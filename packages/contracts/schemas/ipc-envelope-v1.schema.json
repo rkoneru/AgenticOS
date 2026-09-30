@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://axis.dev/schemas/ipc-envelope/v1.json",
+  "title": "AXIS IPC message envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "tenant_id",
+    "trace_id",
+    "from",
+    "to",
+    "kind",
+    "ts",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "trace_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "from": { "$ref": "#/$defs/pid" },
+    "to": {
+      "description": "A PID, or a channel name prefixed 'chan:' for pub/sub delivery within the tenant.",
+      "type": "string",
+      "pattern": "^(axp_[0-9A-HJKMNP-TV-Z]{26}|chan:[a-z][a-z0-9._-]{0,62})$"
+    },
+    "kind": { "enum": ["message", "event", "request", "response"] },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "ts": { "type": "string", "format": "date-time" },
+    "ttl_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "response" } } },
+      "then": { "required": ["correlation_id"] }
+    }
+  ],
+  "$defs": { "pid": { "type": "string", "pattern": "^axp_[0-9A-HJKMNP-TV-Z]{26}$" } }
+}

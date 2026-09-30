@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://axis.dev/schemas/audit-event/v1.json",
+  "title": "AXIS audit event v1 (hash-chained, per tenant)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "tenant_id",
+    "seq",
+    "ts",
+    "trace_id",
+    "actor",
+    "blueprint",
+    "policy_version",
+    "enforcement_point",
+    "action",
+    "decision",
+    "inputs_hash",
+    "outputs_hash",
+    "prev_hash",
+    "hash"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Gapless per-tenant sequence starting at 1."
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC, millisecond precision, e.g. 2026-01-01T00:00:00.000Z"
+    },
+    "trace_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["human", "agent", "system"] },
+        "id": { "type": "string", "minLength": 1 },
+        "pid": { "type": "string", "pattern": "^axp_[0-9A-HJKMNP-TV-Z]{26}$" }
+      },
+      "if": { "properties": { "type": { "const": "agent" } } },
+      "then": { "required": ["pid"] }
+    },
+    "blueprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } }
+    },
+    "policy_version": { "type": "string", "minLength": 1 },
+    "enforcement_point": {
+      "enum": [
+        "tool_call",
+        "mcp_call",
+        "model_call",
+        "memory_write",
+        "message_send",
+        "code_exec",
+        "browser_exec",
+        "lifecycle",
+        "admin"
+      ]
+    },
+    "action": { "type": "string", "minLength": 1 },
+    "decision": { "enum": ["ALLOW", "DENY", "REQUIRE_APPROVAL", "ALLOW_WITH_REDACTION"] },
+    "reason": { "type": "string", "maxLength": 1000 },
+    "inputs_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "outputs_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "prev_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

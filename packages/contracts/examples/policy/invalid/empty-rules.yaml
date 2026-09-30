@@ -1,0 +1,4 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata: { name: bad, version: 1.0.0 }
+spec: { defaultDecision: DENY, rules: [] }

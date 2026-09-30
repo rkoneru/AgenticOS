@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "description": "AXIS agent process model. States, legal transitions, and signals. Source of truth for the Python runtime and TS control plane.",
+  "pid": {
+    "format": "axp_<ULID, Crockford base32, 26 chars>",
+    "regex": "^axp_[0-9A-HJKMNP-TV-Z]{26}$",
+    "notes": "PIDs are globally unique and time-sortable. They are NOT tenant-secret; tenant scoping is enforced by tenant_id on every row and message. ppid is stored separately; the init process of a run has ppid null."
+  },
+  "states": ["spawn", "ready", "running", "waiting", "suspended", "terminated"],
+  "initial": "spawn",
+  "terminal": ["terminated"],
+  "exitReasons": [
+    "completed",
+    "failed",
+    "killed",
+    "budget_exceeded",
+    "policy_denied",
+    "timeout",
+    "parent_terminated"
+  ],
+  "transitions": [
+    { "from": "spawn", "to": "ready", "on": "init_complete" },
+    { "from": "spawn", "to": "terminated", "on": "init_failed" },
+    { "from": "ready", "to": "running", "on": "scheduled" },
+    { "from": "running", "to": "waiting", "on": "await" },
+    { "from": "waiting", "to": "running", "on": "wake" },
+    { "from": "running", "to": "ready", "on": "yield" },
+    { "from": "ready", "to": "suspended", "on": "PAUSE" },
+    { "from": "running", "to": "suspended", "on": "PAUSE" },
+    { "from": "waiting", "to": "suspended", "on": "PAUSE" },
+    { "from": "suspended", "to": "ready", "on": "RESUME" },
+    { "from": "running", "to": "terminated", "on": "exit" },
+    { "from": "spawn", "to": "terminated", "on": "KILL" },
+    { "from": "ready", "to": "terminated", "on": "KILL" },
+    { "from": "running", "to": "terminated", "on": "KILL" },
+    { "from": "waiting", "to": "terminated", "on": "KILL" },
+    { "from": "suspended", "to": "terminated", "on": "KILL" },
+    { "from": "ready", "to": "terminated", "on": "TERM" },
+    { "from": "running", "to": "terminated", "on": "TERM" },
+    { "from": "waiting", "to": "terminated", "on": "TERM" },
+    { "from": "suspended", "to": "terminated", "on": "TERM" }
+  ],
+  "signals": {
+    "PAUSE": {
+      "graceful": true,
+      "description": "Suspend at the next safe point; state is checkpointed in the event log."
+    },
+    "RESUME": { "graceful": true, "description": "Return a suspended process to ready." },
+    "TERM": {
+      "graceful": true,
+      "description": "Request shutdown; process may finish the current step. Escalates to KILL after the grace period."
+    },
+    "KILL": {
+      "graceful": false,
+      "description": "Immediate termination; in-flight external actions are not started. Also delivered by kill-switches."
+    },
+    "INTERRUPT": {
+      "graceful": true,
+      "description": "Deliver an out-of-band message without a state change (e.g. human takeover notice)."
+    }
+  },
+  "invariants": [
+    "terminated is absorbing: no transition leaves it.",
+    "KILL is legal from every non-terminal state.",
+    "Terminating a parent sends TERM then KILL to all children (exit reason parent_terminated).",
+    "Every transition is an event in the run's append-only log and an audit event (enforcement_point: lifecycle)."
+  ]
+}

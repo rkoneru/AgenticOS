@@ -1,0 +1,29 @@
+{
+  "name": "@axis/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "schemas",
+    "openapi",
+    "process-model.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage",
+    "freeze": "tsx scripts/freeze.ts",
+    "lint:openapi": "redocly lint openapi/axis-v1.yaml",
+    "lint:proto": "buf lint ../../proto && buf build ../../proto -o /dev/null"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.5.0"
+  }
+}

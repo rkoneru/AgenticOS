@@ -1,0 +1,455 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://axis.dev/schemas/policy/v1.json",
+  "title": "AXIS Policy DSL v1 (compiles to OPA/Rego)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "const": "policy.axis.dev/v1"
+    },
+    "kind": {
+      "const": "PolicyPack"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultDecision", "rules"],
+      "properties": {
+        "defaultDecision": {
+          "description": "Fail-closed: the only permitted value is DENY. Applied when no rule matches and on any evaluation error.",
+          "const": "DENY"
+        },
+        "gates": {
+          "description": "Parameterised gate instances referenced by rules. Generalises the six Risk Kernel gates.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gate"
+          },
+          "uniqueItems": false
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,62}$"
+    },
+    "enforcementPoint": {
+      "enum": [
+        "tool_call",
+        "mcp_call",
+        "model_call",
+        "memory_write",
+        "message_send",
+        "code_exec",
+        "browser_exec"
+      ]
+    },
+    "decision": {
+      "enum": ["ALLOW", "DENY", "REQUIRE_APPROVAL", "ALLOW_WITH_REDACTION"]
+    },
+    "scalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "condition": {
+      "description": "Boolean expression tree over the request context (dot-path fields such as tool.name, tenant.id, args.amount).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["not"],
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "op"],
+          "properties": {
+            "field": {
+              "type": "string",
+              "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$"
+            },
+            "op": {
+              "enum": ["eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "matches", "exists"]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/scalar"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/scalar"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": ["kill_switch", "staleness", "amount_cap", "target_cap", "budget", "rate_limit"]
+        },
+        "scope": {
+          "enum": ["global", "tenant", "agent", "tool"]
+        },
+        "params": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "kill_switch"
+              }
+            }
+          },
+          "then": {
+            "required": ["scope"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "staleness"
+              }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["maxAgeSeconds", "field"],
+                "properties": {
+                  "maxAgeSeconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "field": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["amount_cap", "target_cap"]
+              }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["field", "max"],
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "max": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "perTarget": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "budget"
+              }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["metric", "window"],
+                "properties": {
+                  "metric": {
+                    "enum": ["tokens", "cost_usd", "tool_calls", "runtime_seconds", "drawdown"]
+                  },
+                  "window": {
+                    "enum": ["run", "hour", "day", "month"]
+                  },
+                  "hard": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "soft": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "rate_limit"
+              }
+            }
+          },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["max", "windowSeconds"],
+                "properties": {
+                  "max": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "windowSeconds": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "key": {
+                    "enum": ["tenant", "agent", "tool", "actor"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "enforcementPoints", "decision"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "priority": {
+          "description": "Higher wins within the same specificity. Conflict resolution: DENY > REQUIRE_APPROVAL > ALLOW_WITH_REDACTION > ALLOW at equal priority.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 100
+        },
+        "enforcementPoints": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/enforcementPoint"
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        },
+        "gates": {
+          "description": "Gate ids that must all pass for an ALLOW-family decision to stand. A failing gate forces DENY.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "uniqueItems": true
+        },
+        "decision": {
+          "$ref": "#/$defs/decision"
+        },
+        "redact": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Field paths or named detectors (e.g. pii.email, phi.mrn) to redact."
+        },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["roles", "slaSeconds"],
+          "properties": {
+            "roles": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "slaSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "escalateTo": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "onTimeout": {
+              "enum": ["DENY"],
+              "default": "DENY"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "ALLOW_WITH_REDACTION"
+              }
+            },
+            "required": ["decision"]
+          },
+          "then": {
+            "required": ["redact"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "REQUIRE_APPROVAL"
+              }
+            },
+            "required": ["decision"]
+          },
+          "then": {
+            "required": ["approval"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "decision": {
+                "enum": ["ALLOW", "DENY"]
+              }
+            },
+            "required": ["decision"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": ["redact"]
+                },
+                {
+                  "required": ["approval"]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

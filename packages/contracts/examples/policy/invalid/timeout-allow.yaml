@@ -1,0 +1,12 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata: { name: bad, version: 1.0.0 }
+spec:
+  defaultDecision: DENY
+  rules:
+    - {
+        id: r,
+        enforcementPoints: [tool_call],
+        decision: REQUIRE_APPROVAL,
+        approval: { roles: [a], slaSeconds: 5, onTimeout: ALLOW },
+      }
