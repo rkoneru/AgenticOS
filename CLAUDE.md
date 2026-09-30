@@ -70,22 +70,27 @@ make tf-plan CLOUD=aws|gcp|azure   # plan only — never apply without me
 
 ## Component status
 
-| Component                                | Status                    | Evidence                                         |
-| ---------------------------------------- | ------------------------- | ------------------------------------------------ |
-| Python reference kernel (existing)       | Not found in repo         | `docs/INVENTORY.md`, `docs/NEEDS.md` #1          |
-| Monorepo, tooling, CI workflow           | Built (CI unrun remotely) | local `pnpm lint typecheck cov`, `uv run pytest` |
-| Compose dev stack                        | Designed (never started)  | `docker compose config` only                     |
-| Decision model skeleton (TS + Py)        | Prototype                 | `packages/shared`, `runtime/` tests              |
-| ABL spec + compiler                      | Concept                   | —                                                |
-| Risk Kernel (generalized)                | Concept                   | —                                                |
-| TKI                                      | Concept                   | —                                                |
-| NEXUS router                             | Concept                   | —                                                |
-| MPM                                      | Concept (stub planned)    | —                                                |
-| AGIL                                     | Concept                   | —                                                |
-| Eval Hub                                 | Concept                   | —                                                |
-| Control plane / console / CLI / SDKs     | Concept                   | —                                                |
-| Voice / omnichannel / marketplace        | Concept                   | —                                                |
-| _Update this table at every phase exit._ |
+| Component                                                       | Status                                | Evidence                                                 |
+| --------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------- |
+| Python reference kernel (existing)                              | Not found in repo                     | `docs/INVENTORY.md`, `docs/NEEDS.md` #1                  |
+| Monorepo, tooling, CI workflow                                  | Built (CI unrun remotely)             | local `pnpm lint typecheck cov`, `uv run pytest`         |
+| Compose dev stack                                               | Designed (never started)              | `docker compose config` only                             |
+| Decision model skeleton (TS + Py)                               | Prototype                             | `packages/shared`, `runtime/` tests                      |
+| Process model, IPC envelope, audit event + hash-chain reference | Built (frozen v1)                     | `packages/contracts` tests (100% cov)                    |
+| gRPC + OpenAPI 3.1 contracts                                    | Built (frozen v1), no implementations | `buf lint/build`, `redocly lint`, drift test             |
+| Postgres schema + RLS + migrations                              | Built, tested on PG16+pgvector        | `packages/db` tenancy tests, mutation-checked            |
+| ABL v1 schema, spec, examples                                   | Built (frozen v1)                     | `packages/abl` tests, `docs/spec/abl-v1.md`              |
+| ABL compiler/linter                                             | Concept                               | Phase 2                                                  |
+| Policy DSL v1 schema + decision model                           | Built (frozen v1)                     | `packages/contracts` tests, `docs/spec/policy-dsl-v1.md` |
+| Policy compiler, Risk Kernel service                            | Concept                               | Phase 2                                                  |
+| TKI                                                             | Concept                               | —                                                        |
+| NEXUS router                                                    | Concept                               | —                                                        |
+| MPM                                                             | Concept (stub planned)                | —                                                        |
+| AGIL                                                            | Concept                               | —                                                        |
+| Eval Hub                                                        | Concept                               | —                                                        |
+| Control plane / console / CLI / SDKs                            | Concept                               | —                                                        |
+| Voice / omnichannel / marketplace                               | Concept                               | —                                                        |
+| _Update this table at every phase exit._                        |
 
 ## Companion files
 

@@ -1,4 +1,4 @@
-.PHONY: install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -17,6 +17,15 @@ dev-ps:
 dev-health:
 	@bash infra/compose/healthcheck.sh
 
+# OpenAPI 3.1 lint + protobuf lint/build. Needs `pnpm install` first.
+contracts-lint:
+	pnpm --filter @axis/contracts lint:openapi
+	cd proto && pnpm exec buf lint && pnpm exec buf build -o /dev/null
+
+# Regenerate the frozen-contract manifest. Requires an ADR (docs/adr/0007).
+freeze:
+	pnpm --filter @axis/contracts freeze
+
 lint:
 	pnpm lint
 	uv run ruff check .
@@ -30,6 +39,7 @@ typecheck:
 	pnpm typecheck
 	uv run mypy runtime/src sdk/python/src
 
+# DB tests need Postgres 16 + pgvector: uses $PG_ADMIN_URL if set, else starts a throwaway local cluster.
 test:
 	pnpm test
 	uv run pytest runtime sdk/python
