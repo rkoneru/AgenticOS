@@ -136,16 +136,18 @@ def test_validate_decision_returns_same_object_when_valid() -> None:
 
 class FakeGate(gate_pb2_grpc.GateServiceServicer):  # type: ignore[misc]
     def __init__(self) -> None:
-        self.handler: Callable[[gate_pb2.EvaluateRequest, Any], Awaitable[gate_pb2.EvaluateResponse]] = (
-            self._default
-        )
+        self.handler: Callable[
+            [gate_pb2.EvaluateRequest, Any], Awaitable[gate_pb2.EvaluateResponse]
+        ] = self._default
         self.seen: list[gate_pb2.EvaluateRequest] = []
 
     @staticmethod
     async def _default(req: gate_pb2.EvaluateRequest, ctx: Any) -> gate_pb2.EvaluateResponse:
         return gate_pb2.EvaluateResponse(decision=common_pb2.DECISION_ALLOW, reason="fine")
 
-    async def Evaluate(self, request: gate_pb2.EvaluateRequest, context: Any) -> gate_pb2.EvaluateResponse:
+    async def Evaluate(
+        self, request: gate_pb2.EvaluateRequest, context: Any
+    ) -> gate_pb2.EvaluateResponse:
         self.seen.append(request)
         return await self.handler(request, context)
 
@@ -185,7 +187,9 @@ async def test_grpc_maps_all_decisions(server: tuple[FakeGate, str]) -> None:
     cases = [
         (gate_pb2.EvaluateResponse(decision=common_pb2.DECISION_DENY, reason="r"), Decision.DENY),
         (
-            gate_pb2.EvaluateResponse(decision=common_pb2.DECISION_REQUIRE_APPROVAL, approval_id="ap"),
+            gate_pb2.EvaluateResponse(
+                decision=common_pb2.DECISION_REQUIRE_APPROVAL, approval_id="ap"
+            ),
             Decision.REQUIRE_APPROVAL,
         ),
         (
@@ -208,7 +212,12 @@ async def test_grpc_maps_all_decisions(server: tuple[FakeGate, str]) -> None:
             fake.handler = handler
             out = await client.evaluate(REQ)
             assert out.decision is expected
-        assert (out.redact_fields, out.matched_rule_ids, out.policy_version, out.audit_event_id) == (
+        assert (
+            out.redact_fields,
+            out.matched_rule_ids,
+            out.policy_version,
+            out.audit_event_id,
+        ) == (
             ("args.ssn",),
             ("r1",),
             "p9",
@@ -338,5 +347,11 @@ def test_proto_mappings_cover_every_enforcement_point() -> None:
         msg = to_proto_request(EvaluateRequest(**{**REQ.__dict__, "enforcement_point": ep}))
         assert msg.enforcement_point == getattr(common_pb2, f"ENFORCEMENT_POINT_{ep.name}")
     for actor in ActorType:
-        assert to_proto_request(EvaluateRequest(**{**REQ.__dict__, "actor_type": actor})).actor.type > 0
-    assert from_proto_response(gate_pb2.EvaluateResponse(decision=common_pb2.DECISION_ALLOW)).decision is Decision.ALLOW
+        assert (
+            to_proto_request(EvaluateRequest(**{**REQ.__dict__, "actor_type": actor})).actor.type
+            > 0
+        )
+    assert (
+        from_proto_response(gate_pb2.EvaluateResponse(decision=common_pb2.DECISION_ALLOW)).decision
+        is Decision.ALLOW
+    )

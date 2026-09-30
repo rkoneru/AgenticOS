@@ -145,7 +145,17 @@ def test_pid_rejects_out_of_range_timestamp(ms: int) -> None:
 
 
 @pytest.mark.parametrize(
-    "bad", [None, 5, "", "axp_", "axp_" + "0" * 25, "axp_" + "U" * 26, "xyz_" + "0" * 26, "axp_" + "0" * 27]
+    "bad",
+    [
+        None,
+        5,
+        "",
+        "axp_",
+        "axp_" + "0" * 25,
+        "axp_" + "U" * 26,
+        "xyz_" + "0" * 26,
+        "axp_" + "0" * 27,
+    ],
 )
 def test_invalid_pids(bad: object) -> None:
     assert not is_valid_pid(bad)

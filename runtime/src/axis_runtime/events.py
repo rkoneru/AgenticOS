@@ -430,6 +430,9 @@ class RunEventLog(Protocol):
     async def read(self, run_id: str) -> list[RunEvent]:
         """All events of a run in sequence order."""
 
+    async def read_after(self, run_id: str, after_seq: int) -> list[RunEvent]:
+        """Events with seq > after_seq, in order (used to fold what another writer appended)."""
+
 
 class InMemoryRunEventLog:
     """Single-process reference implementation (tests and local dev)."""
@@ -453,6 +456,10 @@ class InMemoryRunEventLog:
         async with self._lock:
             return list(self._runs.get(run_id, ()))
 
+    async def read_after(self, run_id: str, after_seq: int) -> list[RunEvent]:
+        async with self._lock:
+            return list(self._runs.get(run_id, ())[after_seq:])
+
 
 class Clock(Protocol):
     def now(self) -> datetime: ...
@@ -470,6 +477,8 @@ def format_ts(moment: datetime) -> str:
 
 
 class RunRecorder:
+    MAX_CONFLICT_RETRIES = 3
+
     """Seals, validates, persists and folds events; the single writer of a run's state.
 
     ``state`` is always ``reduce(log)``: events are validated against the folded state BEFORE
@@ -513,20 +522,34 @@ class RunRecorder:
 
     async def record(self, type: str, pid: str | None, data: Mapping[str, JSON]) -> RunEvent:
         async with self._lock:
-            seq = 1 if self._state is None else self._state.last_seq + 1
-            prev = GENESIS_HASH if self._state is None else self._state.last_hash
-            event = seal_event(
-                run_id=self.run_id,
-                seq=seq,
-                ts=format_ts(self.clock.now()),
-                type=str(type),
-                pid=pid,
-                data=data,
-                prev_hash=prev,
-            )
-            new_state = apply_event(self._state, event)  # validate first
-            await self.log.append(event)
-            self._state = new_state
+            for attempt in range(self.MAX_CONFLICT_RETRIES + 1):
+                seq = 1 if self._state is None else self._state.last_seq + 1
+                prev = GENESIS_HASH if self._state is None else self._state.last_hash
+                event = seal_event(
+                    run_id=self.run_id,
+                    seq=seq,
+                    ts=format_ts(self.clock.now()),
+                    type=str(type),
+                    pid=pid,
+                    data=data,
+                    prev_hash=prev,
+                )
+                new_state = apply_event(self._state, event)  # validate first
+                try:
+                    await self.log.append(event)
+                except SequenceConflictError:
+                    # Another writer (e.g. an in-flight Temporal activity) extended the log.
+                    # Fold what it appended and rebuild on the new head; never overwrite or fork.
+                    if attempt == self.MAX_CONFLICT_RETRIES:
+                        raise
+                    self.ingest(
+                        await self.log.read_after(
+                            self.run_id, self._state.last_seq if self._state else 0
+                        )
+                    )
+                    continue
+                self._state = new_state
+                break
         for listener in self._listeners:
             listener(event, new_state)
         return event

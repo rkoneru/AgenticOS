@@ -73,7 +73,9 @@ def deny(reason: str = "nope") -> GateDecision:
 class ScriptedGate:
     """GateClient driven by a function; records every request."""
 
-    def __init__(self, fn: Callable[[EvaluateRequest], GateDecision] | GateDecision | None = None) -> None:
+    def __init__(
+        self, fn: Callable[[EvaluateRequest], GateDecision] | GateDecision | None = None
+    ) -> None:
         if fn is None:
             fn = allow()
         self._fn = fn if callable(fn) else (lambda _r: fn)  # type: ignore[misc, return-value]
@@ -88,21 +90,51 @@ def manifest_dict(**over: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "manifest_version": 1,
         "blueprint": {"name": "claims-triage", "version": "1.0.0", "content_hash": "a" * 64},
-        "risk": {"level": "limited", "human_oversight_required": False, "approver_roles": [],
-                 "transparency_notice": "You are talking to an AI."},
-        "models": {"primary": {"provider": "openai", "model": "gpt-4o", "endpoint": None,
-                               "params": {"temperature": 0}}, "fallbacks": []},
+        "risk": {
+            "level": "limited",
+            "human_oversight_required": False,
+            "approver_roles": [],
+            "transparency_notice": "You are talking to an AI.",
+        },
+        "models": {
+            "primary": {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "endpoint": None,
+                "params": {"temperature": 0},
+            },
+            "fallbacks": [],
+        },
         "routing": {"stages": ["llm"]},
         "system_prompt": "You triage claims.",
-        "tools": [{"name": "lookup_claim", "kind": "function", "ref": None, "mcp_server": None,
-                   "side_effects": "read", "timeout_seconds": 60}],
+        "tools": [
+            {
+                "name": "lookup_claim",
+                "kind": "function",
+                "ref": None,
+                "mcp_server": None,
+                "side_effects": "read",
+                "timeout_seconds": 60,
+            }
+        ],
         "memory": {"run": True, "session": False, "long_term": False, "knowledge_bases": []},
-        "budgets": {"tokens": {"soft": None, "hard": None}, "cost_usd": {"soft": None, "hard": None},
-                    "runtime_seconds": {"soft": None, "hard": None},
-                    "tool_calls": {"soft": None, "hard": None}},
-        "process": {"restart_policy": "never", "max_restarts": 0, "max_children": 0,
-                    "timeout_seconds": None, "supervisor": "one-for-one"},
-        "policy_packs": [], "channels": [], "data": {"phi": False, "residency": None}, "evals": [],
+        "budgets": {
+            "tokens": {"soft": None, "hard": None},
+            "cost_usd": {"soft": None, "hard": None},
+            "runtime_seconds": {"soft": None, "hard": None},
+            "tool_calls": {"soft": None, "hard": None},
+        },
+        "process": {
+            "restart_policy": "never",
+            "max_restarts": 0,
+            "max_children": 0,
+            "timeout_seconds": None,
+            "supervisor": "one-for-one",
+        },
+        "policy_packs": [],
+        "channels": [],
+        "data": {"phi": False, "residency": None},
+        "evals": [],
     }
     for k, v in over.items():
         if isinstance(v, dict) and isinstance(base.get(k), dict):
@@ -135,11 +167,29 @@ def openai_body(
     return {
         "id": "chatcmpl-1",
         "model": "gpt-4o-2024-08-06",
-        "choices": [{"index": 0, "message": msg,
-                     "finish_reason": finish or ("tool_calls" if tool_calls else "stop")}],
-        "usage": {"prompt_tokens": prompt, "completion_tokens": completion,
-                  "prompt_tokens_details": {"cached_tokens": 0}},
+        "choices": [
+            {
+                "index": 0,
+                "message": msg,
+                "finish_reason": finish or ("tool_calls" if tool_calls else "stop"),
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "prompt_tokens_details": {"cached_tokens": 0},
+        },
     }
+
+
+def final_body(text: str = "done", **kw: Any) -> dict[str, Any]:
+    """A plain assistant answer (no tool calls)."""
+    return openai_body(text, **kw)
+
+
+def tool_turn_body(*calls: tuple[str, dict[str, Any]], **kw: Any) -> dict[str, Any]:
+    """An assistant turn that requests the given (tool_name, arguments) calls."""
+    return openai_body(None, [(f"call_{i}", n, a) for i, (n, a) in enumerate(calls)], **kw)
 
 
 @dataclass
@@ -213,4 +263,3 @@ async def started_recorder(clock: FakeClock | None = None) -> RunRecorder:
     return await RunRecorder.start(
         InMemoryRunEventLog(), clock or FakeClock(), run_id="run_1", tenant_id=TENANT, meta={}
     )
-

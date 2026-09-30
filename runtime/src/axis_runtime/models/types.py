@@ -175,6 +175,43 @@ class ModelResponse:
     cost_usd: Decimal | None = None
     attempts: tuple[Attempt, ...] = ()
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "text": self.text,
+            "tool_calls": [
+                {"id": c.id, "name": c.name, "arguments": dict(c.arguments)}
+                for c in self.tool_calls
+            ],
+            "usage": [
+                self.usage.input_tokens,
+                self.usage.output_tokens,
+                self.usage.cached_tokens,
+                self.usage.cache_write_tokens,
+            ],
+            "finish_reason": self.finish_reason.value,
+            "provider": self.provider,
+            "model": self.model,
+            "latency_ms": self.latency_ms,
+            "cost_usd": None if self.cost_usd is None else str(self.cost_usd),
+            "attempts": [[a.provider, a.model, a.outcome] for a in self.attempts],
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> ModelResponse:
+        return cls(
+            text=raw["text"],
+            tool_calls=tuple(
+                ToolCallRequest(c["id"], c["name"], c["arguments"]) for c in raw["tool_calls"]
+            ),
+            usage=Usage(*raw["usage"]),
+            finish_reason=FinishReason(raw["finish_reason"]),
+            provider=raw["provider"],
+            model=raw["model"],
+            latency_ms=raw["latency_ms"],
+            cost_usd=None if raw["cost_usd"] is None else Decimal(raw["cost_usd"]),
+            attempts=tuple(Attempt(*a) for a in raw["attempts"]),
+        )
+
 
 @dataclass(frozen=True)
 class StreamEvent:

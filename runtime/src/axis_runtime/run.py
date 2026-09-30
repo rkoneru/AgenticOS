@@ -560,7 +560,7 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
         tenant_id=deps.tenant_id,
         run_id=run_id,
         trace_id=trace_id,
-        span_id=secrets.token_hex(8),
+        span_id=hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:16],  # deterministic (Temporal)
         blueprint_name=manifest.name,
         blueprint_version=manifest.version,
         phi=manifest.phi,
