@@ -1,0 +1,66 @@
+{
+  "manifest_version": 1,
+  "blueprint": {
+    "name": "hello-agent",
+    "version": "1.0.0",
+    "content_hash": "dc143d6b817ec822871fe96f0486c775a1b6cd215f3d2c4d72e8a6a2cf6a012b"
+  },
+  "risk": {
+    "level": "minimal",
+    "human_oversight_required": false,
+    "approver_roles": [],
+    "transparency_notice": null
+  },
+  "models": {
+    "primary": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "endpoint": null,
+      "params": {}
+    },
+    "fallbacks": []
+  },
+  "routing": {
+    "stages": ["llm"]
+  },
+  "system_prompt": "You are a helpful assistant.",
+  "tools": [],
+  "memory": {
+    "run": true,
+    "session": false,
+    "long_term": false,
+    "knowledge_bases": []
+  },
+  "budgets": {
+    "tokens": {
+      "soft": null,
+      "hard": null
+    },
+    "cost_usd": {
+      "soft": null,
+      "hard": null
+    },
+    "runtime_seconds": {
+      "soft": null,
+      "hard": null
+    },
+    "tool_calls": {
+      "soft": null,
+      "hard": null
+    }
+  },
+  "process": {
+    "restart_policy": "never",
+    "max_restarts": 0,
+    "max_children": 0,
+    "timeout_seconds": null,
+    "supervisor": "one-for-one"
+  },
+  "policy_packs": [],
+  "channels": [],
+  "data": {
+    "phi": false,
+    "residency": null
+  },
+  "evals": []
+}
