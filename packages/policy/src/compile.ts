@@ -78,6 +78,20 @@ export function lit(value: unknown): string {
 
 const OP_SYMBOL: Record<string, string> = { gt: ">", gte: ">=", lt: "<", lte: "<=" };
 
+/** Names of the two generated booleans for a condition node: definitely-true and possibly-true. */
+interface Node {
+  t: string;
+  p: string;
+}
+
+/**
+ * Three-valued (Kleene) evaluation over possibly-missing data. Every condition node compiles to two total booleans:
+ *   t = definitely TRUE      p = possibly true (TRUE or UNKNOWN)
+ * A leaf over a missing field, or a field whose type does not fit the operator (e.g. a string under `gt`), is UNKNOWN.
+ * not(x): t = !p(x), p = !t(x).  all: AND of each.  any: OR of each.
+ * A rule whose decision is DENY matches on `p` (unknown data must not let a deny rule be skipped); every other decision
+ * needs `t`. So missing data can only ever push a request toward DENY, including through negation.
+ */
 class Emitter {
   readonly lines: string[] = [];
   readonly issues: PolicyIssue[] = [];
@@ -88,27 +102,30 @@ class Emitter {
     this.issues.push({ doc: this.doc, path, code, message });
   }
 
-  /** Emit named, total boolean rules for a condition tree; returns the name of the root rule. */
-  cond(c: Cond, rule: number, path: string): string {
-    const name = `c${rule}_${this.counter++}`;
-    this.lines.push(`default ${name} := false`);
+  cond(c: Cond, rule: number, path: string): Node {
+    const id = `${rule}_${this.counter++}`;
+    const node: Node = { t: `t${id}`, p: `p${id}` };
+    this.lines.push(`default ${node.t} := false`, `default ${node.p} := false`);
     if (c.all) {
-      const refs = c.all.map((x, i) => this.cond(x, rule, `${path}/all/${i}`));
-      this.lines.push(`${name} if {`, ...refs.map((r) => `\t${r}`), "}");
+      const kids = c.all.map((x, i) => this.cond(x, rule, `${path}/all/${i}`));
+      this.lines.push(`${node.t} if {`, ...kids.map((k) => `\t${k.t}`), "}");
+      this.lines.push(`${node.p} if {`, ...kids.map((k) => `\t${k.p}`), "}");
     } else if (c.any) {
-      const refs = c.any.map((x, i) => this.cond(x, rule, `${path}/any/${i}`));
-      for (const r of refs) this.lines.push(`${name} if { ${r} }`);
+      for (const [i, x] of c.any.entries()) {
+        const k = this.cond(x, rule, `${path}/any/${i}`);
+        this.lines.push(`${node.t} if { ${k.t} }`, `${node.p} if { ${k.p} }`);
+      }
     } else if (c.not) {
-      const ref = this.cond(c.not, rule, `${path}/not`);
-      this.lines.push(`${name} if { not ${ref} }`);
+      const k = this.cond(c.not, rule, `${path}/not`);
+      this.lines.push(`${node.t} if { not ${k.p} }`, `${node.p} if { not ${k.t} }`);
     } else {
-      this.leaf(name, c, path);
+      this.leaf(id, node, c, path);
     }
     this.lines.push("");
-    return name;
+    return node;
   }
 
-  private leaf(name: string, c: Cond, path: string): void {
+  private leaf(id: string, node: Node, c: Cond, path: string): void {
     const field = c.field as string;
     const op = c.op as string;
     const root = field.split(".")[0] as string;
@@ -122,22 +139,22 @@ class Emitter {
     const ref = `input.${field}`;
     const v = c.value;
     const scalar = v === null || ["string", "number", "boolean"].includes(typeof v);
+    const known = `k${id}`;
+    // `known` = the field is present with a type the operator can judge; otherwise the leaf is UNKNOWN.
+    let typeGuard = "";
+    let test: string;
     switch (op) {
       case "eq":
       case "neq":
         if (!scalar) this.issue(`${path}/value`, "POLICY_BAD_VALUE", `${op} needs a scalar value`);
-        this.lines.push(`${name} if { ${ref} ${op === "eq" ? "==" : "!="} ${lit(v)} }`);
+        test = `v ${op === "eq" ? "==" : "!="} ${lit(v)}`;
         break;
       case "in":
       case "not_in":
         if (!Array.isArray(v) || v.length === 0) {
           this.issue(`${path}/value`, "POLICY_BAD_VALUE", `${op} needs a non-empty array`);
         }
-        this.lines.push(
-          op === "in"
-            ? `${name} if { v := ${ref}; v in ${lit(v)} }`
-            : `${name} if { v := ${ref}; not v in ${lit(v)} }`,
-        );
+        test = op === "in" ? `v in ${lit(v)}` : `not v in ${lit(v)}`;
         break;
       case "gt":
       case "gte":
@@ -145,40 +162,73 @@ class Emitter {
       case "lte":
         if (typeof v !== "number")
           this.issue(`${path}/value`, "POLICY_BAD_VALUE", `${op} needs a number`);
-        this.lines.push(`${name} if { v := ${ref}; is_number(v); v ${OP_SYMBOL[op]} ${lit(v)} }`);
+        typeGuard = "is_number(v); ";
+        test = `v ${OP_SYMBOL[op]} ${lit(v)}`;
         break;
-      case "matches":
-        if (typeof v !== "string" || !validRegex(v)) {
-          this.issue(
-            `${path}/value`,
-            "POLICY_BAD_VALUE",
-            "matches needs a valid regular expression string",
-          );
-        }
-        this.lines.push(`${name} if { v := ${ref}; is_string(v); regex.match(${lit(v)}, v) }`);
+      case "matches": {
+        const why =
+          typeof v === "string" ? re2Problem(v) : "matches needs a regular expression string";
+        if (why) this.issue(`${path}/value`, "POLICY_BAD_VALUE", why);
+        typeGuard = "is_string(v); ";
+        test = `regex.match(${lit(v)}, v)`;
         break;
+      }
       default: {
-        // exists
+        // exists: always definite (present or absent), never UNKNOWN.
         if (v !== undefined && typeof v !== "boolean") {
           this.issue(`${path}/value`, "POLICY_BAD_VALUE", "exists takes an optional boolean");
         }
-        const defined = `${name}_def`;
+        const defined = `d${id}`;
         this.lines.push(`${defined} if { v := ${ref} }`);
         this.lines.push(
-          v === false ? `${name} if { not ${defined} }` : `${name} if { ${defined} }`,
+          v === false ? `${node.t} if { not ${defined} }` : `${node.t} if { ${defined} }`,
         );
+        this.lines.push(`${node.p} if { ${node.t} }`);
+        return;
       }
     }
+    this.lines.push(
+      typeGuard
+        ? `${known} if { v := ${ref}; ${typeGuard.replace(/; $/, "")} }`
+        : `${known} if { _ := ${ref} }`,
+    );
+    this.lines.push(`${node.t} if { v := ${ref}; ${typeGuard}${test} }`);
+    this.lines.push(`${node.p} if { ${node.t} }`, `${node.p} if { not ${known} }`);
   }
 }
 
-function validRegex(p: string): boolean {
-  try {
-    new RegExp(p);
-    return true;
-  } catch {
-    return false;
+/**
+ * Policies are evaluated by OPA (RE2 syntax, Go), not by JavaScript. Accept only the syntax both engines share and
+ * mean the same thing by; reject constructs RE2 lacks (lookaround, backreferences, atomic/possessive groups) and ones
+ * whose meaning differs (inline flags, named groups, \\p classes, \\u escapes). Returns a problem description or undefined.
+ */
+export function re2Problem(pattern: string): string | undefined {
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i] as string;
+    if (ch === "\\") {
+      const n = pattern[i + 1];
+      if (n === undefined) return "trailing backslash";
+      if (/[1-9]/.test(n)) return "backreferences are not supported by RE2";
+      if ("kucCpP".includes(n)) return `\\${n} escapes are not portable to RE2`;
+      i++;
+    } else if (inClass) {
+      if (ch === "]") inClass = false;
+    } else if (ch === "[") {
+      inClass = true;
+      if (pattern[i + 1] === "^") i++;
+      if (pattern[i + 1] === "]") i++; // a leading ] is literal
+    } else if (ch === "(" && pattern[i + 1] === "?" && pattern[i + 2] !== ":") {
+      return "only plain and non-capturing (?:...) groups are supported (no lookaround, named groups or inline flags)";
+    }
   }
+  if (inClass) return "unterminated character class";
+  try {
+    new RegExp(pattern);
+  } catch {
+    return "invalid regular expression syntax";
+  }
+  return undefined;
 }
 
 /**
@@ -296,10 +346,12 @@ export function compilePolicySet(docs: unknown[]): CompileResult {
           : null,
       };
       const root = r.when ? em.cond(r.when, ruleNo, `${p}/when`) : undefined;
+      // DENY rules fire when the condition is possibly true (unknown data must not skip a deny); others need definitely true.
+      const gate = root ? (r.decision === "DENY" ? root.p : root.t) : undefined;
       em.lines.push(
         `matched contains ${JSON.stringify(fq)} if {`,
         `\tinput.enforcement_point in ${lit(r.enforcementPoints)}`,
-        ...(root ? [`\t${root}`] : []),
+        ...(gate ? [`\t${gate}`] : []),
         "}",
         "",
       );

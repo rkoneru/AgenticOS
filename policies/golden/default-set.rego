@@ -13,78 +13,121 @@ gates := {"baseline-deny/amount-cap": {"id": "baseline-deny/amount-cap", "params
 rules := {"baseline-deny/allow-read-tools": {"approval": null, "decision": "ALLOW", "gates": ["baseline-deny/tenant-kill", "baseline-deny/fire-rate"], "priority": 100, "redact": []}, "baseline-deny/approve-large-payments": {"approval": {"escalate_to": ["finance-director"], "on_timeout": "DENY", "roles": ["finance-approver"], "sla_seconds": 900}, "decision": "REQUIRE_APPROVAL", "gates": ["baseline-deny/tenant-kill", "baseline-deny/amount-cap"], "priority": 200, "redact": []}, "baseline-deny/deny-browser-offlist": {"approval": null, "decision": "DENY", "gates": [], "priority": 500, "redact": []}, "baseline-deny/redact-phi-egress": {"approval": null, "decision": "ALLOW_WITH_REDACTION", "gates": [], "priority": 100, "redact": ["phi.mrn", "phi.ssn", "pii.email"]}, "phi-redaction/allow-model-calls": {"approval": null, "decision": "ALLOW", "gates": [], "priority": 100, "redact": []}, "phi-redaction/deny-phi-to-code": {"approval": null, "decision": "DENY", "gates": [], "priority": 400, "redact": []}, "phi-redaction/redact-phi-egress": {"approval": null, "decision": "ALLOW_WITH_REDACTION", "gates": [], "priority": 300, "redact": ["phi.mrn", "phi.ssn", "pii.email"]}}
 
 # --- pack baseline-deny@1.0.0
-default c0_0 := false
-default c0_1 := false
-c0_1 if { v := input.tool.side_effects; v in ["none", "read"] }
+default t0_0 := false
+default p0_0 := false
+default t0_1 := false
+default p0_1 := false
+k0_1 if { _ := input.tool.side_effects }
+t0_1 if { v := input.tool.side_effects; v in ["none", "read"] }
+p0_1 if { t0_1 }
+p0_1 if { not k0_1 }
 
-c0_0 if {
-	c0_1
+t0_0 if {
+	t0_1
+}
+p0_0 if {
+	p0_1
 }
 
 matched contains "baseline-deny/allow-read-tools" if {
 	input.enforcement_point in ["tool_call", "mcp_call"]
-	c0_0
+	t0_0
 }
 
-default c1_2 := false
-default c1_3 := false
-c1_3 if { input.tool.name == "payments" }
+default t1_2 := false
+default p1_2 := false
+default t1_3 := false
+default p1_3 := false
+k1_3 if { _ := input.tool.name }
+t1_3 if { v := input.tool.name; v == "payments" }
+p1_3 if { t1_3 }
+p1_3 if { not k1_3 }
 
-default c1_4 := false
-c1_4 if { v := input.args.amount; is_number(v); v > 1000 }
+default t1_4 := false
+default p1_4 := false
+k1_4 if { v := input.args.amount; is_number(v) }
+t1_4 if { v := input.args.amount; is_number(v); v > 1000 }
+p1_4 if { t1_4 }
+p1_4 if { not k1_4 }
 
-c1_2 if {
-	c1_3
-	c1_4
+t1_2 if {
+	t1_3
+	t1_4
+}
+p1_2 if {
+	p1_3
+	p1_4
 }
 
 matched contains "baseline-deny/approve-large-payments" if {
 	input.enforcement_point in ["tool_call"]
-	c1_2
+	t1_2
 }
 
-default c2_5 := false
-c2_5 if { input.data.phi == true }
+default t2_5 := false
+default p2_5 := false
+k2_5 if { _ := input.data.phi }
+t2_5 if { v := input.data.phi; v == true }
+p2_5 if { t2_5 }
+p2_5 if { not k2_5 }
 
 matched contains "baseline-deny/redact-phi-egress" if {
 	input.enforcement_point in ["model_call", "message_send"]
-	c2_5
+	t2_5
 }
 
-default c3_6 := false
-default c3_7 := false
-c3_7 if { v := input.args.domain; v in ["example.com", "docs.example.com"] }
+default t3_6 := false
+default p3_6 := false
+default t3_7 := false
+default p3_7 := false
+k3_7 if { _ := input.args.domain }
+t3_7 if { v := input.args.domain; v in ["example.com", "docs.example.com"] }
+p3_7 if { t3_7 }
+p3_7 if { not k3_7 }
 
-c3_6 if { not c3_7 }
+t3_6 if { not p3_7 }
+p3_6 if { not t3_7 }
 
 matched contains "baseline-deny/deny-browser-offlist" if {
 	input.enforcement_point in ["browser_exec"]
-	c3_6
+	p3_6
 }
 
 # --- pack phi-redaction@1.1.0
-default c4_0 := false
-c4_0 if { input.data.phi == true }
+default t4_0 := false
+default p4_0 := false
+k4_0 if { _ := input.data.phi }
+t4_0 if { v := input.data.phi; v == true }
+p4_0 if { t4_0 }
+p4_0 if { not k4_0 }
 
 matched contains "phi-redaction/redact-phi-egress" if {
 	input.enforcement_point in ["model_call", "message_send"]
-	c4_0
+	t4_0
 }
 
-default c5_1 := false
-c5_1 if { input.data.phi == true }
+default t5_1 := false
+default p5_1 := false
+k5_1 if { _ := input.data.phi }
+t5_1 if { v := input.data.phi; v == true }
+p5_1 if { t5_1 }
+p5_1 if { not k5_1 }
 
 matched contains "phi-redaction/deny-phi-to-code" if {
 	input.enforcement_point in ["code_exec", "browser_exec"]
-	c5_1
+	p5_1
 }
 
-default c6_2 := false
-c6_2 if { input.data.phi != true }
+default t6_2 := false
+default p6_2 := false
+k6_2 if { _ := input.data.phi }
+t6_2 if { v := input.data.phi; v != true }
+p6_2 if { t6_2 }
+p6_2 if { not k6_2 }
 
 matched contains "phi-redaction/allow-model-calls" if {
 	input.enforcement_point in ["model_call", "message_send"]
-	c6_2
+	t6_2
 }
 
 # --- resolution: highest priority, then most restrictive decision

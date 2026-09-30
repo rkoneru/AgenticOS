@@ -65,3 +65,26 @@ store error) **fails**, which forces `DENY`.
   request is otherwise allowed.
 - `budget`: the spent amount of `metric` in `window` (maintained by TKI) must be below `hard`; crossing `soft` passes with a warning reason.
 - `rate_limit`: sliding window of `windowSeconds`; the request fails when it would make more than `max` hits for the `key` (tenant, agent, tool or actor).
+
+## Missing and mistyped data (three-valued semantics)
+
+Conditions are evaluated with three values: **true**, **false** and **unknown**. A leaf over a field that is absent, or
+present with a type the operator cannot judge (a string under `gt`, a number under `matches`), is _unknown_. `exists` is always
+definite. `not` of unknown is unknown; `all` is false if any operand is false, else unknown if any is unknown; `any` is true if
+any operand is true, else unknown if any is unknown.
+
+A rule matches when its condition is **definitely true** - except `DENY` rules, which match when the condition is **possibly
+true** (true or unknown). So missing data can only push a request toward `DENY`: an `ALLOW`, `ALLOW_WITH_REDACTION` or
+`REQUIRE_APPROVAL` rule never matches on unknown data, and a `DENY` rule is never skipped because a field was absent. Example:
+`deny when args.region neq "EU"` denies a request with no `args.region` at all.
+
+Consequence: "less data never gains an allow and never loses a deny" for every operator except `exists` (which is definite,
+so "allow only if the field is absent" is expressible). This is property-tested against an independent reference evaluator
+and differentially against real OPA.
+
+## `matches` uses RE2 syntax
+
+Policies run in OPA (RE2). The compiler accepts only syntax with the same meaning in RE2 and JavaScript: plain and
+non-capturing `(?:...)` groups, classes, quantifiers, anchors, `\d \w \s \b`. It rejects lookaround, backreferences,
+atomic/possessive groups, named groups, inline flags, `\p{..}` classes and `\u`/`\k`/`\c` escapes at compile time. ReDoS is not
+a concern for RE2 (linear time).
