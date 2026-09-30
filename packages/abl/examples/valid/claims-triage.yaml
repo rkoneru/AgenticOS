@@ -1,0 +1,38 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: claims-triage
+  version: 2.3.1
+  description: Triages inbound insurance claims and drafts routing recommendations.
+  owner: claims-platform@example.com
+  labels: { domain: insurance }
+spec:
+  riskClassification:
+    level: high
+    rationale: Output influences access to an essential service (insurance claim handling).
+    intendedPurpose: Recommend routing; a human adjuster decides.
+    transparencyNotice: You are interacting with an AI system. A human adjuster reviews every decision.
+    humanOversight: { required: true, approverRoles: [claims-adjuster] }
+  model:
+    primary: { provider: bedrock, model: anthropic.claude-sonnet, params: { temperature: 0.1 } }
+    fallbacks:
+      - { provider: azure-openai, model: gpt-4o, endpoint: "https://example.openai.azure.com" }
+  routing: { stages: [cache, rules, rag, llm] }
+  instructions:
+    system: Classify the claim and recommend a queue. Never state coverage decisions as final.
+  tools:
+    - { name: lookup-policy, kind: function, ref: "policy-db@^1.0.0", sideEffects: read }
+    - { name: crm, kind: mcp, mcpServer: "https://mcp.example.com/crm", sideEffects: write }
+    - { name: notify-adjuster, kind: channel, sideEffects: external }
+  memory: { run: true, session: true, knowledgeBases: [claims-handbook] }
+  budgets:
+    tokens: { soft: 200000, hard: 400000 }
+    costUsd: { soft: 2, hard: 5 }
+    toolCalls: { hard: 50 }
+  process:
+    { restartPolicy: on-failure, maxRestarts: 3, supervisor: one-for-one, timeoutSeconds: 900 }
+  policy: { packs: ["baseline-deny@^1.0.0", "phi-redaction@^1.1.0"] }
+  channels: [web, slack]
+  data: { phi: true, residency: eu-west-1 }
+  evals:
+    suites: [{ ref: "claims-regression@^1.0.0", threshold: 0.92 }]

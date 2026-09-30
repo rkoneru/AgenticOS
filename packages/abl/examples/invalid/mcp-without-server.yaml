@@ -1,0 +1,9 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata: { name: bad-agent, version: 1.0.0 }
+spec:
+  riskClassification: { level: minimal, rationale: A long enough rationale. }
+  model: { primary: { provider: anthropic, model: m } }
+  instructions: { system: hi }
+  tools:
+    - { name: crm, kind: mcp }

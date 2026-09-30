@@ -1,0 +1,445 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://axis.dev/schemas/abl/v1.json",
+  "title": "AXIS Blueprint Language (ABL) v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "const": "abl.axis.dev/v1"
+    },
+    "kind": {
+      "const": "Agent"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/spec"
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,62}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "ref": {
+      "description": "Registry reference: name@semver-range, e.g. web-search@^1.2.0",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,62}(/[a-z][a-z0-9-]{1,62})?@[\\^~<>=0-9][0-9A-Za-z.^~<>=| *-]*$"
+    },
+    "money": {
+      "type": "number",
+      "minimum": 0
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "owner": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxProperties": 50
+        }
+      }
+    },
+    "riskClassification": {
+      "description": "EU AI Act risk tier. 'unacceptable' systems are prohibited and cannot be expressed. Required on every blueprint.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "rationale"],
+      "properties": {
+        "level": {
+          "enum": ["minimal", "limited", "high"]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000
+        },
+        "intendedPurpose": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "transparencyNotice": {
+          "description": "Shown to end users when they interact with the agent. Required for limited and high.",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "humanOversight": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required"],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "approverRoles": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          },
+          "if": {
+            "properties": {
+              "required": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": ["approverRoles"],
+            "properties": {
+              "approverRoles": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "level": {
+                "enum": ["limited", "high"]
+              }
+            }
+          },
+          "then": {
+            "required": ["transparencyNotice"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "level": {
+                "const": "high"
+              }
+            }
+          },
+          "then": {
+            "required": ["humanOversight"],
+            "properties": {
+              "humanOversight": {
+                "type": "object",
+                "properties": {
+                  "required": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "modelRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model"],
+      "properties": {
+        "provider": {
+          "enum": ["anthropic", "openai", "google", "azure-openai", "bedrock", "openai-compatible"]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "maxOutputTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "topP": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "kind": {
+          "enum": ["function", "mcp", "code", "browser", "channel", "agent"]
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "mcpServer": {
+          "type": "string",
+          "format": "uri"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "sideEffects": {
+          "description": "Declared effect class; policy packs key off it. Defaults to 'write' when omitted (conservative).",
+          "enum": ["none", "read", "write", "external"]
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "mcp"
+              }
+            }
+          },
+          "then": {
+            "required": ["mcpServer"]
+          }
+        }
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "soft": {
+          "$ref": "#/$defs/money"
+        },
+        "hard": {
+          "$ref": "#/$defs/money"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["riskClassification", "model", "instructions"],
+      "properties": {
+        "riskClassification": {
+          "$ref": "#/$defs/riskClassification"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary"],
+          "properties": {
+            "primary": {
+              "$ref": "#/$defs/modelRef"
+            },
+            "fallbacks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/modelRef"
+              },
+              "maxItems": 5
+            }
+          }
+        },
+        "routing": {
+          "description": "NEXUS pipeline. Stages run in listed order; the first stage that resolves the request short-circuits.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stages": {
+              "type": "array",
+              "items": {
+                "enum": ["cache", "rules", "mpm", "rag", "llm"]
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            }
+          }
+        },
+        "instructions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["system"],
+          "properties": {
+            "system": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50000
+            }
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool"
+          },
+          "maxItems": 100
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "run": {
+              "type": "boolean"
+            },
+            "session": {
+              "type": "boolean"
+            },
+            "longTerm": {
+              "type": "boolean"
+            },
+            "knowledgeBases": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/name"
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tokens": {
+              "$ref": "#/$defs/budget"
+            },
+            "costUsd": {
+              "$ref": "#/$defs/budget"
+            },
+            "runtimeSeconds": {
+              "$ref": "#/$defs/budget"
+            },
+            "toolCalls": {
+              "$ref": "#/$defs/budget"
+            }
+          }
+        },
+        "process": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "restartPolicy": {
+              "enum": ["never", "on-failure", "always"]
+            },
+            "maxRestarts": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "maxChildren": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "supervisor": {
+              "enum": ["one-for-one", "one-for-all", "rest-for-one"]
+            }
+          }
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "packs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ref"
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "enum": ["web", "slack", "teams", "email", "sms", "whatsapp", "voice"]
+          },
+          "uniqueItems": true
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "phi": {
+              "type": "boolean"
+            },
+            "residency": {
+              "type": "string",
+              "pattern": "^[a-z]{2}(-[a-z0-9]+)+$"
+            }
+          }
+        },
+        "evals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "suites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref", "threshold"],
+                "properties": {
+                  "ref": {
+                    "$ref": "#/$defs/ref"
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

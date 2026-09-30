@@ -1,0 +1,6 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata: { name: bad-agent, version: 1.0.0 }
+spec:
+  model: { primary: { provider: anthropic, model: m } }
+  instructions: { system: hi }
