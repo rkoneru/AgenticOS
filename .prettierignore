@@ -1,0 +1,9 @@
+pnpm-lock.yaml
+uv.lock
+node_modules
+dist
+coverage
+.turbo
+AXIS_MASTER_PROMPT.md
+PHASE_PLAN.md
+infra/compose/grafana
