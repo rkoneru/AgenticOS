@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -20,6 +21,7 @@ from axis_runtime.models.adapters.base import HttpCall, ParsedResponse, default_
 from axis_runtime.models.costs import CostTable
 from axis_runtime.models.endpoints import EndpointError, Resolver, validate_endpoint
 from axis_runtime.models.resilience import (
+    BreakerState,
     CircuitBreaker,
     ModelClock,
     RetryPolicy,
@@ -71,6 +73,7 @@ class ModelGateway:
         cost_table: CostTable | None = None,
         breaker_threshold: int = 5,
         breaker_reset_seconds: float = 30.0,
+        max_breakers: int = 1024,
         allow_http_endpoints: bool = False,
         request_timeout: float = 120.0,
         resolver: Resolver | None = None,
@@ -85,7 +88,12 @@ class ModelGateway:
         self._clock = clock or SystemModelClock()
         self._rng = rng or default_rng()
         self.cost_table = cost_table or CostTable()
-        self._breakers: dict[tuple[str, str, str], CircuitBreaker] = {}
+        if max_breakers < 1:
+            raise ValueError("max_breakers must be at least 1")
+        self._max_breakers = max_breakers
+        # LRU order: least recently used first. Bounded because the key includes a tenant-controlled
+        # endpoint string.
+        self._breakers: OrderedDict[tuple[str, str, str], CircuitBreaker] = OrderedDict()
         self._breaker_args = (breaker_threshold, breaker_reset_seconds)
         self._allow_http = allow_http_endpoints
         self._timeout = request_timeout
@@ -108,11 +116,37 @@ class ModelGateway:
 
     def breaker(self, tenant_id: str, provider: str, endpoint: str | None = None) -> CircuitBreaker:
         """One breaker per (tenant, provider, endpoint): a tenant's failing endpoint must never
-        open the circuit for another tenant (or for the same tenant's other endpoints)."""
+        open the circuit for another tenant (or for the same tenant's other endpoints).
+
+        The map is a bounded LRU (``max_breakers``). When full, the least recently used CLOSED
+        breaker is evicted (a closed breaker only forgets a few sub-threshold failures). OPEN and
+        HALF_OPEN breakers are never evicted, so eviction cannot reset a tripped circuit; if every
+        breaker is tripped, a new key is refused with a non-retryable CONFIGURATION error."""
         key = (tenant_id, provider, (endpoint or "").rstrip("/"))
-        if key not in self._breakers:
-            self._breakers[key] = CircuitBreaker(self._clock, *self._breaker_args)
-        return self._breakers[key]
+        existing = self._breakers.get(key)
+        if existing is not None:
+            self._breakers.move_to_end(key)
+            return existing
+        if len(self._breakers) >= self._max_breakers:
+            victim = next(
+                (k for k, b in self._breakers.items() if b.state is BreakerState.CLOSED), None
+            )
+            if victim is None:
+                raise ModelError(
+                    ErrorKind.CONFIGURATION,
+                    provider,
+                    "too many tripped circuit breakers; endpoint refused",
+                )
+            del self._breakers[victim]
+        created = self._breakers[key] = CircuitBreaker(self._clock, *self._breaker_args)
+        return created
+
+    def _recording_breaker(self, request: ModelRequest, target: ModelTarget) -> CircuitBreaker:
+        """Breaker for recording an outcome: never raises (a refused key gets a throwaway one)."""
+        try:
+            return self._breaker_for(request, target)
+        except ModelError:
+            return CircuitBreaker(self._clock, *self._breaker_args)
 
     def _breaker_for(self, request: ModelRequest, target: ModelTarget) -> CircuitBreaker:
         return self.breaker(request.tenant_id, target.provider, target.endpoint)
@@ -209,7 +243,7 @@ class ModelGateway:
         self, err: ModelError, request: ModelRequest, target: ModelTarget, attempts: list[Attempt]
     ) -> None:
         attempts.append(Attempt(target.provider, target.model, err.kind.value))
-        breaker = self._breaker_for(request, target)
+        breaker = self._recording_breaker(request, target)
         if err.retryable:
             breaker.record_failure()
         else:
@@ -268,7 +302,7 @@ class ModelGateway:
                     raise err from None
                 await self._clock.sleep(self._retry.delay(attempt, self._rng, err.retry_after))
                 continue
-            self._breaker_for(request, target).record_success()
+            self._recording_breaker(request, target).record_success()
             attempts.append(Attempt(target.provider, target.model, "ok"))
             return self._finish(parsed, target, started, attempts)
         raise AssertionError("unreachable")  # pragma: no cover
@@ -350,7 +384,7 @@ class ModelGateway:
                     raise err from None
                 await self._clock.sleep(self._retry.delay(attempt, self._rng, err.retry_after))
                 continue
-            self._breaker_for(request, target).record_success()
+            self._recording_breaker(request, target).record_success()
             attempts.append(Attempt(target.provider, target.model, "ok"))
             yield StreamEvent(
                 "done", response=self._finish(parser.result(), target, started, attempts)
