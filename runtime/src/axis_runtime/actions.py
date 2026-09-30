@@ -56,7 +56,17 @@ class Backends:
     spawn: SpawnHandler | None = None
 
     def need(self, name: str) -> Any:
-        value = getattr(self, name)
+        available: dict[str, Any] = {
+            "tools": self.tools,
+            "mcp": self.mcp,
+            "sandbox": self.sandbox,
+            "browser": self.browser,
+            "memory": self.memory,
+            "channels": self.channels,
+            "models": self.models,
+            "spawn": self.spawn,
+        }
+        value = available[name]  # unknown names are a programming error (KeyError)
         if value is None:
             raise BackendUnavailableError(f"no {name} backend configured")
         return value

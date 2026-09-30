@@ -13,7 +13,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import grpc
 import grpc.aio
@@ -108,7 +108,13 @@ class FailClosedGate:
         return validate_decision(result)
 
 
-_EP_TO_PROTO = {ep: getattr(common_pb2, f"ENFORCEMENT_POINT_{ep.name}") for ep in EnforcementPoint}
+_EP_TO_PROTO: dict[EnforcementPoint, common_pb2.EnforcementPoint] = {
+    ep: cast(
+        common_pb2.EnforcementPoint,
+        common_pb2.EnforcementPoint.Value(f"ENFORCEMENT_POINT_{ep.name}"),
+    )
+    for ep in EnforcementPoint
+}
 _ACTOR_TO_PROTO = {
     ActorType.HUMAN: common_pb2.Actor.TYPE_HUMAN,
     ActorType.AGENT: common_pb2.Actor.TYPE_AGENT,
