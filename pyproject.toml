@@ -42,3 +42,12 @@ follow_imports = "silent"
 [[tool.mypy.overrides]]
 module = ["grpc", "grpc.*"]
 ignore_missing_imports = true
+
+# Used when pytest is run from the repo root over several packages
+# (`uv run pytest runtime sdk/python`); per-package runs use each package's own pyproject.
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--cov=axis_runtime --cov=axis_sdk --cov-branch --cov-fail-under=85"
+
+[tool.coverage.run]
+omit = ["*/axis_runtime/_gen/*"]
