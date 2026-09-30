@@ -31,9 +31,9 @@ SRC = Path(axis_runtime.__file__).resolve().parent
 # ---------------------------------------------------------------------------------------------------
 NETWORK_IMPORT_ALLOWLIST: dict[str, tuple[frozenset[str], str]] = {
     "models/adapters/base.py": (
-        frozenset({"httpx"}),
+        frozenset({"httpx", "socket"}),
         "HttpxTransport: the single place the ModelGateway touches the network; only reachable via ModelGateway, "
-        "which only runs inside ActionExecutor (ModelCall).",
+        "which only runs inside ActionExecutor (ModelCall). socket: default DNS resolver for endpoint checks.",
     ),
     "tools.py": (
         frozenset({"httpx"}),

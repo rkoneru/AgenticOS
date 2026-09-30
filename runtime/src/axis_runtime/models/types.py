@@ -233,6 +233,7 @@ class ErrorKind(StrEnum):
     NETWORK = "network"
     CONTENT_FILTER = "content_filter"
     NO_CREDENTIALS = "no_credentials"
+    CONFIGURATION = "configuration"  # non-retryable: forbidden by tenant/platform configuration
     CIRCUIT_OPEN = "circuit_open"
     UNKNOWN = "unknown"
 

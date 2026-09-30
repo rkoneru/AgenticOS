@@ -1,8 +1,11 @@
-"""Adapter base, HTTP transport (the ONLY place the model layer touches httpx) and SSE decoding."""
+"""Adapter base, HTTP transport (the ONLY place the model layer touches httpx), the default DNS
+resolver (the only use of socket) and SSE decoding."""
 
 from __future__ import annotations
 
+import asyncio
 import json
+import socket
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Mapping
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -12,6 +15,7 @@ from typing import Any, ClassVar, Protocol
 
 import httpx
 
+from axis_runtime.models.endpoints import Resolver
 from axis_runtime.models.secrets import Secret, scrub
 from axis_runtime.models.types import (
     ErrorKind,
@@ -52,6 +56,16 @@ class StreamHandle(Protocol):
 class Transport(Protocol):
     async def send(self, call: HttpCall) -> HttpResponse: ...
     def stream(self, call: HttpCall) -> AbstractAsyncContextManager[StreamHandle]: ...
+
+
+def default_resolver() -> Resolver:
+    """Real DNS via the event loop's getaddrinfo (threaded; never called at import time)."""
+
+    async def resolve(host: str, port: int) -> list[str]:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        return [str(info[4][0]) for info in infos]
+
+    return resolve
 
 
 def _map_transport_error(exc: httpx.HTTPError, provider: str) -> ModelError:

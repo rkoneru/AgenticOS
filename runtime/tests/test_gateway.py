@@ -249,7 +249,7 @@ async def test_breaker_opens_then_rejects_without_calling_the_provider() -> None
     for _ in range(2):  # 2 calls x 2 attempts = 4 failures >= threshold 3
         with pytest.raises(ModelError):
             await free(gw).complete(request("openai", "gpt-4o"))
-    assert gw.breaker("openai").state is BreakerState.OPEN
+    assert gw.breaker(TENANT, "openai").state is BreakerState.OPEN
     calls_before = len(script.hosts)
     with pytest.raises(ModelError) as exc:
         await free(gw).complete(request("openai", "gpt-4o"))
@@ -263,11 +263,11 @@ async def test_breaker_half_open_probe_closes_on_success_and_reopens_on_failure(
     )
     with pytest.raises(ModelError):
         await free(gw).complete(request("openai", "gpt-4o"))
-    assert gw.breaker("openai").state is BreakerState.OPEN
+    assert gw.breaker(TENANT, "openai").state is BreakerState.OPEN
     clock.advance(31)
-    assert gw.breaker("openai").state is BreakerState.HALF_OPEN
+    assert gw.breaker(TENANT, "openai").state is BreakerState.HALF_OPEN
     assert (await free(gw).complete(request("openai", "gpt-4o"))).text == "ok"  # the single probe
-    assert gw.breaker("openai").state is BreakerState.CLOSED
+    assert gw.breaker(TENANT, "openai").state is BreakerState.CLOSED
 
     script2 = Script(err(500))
     gw2, clock2 = gateway_for(
@@ -278,7 +278,10 @@ async def test_breaker_half_open_probe_closes_on_success_and_reopens_on_failure(
     clock2.advance(11)
     with pytest.raises(ModelError) as exc:
         await free(gw2).complete(request("openai", "gpt-4o"))  # probe fails
-    assert exc.value.kind is ErrorKind.SERVER and gw2.breaker("openai").state is BreakerState.OPEN
+    assert (
+        exc.value.kind is ErrorKind.SERVER
+        and gw2.breaker(TENANT, "openai").state is BreakerState.OPEN
+    )
 
 
 def test_breaker_allows_only_one_half_open_probe() -> None:
@@ -297,14 +300,14 @@ async def test_breaker_is_per_provider_and_ignores_client_errors() -> None:
     gw, _ = gateway_for(Script(err(500)), breaker_threshold=1, retry=RetryPolicy(max_attempts=1))
     with pytest.raises(ModelError):
         await free(gw).complete(request("openai", "gpt-4o"))
-    assert gw.breaker("openai").state is BreakerState.OPEN
-    assert gw.breaker("anthropic").state is BreakerState.CLOSED
+    assert gw.breaker(TENANT, "openai").state is BreakerState.OPEN
+    assert gw.breaker(TENANT, "anthropic").state is BreakerState.CLOSED
     gw2, _ = gateway_for(Script(err(400)), breaker_threshold=1)
     for _ in range(3):
         with pytest.raises(ModelError):
             await free(gw2).complete(request("openai", "gpt-4o"))
     assert (
-        gw2.breaker("openai").state is BreakerState.CLOSED
+        gw2.breaker(TENANT, "openai").state is BreakerState.CLOSED
     )  # a bad request is not a provider outage
 
 

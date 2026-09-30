@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 import pytest
-from axis_runtime.models import CacheHints, FinishReason, Message, ModelError
+from axis_runtime.models import CacheHints, FinishReason, Message, ModelError, TenantModelPolicy
 from axis_runtime.models.adapters.sigv4 import sign_request, signing_key
 from axis_runtime.models.types import ErrorKind
 from conftest import FakeClock
@@ -658,26 +658,28 @@ async def test_openai_compatible_custom_endpoint_and_auth() -> None:
         request(
             "openai-compatible",
             "llama-3",
-            endpoint="https://llm.internal/v1",
+            endpoint="https://llm.example.com/v1",
             params={"max_tokens": 9},
         )
     )
-    assert str(SEEN[0].url) == "https://llm.internal/v1/chat/completions"
+    assert str(SEEN[0].url) == "https://llm.example.com/v1/chat/completions"
     assert SEEN[0].headers["authorization"] == "Bearer compat-SECRET-555"
     assert (
         body()["max_tokens"] == 9
         and "max_completion_tokens" not in body()
         and body()["model"] == "llama-3"
     )
-    await free(gw).complete(request("openai-compatible", endpoint="https://llm.internal"))
-    assert str(SEEN[0].url) == "https://llm.internal/v1/chat/completions"
+    await free(gw).complete(request("openai-compatible", endpoint="https://llm.example.com"))
+    assert str(SEEN[0].url) == "https://llm.example.com/v1/chat/completions"
 
 
 async def test_openai_compatible_without_key_sends_no_auth_header() -> None:
     from axis_runtime.models import InMemorySecretStore
 
     gw, _ = gateway_for(capture(json_response(OPENAI_TEXT)), secrets=InMemorySecretStore())
-    resp = await free(gw).complete(request("openai-compatible", endpoint="https://llm.internal/v1"))
+    resp = await free(gw).complete(
+        request("openai-compatible", endpoint="https://llm.example.com/v1")
+    )
     assert (
         "authorization" not in SEEN[0].headers and resp.cost_usd is None
     )  # unknown pricing is never guessed
@@ -693,7 +695,12 @@ async def test_endpoint_rules() -> None:
         await free(gw).complete(request("openai", endpoint="http://evil.internal"))
     with pytest.raises(ModelError, match="endpoint must be https"):
         await free(gw).complete(request("openai", endpoint="file:///etc/passwd"))
-    gw_http, _ = gateway_for(capture(json_response(OPENAI_TEXT)), allow_http_endpoints=True)
+    gw_http, _ = gateway_for(
+        capture(json_response(OPENAI_TEXT)),
+        allow_http_endpoints=True,
+        extra_endpoint_ports=frozenset({8000}),
+        tenant_policy=lambda _t: TenantModelPolicy(allow_private_endpoints=True),
+    )
     await free(gw_http).complete(request("openai-compatible", endpoint="http://localhost:8000"))
     assert str(SEEN[0].url) == "http://localhost:8000/v1/chat/completions"
 

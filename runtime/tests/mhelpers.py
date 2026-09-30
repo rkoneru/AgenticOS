@@ -55,6 +55,11 @@ def store(**extra: str) -> InMemorySecretStore:
     return InMemorySecretStore(data)
 
 
+async def public_resolver(host: str, port: int) -> list[str]:
+    """Fake DNS: every name resolves to a documentation-range-free public address."""
+    return ["93.184.216.34"]
+
+
 def gateway_for(
     handler: Handler,
     *,
@@ -64,6 +69,7 @@ def gateway_for(
 ) -> tuple[ModelGateway, FakeClock]:
     clock = clock or FakeClock()
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    kw.setdefault("resolver", public_resolver)
     kw.setdefault("retry", RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=8.0))
     gw = ModelGateway(
         secrets or store(), transport=HttpxTransport(client), clock=clock, rng=FixedRng(), **kw

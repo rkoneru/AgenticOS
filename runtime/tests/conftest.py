@@ -217,6 +217,10 @@ class ScriptedTransport:
         yield
 
 
+async def _public_resolver(host: str, port: int) -> list[str]:
+    return ["93.184.216.34"]
+
+
 def make_gateway(
     transport: ScriptedTransport,
     clock: FakeClock,
@@ -229,6 +233,7 @@ def make_gateway(
         transport=transport,
         clock=clock,
         rng=FixedRng(),
+        resolver=_public_resolver,
         retry=RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=8.0),
         **kw,
     )
