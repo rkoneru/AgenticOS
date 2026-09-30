@@ -1,0 +1,7 @@
+extends:
+  - recommended
+rules:
+  # Every operation declares a `default` problem+json response that covers 4XX/5XX; we do not enumerate each code.
+  operation-4xx-response: off
+  # Conditional `required` inside if/then (JSON Schema) legitimately names properties defined on the parent schema.
+  no-required-schema-properties-undefined: off

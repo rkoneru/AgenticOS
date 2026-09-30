@@ -1,0 +1,676 @@
+openapi: 3.1.0
+info:
+  title: AXIS Control Plane API
+  version: 1.0.0
+  summary: Governed agent runtime — REST API v1
+  description: |
+    Source of truth for the public `/v1` API. SDKs and server route schemas are generated from this file.
+
+    **Conventions**
+    - Every request is scoped to one tenant, derived from the credential; there is no `tenant_id` parameter.
+    - `POST` endpoints that create or start something accept an `Idempotency-Key` header.
+    - Lists are cursor-paginated (`limit`, `cursor`) and return `next_cursor`.
+    - Errors use `application/problem+json` (RFC 9457).
+    - A request that cannot be evaluated by the policy gate is denied, never allowed (`403`, code `policy_denied`).
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://api.{region}.axis.example/v1
+    variables:
+      region: { default: us-east-1, description: Region-pinned deployment }
+security:
+  - bearerAuth: []
+  - apiKey: []
+tags:
+  - { name: Blueprints, description: Versioned ABL agent blueprints }
+  - { name: Runs, description: Agent runs and their process lifecycle }
+  - { name: Approvals, description: Human-in-the-loop approval queue }
+  - { name: Policies, description: Policy packs compiled to Rego }
+  - { name: Audit, description: Tamper-evident audit log }
+  - { name: Kill switches, description: Emergency stops by scope }
+  - { name: Usage, description: Metered usage }
+  - { name: Evals, description: Eval Hub runs }
+paths:
+  /blueprints:
+    get:
+      tags: [Blueprints]
+      operationId: listBlueprints
+      summary: List blueprints
+      parameters:
+        [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }]
+      responses:
+        "200":
+          description: Page of blueprints
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlueprintPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Blueprints]
+      operationId: publishBlueprintVersion
+      summary: Validate and publish a blueprint version (immutable once published)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [abl]
+              additionalProperties: false
+              properties:
+                abl: { $ref: "../../abl/schema/abl-v1.schema.json" }
+      responses:
+        "201":
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlueprintVersion" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /blueprints/{name}/versions/{version}:
+    get:
+      tags: [Blueprints]
+      operationId: getBlueprintVersion
+      summary: Get one blueprint version
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Blueprint version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlueprintVersion" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /runs:
+    get:
+      tags: [Runs]
+      operationId: listRuns
+      summary: List runs
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { name: state, in: query, schema: { $ref: "#/components/schemas/ProcessState" } }
+        - { name: blueprint, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Page of runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Runs]
+      operationId: startRun
+      summary: Start a run (spawns the init process as a durable workflow)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blueprint]
+              additionalProperties: false
+              properties:
+                blueprint:
+                  type: object
+                  required: [name, version]
+                  properties:
+                    name: { type: string }
+                    version: { type: string }
+                input: { type: object }
+      responses:
+        "202":
+          description: Accepted; the run is starting
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        "429": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /runs/{runId}:
+    get:
+      tags: [Runs]
+      operationId: getRun
+      summary: Get a run
+      parameters: [{ $ref: "#/components/parameters/RunId" }]
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /runs/{runId}/signals:
+    post:
+      tags: [Runs]
+      operationId: signalRun
+      summary: Send a signal (PAUSE, RESUME, TERM, KILL, INTERRUPT) to a process in the run
+      parameters:
+        [
+          { $ref: "#/components/parameters/RunId" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signal]
+              additionalProperties: false
+              properties:
+                pid:
+                  {
+                    $ref: "#/components/schemas/Pid",
+                    description: Defaults to the run's init process,
+                  }
+                signal: { $ref: "#/components/schemas/Signal" }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Signal delivered; resulting state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pid, state]
+                properties:
+                  pid: { $ref: "#/components/schemas/Pid" }
+                  state: { $ref: "#/components/schemas/ProcessState" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /runs/{runId}/events:
+    get:
+      tags: [Runs]
+      operationId: listRunEvents
+      summary: Read the run's append-only event log (basis for replay)
+      parameters:
+        - { $ref: "#/components/parameters/RunId" }
+        - { name: after_sequence, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: Events in sequence order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RunEvent" } }
+                  next_cursor: { type: [string, "null"] }
+            text/event-stream:
+              schema:
+                {
+                  type: string,
+                  description: Server-sent RunEvent objects when Accept is text/event-stream,
+                }
+        default: { $ref: "#/components/responses/Problem" }
+  /approvals:
+    get:
+      tags: [Approvals]
+      operationId: listApprovals
+      summary: List approvals
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ApprovalStatus" } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200":
+          description: Page of approvals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApprovalPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /approvals/{approvalId}/decision:
+    post:
+      tags: [Approvals]
+      operationId: decideApproval
+      summary: Approve or reject a pending approval
+      parameters:
+        - { name: approvalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              additionalProperties: false
+              properties:
+                decision: { enum: [approve, reject] }
+                comment: { type: string, maxLength: 1000 }
+      responses:
+        "200":
+          description: Decided
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Approval" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /policies:
+    get:
+      tags: [Policies]
+      operationId: listPolicyPacks
+      summary: List policy packs
+      parameters:
+        [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }]
+      responses:
+        "200":
+          description: Page of policy packs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PolicyPackPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Policies]
+      operationId: publishPolicyPack
+      summary: Validate, compile to Rego and publish a policy pack version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy]
+              additionalProperties: false
+              properties:
+                policy: { $ref: "../schemas/policy-v1.schema.json" }
+      responses:
+        "201":
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PolicyPack" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /policies:test:
+    post:
+      tags: [Policies]
+      operationId: testPolicy
+      summary: Evaluate a hypothetical request against a policy pack without executing anything
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy, request]
+              additionalProperties: false
+              properties:
+                policy: { $ref: "../schemas/policy-v1.schema.json" }
+                request:
+                  type: object
+                  required: [enforcement_point, context]
+                  properties:
+                    enforcement_point: { type: string }
+                    action: { type: string }
+                    context: { type: object }
+      responses:
+        "200":
+          description: Decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GateDecision" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /audit/events:
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: Query the tenant's audit log
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { name: trace_id, in: query, schema: { type: string, pattern: "^[0-9a-f]{32}$" } }
+        - { name: decision, in: query, schema: { $ref: "#/components/schemas/Decision" } }
+        - { name: from_seq, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Page of audit events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "../schemas/audit-event-v1.schema.json" } }
+                  next_cursor: { type: [string, "null"] }
+        default: { $ref: "#/components/responses/Problem" }
+  /audit/verify:
+    post:
+      tags: [Audit]
+      operationId: verifyAuditChain
+      summary: Verify hash-chain integrity over a range
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                from_seq: { type: integer, minimum: 1 }
+                to_seq: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Verdict
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, verified]
+                properties:
+                  ok: { type: boolean }
+                  verified: { type: integer }
+                  broken_at_seq: { type: integer }
+                  reason: { type: string }
+        default: { $ref: "#/components/responses/Problem" }
+  /kill-switches:
+    get:
+      tags: [Kill switches]
+      operationId: listKillSwitches
+      summary: List engaged kill-switches visible to the tenant
+      responses:
+        "200":
+          description: Kill switches
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/KillSwitch" } }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Kill switches]
+      operationId: setKillSwitch
+      summary: Engage or release a tenant, agent or tool kill-switch (effective < 1 s)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KillSwitchRequest" }
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KillSwitch" }
+        default: { $ref: "#/components/responses/Problem" }
+  /usage:
+    get:
+      tags: [Usage]
+      operationId: getUsage
+      summary: Metered usage by meter and period
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: group_by, in: query, schema: { enum: [meter, model, blueprint, day] } }
+      responses:
+        "200":
+          description: Usage rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [meter, quantity, unit]
+                      properties:
+                        meter: { $ref: "#/components/schemas/Meter" }
+                        quantity: { type: number }
+                        unit: { type: string }
+                        group: { type: string }
+        default: { $ref: "#/components/responses/Problem" }
+  /evals/runs:
+    post:
+      tags: [Evals]
+      operationId: startEvalRun
+      summary: Run an eval suite against a blueprint version
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suite, blueprint]
+              additionalProperties: false
+              properties:
+                suite: { type: string }
+                blueprint:
+                  type: object
+                  required: [name, version]
+                  properties:
+                    name: { type: string }
+                    version: { type: string }
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvalRun" }
+        default: { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    bearerAuth:
+      {
+        type: http,
+        scheme: bearer,
+        bearerFormat: JWT,
+        description: Short-lived token issued via WorkOS SSO,
+      }
+    apiKey: { type: apiKey, in: header, name: X-Axis-Api-Key }
+  parameters:
+    Limit:
+      { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    RunId: { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Client-generated unique key; replays within 24 h return the original response.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ValidationProblem:
+      description: The document failed schema or lint validation
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ValidationProblemBody" }
+  schemas:
+    Pid: { type: string, pattern: "^axp_[0-9A-HJKMNP-TV-Z]{26}$" }
+    ProcessState: { enum: [spawn, ready, running, waiting, suspended, terminated] }
+    Signal: { enum: [PAUSE, RESUME, TERM, KILL, INTERRUPT] }
+    Decision: { enum: [ALLOW, DENY, REQUIRE_APPROVAL, ALLOW_WITH_REDACTION] }
+    ApprovalStatus: { enum: [pending, approved, rejected, expired, escalated] }
+    Meter:
+      {
+        enum:
+          [
+            tokens,
+            runtime_seconds,
+            tool_executions,
+            voice_minutes,
+            storage_gb_hours,
+            marketplace_installs,
+          ],
+      }
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, description: "URI, e.g. https://axis.example/problems/policy_denied" }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          {
+            enum:
+              [
+                unauthenticated,
+                forbidden,
+                policy_denied,
+                not_found,
+                conflict,
+                validation_failed,
+                rate_limited,
+                budget_exceeded,
+                internal,
+              ],
+          }
+        detail: { type: string }
+        trace_id: { type: string }
+    ValidationProblemBody:
+      allOf:
+        - { $ref: "#/components/schemas/Problem" }
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [path, message]
+                properties:
+                  { path: { type: string }, keyword: { type: string }, message: { type: string } }
+    BlueprintVersion:
+      type: object
+      required: [name, version, risk_level, created_at, abl]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        risk_level: { enum: [minimal, limited, high] }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        signature: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        abl: { $ref: "../../abl/schema/abl-v1.schema.json" }
+    BlueprintPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BlueprintVersion" } }
+        next_cursor: { type: [string, "null"] }
+    Run:
+      type: object
+      required: [id, blueprint, state, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        init_pid: { $ref: "#/components/schemas/Pid" }
+        blueprint:
+          type: object
+          required: [name, version]
+          properties: { name: { type: string }, version: { type: string } }
+        state: { $ref: "#/components/schemas/ProcessState" }
+        exit_reason: { type: [string, "null"] }
+        trace_id: { type: string }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    RunPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Run" } }
+        next_cursor: { type: [string, "null"] }
+    RunEvent:
+      type: object
+      required: [sequence, type, pid, at]
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        type:
+          {
+            type: string,
+            description: "state_transition, model_call, tool_call, gate_decision, message, ...",
+          }
+        pid: { $ref: "#/components/schemas/Pid" }
+        at: { type: string, format: date-time }
+        audit_event_id: { type: string, format: uuid }
+        data: { type: object }
+    GateDecision:
+      type: object
+      required: [decision, policy_version]
+      properties:
+        decision: { $ref: "#/components/schemas/Decision" }
+        policy_version: { type: string }
+        reason: { type: string }
+        matched_rule_ids: { type: array, items: { type: string } }
+        redact_fields: { type: array, items: { type: string } }
+    Approval:
+      type: object
+      required: [id, status, run_id, requested_at, sla_deadline]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/ApprovalStatus" }
+        run_id: { type: string, format: uuid }
+        pid: { $ref: "#/components/schemas/Pid" }
+        action: { type: string }
+        roles: { type: array, items: { type: string } }
+        requested_at: { type: string, format: date-time }
+        sla_deadline: { type: string, format: date-time }
+        decided_by: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        comment: { type: [string, "null"] }
+    ApprovalPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Approval" } }
+        next_cursor: { type: [string, "null"] }
+    PolicyPack:
+      type: object
+      required: [name, version, created_at]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        created_at: { type: string, format: date-time }
+    PolicyPackPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PolicyPack" } }
+        next_cursor: { type: [string, "null"] }
+    KillSwitchRequest:
+      type: object
+      required: [scope, engaged]
+      additionalProperties: false
+      properties:
+        scope: { enum: [tenant, agent, tool] }
+        target: { type: string, description: Required for agent and tool scopes }
+        engaged: { type: boolean }
+        reason: { type: string, maxLength: 500 }
+    KillSwitch:
+      type: object
+      required: [scope, engaged, updated_at]
+      properties:
+        scope: { enum: [global, tenant, agent, tool] }
+        target: { type: [string, "null"] }
+        engaged: { type: boolean }
+        reason: { type: [string, "null"] }
+        updated_at: { type: string, format: date-time }
+    EvalRun:
+      type: object
+      required: [id, suite, status]
+      properties:
+        id: { type: string, format: uuid }
+        suite: { type: string }
+        status: { enum: [queued, running, passed, failed, errored] }
+        score: { type: [number, "null"] }
+        threshold: { type: [number, "null"] }
