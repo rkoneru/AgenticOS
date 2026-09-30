@@ -1,0 +1,26 @@
+{
+  "name": "@axis/risk-kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@axis/contracts": "workspace:*",
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
+    "@open-policy-agent/opa-wasm": "^1.10.0"
+  },
+  "devDependencies": {
+    "@axis/policy": "workspace:*",
+    "yaml": "^2.9.1"
+  }
+}
