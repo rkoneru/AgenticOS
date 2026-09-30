@@ -41,6 +41,13 @@ callers of `RiskKernel.evaluate` with an invalid request get a DENY with an empt
 
 ## Known limits
 
+- Rejection audit records are rate-limited to 60 per tenant per minute (`rejectionAuditPerMinute`); the rest are counted and logged
+  as `rejection audits dropped`. This only ever bounds the caller's own chain and the shared audit path's load.
+- A `REQUIRE_APPROVAL` decision releases any capacity its gates reserved (nothing executes). The approved action is evaluated
+  again when resumed (Phase 3), and reserves then.
+- gRPC messages that fail protobuf decoding (for example pathologically nested `Struct`s) are rejected by the transport with
+  INTERNAL before the kernel runs; they are not audited. Clients treat that as DENY.
+
 - Kill-switch and counter state is in-memory and single-instance, so **cross-instance kill-switch propagation (< 1 s) is not built**;
   the Redis stores must implement `CounterStore.reserve` as one atomic script (Lua), not get-then-add.
 - Counter keys use the agent name and `run.id` supplied by the (trusted) runtime. There is no tenant-wide budget scope and no

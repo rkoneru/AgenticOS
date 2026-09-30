@@ -17,8 +17,8 @@ default t0_0 := false
 default p0_0 := false
 default t0_1 := false
 default p0_1 := false
-k0_1 if { _ := input.tool.side_effects }
-t0_1 if { v := input.tool.side_effects; v in ["none", "read"] }
+k0_1 if { v := input["tool"]["side_effects"]; type_name(v) in ["string"] }
+t0_1 if { v := input["tool"]["side_effects"]; type_name(v) in ["string"]; v in ["none", "read"] }
 p0_1 if { t0_1 }
 p0_1 if { not k0_1 }
 
@@ -38,15 +38,15 @@ default t1_2 := false
 default p1_2 := false
 default t1_3 := false
 default p1_3 := false
-k1_3 if { _ := input.tool.name }
-t1_3 if { v := input.tool.name; v == "payments" }
+k1_3 if { v := input["tool"]["name"]; type_name(v) in ["string"] }
+t1_3 if { v := input["tool"]["name"]; type_name(v) in ["string"]; v == "payments" }
 p1_3 if { t1_3 }
 p1_3 if { not k1_3 }
 
 default t1_4 := false
 default p1_4 := false
-k1_4 if { v := input.args.amount; is_number(v) }
-t1_4 if { v := input.args.amount; is_number(v); v > 1000 }
+k1_4 if { v := input["args"]["amount"]; is_number(v) }
+t1_4 if { v := input["args"]["amount"]; is_number(v); v > 1000 }
 p1_4 if { t1_4 }
 p1_4 if { not k1_4 }
 
@@ -66,8 +66,8 @@ matched contains "baseline-deny/approve-large-payments" if {
 
 default t2_5 := false
 default p2_5 := false
-k2_5 if { _ := input.data.phi }
-t2_5 if { v := input.data.phi; v == true }
+k2_5 if { v := input["data"]["phi"]; type_name(v) in ["boolean"] }
+t2_5 if { v := input["data"]["phi"]; type_name(v) in ["boolean"]; v == true }
 p2_5 if { t2_5 }
 p2_5 if { not k2_5 }
 
@@ -80,8 +80,8 @@ default t3_6 := false
 default p3_6 := false
 default t3_7 := false
 default p3_7 := false
-k3_7 if { _ := input.args.domain }
-t3_7 if { v := input.args.domain; v in ["example.com", "docs.example.com"] }
+k3_7 if { v := input["args"]["domain"]; type_name(v) in ["string"] }
+t3_7 if { v := input["args"]["domain"]; type_name(v) in ["string"]; v in ["example.com", "docs.example.com"] }
 p3_7 if { t3_7 }
 p3_7 if { not k3_7 }
 
@@ -96,8 +96,8 @@ matched contains "baseline-deny/deny-browser-offlist" if {
 # --- pack phi-redaction@1.1.0
 default t4_0 := false
 default p4_0 := false
-k4_0 if { _ := input.data.phi }
-t4_0 if { v := input.data.phi; v == true }
+k4_0 if { v := input["data"]["phi"]; type_name(v) in ["boolean"] }
+t4_0 if { v := input["data"]["phi"]; type_name(v) in ["boolean"]; v == true }
 p4_0 if { t4_0 }
 p4_0 if { not k4_0 }
 
@@ -108,8 +108,8 @@ matched contains "phi-redaction/redact-phi-egress" if {
 
 default t5_1 := false
 default p5_1 := false
-k5_1 if { _ := input.data.phi }
-t5_1 if { v := input.data.phi; v == true }
+k5_1 if { v := input["data"]["phi"]; type_name(v) in ["boolean"] }
+t5_1 if { v := input["data"]["phi"]; type_name(v) in ["boolean"]; v == true }
 p5_1 if { t5_1 }
 p5_1 if { not k5_1 }
 
@@ -120,8 +120,8 @@ matched contains "phi-redaction/deny-phi-to-code" if {
 
 default t6_2 := false
 default p6_2 := false
-k6_2 if { _ := input.data.phi }
-t6_2 if { v := input.data.phi; v != true }
+k6_2 if { v := input["data"]["phi"]; type_name(v) in ["boolean"] }
+t6_2 if { v := input["data"]["phi"]; type_name(v) in ["boolean"]; v != true }
 p6_2 if { t6_2 }
 p6_2 if { not k6_2 }
 

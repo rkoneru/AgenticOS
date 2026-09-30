@@ -83,9 +83,24 @@ Consequence: "less data never gains an allow and never loses a deny" for every o
 so "allow only if the field is absent" is expressible). This is property-tested against an independent reference evaluator
 and differentially against real OPA.
 
-## `matches` uses RE2 syntax
+## `matches` uses RE2 semantics
 
-Policies run in OPA (RE2). The compiler accepts only syntax with the same meaning in RE2 and JavaScript: plain and
-non-capturing `(?:...)` groups, classes, quantifiers, anchors, `\d \w \s \b`. It rejects lookaround, backreferences,
-atomic/possessive groups, named groups, inline flags, `\p{..}` classes and `\u`/`\k`/`\c` escapes at compile time. ReDoS is not
-a concern for RE2 (linear time).
+Policies run in OPA, whose regular expressions are Go **RE2**, not JavaScript. The compiler validates every `matches` pattern with
+a real RE2 parser (`re2js`, which agrees with OPA's `regex.is_valid` on every pattern we probed) and rejects patterns RE2 rejects:
+lookaround, backreferences, `\\e`, repeat counts over 1000, `[a-\\d]`, JS escapes such as `\\u0041`, and so on. Accepted patterns
+have **RE2 meaning**: POSIX classes (`[[:alpha:]]`), `\\A` / `\\z`, `\\Q..\\E`, inline flags `(?i)`, named groups, and `.` excluding
+only `\\n`. Do not assume JavaScript behaviour. RE2 guarantees linear-time matching, so ReDoS is not a concern.
+
+As defence in depth the generated Rego guards every `matches` with `regex.is_valid(pattern)`: if OPA ever disagrees with the
+compile-time check, the leaf is UNKNOWN at runtime (a DENY rule fires, an ALLOW rule does not) instead of silently not matching.
+
+## Types, priority and pack composition
+
+- `eq`, `neq`, `in` and `not_in` are judged only when the field's type matches the value's type (or one of the listed values'
+  types). A field of another type (an array, object, `null`, a number where a string is expected) is UNKNOWN, not "not equal".
+  So `args.dest not_in ["evil.com"]` does **not** match `dest: ["evil.com"]`, and a `deny when amount eq 100` fires for `"100"`.
+- **Priority is not overridden by unknown data.** A possibly-true `DENY` at priority 100 is outranked by a definitely-true `ALLOW`
+  at priority 200; give deny rules the priority they need. Among equal priorities the most restrictive decision wins.
+- Packs compose in one flat namespace (`<pack>/<rule>`): all rules from all loaded packs compete by priority, so a higher-priority
+  ALLOW in one pack can outrank a DENY in another. Review pack priorities together.
+- Field paths are compiled with bracket notation (`input["args"]["in"]`), so any segment, including Rego keywords, is safe.

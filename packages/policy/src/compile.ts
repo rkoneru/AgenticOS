@@ -1,4 +1,5 @@
 import { validatePolicy } from "@axis/contracts";
+import { RE2JS } from "re2js";
 
 /** Entry point of the generated module (OPA query path / Wasm entrypoint). */
 export const REGO_PACKAGE = "axis.policy";
@@ -78,6 +79,17 @@ export function lit(value: unknown): string {
 
 const OP_SYMBOL: Record<string, string> = { gt: ">", gte: ">=", lt: "<", lte: "<=" };
 
+const typeNameOf = (v: unknown): string =>
+  v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+
+/** Rego guard that the field's type is one of the types present in `values` (scalars only ever match scalar types). */
+function typeTest(values: unknown[]): string {
+  const names = [...new Set(values.map(typeNameOf))].filter((n) =>
+    ["string", "number", "boolean", "null"].includes(n),
+  );
+  return names.length === 0 ? "false" : `type_name(v) in ${lit(names.sort())}`;
+}
+
 /** Names of the two generated booleans for a condition node: definitely-true and possibly-true. */
 interface Node {
   t: string;
@@ -96,7 +108,10 @@ class Emitter {
   readonly lines: string[] = [];
   readonly issues: PolicyIssue[] = [];
   private counter = 0;
-  constructor(private readonly doc: number) {}
+  constructor(
+    private readonly doc: number,
+    private readonly regexCheck: (pattern: string) => string | undefined,
+  ) {}
 
   issue(path: string, code: string, message: string): void {
     this.issues.push({ doc: this.doc, path, code, message });
@@ -136,7 +151,11 @@ class Emitter {
         `unknown context root "${root}" (allowed: ${CONTEXT_ROOTS.join(", ")})`,
       );
     }
-    const ref = `input.${field}`;
+    // Bracket notation: a field segment that is a Rego keyword (`in`, `not`, `default`...) cannot break the module.
+    const ref = `input${field
+      .split(".")
+      .map((seg) => `[${JSON.stringify(seg)}]`)
+      .join("")}`;
     const v = c.value;
     const scalar = v === null || ["string", "number", "boolean"].includes(typeof v);
     const known = `k${id}`;
@@ -147,6 +166,8 @@ class Emitter {
       case "eq":
       case "neq":
         if (!scalar) this.issue(`${path}/value`, "POLICY_BAD_VALUE", `${op} needs a scalar value`);
+        // A field of a different type than the value (or a non-scalar) cannot be judged: UNKNOWN, not "not equal".
+        typeGuard = `${typeTest([v])}; `;
         test = `v ${op === "eq" ? "==" : "!="} ${lit(v)}`;
         break;
       case "in":
@@ -154,6 +175,7 @@ class Emitter {
         if (!Array.isArray(v) || v.length === 0) {
           this.issue(`${path}/value`, "POLICY_BAD_VALUE", `${op} needs a non-empty array`);
         }
+        typeGuard = `${typeTest(Array.isArray(v) ? v : [])}; `;
         test = op === "in" ? `v in ${lit(v)}` : `not v in ${lit(v)}`;
         break;
       case "gt":
@@ -167,9 +189,10 @@ class Emitter {
         break;
       case "matches": {
         const why =
-          typeof v === "string" ? re2Problem(v) : "matches needs a regular expression string";
+          typeof v === "string" ? this.regexCheck(v) : "matches needs a regular expression string";
         if (why) this.issue(`${path}/value`, "POLICY_BAD_VALUE", why);
-        typeGuard = "is_string(v); ";
+        // `regex.is_valid`: a pattern OPA cannot compile is UNKNOWN (fires DENY rules), never a silent non-match.
+        typeGuard = `is_string(v); regex.is_valid(${lit(v)}); `;
         test = `regex.match(${lit(v)}, v)`;
         break;
       }
@@ -198,37 +221,20 @@ class Emitter {
 }
 
 /**
- * Policies are evaluated by OPA (RE2 syntax, Go), not by JavaScript. Accept only the syntax both engines share and
- * mean the same thing by; reject constructs RE2 lacks (lookaround, backreferences, atomic/possessive groups) and ones
- * whose meaning differs (inline flags, named groups, \\p classes, \\u escapes). Returns a problem description or undefined.
+ * Policies are evaluated by OPA, whose regular expressions are Go RE2. `matches` patterns are therefore validated with a
+ * real RE2 parser (re2js; agrees with OPA's `regex.is_valid` on every pattern we probed, including the ones JavaScript
+ * accepts but RE2 rejects: `\\e`, `a{1001}`, `[a-\\d]`). Semantics are RE2's (POSIX classes, `\\A`/`\\z`, `\\Q..\\E`, inline
+ * flags, `.` excluding only `\\n`), NOT JavaScript's. The generated Rego also guards every `matches` with
+ * `regex.is_valid`, so a pattern the two parsers disagree on is UNKNOWN at runtime (fires DENY rules) instead of silently
+ * failing. Returns a problem description, or undefined when the pattern is valid.
  */
 export function re2Problem(pattern: string): string | undefined {
-  let inClass = false;
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i] as string;
-    if (ch === "\\") {
-      const n = pattern[i + 1];
-      if (n === undefined) return "trailing backslash";
-      if (/[1-9]/.test(n)) return "backreferences are not supported by RE2";
-      if ("kucCpP".includes(n)) return `\\${n} escapes are not portable to RE2`;
-      i++;
-    } else if (inClass) {
-      if (ch === "]") inClass = false;
-    } else if (ch === "[") {
-      inClass = true;
-      if (pattern[i + 1] === "^") i++;
-      if (pattern[i + 1] === "]") i++; // a leading ] is literal
-    } else if (ch === "(" && pattern[i + 1] === "?" && pattern[i + 2] !== ":") {
-      return "only plain and non-capturing (?:...) groups are supported (no lookaround, named groups or inline flags)";
-    }
-  }
-  if (inClass) return "unterminated character class";
   try {
-    new RegExp(pattern);
-  } catch {
-    return "invalid regular expression syntax";
+    RE2JS.compile(pattern);
+    return undefined;
+  } catch (err) {
+    return `invalid RE2 regular expression: ${(err as Error).message}`.slice(0, 200);
   }
-  return undefined;
 }
 
 /**
@@ -238,7 +244,12 @@ export function re2Problem(pattern: string): string | undefined {
  * decision wins (DENY > REQUIRE_APPROVAL > ALLOW_WITH_REDACTION > ALLOW); ties within the winning decision
  * union their gates and redactions and take the lexicographically first rule's approval. No match => DENY.
  */
-export function compilePolicySet(docs: unknown[]): CompileResult {
+export interface CompileOptions {
+  /** Test seam: replaces the RE2 syntax check (the runtime `regex.is_valid` guard remains). */
+  regexCheck?: (pattern: string) => string | undefined;
+}
+
+export function compilePolicySet(docs: unknown[], opts: CompileOptions = {}): CompileResult {
   const issues: PolicyIssue[] = [];
   const warnings: PolicyIssue[] = [];
   if (docs.length === 0) {
@@ -294,7 +305,7 @@ export function compilePolicySet(docs: unknown[]): CompileResult {
 
   for (const { pack, doc } of sorted) {
     const ns = pack.metadata.name;
-    const em = new Emitter(doc);
+    const em = new Emitter(doc, opts.regexCheck ?? re2Problem);
     const gateIds = new Set<string>();
     (pack.spec.gates ?? []).forEach((g, i) => {
       if (gateIds.has(g.id))

@@ -26,6 +26,8 @@ export interface KernelDeps {
   /** Budget for policy evaluation; over-budget or timed-out evaluations are denied. Default 25 ms. */
   policyTimeoutMs?: number;
   logger?: Logger;
+  /** Max rejection audit records per tenant per minute; further rejections are counted and logged, not appended. Default 60. */
+  rejectionAuditPerMinute?: number;
 }
 
 /** Hash that cannot throw: an unhashable payload still gets an audit record (with a sentinel hash), never none. */
@@ -55,11 +57,17 @@ export class RiskKernel {
   private readonly clock: () => number;
   private readonly timeoutMs: number;
   private readonly log: Logger;
+  private readonly rejectionLimit: number;
+  private readonly rejections = new Map<
+    string,
+    { windowStart: number; count: number; dropped: number }
+  >();
 
   constructor(private readonly deps: KernelDeps) {
     this.clock = deps.clock ?? Date.now;
     this.timeoutMs = deps.policyTimeoutMs ?? 25;
     this.log = deps.logger ?? silent;
+    this.rejectionLimit = deps.rejectionAuditPerMinute ?? 60;
   }
 
   async evaluate(raw: unknown): Promise<GateResponse> {
@@ -222,6 +230,20 @@ export class RiskKernel {
    * or "" if the append failed (logged).
    */
   async auditRejection(tenantId: string, reason: string): Promise<string> {
+    // Bound the work an authenticated caller can force on the shared audit path: per-tenant budget per minute, the rest is
+    // counted and logged (one line per window) but not appended. Only ever affects the caller's own chain.
+    const now = this.clock();
+    const w = this.rejections.get(tenantId);
+    if (!w || now - w.windowStart >= 60_000) {
+      if (w && w.dropped > 0)
+        this.log.warn("rejection audits dropped", { tenant_id: tenantId, dropped: w.dropped });
+      this.rejections.set(tenantId, { windowStart: now, count: 1, dropped: 0 });
+    } else if (w.count >= this.rejectionLimit) {
+      w.dropped++;
+      return "";
+    } else {
+      w.count++;
+    }
     try {
       const sealed = await this.deps.audit.append({
         schema_version: 1,
@@ -252,6 +274,9 @@ export class RiskKernel {
     o: Omit<GateResponse, "audit_event_id">,
     reservations: GateResult[],
   ): Promise<GateResponse> {
+    // Nothing executes for a REQUIRE_APPROVAL, so capacity reserved by its gates is released; the resumed action is
+    // evaluated again (Phase 3 approvals flow) and reserves then.
+    if (o.decision === "REQUIRE_APPROVAL") await this.rollback(reservations);
     const event: UnsealedEvent = {
       schema_version: 1,
       id: randomUUID(),

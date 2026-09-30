@@ -613,10 +613,19 @@ function tri(c: C, input: unknown): Tri {
       ? "T"
       : "F";
   }
-  if (c.op === "eq") return v === val ? "T" : "F";
-  if (c.op === "neq") return v !== val ? "T" : "F";
-  if (c.op === "in") return (val as unknown[]).includes(v) ? "T" : "F";
-  return (val as unknown[]).includes(v) ? "F" : "T"; // not_in
+  const tn = (x: unknown): string => (x === null ? "null" : Array.isArray(x) ? "array" : typeof x);
+  if (c.op === "eq" || c.op === "neq") {
+    if (tn(v) !== tn(val)) return "U"; // a different type cannot be judged
+    return (v === val) === (c.op === "eq") ? "T" : "F";
+  }
+  const list = val as unknown[];
+  if (
+    !list.some((x) => tn(x) === tn(v)) ||
+    Array.isArray(v) ||
+    (typeof v === "object" && v !== null)
+  )
+    return "U";
+  return list.includes(v) === (c.op === "in") ? "T" : "F";
 }
 
 describe("differential: compiled Rego (real OPA) == reference three-valued evaluator", () => {
@@ -700,18 +709,19 @@ describe("differential: compiled Rego (real OPA) == reference three-valued evalu
   });
 });
 
-describe("matches: only syntax that means the same in RE2 and JS is accepted (review finding 3)", () => {
+describe("matches: real RE2 validation plus a runtime guard (second review)", () => {
   it.each([
-    ["^(?!safe).*", "plain-group"],
     ["(?=x)a", "lookahead"],
-    ["(?<=a)b", "lookbehind"],
-    ["(?<n>a)", "named group"],
-    ["(?i)abc", "inline flag"],
-    ["(?>a+)b", "atomic group"],
     ["(a)\\1", "backreference"],
+    ["^\\e.*rm -rf", "\\e is not RE2"],
+    ["a{1001}", "repeat count over RE2's limit of 1000"],
+    ["[a-\\d]", "class range ending in a class"],
+    ["^(\\y)x", "\\y is not RE2"],
+    ["x{2,1}", "reversed repeat bounds"],
+    ["a**", "double repetition"],
+    ["\\C", "unsupported escape"],
+    ["\\u0041", "JS unicode escape"],
     ["\\k<n>", "named backreference"],
-    ["\\p{L}+", "unicode class"],
-    ["\\u0041", "unicode escape"],
     ["[unterminated", "unterminated class"],
     ["(", "unbalanced"],
     ["abc\\", "trailing backslash"],
@@ -724,20 +734,226 @@ describe("matches: only syntax that means the same in RE2 and JS is accepted (re
     ).toContain("POLICY_BAD_VALUE");
   });
 
-  it.each(["^https://ex\\.com/", "^(?:a|b)+$", "[^\\]]x", "[]a]", "\\d{3}-\\d{4}", "a.*b", "^$"])(
-    "accepts %s",
-    (pattern) => {
-      expect(re2Problem(pattern)).toBeUndefined();
-    },
-  );
+  it.each([
+    ["^https://ex\\.com/", "https://ex.com/a", true],
+    ["^(?:a|b)+$", "abba", true],
+    ["(?i)abc", "xABCx", true],
+    ["[[:alpha:]]", "_q_", true],
+    ["\\Qa.b\\E", "a.b", true],
+    ["\\Qa.b\\E", "axb", false],
+    ["\\Aabc\\z", "abc", true],
+    ["(?P<n>a)b", "ab", true],
+    ["\\d{3}-\\d{4}", "555-1234", true],
+    ["^a.b$", "a\rb", true], // RE2 `.` excludes only \n; JavaScript would say false
+  ])("accepts %s and OPA agrees on the meaning (%s -> %s)", (pattern, input, expected) => {
+    expect(re2Problem(pattern)).toBeUndefined();
+    const { rego } = ok(
+      compilePolicySet([pack({}, [rule({ field: "args.s", op: "matches", value: pattern })])]),
+    );
+    expect(opaEval(rego, { enforcement_point: "tool_call", args: { s: input } })["decision"]).toBe(
+      expected ? "ALLOW" : "DENY",
+    );
+    expect(() => opaBuildWasm(rego)).not.toThrow();
+  });
 
-  it("every accepted pattern is also accepted by real OPA", () => {
-    for (const pattern of ["^https://ex\\.com/", "^(?:a|b)+$", "[^\\]]x", "\\d{3}-\\d{4}"]) {
-      const { rego } = ok(
-        compilePolicySet([pack({}, [rule({ field: "args.u", op: "matches", value: pattern })])]),
-      );
-      expect(() => opaCheck(rego)).not.toThrow();
-      expect(() => opaBuildWasm(rego)).not.toThrow();
-    }
+  it("a pattern the RE2 check lets through but OPA cannot compile is UNKNOWN at runtime: a DENY rule still fires", () => {
+    // The reviewer's probe: before the `regex.is_valid` guard this DENY rule was silently skipped.
+    const rules = [
+      { id: "allow-all", enforcementPoints: ["tool_call"], decision: "ALLOW", priority: 1 },
+      {
+        id: "deny-rm",
+        enforcementPoints: ["tool_call"],
+        decision: "DENY",
+        priority: 100,
+        when: { field: "args.cmd", op: "matches", value: "^\\e.*rm -rf" },
+      },
+    ];
+    const { rego } = ok(compilePolicySet([pack({}, rules)], { regexCheck: () => undefined })); // simulate a parser disagreement
+    expect(rego).toContain("regex.is_valid");
+    expect(
+      opaEval(rego, { enforcement_point: "tool_call", args: { cmd: "\u001brm -rf /" } })[
+        "decision"
+      ],
+    ).toBe("DENY");
+    expect(opaEval(rego, { enforcement_point: "tool_call", args: { cmd: 5 } })["decision"]).toBe(
+      "DENY",
+    );
+    // ...and an ALLOW rule with the same broken pattern never matches.
+    const allow = ok(
+      compilePolicySet(
+        [
+          pack({}, [
+            {
+              id: "allow-bad",
+              enforcementPoints: ["tool_call"],
+              decision: "ALLOW",
+              when: { field: "args.cmd", op: "matches", value: "^\\e" },
+            },
+          ]),
+        ],
+        { regexCheck: () => undefined },
+      ),
+    );
+    expect(
+      opaEval(allow.rego, { enforcement_point: "tool_call", args: { cmd: "x" } })["decision"],
+    ).toBe("DENY");
+  });
+});
+
+describe("wrong-typed fields are UNKNOWN for eq / neq / in / not_in (second review)", () => {
+  const dec = (decision: "ALLOW" | "DENY", when: unknown, input: unknown) => {
+    const rules =
+      decision === "DENY"
+        ? [
+            { id: "allow-low", enforcementPoints: ["tool_call"], decision: "ALLOW", priority: 1 },
+            {
+              id: "deny-when",
+              enforcementPoints: ["tool_call"],
+              decision: "DENY",
+              priority: 500,
+              when,
+            },
+          ]
+        : [rule(when, "ALLOW")];
+    const { rego } = ok(compilePolicySet([pack({}, rules)]));
+    return opaEval(rego, { enforcement_point: "tool_call", ...(input as object) })["decision"];
+  };
+  it.each([
+    [
+      "ALLOW not_in: array field is not 'not in'",
+      "ALLOW",
+      { field: "args.dest", op: "not_in", value: ["evil.com"] },
+      { args: { dest: ["evil.com"] } },
+      "DENY",
+    ],
+    [
+      "ALLOW not_in: object field",
+      "ALLOW",
+      { field: "args.dest", op: "not_in", value: ["evil.com"] },
+      { args: { dest: { h: "evil.com" } } },
+      "DENY",
+    ],
+    [
+      "ALLOW not_in: null field",
+      "ALLOW",
+      { field: "args.dest", op: "not_in", value: ["evil.com"] },
+      { args: { dest: null } },
+      "DENY",
+    ],
+    [
+      "ALLOW not_in: proper string still works",
+      "ALLOW",
+      { field: "args.dest", op: "not_in", value: ["evil.com"] },
+      { args: { dest: "ok.com" } },
+      "ALLOW",
+    ],
+    [
+      "ALLOW neq: number where string expected",
+      "ALLOW",
+      { field: "args.role", op: "neq", value: "banned" },
+      { args: { role: 5 } },
+      "DENY",
+    ],
+    [
+      "ALLOW neq: proper string still works",
+      "ALLOW",
+      { field: "args.role", op: "neq", value: "banned" },
+      { args: { role: "admin" } },
+      "ALLOW",
+    ],
+    [
+      "DENY eq 100: the string '100' is unknown and fires",
+      "DENY",
+      { field: "args.amount", op: "eq", value: 100 },
+      { args: { amount: "100" } },
+      "DENY",
+    ],
+    [
+      "DENY eq 100: 7 is definitely not 100",
+      "DENY",
+      { field: "args.amount", op: "eq", value: 100 },
+      { args: { amount: 7 } },
+      "ALLOW",
+    ],
+    [
+      "DENY in: mistyped field fires",
+      "DENY",
+      { field: "args.k", op: "in", value: [1, 2] },
+      { args: { k: "1" } },
+      "DENY",
+    ],
+    [
+      "DENY in: definite miss does not fire",
+      "DENY",
+      { field: "args.k", op: "in", value: [1, 2] },
+      { args: { k: 3 } },
+      "ALLOW",
+    ],
+    [
+      "eq null: null matches",
+      "ALLOW",
+      { field: "args.n", op: "eq", value: null },
+      { args: { n: null } },
+      "ALLOW",
+    ],
+    [
+      "eq null: a string is unknown",
+      "ALLOW",
+      { field: "args.n", op: "eq", value: null },
+      { args: { n: "x" } },
+      "DENY",
+    ],
+  ])("%s", (_n, d, when, input, want) => {
+    expect(dec(d as "ALLOW" | "DENY", when, input)).toBe(want);
+  });
+});
+
+describe("field segments that are Rego keywords compile (second review)", () => {
+  it.each([
+    "in",
+    "not",
+    "if",
+    "default",
+    "contains",
+    "every",
+    "some",
+    "with",
+    "as",
+    "else",
+    "true",
+    "null",
+    "package",
+    "import",
+  ])("args.%s", (kw) => {
+    const { rego } = ok(
+      compilePolicySet([pack({}, [rule({ field: `args.${kw}`, op: "eq", value: "x" })])]),
+    );
+    expect(() => opaCheck(rego)).not.toThrow();
+    expect(opaEval(rego, { enforcement_point: "tool_call", args: { [kw]: "x" } })["decision"]).toBe(
+      "ALLOW",
+    );
+    expect(opaEval(rego, { enforcement_point: "tool_call", args: {} })["decision"]).toBe("DENY");
+  });
+});
+
+describe("priority and pack composition (documented behaviour)", () => {
+  it("a possibly-true DENY at lower priority LOSES to a definitely-true ALLOW at higher priority; priority decides across packs", () => {
+    const hi = {
+      ...pack({}, [rule({ field: "tool.name", op: "eq", value: "x" }, "ALLOW", "hi-allow")]),
+      metadata: { name: "pk-a", version: "1.0.0" },
+    } as Record<string, unknown>;
+    (hi["spec"] as { rules: { priority?: number }[] }).rules[0]!.priority = 200;
+    const lo = {
+      ...pack({}, [rule({ field: "args.region", op: "neq", value: "EU" }, "DENY", "lo-deny")]),
+      metadata: { name: "pk-b", version: "1.0.0" },
+    } as Record<string, unknown>;
+    (lo["spec"] as { rules: { priority?: number }[] }).rules[0]!.priority = 100;
+    const { rego } = ok(compilePolicySet([hi, lo]));
+    expect(opaEval(rego, { enforcement_point: "tool_call", tool: { name: "x" } })["decision"]).toBe(
+      "ALLOW",
+    );
+    expect(opaEval(rego, { enforcement_point: "tool_call", tool: { name: "y" } })["decision"]).toBe(
+      "DENY",
+    );
   });
 });

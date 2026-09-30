@@ -560,3 +560,54 @@ describe("review findings (Phase 2)", () => {
     expect((await h.kernel.evaluate(other)).decision).toBe("ALLOW");
   });
 });
+
+describe("second review follow-ups", () => {
+  const capGate = [
+    { id: "cap", type: "target_cap", params: { field: "args.amount", max: 100, perTarget: true } },
+  ];
+  const call = (amount: number) =>
+    req({ context: { tool: { name: "t" }, args: { amount, target: "v" } } });
+
+  it("a REQUIRE_APPROVAL decision does not consume target capacity (nothing executes)", async () => {
+    const approval = { roles: ["r"], sla_seconds: 5, escalate_to: [] };
+    const h = await harness(
+      {},
+      engineReturning(goodResult({ decision: "REQUIRE_APPROVAL", approval, gates: capGate })),
+    );
+    for (let i = 0; i < 5; i++)
+      expect((await h.kernel.evaluate(call(100))).decision).toBe("REQUIRE_APPROVAL");
+    // The capacity is all still available to an allowed action.
+    const allow = await harness({}, engineReturning(goodResult({ gates: capGate })));
+    expect((await allow.kernel.evaluate(call(100))).decision).toBe("ALLOW");
+    const k2 = new RiskKernel({
+      engine: engineReturning(
+        goodResult({ decision: "REQUIRE_APPROVAL", approval, gates: capGate }),
+      ),
+      audit: h.audit,
+      killSwitches: h.kill,
+      counters: h.counters,
+      clock: () => h.clock.now,
+    });
+    await k2.evaluate(call(100));
+    const k3 = new RiskKernel({
+      engine: engineReturning(goodResult({ gates: capGate })),
+      audit: h.audit,
+      killSwitches: h.kill,
+      counters: h.counters,
+      clock: () => h.clock.now,
+    });
+    expect((await k3.evaluate(call(100))).decision).toBe("ALLOW"); // shared counters: approvals never consumed the cap
+  });
+
+  it("rejection audits are rate-limited per tenant per minute and never affect another tenant", async () => {
+    const h = await harness({ rejectionAuditPerMinute: 3 });
+    const ids: string[] = [];
+    for (let i = 0; i < 10; i++) ids.push(await h.kernel.auditRejection(T1, "probe"));
+    expect(ids.filter((x) => x !== "")).toHaveLength(3);
+    expect(h.audit.events.get(T1)).toHaveLength(3);
+    expect(await h.kernel.auditRejection(T2, "probe")).not.toBe(""); // other tenants have their own budget
+    h.clock.now += 61_000;
+    expect(await h.kernel.auditRejection(T1, "probe")).not.toBe(""); // window rolls over
+    expect(h.logs).toContain("warn:rejection audits dropped");
+  });
+});
