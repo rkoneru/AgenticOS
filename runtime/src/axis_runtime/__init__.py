@@ -1,25 +1,20 @@
-"""AXIS agent runtime (Phase 0 skeleton)."""
+"""AXIS agent runtime."""
 
-from enum import StrEnum
+from axis_runtime._decision import FAIL_CLOSED_DECISION, Decision, coerce_decision
 
 __version__ = "0.0.0"
 
-
-class Decision(StrEnum):
-    ALLOW = "ALLOW"
-    DENY = "DENY"
-    REQUIRE_APPROVAL = "REQUIRE_APPROVAL"
-    ALLOW_WITH_REDACTION = "ALLOW_WITH_REDACTION"
-
-
-FAIL_CLOSED_DECISION = Decision.DENY
+__all__ = [
+    "FAIL_CLOSED_DECISION",
+    "Decision",
+    "__version__",
+    "all_action_types",
+    "coerce_decision",
+]
 
 
-def coerce_decision(value: object) -> Decision:
-    """Coerce an untrusted value to a Decision; anything unknown fails closed to DENY."""
-    if isinstance(value, str):
-        try:
-            return Decision(value)
-        except ValueError:
-            return FAIL_CLOSED_DECISION
-    return FAIL_CLOSED_DECISION
+def all_action_types() -> tuple[type, ...]:
+    """Every concrete ``Action`` subclass currently defined (used by the bypass guard)."""
+    from axis_runtime.actions import all_action_types as _all
+
+    return _all()
