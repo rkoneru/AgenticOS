@@ -150,4 +150,20 @@ describe("cli", () => {
       process.chdir(prev);
     }
   });
+
+  it("bundle builds a Wasm bundle, reports compile errors, and usage", () => {
+    const dir = mkdtempSync(join(tmpdir(), "axis-bundle-"));
+    const out = join(dir, "b.tar.gz");
+    const c = capture();
+    expect(main(["bundle", join(policies, "baseline-deny/pack.yaml"), "-o", out], c.out)).toBe(0);
+    expect(c.lines[0]).toContain("baseline-deny@1.0.0");
+    expect(readFileSync(out).length).toBeGreaterThan(1000);
+
+    writeFileSync(join(dir, "bad.yaml"), "apiVersion: nope\n");
+    const e = capture();
+    expect(main(["bundle", join(dir, "bad.yaml"), "-o", out], e.out)).toBe(1);
+    const u = capture();
+    expect(main(["bundle", join(policies, "baseline-deny/pack.yaml")], u.out)).toBe(2);
+    expect(main(["bundle", "-o", out], u.out)).toBe(2);
+  });
 });

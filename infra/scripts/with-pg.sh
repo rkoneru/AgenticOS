@@ -7,7 +7,8 @@ if [[ -n "${PG_ADMIN_URL:-}" ]]; then exec "$@"; fi
 
 BIN=${PG_BIN:-/usr/lib/postgresql/16/bin}
 [[ -x "$BIN/initdb" ]] || { echo "no PG_ADMIN_URL and no PostgreSQL 16 at $BIN" >&2; exit 2; }
-PORT=${PG_PORT:-54329}
+# Pick a free port so concurrent test runs (worktrees, CI shards) never collide.
+PORT=${PG_PORT:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}
 DIR=$(mktemp -d)
 RUN=()
 if [[ $(id -u) -eq 0 ]]; then # postgres refuses to run as root

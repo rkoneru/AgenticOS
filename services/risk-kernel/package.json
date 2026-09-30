@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cov": "vitest run --coverage",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts",
+    "bench": "tsx bench.ts"
   },
   "dependencies": {
     "@axis/contracts": "workspace:*",

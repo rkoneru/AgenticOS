@@ -54,6 +54,8 @@ export async function harness(
     killSwitches: kill,
     counters,
     clock: () => clock.now,
+    // Generous: functional tests must not depend on machine load. Timeout behaviour has its own explicit tests.
+    policyTimeoutMs: 2000,
     logger: {
       warn: (m) => void logs.push(`warn:${m}`),
       error: (m) => void logs.push(`error:${m}`),
