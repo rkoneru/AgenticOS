@@ -1,0 +1,141 @@
+"""Side-effect backends used by Actions.  Network/process/file-IO primitives live HERE (and in
+``axis_runtime.models.adapters``), never in the agent loop.
+
+Only the function-tool registry and a minimal HTTP MCP client are implemented.  Code sandbox,
+browser, memory and channel backends are interfaces only (Phase 4+); see docs/NEEDS.md.
+"""
+
+from __future__ import annotations
+
+import inspect
+import itertools
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+import httpx
+
+ToolHandler = Callable[[Mapping[str, Any]], Any]
+
+
+class ToolNotFoundError(KeyError):
+    pass
+
+
+class BackendUnavailableError(RuntimeError):
+    """The Backends bundle has no implementation for the requested action kind."""
+
+
+@dataclass(frozen=True)
+class RegisteredTool:
+    name: str
+    handler: ToolHandler
+    description: str
+    input_schema: Mapping[str, Any]
+
+
+class ToolRegistry:
+    """Function tools by name.  Handlers may be sync or async."""
+
+    def __init__(self) -> None:
+        self._tools: dict[str, RegisteredTool] = {}
+
+    def register(
+        self,
+        name: str,
+        handler: ToolHandler,
+        *,
+        description: str = "",
+        input_schema: Mapping[str, Any] | None = None,
+    ) -> None:
+        self._tools[name] = RegisteredTool(
+            name, handler, description, input_schema or {"type": "object"}
+        )
+
+    def get(self, name: str) -> RegisteredTool | None:
+        return self._tools.get(name)
+
+    async def call(self, name: str, args: Mapping[str, Any]) -> Any:
+        tool = self._tools.get(name)
+        if tool is None:
+            raise ToolNotFoundError(name)
+        result = tool.handler(args)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+
+class McpClient(Protocol):
+    async def call_tool(self, server: str, name: str, args: Mapping[str, Any]) -> Any: ...
+
+
+class CodeSandbox(Protocol):
+    async def run(self, language: str, code: str, timeout_seconds: int) -> Any: ...
+
+
+class BrowserRunner(Protocol):
+    async def run(self, args: Mapping[str, Any]) -> Any: ...
+
+
+class MemoryStore(Protocol):
+    async def write(self, scope: str, args: Mapping[str, Any]) -> Any: ...
+
+
+class ChannelSender(Protocol):
+    async def send(self, channel: str, args: Mapping[str, Any]) -> Any: ...
+
+
+class SpawnHandler(Protocol):
+    def __call__(self, ref: str, args: Mapping[str, Any]) -> Awaitable[Any]: ...
+
+
+class McpError(RuntimeError):
+    pass
+
+
+class HttpMcpClient:
+    """Minimal MCP-over-HTTP client (JSON-RPC 2.0 ``tools/call``, JSON responses only).
+
+    No session negotiation, SSE responses or auth flows: Prototype.
+    """
+
+    def __init__(
+        self,
+        servers: Mapping[str, str],
+        *,
+        client: httpx.AsyncClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        self._servers = dict(servers)
+        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._ids = itertools.count(1)
+
+    async def call_tool(self, server: str, name: str, args: Mapping[str, Any]) -> Any:
+        url = self._servers.get(server)
+        if url is None:
+            raise McpError(f"unknown MCP server {server!r}")
+        payload = {
+            "jsonrpc": "2.0",
+            "id": next(self._ids),
+            "method": "tools/call",
+            "params": {"name": name, "arguments": dict(args)},
+        }
+        try:
+            resp = await self._client.post(url, json=payload)
+            resp.raise_for_status()
+            body = resp.json()
+        except httpx.HTTPError as exc:
+            raise McpError(f"transport error: {type(exc).__name__}") from exc
+        except ValueError as exc:
+            raise McpError("invalid JSON from MCP server") from exc
+        if not isinstance(body, dict):
+            raise McpError("invalid JSON-RPC response")
+        if "error" in body:
+            err = body["error"]
+            raise McpError(f"MCP error {err.get('code') if isinstance(err, dict) else ''}")
+        if "result" not in body:
+            raise McpError("invalid JSON-RPC response")
+        return body["result"]
+
+    async def aclose(self) -> None:
+        await self._client.aclose()

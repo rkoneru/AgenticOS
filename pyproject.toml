@@ -27,7 +27,8 @@ extend-exclude = ["runtime/src/axis_runtime/_gen"]
 select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101"]
+# Tests: asserts, fake credentials, seeded RNG, poll loops and long fixture lines are fine.
+"**/tests/**" = ["S101", "S105", "S106", "S311", "E501", "ASYNC109", "ASYNC110"]
 
 [tool.mypy]
 strict = true
