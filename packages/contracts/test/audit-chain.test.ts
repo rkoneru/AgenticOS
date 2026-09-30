@@ -100,3 +100,20 @@ import type { AuditEvent } from "../src/index.js";
 function sealEventRaw(e: Omit<AuditEvent, "hash">): AuditEvent {
   return { ...e, hash: computeEventHash(e) };
 }
+
+import { canonicalizePayload, hashJson } from "../src/index.js";
+
+describe("canonicalizePayload / hashJson (float-tolerant payload hashing)", () => {
+  it("sorts keys, keeps floats in ES number form, and is order independent", () => {
+    expect(canonicalizePayload({ b: 1.5, a: [0.1, -2, 1e21, "x"], c: null, d: true })).toBe(
+      '{"a":[0.1,-2,1e+21,"x"],"b":1.5,"c":null,"d":true}',
+    );
+    expect(hashJson({ x: 1.25, y: 2 })).toBe(hashJson({ y: 2, x: 1.25 }));
+    expect(hashJson({})).toBe(hashPayload({}));
+  });
+  it("rejects non-finite numbers and unsupported types", () => {
+    for (const bad of [NaN, Infinity, -Infinity, undefined, () => 1, 10n, Symbol("s")]) {
+      expect(() => canonicalizePayload(bad)).toThrow(TypeError);
+    }
+  });
+});

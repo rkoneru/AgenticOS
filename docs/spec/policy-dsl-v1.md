@@ -50,3 +50,18 @@ Kill-switch state is evaluated by the gate before policy evaluation and is not p
 
 Same rules as ABL: additive changes within `v1` (ADR required post-freeze), breaking changes create `policy.axis.dev/v2`.
 Published pack versions are immutable (DB trigger); `metadata.version` is strict `x.y.z`.
+
+## Gate semantics (Risk Kernel, Phase 2)
+
+Gates are evaluated by the kernel, not by Rego. A gate that cannot be evaluated (missing or wrong-typed field, unknown type,
+store error) **fails**, which forces `DENY`.
+
+- `kill_switch`: fails while a kill-switch is engaged at the gate's `scope` (global, tenant, agent, tool). Engaged kill-switches
+  also deny before policy evaluation, regardless of which gates a rule lists.
+- `staleness`: the value at `field` (ISO-8601 string or epoch milliseconds) must be no older than `maxAgeSeconds` (and not in the future by more than 5 s).
+- `amount_cap`: the numeric value at `field` must be <= `max`.
+- `target_cap`: cumulative sum of the numeric value at `field` per target (target = `args.target`, else `tool.name`) per tenant
+  and agent per UTC day must stay <= `max`; `perTarget: false` uses one counter across targets. The sum is committed only when the
+  request is otherwise allowed.
+- `budget`: the spent amount of `metric` in `window` (maintained by TKI) must be below `hard`; crossing `soft` passes with a warning reason.
+- `rate_limit`: sliding window of `windowSeconds`; the request fails when it would make more than `max` hits for the `key` (tenant, agent, tool or actor).

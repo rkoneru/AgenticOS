@@ -11,7 +11,7 @@ spec:
     - {
         id: venue-cap,
         type: target_cap,
-        params: { field: args.venue, max: 50000, perTarget: true },
+        params: { field: args.amount, max: 50000, perTarget: true },
       }
     - {
         id: daily-spend,
