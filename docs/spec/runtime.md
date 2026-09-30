@@ -41,14 +41,14 @@ activity may still complete its side effect (inherent to cancelling external wor
 
 ## What is tested how
 
-| Area                                                                        | Evidence                                                                                                           |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Process model, event log, replay, executor, gate client, redaction          | unit + property-style tests, mutation-checked (DENY performs, gate error/timeout to ALLOW, unspecified accepted)   |
-| gRPC client                                                                 | in-process fake gRPC server (deadline, UNAVAILABLE, UNSPECIFIED). Against the real kernel: `e2e/` (Phase 2 exit)   |
-| Temporal workflow                                                           | real Temporal time-skipping test server: end to end, deny, approval parking, signals/queries, timeout, lost activity result, bad manifest, and `Replayer` determinism check |
-| Provider adapters                                                           | `httpx.MockTransport` fixtures written from provider docs. **No live provider calls have been made.**             |
-| KMS secret store, S3/cloud sinks                                            | interfaces only (`docs/NEEDS.md`)                                                                                   |
-| Bypass guard                                                                | `runtime/tests/test_bypass.py`: every `Action` type under a DENY gate has zero effects; AST test confines IO imports |
+| Area                                                               | Evidence                                                                                                                                                                    |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Process model, event log, replay, executor, gate client, redaction | unit + property-style tests, mutation-checked (DENY performs, gate error/timeout to ALLOW, unspecified accepted)                                                            |
+| gRPC client                                                        | in-process fake gRPC server (deadline, UNAVAILABLE, UNSPECIFIED). Against the real kernel: `e2e/` (Phase 2 exit)                                                            |
+| Temporal workflow                                                  | real Temporal time-skipping test server: end to end, deny, approval parking, signals/queries, timeout, lost activity result, bad manifest, and `Replayer` determinism check |
+| Provider adapters                                                  | `httpx.MockTransport` fixtures written from provider docs. **No live provider calls have been made.**                                                                       |
+| KMS secret store, S3/cloud sinks                                   | interfaces only (`docs/NEEDS.md`)                                                                                                                                           |
+| Bypass guard                                                       | `runtime/tests/test_bypass.py`: every `Action` type under a DENY gate has zero effects; AST test confines IO imports                                                        |
 
 The Temporal test server binary is downloaded from the Java SDK's GitHub release (the SDK's default host is blocked in some
 sandboxes); override with `AXIS_TEMPORAL_TEST_SERVER`. Tests fail, never skip, if it cannot be obtained.
