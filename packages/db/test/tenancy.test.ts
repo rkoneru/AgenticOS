@@ -190,7 +190,7 @@ describe("cross-tenant isolation at the database layer", () => {
     const e = await code(
       asApp(c, B, (x) =>
         x.query(
-          "INSERT INTO run_events (tenant_id, run_id, sequence, type, pid) VALUES ($1, $2, 99, 't', $3)",
+          "INSERT INTO run_events (tenant_id, run_id, sequence, type, pid) VALUES ($1, $2, 1, 't', $3)",
           [B, runA, PID1],
         ),
       ),
