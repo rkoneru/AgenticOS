@@ -6,6 +6,16 @@ ONCE and is inert unless ``recording()`` is active) captures network/process/nat
 events. Under a DENY (or approval-pending, or fail-closed outage) gate, and on the scripted/fake
 transport allow path, the set of such events must be EMPTY. A non-vacuity test performs each
 forbidden operation for real and proves the recorder sees it.
+
+What this proves, precisely: NO forbidden IO happens when a gate DENIES, requires approval, or is
+unavailable, for every action type. It does NOT claim an ALLOWED action is IO-free: allowed actions
+are EXPECTED to do IO (a tool that writes a file, a model call that opens a socket), and the ALLOW
+scenario below uses the scripted transport only so the suite needs no network. So an IO event on the
+allow path is not a bypass. A bypass is IO that happens WITHOUT a gate consult. The recorder therefore
+also notes, per event, whether the ``guard`` executing context (set only while ``ActionExecutor``
+performs an action that the gate allowed) was active; ``test_io_under_allow_happens_only_inside_the_
+executing_context`` proves that for a real IO-performing allowed tool every event is inside it, and
+that the same IO outside the executor is recorded as outside.
 """
 
 from __future__ import annotations
@@ -21,6 +31,7 @@ from typing import Any
 import pytest
 from axis_runtime import Decision
 from axis_runtime.gate import EvaluateRequest, GateDecision
+from axis_runtime.guard import in_executor
 from axis_runtime.run import run_agent
 from conftest import ScriptedGate, allow, deny, make_deps, make_manifest
 from helpers import PID, SAMPLES, make_executor
@@ -28,6 +39,7 @@ from test_run import deps_for, final, tool_turn
 
 _ACTIVE = False  # module-level switch: the installed hook does nothing unless True
 _EVENTS: list[tuple[str, str]] = []
+_EVENT_IN_EXECUTOR: list[bool] = []  # parallel to _EVENTS: was guard.in_executor() true?
 _INSTALLED = False
 
 _WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
@@ -73,6 +85,7 @@ def _hook(event: str, args: tuple[Any, ...]) -> None:
     kind = classify(event, args)
     if kind is not None:
         _EVENTS.append((kind, repr(args)[:120]))
+        _EVENT_IN_EXECUTOR.append(in_executor())
 
 
 def _install_once() -> None:
@@ -87,6 +100,7 @@ def recording() -> Iterator[list[tuple[str, str]]]:
     global _ACTIVE
     _install_once()
     _EVENTS.clear()
+    _EVENT_IN_EXECUTOR.clear()
     _ACTIVE = True
     try:
         yield _EVENTS
@@ -204,3 +218,26 @@ async def test_allowed_scripted_agent_run_touches_only_the_fake_transport() -> N
         plain = make_deps(gate=ScriptedGate(allow()))
         assert (await run_agent(make_manifest(), "hi", plain)).output == "done"
     assert events == []
+
+
+async def test_io_under_allow_happens_only_inside_the_executing_context(tmp_path: Any) -> None:
+    """ALLOWED actions may do IO; what matters is that it happens after the gate, inside the executor."""
+    from axis_runtime.actions import ToolCall
+
+    target = tmp_path / "allowed-tool-output.txt"
+
+    def writing_tool(args: Any) -> Any:
+        target.write_text("x")  # real IO performed by an allowed tool
+        return {"ok": True}
+
+    ex, _, effects, gate = await make_executor(ScriptedGate(allow()))
+    ex._backends.tools.register("writer", writing_tool)  # type: ignore[attr-defined]  # noqa: SLF001
+    with recording() as events:
+        await ex.run(ToolCall(name="writer", args={}), pid=PID)
+        inside = list(_EVENT_IN_EXECUTOR)
+        assert len(gate.requests) == 1  # the gate was consulted first
+    assert events and target.exists()
+    assert all(inside), "IO event outside the executor context after an allow"
+    with recording() as events:
+        (tmp_path / "direct.txt").write_text("x")  # the same IO with no executor: no gate consulted
+    assert events and not any(_EVENT_IN_EXECUTOR)
