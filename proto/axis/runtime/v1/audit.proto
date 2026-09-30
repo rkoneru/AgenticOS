@@ -11,6 +11,8 @@ service AuditService {
   rpc VerifyChain(VerifyChainRequest) returns (VerifyChainResponse);
 }
 
+// SERVER RULES: derive tenant from the credential; reject DECISION_UNSPECIFIED, unknown enforcement_point values,
+// non-lowercase UUIDs, hashes that are not 64 lowercase hex, and timestamps with sub-millisecond precision.
 message AppendRequest {
   string tenant_id = 1;
   string id = 2; // client-supplied UUID, used for idempotency

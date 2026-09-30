@@ -12,6 +12,8 @@ service GateService {
   rpc SetKillSwitch(SetKillSwitchRequest) returns (SetKillSwitchResponse);
 }
 
+// SERVER RULES: tenant_id is advisory. The service MUST derive the tenant from the authenticated
+// credential (mTLS identity / token) and reject a mismatch. It MUST reject unspecified enums.
 message EvaluateRequest {
   string tenant_id = 1;
   TraceContext trace = 2;

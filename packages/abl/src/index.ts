@@ -17,6 +17,7 @@ export interface AblIssue {
   path: string;
   keyword: string;
   message: string;
+  params: Record<string, unknown>;
 }
 
 export type AblResult = { ok: true; doc: unknown } | { ok: false; issues: AblIssue[] };
@@ -26,6 +27,7 @@ function toIssues(errors: ErrorObject[]): AblIssue[] {
     path: e.instancePath === "" ? "/" : e.instancePath,
     keyword: e.keyword,
     message: String(e.message),
+    params: e.params,
   }));
 }
 
@@ -42,7 +44,10 @@ export function validateAblYaml(text: string): AblResult {
   try {
     doc = parse(text);
   } catch (err) {
-    return { ok: false, issues: [{ path: "/", keyword: "yaml", message: String(err) }] };
+    return {
+      ok: false,
+      issues: [{ path: "/", keyword: "yaml", message: String(err), params: {} }],
+    };
   }
   return validateAbl(doc);
 }

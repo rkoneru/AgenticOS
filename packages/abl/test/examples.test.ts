@@ -15,16 +15,32 @@ describe("valid examples", () => {
 });
 
 // Each invalid example must fail for the stated reason, not just fail.
-const expected: Record<string, { keyword: string; pathIncludes: string }> = {
-  "missing-risk-classification": { keyword: "required", pathIncludes: "/spec" },
-  "unacceptable-risk": { keyword: "enum", pathIncludes: "/riskClassification/level" },
-  "high-without-oversight": { keyword: "required", pathIncludes: "/riskClassification" },
-  "limited-without-notice": { keyword: "required", pathIncludes: "/riskClassification" },
-  "bad-version": { keyword: "pattern", pathIncludes: "/metadata/version" },
-  "unknown-field": { keyword: "additionalProperties", pathIncludes: "/spec" },
-  "mcp-without-server": { keyword: "required", pathIncludes: "/tools/0" },
-  "unknown-provider": { keyword: "enum", pathIncludes: "/provider" },
-  "wrong-api-version": { keyword: "const", pathIncludes: "/apiVersion" },
+const expected: Record<string, { keyword: string; path: string; param: string }> = {
+  "missing-risk-classification": {
+    keyword: "required",
+    path: "/spec",
+    param: "riskClassification",
+  },
+  "unacceptable-risk": {
+    keyword: "enum",
+    path: "/spec/riskClassification/level",
+    param: "minimal",
+  },
+  "high-without-oversight": {
+    keyword: "required",
+    path: "/spec/riskClassification",
+    param: "humanOversight",
+  },
+  "limited-without-notice": {
+    keyword: "required",
+    path: "/spec/riskClassification",
+    param: "transparencyNotice",
+  },
+  "bad-version": { keyword: "pattern", path: "/metadata/version", param: "" },
+  "unknown-field": { keyword: "additionalProperties", path: "/spec", param: "surprise" },
+  "mcp-without-server": { keyword: "required", path: "/spec/tools/0", param: "mcpServer" },
+  "unknown-provider": { keyword: "enum", path: "/spec/model/primary/provider", param: "anthropic" },
+  "wrong-api-version": { keyword: "const", path: "/apiVersion", param: "abl.axis.dev/v1" },
 };
 
 describe("invalid examples", () => {
@@ -38,7 +54,12 @@ describe("invalid examples", () => {
       expect(r.ok).toBe(false);
       if (!r.ok) {
         expect(
-          r.issues.some((i) => i.keyword === want.keyword && i.path.includes(want.pathIncludes)),
+          r.issues.some(
+            (i) =>
+              i.keyword === want.keyword &&
+              i.path === want.path &&
+              JSON.stringify(i.params).includes(want.param),
+          ),
           JSON.stringify(r.issues),
         ).toBe(true);
       }

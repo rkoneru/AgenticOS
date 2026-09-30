@@ -13,17 +13,18 @@ describe("policy DSL valid examples", () => {
   }
 });
 
-const expected: Record<string, string> = {
-  "default-allow": "const",
-  "empty-rules": "minItems",
-  "approval-without-approval-block": "required",
-  "redaction-without-fields": "required",
-  "allow-with-redact": "not",
-  "unknown-enforcement-point": "enum",
-  "amount-cap-without-params": "required",
-  "kill-switch-without-scope": "required",
-  "bad-condition-op": "oneOf",
-  "timeout-allow": "enum",
+// keyword + exact instancePath of the expected failure
+const expected: Record<string, [string, string]> = {
+  "default-allow": ["const", "/spec/defaultDecision"],
+  "empty-rules": ["minItems", "/spec/rules"],
+  "approval-without-approval-block": ["required", "/spec/rules/0"],
+  "redaction-without-fields": ["required", "/spec/rules/0"],
+  "allow-with-redact": ["not", "/spec/rules/0"],
+  "unknown-enforcement-point": ["enum", "/spec/rules/0/enforcementPoints/0"],
+  "amount-cap-without-params": ["required", "/spec/gates/0"],
+  "kill-switch-without-scope": ["required", "/spec/gates/0"],
+  "bad-condition-op": ["enum", "/spec/rules/0/when/op"],
+  "timeout-allow": ["enum", "/spec/rules/0/approval/onTimeout"],
 };
 
 describe("policy DSL invalid examples fail for the stated reason", () => {
@@ -34,11 +35,11 @@ describe("policy DSL invalid examples fail for the stated reason", () => {
         .sort(),
     ).toEqual(Object.keys(expected).sort());
   });
-  for (const [name, keyword] of Object.entries(expected)) {
-    it(`${name} -> ${keyword}`, () => {
+  for (const [name, [keyword, path]] of Object.entries(expected)) {
+    it(`${name} -> ${keyword} at ${path}`, () => {
       expect(validatePolicy(read("invalid", `${name}.yaml`))).toBe(false);
       expect(
-        validatePolicy.errors?.some((e) => e.keyword === keyword),
+        validatePolicy.errors?.some((e) => e.keyword === keyword && e.instancePath === path),
         JSON.stringify(validatePolicy.errors),
       ).toBe(true);
     });

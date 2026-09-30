@@ -2,19 +2,20 @@
   "note": "Frozen contracts. Do not edit by hand; see docs/adr/0007-contracts-freeze.md.",
   "files": {
     "packages/abl/schema/abl-v1.schema.json": "819266b039ae1335c4c06138b7c019dbc78368e350b04267ad1edacd0b171a74",
-    "packages/contracts/schemas/audit-event-v1.schema.json": "1918523ea074cb639f6ddd637964a3390d239bd0b9488bdeb44448f7e97bed5a",
+    "packages/contracts/schemas/audit-event-v1.schema.json": "f330701b0dc5b0873daffc68d9ba91e16980813f5a9c84918e803a3ebe596564",
     "packages/contracts/schemas/ipc-envelope-v1.schema.json": "7a60b6bde6ccb89e5e47223accde3e32b53f9f9e9080173c94d9aa9cf3f0449d",
     "packages/contracts/schemas/policy-v1.schema.json": "9421d5a629fbe971d85a2a11fdca1217949dfcd05afad679795a8777d1264d22",
     "packages/contracts/process-model.json": "c963ac5787d1d34f51a65d893caeecafec83928de1dc728d3afce6fb17a58c52",
     "packages/contracts/openapi/axis-v1.yaml": "e8720ccd54ffa0eb02b8a36ece501211032dd46e7c7348c27bf8c8a6e2ade860",
     "proto/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "proto/axis/runtime/v1/audit.proto": "987a84aa591d0382507363587922e22fdf15dc8d8c4239f9baaf9308207cac38",
+    "proto/axis/runtime/v1/audit.proto": "8bb9bfb9a42304a2cc8927f3af70f5f4f175fae2fc0e98a34524a41c1349f93e",
     "proto/axis/runtime/v1/common.proto": "b0124e436e52e9f13a125f5deced4752cf51f10b0574c12ee04204d48a225566",
     "proto/axis/runtime/v1/control.proto": "197f1aa2b6e37d601b751bbbfe8991ee2d577300dff8b9dd09144c93bb8f99e2",
-    "proto/axis/runtime/v1/gate.proto": "fb9186a33eb413a9cdb705fbdcdc273fdb39d40c2b884d4584f628ef8cbb7c2f",
+    "proto/axis/runtime/v1/gate.proto": "7165594db319b265139a447c0d05f3a77eec716041bd91004afe09b5392b6878",
     "proto/buf.yaml": "c79d7b8cbf8882355ece98079545d2935063fb9499365d9ec5f9fbc2e0454ff9",
     "packages/db/migrations/0001_tenancy_and_rls.sql": "d71f3653217590a3882958857a72987ef8c354effeebfda5b66880b5314609d1",
     "packages/db/migrations/0002_core_tables.sql": "2b2aaf3df540b48368beb2418edee02b52266aaa638e19206c4ddc26796560cf",
-    "packages/db/migrations/0003_audit_and_memory.sql": "0126e12f2070eeab5056fc601b25bc4658bf288da27653b1680cbb29da8b09d7"
+    "packages/db/migrations/0003_audit_and_memory.sql": "0126e12f2070eeab5056fc601b25bc4658bf288da27653b1680cbb29da8b09d7",
+    "packages/db/migrations/0004_hardening.sql": "3f96cd3df4339ecc08d7f5f4ca79206cc4d5ff960bb0d525eae090f69470e1b8"
   }
 }
