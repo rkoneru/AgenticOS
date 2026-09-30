@@ -108,6 +108,22 @@ importers:
 
   packages/shared: {}
 
+  services/audit:
+    dependencies:
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+
   services/risk-kernel:
     dependencies:
       '@axis/contracts':
