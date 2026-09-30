@@ -1,0 +1,55 @@
+.PHONY: install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
+
+install:
+	pnpm install --frozen-lockfile
+	uv sync --all-packages
+
+dev:
+	$(COMPOSE) up -d --wait
+
+dev-down:
+	$(COMPOSE) down -v
+
+dev-ps:
+	$(COMPOSE) ps
+
+dev-health:
+	@bash infra/compose/healthcheck.sh
+
+lint:
+	pnpm lint
+	uv run ruff check .
+	uv run ruff format --check .
+
+fmt:
+	pnpm format
+	uv run ruff format .
+
+typecheck:
+	pnpm typecheck
+	uv run mypy runtime/src sdk/python/src
+
+test:
+	pnpm test
+	uv run pytest runtime sdk/python
+
+# Coverage gates are enforced inside each package (vitest thresholds, pytest --cov-fail-under).
+cov:
+	pnpm cov
+	uv run pytest runtime sdk/python
+
+e2e:
+	@echo "(planned) Phase 7: Playwright + CLI e2e"; exit 1
+
+evals:
+	@echo "(planned) Phase 8: Eval Hub suites"; exit 1
+
+policy-test:
+	@echo "(planned) Phase 2: policy DSL -> Rego golden tests"; exit 1
+
+k3s-up:
+	@echo "(planned) Phase 10"; exit 1
+
+tf-plan:
+	@echo "(planned) Phase 10: plan only, never apply"; exit 1
