@@ -106,6 +106,30 @@ BAD_ENDPOINTS = [
     "https://0177.0.0.1",  # octal
     "https://127.1",  # short form
     "https://017700000001",
+    "https://a..b/",  # empty DNS label
+    "https://.a.example.com/",
+    "https://" + "a" * 64 + ".example.com/",  # over-long DNS label
+    "https://" + ".".join(["a" * 60] * 5) + "/",  # over-long name
+    "https://[fec0::1]",  # deprecated site-local
+    "https://[fec0:0:0:1::5]",
+    "https://[feff::1]",  # top of fec0::/10
+    "https://[2001:db8::1]",  # documentation
+    "https://[3fff::1]",  # documentation (RFC 9637)
+    "https://[100::1]",  # discard-only
+    "https://[64:ff9b:1::1]",  # local-use NAT64
+    "https://[2001:2::1]",  # benchmarking
+    "https://[2001:20::1]",  # ORCHIDv2
+    "https://[::ffff:198.18.0.1]",  # mapped benchmarking
+    "https://192.0.0.1",
+    "https://192.0.0.9",  # is_global says True; IETF protocol block
+    "https://192.88.99.1",  # deprecated 6to4 relay anycast (is_global says True)
+    "https://198.18.0.1",
+    "https://198.19.255.254",
+    "https://240.0.0.1",
+    "https://255.255.255.255",
+    "https://192.0.2.1",
+    "https://198.51.100.1",
+    "https://203.0.113.1",
 ]
 
 
@@ -184,6 +208,47 @@ async def test_resolver_failure_fails_closed() -> None:
             extra_ports=frozenset(),
             resolver=boom,
         )
+
+
+@pytest.mark.parametrize(
+    "error",
+    [UnicodeError("label too long"), ValueError("bad"), LookupError("x"), RuntimeError("y")],
+)
+async def test_any_resolver_exception_becomes_an_endpoint_error(error: Exception) -> None:
+    async def boom(host: str, port: int) -> list[str]:
+        raise error
+
+    with pytest.raises(EndpointError, match="could not be resolved"):
+        await check_resolved("api.example.com", 443, boom)
+
+
+@pytest.mark.parametrize("host", ["a..b", "a" * 64 + ".example.com", "x" * 300])
+async def test_the_default_resolver_never_leaks_unicode_errors(host: str) -> None:
+    """Regression: the real getaddrinfo raises UnicodeError for bad labels; it must not escape."""
+    with pytest.raises(EndpointError):
+        await check_resolved(host, 443, default_resolver())
+    with pytest.raises(EndpointError):
+        await _validate(f"https://{host}/", None)  # also rejected statically
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["https://a..b/", "https://" + "a" * 64 + ".example.com/", "https://[fec0::1]/"]
+)
+async def test_gateway_maps_these_to_a_non_retryable_model_error(endpoint: str) -> None:
+    gw, seen = _seen_gateway()
+    with pytest.raises(ModelError) as exc:
+        await free(gw).complete(request("openai-compatible", endpoint=endpoint))
+    assert not exc.value.retryable and seen == []
+
+
+async def test_gateway_maps_a_resolver_unicode_error_to_a_model_error() -> None:
+    async def boom(host: str, port: int) -> list[str]:
+        raise UnicodeError("label empty or too long")
+
+    gw, seen = _seen_gateway(resolver=boom)
+    with pytest.raises(ModelError) as exc:
+        await free(gw).complete(request("openai-compatible", endpoint="https://api.example.com"))
+    assert not exc.value.retryable and seen == []
 
 
 async def test_allow_private_skips_host_checks_but_not_scheme_or_userinfo() -> None:
