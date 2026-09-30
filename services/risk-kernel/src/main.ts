@@ -1,5 +1,8 @@
 /* Process entry point (dev/e2e): env-configured kernel with in-memory stores and audit. Excluded from coverage. */
 import { readFileSync } from "node:fs";
+import { PgAuditLog } from "@axis/audit";
+import type { AuditSink } from "@axis/contracts";
+import pg from "pg";
 import { createGateServer, listen, staticTokenAuthenticator, type Principal } from "./grpc.js";
 import { WasmPolicyEngine } from "./engine.js";
 import { RiskKernel } from "./kernel.js";
@@ -15,7 +18,14 @@ if (!bundle || !tokens) {
   process.exit(1);
 }
 const engine = await WasmPolicyEngine.fromBundle(readFileSync(bundle));
-const audit = new MemoryAuditSink();
+// AXIS_AUDIT_PG_URL: durable hash-chained audit in Postgres (connect as the axis_app role). Otherwise in-memory (dev only).
+const pgUrl = process.env["AXIS_AUDIT_PG_URL"];
+const audit: AuditSink = pgUrl
+  ? new PgAuditLog({
+      pool: new pg.Pool({ connectionString: pgUrl }),
+      ...(process.env["AXIS_AUDIT_PG_ROLE"] ? { role: process.env["AXIS_AUDIT_PG_ROLE"] } : {}),
+    })
+  : new MemoryAuditSink();
 const killSwitches = new MemoryKillSwitchStore();
 const counters = new MemoryCounterStore();
 const kernel = new RiskKernel({

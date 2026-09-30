@@ -126,6 +126,9 @@ importers:
 
   services/risk-kernel:
     dependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@axis/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -138,10 +141,16 @@ importers:
       '@open-policy-agent/opa-wasm':
         specifier: ^1.10.0
         version: 1.10.0
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
     devDependencies:
       '@axis/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
       yaml:
         specifier: ^2.9.1
         version: 2.9.1

@@ -15,13 +15,16 @@
     "bench": "tsx bench.ts"
   },
   "dependencies": {
+    "@axis/audit": "workspace:*",
     "@axis/contracts": "workspace:*",
     "@grpc/grpc-js": "^1.14.5",
     "@grpc/proto-loader": "^0.8.1",
-    "@open-policy-agent/opa-wasm": "^1.10.0"
+    "@open-policy-agent/opa-wasm": "^1.10.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@axis/policy": "workspace:*",
+    "@types/pg": "^8.23.1",
     "yaml": "^2.9.1"
   }
 }
