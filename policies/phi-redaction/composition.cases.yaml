@@ -1,0 +1,14 @@
+packs: [../baseline-deny/pack.yaml, pack.yaml]
+cases:
+  - name: higher-priority rule from the second pack wins over the baseline one
+    input: { enforcement_point: message_send, data: { phi: true } }
+    expect: { decision: ALLOW_WITH_REDACTION, winners: [phi-redaction/redact-phi-egress] }
+  - name: higher priority deny beats redaction
+    input: { enforcement_point: browser_exec, data: { phi: true }, args: { domain: example.com } }
+    expect: { decision: DENY, winners: [phi-redaction/deny-phi-to-code] }
+  - name: non-phi model call allowed by phi pack rule
+    input: { enforcement_point: model_call, data: { phi: false } }
+    expect: { decision: ALLOW, winners: [phi-redaction/allow-model-calls] }
+  - name: baseline read rule still works with both packs
+    input: { enforcement_point: tool_call, tool: { side_effects: read } }
+    expect: { decision: ALLOW, winners: [baseline-deny/allow-read-tools] }

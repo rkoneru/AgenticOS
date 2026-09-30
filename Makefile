@@ -55,8 +55,9 @@ e2e:
 evals:
 	@echo "(planned) Phase 8: Eval Hub suites"; exit 1
 
+# Compiles policies/**, checks Rego (opa check --strict), proves Wasm builds, runs generated `opa test` cases. Needs `opa` (>= 0.70) on PATH.
 policy-test:
-	@echo "(planned) Phase 2: policy DSL -> Rego golden tests"; exit 1
+	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../policies
 
 k3s-up:
 	@echo "(planned) Phase 10"; exit 1

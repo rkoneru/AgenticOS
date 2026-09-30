@@ -1,0 +1,70 @@
+packs: [pack.yaml]
+cases:
+  - name: read tool allowed with its gates
+    input: { enforcement_point: tool_call, tool: { name: lookup, side_effects: read }, args: {} }
+    expect:
+      {
+        decision: ALLOW,
+        winners: [baseline-deny/allow-read-tools],
+        gates: [baseline-deny/fire-rate, baseline-deny/tenant-kill],
+      }
+  - name: read mcp allowed
+    input: { enforcement_point: mcp_call, tool: { name: crm, side_effects: none } }
+    expect: { decision: ALLOW }
+  - name: write tool with no matching rule is denied
+    input: { enforcement_point: tool_call, tool: { name: crm, side_effects: write }, args: {} }
+    expect: { decision: DENY, winners: [] }
+  - name: missing side_effects field fails closed
+    input: { enforcement_point: tool_call, tool: { name: crm } }
+    expect: { decision: DENY }
+  - name: large payment needs approval
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: payments, side_effects: external },
+        args: { amount: 5000 },
+      }
+    expect:
+      {
+        decision: REQUIRE_APPROVAL,
+        winners: [baseline-deny/approve-large-payments],
+        gates: [baseline-deny/amount-cap, baseline-deny/tenant-kill],
+        approval_roles: [finance-approver],
+      }
+  - name: small payment has no matching rule so denied
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: payments, side_effects: external },
+        args: { amount: 10 },
+      }
+    expect: { decision: DENY }
+  - name: amount as a string does not satisfy gt
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: payments, side_effects: external },
+        args: { amount: "99999" },
+      }
+    expect: { decision: DENY }
+  - name: phi egress redacted
+    input: { enforcement_point: model_call, data: { phi: true } }
+    expect: { decision: ALLOW_WITH_REDACTION, redact: [phi.mrn, phi.ssn, pii.email] }
+  - name: phi flag missing means the redaction rule does not match
+    input: { enforcement_point: model_call }
+    expect: { decision: DENY }
+  - name: browser off allowlist denied
+    input: { enforcement_point: browser_exec, args: { domain: evil.com } }
+    expect: { decision: DENY, winners: [baseline-deny/deny-browser-offlist] }
+  - name: browser on allowlist has no allow rule so still denied
+    input: { enforcement_point: browser_exec, args: { domain: example.com } }
+    expect: { decision: DENY, winners: [] }
+  - name: browser with missing domain is denied by the negated membership
+    input: { enforcement_point: browser_exec, args: {} }
+    expect: { decision: DENY, winners: [baseline-deny/deny-browser-offlist] }
+  - name: unknown enforcement point
+    input: { enforcement_point: telepathy, tool: { side_effects: read } }
+    expect: { decision: DENY }
+  - name: empty input
+    input: {}
+    expect: { decision: DENY }

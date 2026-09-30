@@ -1,0 +1,47 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  { name: baseline-deny, version: 1.0.0, description: "Kill-switch, caps, approval and redaction." }
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+    - { id: fresh-quote, type: staleness, params: { field: args.quote_ts, maxAgeSeconds: 5 } }
+    - { id: amount-cap, type: amount_cap, params: { field: args.amount, max: 10000 } }
+    - {
+        id: venue-cap,
+        type: target_cap,
+        params: { field: args.venue, max: 50000, perTarget: true },
+      }
+    - {
+        id: daily-spend,
+        type: budget,
+        params: { metric: cost_usd, window: day, hard: 100, soft: 80 },
+      }
+    - { id: fire-rate, type: rate_limit, params: { max: 30, windowSeconds: 60, key: agent } }
+  rules:
+    - id: allow-read-tools
+      enforcementPoints: [tool_call, mcp_call]
+      when: { all: [{ field: tool.side_effects, op: in, value: [none, read] }] }
+      gates: [tenant-kill, fire-rate]
+      decision: ALLOW
+    - id: approve-large-payments
+      priority: 200
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: payments }
+          - { field: args.amount, op: gt, value: 1000 }
+      gates: [tenant-kill, amount-cap]
+      decision: REQUIRE_APPROVAL
+      approval: { roles: [finance-approver], slaSeconds: 900, escalateTo: [finance-director] }
+    - id: redact-phi-egress
+      enforcementPoints: [model_call, message_send]
+      when: { field: data.phi, op: eq, value: true }
+      decision: ALLOW_WITH_REDACTION
+      redact: [phi.mrn, phi.ssn, pii.email]
+    - id: deny-browser-offlist
+      priority: 500
+      enforcementPoints: [browser_exec]
+      when: { not: { field: args.domain, op: in, value: [example.com, docs.example.com] } }
+      decision: DENY

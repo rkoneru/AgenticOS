@@ -17,3 +17,4 @@ coverage.xml
 *.tfstate*
 .terraform/
 .DS_Store
+.claude/worktrees/

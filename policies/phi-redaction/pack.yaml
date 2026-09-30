@@ -1,0 +1,24 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: phi-redaction
+  version: 1.1.0
+  description: "Redacts PHI and PII from model calls and outbound messages; blocks PHI in browser and code execution."
+spec:
+  defaultDecision: DENY
+  rules:
+    - id: redact-phi-egress
+      priority: 300
+      enforcementPoints: [model_call, message_send]
+      when: { field: data.phi, op: eq, value: true }
+      decision: ALLOW_WITH_REDACTION
+      redact: [phi.mrn, phi.ssn, pii.email]
+    - id: deny-phi-to-code
+      priority: 400
+      enforcementPoints: [code_exec, browser_exec]
+      when: { field: data.phi, op: eq, value: true }
+      decision: DENY
+    - id: allow-model-calls
+      enforcementPoints: [model_call, message_send]
+      when: { field: data.phi, op: neq, value: true }
+      decision: ALLOW
