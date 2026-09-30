@@ -13,12 +13,12 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from decimal import Decimal
-from urllib.parse import urlsplit
 
 from axis_runtime.guard import DirectExecutionError, in_executor
 from axis_runtime.models.adapters import Adapter, Transport, default_adapters, default_transport
-from axis_runtime.models.adapters.base import HttpCall, ParsedResponse
+from axis_runtime.models.adapters.base import HttpCall, ParsedResponse, default_resolver
 from axis_runtime.models.costs import CostTable
+from axis_runtime.models.endpoints import EndpointError, Resolver, validate_endpoint
 from axis_runtime.models.resilience import (
     CircuitBreaker,
     ModelClock,
@@ -52,6 +52,8 @@ class TenantModelPolicy:
     """Per-tenant model settings. Platform keys are OFF unless the tenant explicitly allows them."""
 
     allow_platform_keys: bool = False
+    # Self-hosted deployments only: permit private/loopback/internal endpoint hosts (no DNS check).
+    allow_private_endpoints: bool = False
 
 
 class ModelGateway:
@@ -71,6 +73,8 @@ class ModelGateway:
         breaker_reset_seconds: float = 30.0,
         allow_http_endpoints: bool = False,
         request_timeout: float = 120.0,
+        resolver: Resolver | None = None,
+        extra_endpoint_ports: frozenset[int] = frozenset(),
     ) -> None:
         self._secrets = secrets
         self._platform = platform_secrets
@@ -81,10 +85,13 @@ class ModelGateway:
         self._clock = clock or SystemModelClock()
         self._rng = rng or default_rng()
         self.cost_table = cost_table or CostTable()
-        self._breakers: dict[str, CircuitBreaker] = {}
+        self._breakers: dict[tuple[str, str, str], CircuitBreaker] = {}
         self._breaker_args = (breaker_threshold, breaker_reset_seconds)
         self._allow_http = allow_http_endpoints
         self._timeout = request_timeout
+        # Only built on first use (never at import/construction time): the default does real DNS.
+        self._resolver = resolver
+        self._extra_ports = extra_endpoint_ports
 
     # ---- public API (guarded) -----------------------------------------------------------
     async def complete(self, request: ModelRequest) -> ModelResponse:
@@ -99,10 +106,16 @@ class ModelGateway:
         """TEST-ONLY seam. Production code must go through ActionExecutor (see bypass test)."""
         return UnguardedModelGateway(self)
 
-    def breaker(self, provider: str) -> CircuitBreaker:
-        if provider not in self._breakers:
-            self._breakers[provider] = CircuitBreaker(self._clock, *self._breaker_args)
-        return self._breakers[provider]
+    def breaker(self, tenant_id: str, provider: str, endpoint: str | None = None) -> CircuitBreaker:
+        """One breaker per (tenant, provider, endpoint): a tenant's failing endpoint must never
+        open the circuit for another tenant (or for the same tenant's other endpoints)."""
+        key = (tenant_id, provider, (endpoint or "").rstrip("/"))
+        if key not in self._breakers:
+            self._breakers[key] = CircuitBreaker(self._clock, *self._breaker_args)
+        return self._breakers[key]
+
+    def _breaker_for(self, request: ModelRequest, target: ModelTarget) -> CircuitBreaker:
+        return self.breaker(request.tenant_id, target.provider, target.endpoint)
 
     # ---- helpers ------------------------------------------------------------------------
     def _adapter(self, target: ModelTarget) -> Adapter:
@@ -111,15 +124,26 @@ class ModelGateway:
             raise ModelError(ErrorKind.INVALID_REQUEST, target.provider, "unknown provider")
         if adapter.endpoint_required and not target.endpoint:
             raise ModelError(ErrorKind.INVALID_REQUEST, target.provider, "endpoint is required")
-        if target.endpoint:
-            scheme = urlsplit(target.endpoint).scheme
-            if scheme != "https" and not (scheme == "http" and self._allow_http):
-                raise ModelError(
-                    ErrorKind.INVALID_REQUEST, target.provider, "endpoint must be https"
-                )
         return adapter
 
-    async def _secret(self, request: ModelRequest, adapter: Adapter) -> Secret | None:
+    async def _check_endpoint(self, request: ModelRequest, target: ModelTarget) -> None:
+        if not target.endpoint:
+            return
+        resolver = self._resolver or default_resolver()
+        try:
+            await validate_endpoint(
+                target.endpoint,
+                allow_http=self._allow_http,
+                allow_private=self._policy(request.tenant_id).allow_private_endpoints,
+                extra_ports=self._extra_ports,
+                resolver=resolver,
+            )
+        except EndpointError as exc:
+            raise ModelError(ErrorKind.INVALID_REQUEST, target.provider, str(exc)) from None
+
+    async def _secret(
+        self, request: ModelRequest, adapter: Adapter, target: ModelTarget
+    ) -> Secret | None:
         provider = adapter.provider
         try:
             return await self._secrets.get(request.tenant_id, provider, request.key_label)
@@ -127,9 +151,19 @@ class ModelGateway:
             pass
         if self._platform is not None and self._policy(request.tenant_id).allow_platform_keys:
             try:
-                return await self._platform.get(PLATFORM_TENANT, provider, "default")
+                platform_secret = await self._platform.get(PLATFORM_TENANT, provider, "default")
             except SecretNotFoundError:
                 pass
+            else:
+                if target.endpoint:
+                    # An ABL-supplied endpoint plus the platform's key would exfiltrate that key.
+                    raise ModelError(
+                        ErrorKind.CONFIGURATION,
+                        provider,
+                        "custom endpoints require the tenant's own key; "
+                        "platform keys never go to a custom endpoint",
+                    )
+                return platform_secret
         if adapter.auth_optional:
             return None
         raise ModelError(
@@ -171,9 +205,11 @@ class ModelGateway:
             attempts=tuple(attempts),
         )
 
-    def _on_error(self, err: ModelError, target: ModelTarget, attempts: list[Attempt]) -> None:
+    def _on_error(
+        self, err: ModelError, request: ModelRequest, target: ModelTarget, attempts: list[Attempt]
+    ) -> None:
         attempts.append(Attempt(target.provider, target.model, err.kind.value))
-        breaker = self.breaker(target.provider)
+        breaker = self._breaker_for(request, target)
         if err.retryable:
             breaker.record_failure()
         else:
@@ -214,10 +250,11 @@ class ModelGateway:
         self, request: ModelRequest, target: ModelTarget, attempts: list[Attempt]
     ) -> ModelResponse:
         adapter = self._adapter(target)
-        secret = await self._secret(request, adapter)
+        await self._check_endpoint(request, target)
+        secret = await self._secret(request, adapter, target)
         started = self._clock.monotonic()
         for attempt in range(1, self._retry.max_attempts + 1):
-            if not self.breaker(target.provider).allow():
+            if not self._breaker_for(request, target).allow():
                 attempts.append(
                     Attempt(target.provider, target.model, ErrorKind.CIRCUIT_OPEN.value)
                 )
@@ -226,12 +263,12 @@ class ModelGateway:
                 parsed = await self._send(adapter, request, target, secret)
             except ModelError as err:
                 err = self._rewrap(err, target.provider)
-                self._on_error(err, target, attempts)
+                self._on_error(err, request, target, attempts)
                 if not err.retryable or attempt == self._retry.max_attempts:
                     raise err from None
                 await self._clock.sleep(self._retry.delay(attempt, self._rng, err.retry_after))
                 continue
-            self.breaker(target.provider).record_success()
+            self._breaker_for(request, target).record_success()
             attempts.append(Attempt(target.provider, target.model, "ok"))
             return self._finish(parsed, target, started, attempts)
         raise AssertionError("unreachable")  # pragma: no cover
@@ -284,10 +321,11 @@ class ModelGateway:
         self, request: ModelRequest, target: ModelTarget, attempts: list[Attempt]
     ) -> AsyncIterator[StreamEvent]:
         adapter = self._adapter(target)
-        secret = await self._secret(request, adapter)
+        await self._check_endpoint(request, target)
+        secret = await self._secret(request, adapter, target)
         started = self._clock.monotonic()
         for attempt in range(1, self._retry.max_attempts + 1):
-            if not self.breaker(target.provider).allow():
+            if not self._breaker_for(request, target).allow():
                 attempts.append(
                     Attempt(target.provider, target.model, ErrorKind.CIRCUIT_OPEN.value)
                 )
@@ -307,12 +345,12 @@ class ModelGateway:
                             yield event
             except ModelError as err:
                 err = self._rewrap(err, target.provider)
-                self._on_error(err, target, attempts)
+                self._on_error(err, request, target, attempts)
                 if started_yielding or not err.retryable or attempt == self._retry.max_attempts:
                     raise err from None
                 await self._clock.sleep(self._retry.delay(attempt, self._rng, err.retry_after))
                 continue
-            self.breaker(target.provider).record_success()
+            self._breaker_for(request, target).record_success()
             attempts.append(Attempt(target.provider, target.model, "ok"))
             yield StreamEvent(
                 "done", response=self._finish(parser.result(), target, started, attempts)

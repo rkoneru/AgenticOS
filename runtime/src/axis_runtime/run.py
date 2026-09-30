@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import hashlib
 import json
 import secrets
@@ -565,12 +566,8 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
         blueprint_version=manifest.version,
         phi=manifest.phi,
     )
-    backends = Backends(
-        **{
-            **(vars(deps.backends) if deps.backends else {}),
-            "tools": deps.tools,
-            "models": deps.models,
-        }
+    backends = dataclasses.replace(
+        deps.backends or Backends(), tools=deps.tools, models=deps.models
     )
     placeholder: Any = None
     ctx = RunContext(deps, recorder, identity, placeholder)

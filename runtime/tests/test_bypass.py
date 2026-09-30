@@ -1,20 +1,24 @@
 """Bypass guard (Python half, ADR-0009): no action path may skip the Risk Kernel.
 
 (a) Behavioural: for EVERY concrete Action type a DENY (or approval-pending) gate means zero side effects.
-(b) Static: an AST scan fails if any module outside an explicit allowlist imports a network / process /
-    file-write primitive, or reaches into the executor-only entry points.  The scanner is itself tested so
-    that it demonstrably fails on violations.
+(b) Static (``bypass_scan.py``): an ALLOWLIST scan of ``src/axis_runtime``: only listed imports,
+    no eval/dynamic-import/introspection/process/network/file-write constructs, and executor-only
+    names referenced only from the files that own them. The scanner is itself proven against a probe
+    corpus (every probe must be flagged) plus negative controls.
+(c) Dynamic: ``test_audit_hook.py`` records interpreter audit events while gated scenarios run.
+
+Static analysis cannot prove the absence of bypasses; see docs/spec/runtime.md for the limits.
 """
 
 from __future__ import annotations
 
 import ast
 import gc
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import axis_runtime
+import bypass_scan as bs
 import pytest
 from axis_runtime import Decision, all_action_types
 from axis_runtime.actions import Action
@@ -25,190 +29,16 @@ from helpers import PID, SAMPLES, make_executor
 
 SRC = Path(axis_runtime.__file__).resolve().parent
 
-# ---------------------------------------------------------------------------------------------------
-# Allowlists. One constant, one reason per entry. Adding an entry is a security review decision.
-# Paths are relative to src/axis_runtime. Every entry is verified to be still needed (no stale grants).
-# ---------------------------------------------------------------------------------------------------
-NETWORK_IMPORT_ALLOWLIST: dict[str, tuple[frozenset[str], str]] = {
-    "models/adapters/base.py": (
-        frozenset({"httpx"}),
-        "HttpxTransport: the single place the ModelGateway touches the network; only reachable via ModelGateway, "
-        "which only runs inside ActionExecutor (ModelCall).",
-    ),
-    "tools.py": (
-        frozenset({"httpx"}),
-        "HttpMcpClient: MCP-over-HTTP backend; only reachable through McpCall performed by ActionExecutor.",
-    ),
-    "gate.py": (
-        frozenset({"grpc", "grpc.aio"}),
-        "GrpcGateClient: the gate's own transport to the Risk Kernel (not an action).",
-    ),
-}
-# Generated gRPC stubs import grpc; they are data, not call paths.
-GENERATED_PREFIX = "_gen/"
-
-FILE_WRITE_ALLOWLIST: dict[str, str] = {
-    "models/secrets.py": "FileSecretStore (dev-only encrypted secret file); not reachable from any Action.",
-}
-
-BANNED_IMPORTS = frozenset(
-    {
-        "httpx",
-        "subprocess",
-        "socket",
-        "requests",
-        "urllib.request",
-        "urllib3",
-        "aiohttp",
-        "http.client",
-        "grpc",
-    }
-)
-
-# Attribute/name references that only specific modules may make (the executor-only entry points).
-RESTRICTED_NAMES: dict[str, dict[str, str]] = {
-    "perform": {"executor.py": "the only caller of Action.perform", "actions.py": "defines it"},
-    "_execute": {"actions.py": "defines and dispatches the guarded hook"},
-    "bind_executor_token": {
-        "executor.py": "binds the single token",
-        "actions.py": "re-export",
-        "guard.py": "defines it",
-    },
-    "ExecutionToken": {
-        "executor.py": "issues the token",
-        "actions.py": "re-export",
-        "guard.py": "defines it",
-    },
-    "unguarded_for_tests": {"models/gateway.py": "defines the test-only seam"},
-    "UnguardedModelGateway": {
-        "models/gateway.py": "defines the test-only seam",
-        "models/__init__.py": "re-export",
-    },
-    "_complete": {"models/gateway.py": "implementation behind the guard"},
-    "_stream": {"models/gateway.py": "implementation behind the guard"},
-}
-
-
-def _imports(tree: ast.AST) -> Iterator[str]:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                yield alias.name
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            yield node.module
-            for alias in node.names:
-                yield f"{node.module}.{alias.name}"
-        elif isinstance(node, ast.Call):
-            fn = node.func
-            name = (
-                fn.id
-                if isinstance(fn, ast.Name)
-                else fn.attr
-                if isinstance(fn, ast.Attribute)
-                else ""
-            )
-            if (
-                name in {"__import__", "import_module"}
-                and node.args
-                and isinstance(node.args[0], ast.Constant)
-            ):
-                yield str(node.args[0].value)
-
-
-def _banned_in(tree: ast.AST) -> set[str]:
-    found: set[str] = set()
-    for mod in _imports(tree):
-        for banned in BANNED_IMPORTS:
-            if mod == banned or mod.startswith(banned + "."):
-                found.add(banned)
-    return found
-
-
-def _opens_for_write(tree: ast.AST) -> list[int]:
-    lines: list[int] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        fn = node.func
-        attr = fn.attr if isinstance(fn, ast.Attribute) else ""
-        name = fn.id if isinstance(fn, ast.Name) else ""
-        if attr in {
-            "write_text",
-            "write_bytes",
-            "replace",
-            "rename",
-            "unlink",
-            "rmtree",
-            "fdopen",
-        } and not (
-            attr == "replace" and len(node.args) != 1 and not isinstance(fn.value, ast.Name)  # type: ignore[union-attr]
-        ):
-            if attr != "replace" or (isinstance(fn.value, ast.Name) and fn.value.id == "os"):  # type: ignore[union-attr]
-                lines.append(node.lineno)
-        if name == "open" or attr == "open":
-            mode: Any = node.args[1] if len(node.args) > 1 else None
-            for kw in node.keywords:
-                if kw.arg == "mode":
-                    mode = kw.value
-            if attr == "open" and isinstance(fn.value, ast.Name) and fn.value.id == "os":  # type: ignore[union-attr]
-                lines.append(
-                    node.lineno
-                )  # os.open: flags, always treated as a write-capable primitive
-            elif (
-                isinstance(mode, ast.Constant)
-                and isinstance(mode.value, str)
-                and set(mode.value) & set("wax+")
-            ):
-                lines.append(node.lineno)
-            elif mode is not None and not isinstance(mode, ast.Constant):
-                lines.append(node.lineno)  # dynamic mode: cannot prove read-only
-    return lines
-
-
-def _restricted_uses(tree: ast.AST) -> dict[str, list[int]]:
-    uses: dict[str, list[int]] = {}
-    for node in ast.walk(tree):
-        names: list[str] = []
-        if isinstance(node, ast.Attribute):
-            names.append(node.attr)
-        elif isinstance(node, ast.Name):
-            names.append(node.id)
-        elif isinstance(node, ast.alias):
-            names.append(node.name.split(".")[-1])
-        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            names.append(node.name)
-        for n in names:
-            if n in RESTRICTED_NAMES:
-                uses.setdefault(n, []).append(getattr(node, "lineno", 0))
-    return uses
-
-
-def scan_source(rel: str, source: str) -> list[str]:
-    """Return human-readable violations for one module."""
-    tree = ast.parse(source)
-    problems: list[str] = []
-    if not rel.startswith(GENERATED_PREFIX):
-        allowed = NETWORK_IMPORT_ALLOWLIST.get(rel, (frozenset(), ""))[0]
-        for banned in sorted(_banned_in(tree)):
-            if banned not in allowed and not any(banned.startswith(a + ".") for a in allowed):
-                problems.append(f"{rel}: imports {banned}")
-    if rel not in FILE_WRITE_ALLOWLIST and not rel.startswith(GENERATED_PREFIX):
-        problems += [f"{rel}:{ln}: file write/remove primitive" for ln in _opens_for_write(tree)]
-    for name, lines in _restricted_uses(tree).items():
-        if rel not in RESTRICTED_NAMES[name]:
-            problems.append(f"{rel}:{lines[0]}: uses executor-only name {name!r}")
-    return problems
-
 
 def _modules() -> list[tuple[str, str]]:
-    return [(str(p.relative_to(SRC)), p.read_text()) for p in sorted(SRC.rglob("*.py"))]
+    return bs.package_modules(SRC)
 
 
 # ---- (b) static guard ------------------------------------------------------------------------------------
 
 
-def test_no_module_outside_the_allowlist_touches_network_process_or_file_writes() -> None:
-    problems = [p for rel, src in _modules() for p in scan_source(rel, src)]
+def test_no_module_violates_the_allowlist_scan() -> None:
+    problems = [p for rel, src in _modules() for p in bs.scan_source(rel, src)]
     assert problems == []
 
 
@@ -218,93 +48,301 @@ def test_scanner_covers_the_whole_package() -> None:
         "executor.py",
         "run.py",
         "models/gateway.py",
+        "models/endpoints.py",
         "models/adapters/bedrock.py",
         "tools.py",
+        "temporal.py",
     } <= rels
     assert len(rels) > 25
 
 
-def test_allowlist_has_no_stale_entries() -> None:
+def test_allowlists_have_no_stale_entries() -> None:
+    """Every grant must still be needed: a removed use must also remove its allowlist entry."""
     mods = dict(_modules())
-    for rel, (allowed, reason) in NETWORK_IMPORT_ALLOWLIST.items():
-        assert reason and rel in mods
-        assert allowed <= {m for m in _imports(ast.parse(mods[rel]))}, (
-            f"{rel} no longer imports {allowed}"
-        )
-    for rel, reason in FILE_WRITE_ALLOWLIST.items():
-        assert reason and _opens_for_write(ast.parse(mods[rel])), f"{rel} no longer writes files"
-    for name, where in RESTRICTED_NAMES.items():
-        for rel in where:
-            assert name in _restricted_uses(ast.parse(mods[rel])), f"{rel} no longer needs {name}"
+    raw = {
+        rel: bs.raw_findings(rel, src) for rel, src in mods.items() if not rel.startswith("_gen/")
+    }
+    for rel, grants in bs.IO_IMPORTS.items():
+        assert rel in mods
+        imported = {m for m, _ in bs.imported_modules(ast.parse(mods[rel]))}
+        for module, reason in grants.items():
+            assert reason
+            assert any(m == module or m.startswith(module + ".") for m in imported), (
+                f"{rel} no longer imports {module}"
+            )
+    for rule, files in bs.EXEMPTIONS.items():
+        for rel, reason in files.items():
+            assert reason and any(f.rule == rule for f in raw[rel]), f"{rel} no longer needs {rule}"
+    for name, files in bs.RESTRICTED_NAMES.items():
+        for rel, reason in files.items():
+            assert reason and any(f.rule == f"restricted:{name}" for f in raw[rel]), (
+                f"{rel} no longer needs {name}"
+            )
+    for rel, reason in bs.GATEWAY_CONSTRUCTION_FILES.items():
+        assert reason and any(f.rule == "gateway-construction" for f in raw[rel])
 
 
-@pytest.mark.parametrize(
-    ("source", "needle"),
-    [
-        ("import httpx", "imports httpx"),
-        ("import subprocess", "imports subprocess"),
-        ("from subprocess import run", "imports subprocess"),
-        ("import socket", "imports socket"),
-        ("import requests", "imports requests"),
-        ("import urllib.request", "imports urllib.request"),
-        ("from urllib import request", "imports urllib.request"),
-        ("from urllib.request import urlopen", "imports urllib.request"),
-        ("import aiohttp.client", "imports aiohttp"),
-        ("from http import client", "imports http.client"),
-        ("import grpc", "imports grpc"),
-        ("__import__('subprocess')", "imports subprocess"),
-        ("import importlib\nimportlib.import_module('socket')", "imports socket"),
-        ("open('x', 'w')", "file write"),
-        ("open('x', mode='a')", "file write"),
-        ("open('x', 'rb+')", "file write"),
-        ("open('x', m)", "file write"),
-        ("from pathlib import Path\nPath('x').write_text('y')", "file write"),
-        ("from pathlib import Path\nPath('x').write_bytes(b'y')", "file write"),
-        ("import os\nos.open('x', 1)", "file write"),
-        ("import os\nos.replace('a', 'b')", "file write"),
-        ("action.perform(token, backends)", "executor-only name 'perform'"),
-        ("action._execute(b)", "executor-only name '_execute'"),
-        ("gw._complete(r)", "executor-only name '_complete'"),
-        ("gw.unguarded_for_tests()", "executor-only name 'unguarded_for_tests'"),
-        ("from axis_runtime.guard import ExecutionToken", "executor-only name 'ExecutionToken'"),
-        (
-            "from axis_runtime.guard import bind_executor_token as b",
-            "executor-only name 'bind_executor_token'",
-        ),
-        ("class Sneaky:\n    async def perform(self): ...", "executor-only name 'perform'"),
-    ],
-)
-def test_scanner_flags_violations(source: str, needle: str) -> None:
-    problems = scan_source("rogue.py", source)
-    assert any(needle in p for p in problems), problems
+def test_safe_imports_are_all_used_and_commented() -> None:
+    used = {
+        m
+        for rel, src in _modules()
+        if not rel.startswith("_gen/")
+        for m, _ in bs.imported_modules(ast.parse(src))
+    }
+    unused = {m for m in bs.SAFE_IMPORTS if m not in used}
+    assert unused == set(), f"stale SAFE_IMPORTS entries: {sorted(unused)}"
+    source = Path(bs.__file__).read_text()
+    block = source[source.index("SAFE_IMPORTS: frozenset") : source.index("SAFE_PREFIXES")]
+    for module in bs.SAFE_IMPORTS:  # one comment per entry
+        line = next(ln for ln in block.splitlines() if f'"{module}"' in ln)
+        assert "#" in line, f"SAFE_IMPORTS entry {module} has no justification comment"
 
 
-@pytest.mark.parametrize(
-    "source",
-    [
-        "import json\nopen('x')",
-        "open('x', 'r')",
-        "open('x', 'rb')",
-        "import asyncio",
-        "from pathlib import Path\nPath('x').read_text()",
-        "x = 'replace'.replace('a', 'b')",
-        "import urllib.parse",
-    ],
-)
+# Every probe the independent reviewer used (plus the original corpus): each MUST be flagged.
+PROBES: list[tuple[str, str]] = [
+    # --- imports of IO-capable / unknown modules (allowlist: anything not listed is a violation)
+    ("import httpx", "import:httpx"),
+    ("import subprocess", "import:subprocess"),
+    ("from subprocess import run", "import:subprocess"),
+    ("import socket", "import:socket"),
+    ("import requests", "import:requests"),
+    ("import urllib.request", "import:urllib.request"),
+    ("from urllib import request", "import:urllib.request"),
+    ("from urllib.request import urlopen", "import:urllib.request"),
+    ("import urllib\nurllib.request.urlopen('http://x')", "import:urllib"),
+    ("import aiohttp.client", "import:aiohttp.client"),
+    ("from http import client", "import:http.client"),
+    ("import grpc", "import:grpc"),
+    ("import ctypes", "import:ctypes"),
+    ("import multiprocessing", "import:multiprocessing"),
+    ("import pty", "import:pty"),
+    ("import smtplib", "import:smtplib"),
+    ("import ftplib", "import:ftplib"),
+    ("import websockets", "import:websockets"),
+    ("import ssl", "import:ssl"),
+    ("import boto3", "import:boto3"),
+    ("import openai", "import:openai"),
+    ("import anthropic", "import:anthropic"),
+    ("import psycopg", "import:psycopg"),
+    ("import sqlite3", "import:sqlite3"),
+    ("import pickle", "import:pickle"),
+    ("import marshal", "import:marshal"),
+    ("import shutil", "import:shutil"),
+    ("import tempfile", "import:tempfile"),
+    ("import sys\nsys.modules['x']", "import:sys"),
+    ("import importlib", "import:importlib"),
+    ("from importlib import import_module", "import:importlib"),
+    ("import os", "import:os"),
+    ("import os as o\no.system('id')", "import:os"),
+    ("from os import system", "import:os"),
+    ("import pathlib", "import:pathlib"),
+    ("import builtins", "import:builtins"),
+    ("import gc", "import:gc"),
+    ("import types", "import:types"),
+    ("import threading", "import:threading"),
+    ("import asyncio.subprocess", "import:asyncio.subprocess"),
+    ("import logging.handlers", "import:logging.handlers"),
+    ("from logging import handlers", "import:logging.handlers"),
+    ("from json import *", "import:json.*"),
+    # --- dynamic execution / import / reflection
+    ("eval('1+1')", "dynamic-exec"),
+    ("exec('x=1')", "dynamic-exec"),
+    ("compile('x', 'f', 'exec')", "dynamic-exec"),
+    ("f = eval\nf('1')", "dynamic-exec"),
+    ("__import__('subprocess')", "dynamic-exec"),
+    ("__import__(name)", "dynamic-exec"),
+    ("import importlib\nimportlib.import_module('socket')", "introspection"),
+    ("import importlib\nimportlib.import_module(name)", "banned-qualified"),
+    ("m.import_module(name)", "introspection"),
+    ("getattr(a, 'per' + 'form')", "dynamic-attr"),
+    ("getattr(a, name)", "dynamic-attr"),
+    ("setattr(a, name, 1)", "dynamic-attr"),
+    ("delattr(a, name)", "dynamic-attr"),
+    ("getattr(a)", "dynamic-attr"),
+    ("getattr(a, 'perform')", "restricted:perform"),
+    ("vars(A)['perform']", "dynamic-exec"),
+    ("A.__dict__['perform']", "introspection"),
+    ("globals()['x']", "dynamic-exec"),
+    ("locals()", "dynamic-exec"),
+    ("f.__globals__", "introspection"),
+    ("fn.__code__", "introspection"),
+    ("object.__subclasses__()", "introspection"),
+    ("frame.f_back.f_globals", "introspection"),
+    ("x.__getattribute__('perform')", "introspection"),
+    ("import sys\nsys.modules", "banned-qualified"),
+    ("from sys import modules", "banned-qualified"),
+    # --- process
+    ("import os\nos.system('id')", "banned-qualified"),
+    ("import os\nos.popen('id')", "process"),
+    ("import os\nos.execv('/bin/sh', [])", "process"),
+    ("import os\nos.execvp('sh', [])", "process"),
+    ("import os\nos.spawnl(0, 'x')", "process"),
+    ("import os\nos.fork()", "process"),
+    ("import os\nos.posix_spawn('x', [], {})", "process"),
+    ("import os\nos.kill(1, 9)", "banned-qualified"),
+    ("import asyncio\nasyncio.create_subprocess_exec('ls')", "process"),
+    ("import asyncio\nasyncio.create_subprocess_shell('ls')", "process"),
+    ("import asyncio\nloop.subprocess_exec(f, 'ls')", "process"),
+    # --- network
+    ("import asyncio\nasyncio.open_connection('h', 1)", "net"),
+    ("import asyncio\nasyncio.start_server(cb, 'h', 1)", "net"),
+    ("import asyncio\nloop.create_connection(f, 'h', 1)", "net"),
+    ("import asyncio\nloop.sock_connect(s, a)", "net"),
+    ("import asyncio\nloop.getaddrinfo('h', 1)", "dns"),
+    ("from socket import gethostbyname\ngethostbyname('h')", "dns"),
+    ("urlopen(u)", "net"),
+    # --- file writes / removals
+    ("open('x', 'w')", "file-write"),
+    ("open('x', mode='a')", "file-write"),
+    ("open('x', 'rb+')", "file-write"),
+    ("open('x', 'x')", "file-write"),
+    ("open('x', m)", "file-write"),
+    ("open('x', mode=m)", "file-write"),
+    ("open('x', opener=o)", "file-write"),
+    ("from pathlib import Path\nPath('x').write_text('y')", "file-write"),
+    ("from pathlib import Path\nPath('x').write_bytes(b'y')", "file-write"),
+    ("from pathlib import Path\nPath('x').touch()", "file-write"),
+    ("from pathlib import Path\nPath('x').open('w')", "file-write"),
+    ("from pathlib import Path\nPath('x').open(mode='a')", "file-write"),
+    ("from pathlib import Path\nPath('x').open('r+')", "file-write"),
+    ("from pathlib import Path\nPath('x').open(m)", "file-write"),
+    ("from pathlib import Path\nPath('x').unlink()", "file-write"),
+    ("from pathlib import Path\nPath('x').mkdir()", "file-write"),
+    ("from pathlib import Path\nPath('x').rename('y')", "file-write"),
+    ("from pathlib import Path\nPath('x').replace('y')", "file-write"),
+    ("import os\nos.open('x', 1)", "file-write"),
+    ("import os\nos.remove('x')", "file-write"),
+    ("import os\nos.unlink('x')", "file-write"),
+    ("import os\nos.rmdir('x')", "file-write"),
+    ("import os\nos.rename('a', 'b')", "file-write"),
+    ("import os\nos.replace('a', 'b')", "file-write"),
+    ("import os\nos.makedirs('a')", "file-write"),
+    ("import os as o\no.remove('x')", "file-write"),
+    ("from os import remove", "file-write"),
+    ("import shutil\nshutil.copy('a', 'b')", "banned-qualified"),
+    ("import shutil\nshutil.rmtree('a')", "banned-qualified"),
+    ("import logging\nlogging.FileHandler('f')", "logging-sink"),
+    ("import logging\nlogging.SocketHandler('h', 1)", "logging-sink"),
+    # --- native / serialisation escape hatches
+    ("import ctypes\nctypes.CDLL(None)", "banned-qualified"),
+    ("import pickle\npickle.loads(b)", "banned-qualified"),
+    # --- executor-only names (RESTRICTED_NAMES)
+    ("action.perform(token, backends)", "restricted:perform"),
+    ("class Sneaky:\n    async def perform(self): ...", "restricted:perform"),
+    ("action._execute(b)", "restricted:_execute"),
+    ("backends.need('tools')", "restricted:need"),
+    ("gw._complete(r)", "restricted:_complete"),
+    ("gw._stream(r)", "restricted:_stream"),
+    ("gw.unguarded_for_tests()", "restricted:unguarded_for_tests"),
+    ("from axis_runtime.guard import ExecutionToken", "restricted:ExecutionToken"),
+    (
+        "from axis_runtime.guard import bind_executor_token as b",
+        "restricted:bind_executor_token",
+    ),
+    ("from axis_runtime.executor import _TOKEN", "restricted:_TOKEN"),
+    ("import axis_runtime.executor as e\ne._TOKEN", "restricted:_TOKEN"),
+    ("getattr(e, '_TOKEN')", "restricted:_TOKEN"),
+    ("from axis_runtime.guard import executing", "restricted:executing"),
+    ("from axis_runtime.guard import in_executor", "restricted:in_executor"),
+    ("guard._executing.set(True)", "restricted:_executing"),
+    ("guard._bound_token", "restricted:_bound_token"),
+    ("guard.token_is_valid(t)", "restricted:token_is_valid"),
+    ("registry.call('t', {})", "restricted:call"),
+    ("await ToolRegistry().call('t', {})", "restricted:call"),
+    ("await mcp.call_tool('s', 'n', {})", "restricted:call_tool"),
+    ("await backends.mcp.call_tool('s', 'n', {})", "restricted:call_tool"),
+    ("await gateway.complete(request)", "restricted:complete"),
+    ("async for e in gateway.stream(request): ...", "restricted:stream"),
+    ("ModelGateway(secrets)", "gateway-construction"),
+    ("models.ModelGateway(secrets)", "gateway-construction"),
+    (
+        # the reviewer's worst case: forging the executing marker to defeat the ModelGateway tripwire
+        "from axis_runtime import guard\n"
+        "async def go(gateway, request):\n"
+        "    with guard.executing():\n"
+        "        return await gateway.complete(request)",
+        "restricted:executing",
+    ),
+    (
+        "from axis_runtime import guard\n"
+        "async def go(gateway, request):\n"
+        "    with guard.executing():\n"
+        "        return await gateway.complete(request)",
+        "restricted:complete",
+    ),
+]
+
+
+@pytest.mark.parametrize(("source", "needle"), PROBES, ids=[f"{i}" for i in range(len(PROBES))])
+def test_scanner_flags_every_probe(source: str, needle: str) -> None:
+    problems = bs.scan_source("rogue.py", source)
+    assert any(needle in p for p in problems), (source, problems)
+
+
+BENIGN = [
+    "import json\nopen('x')",
+    "open('x', 'r')",
+    "open('x', 'rb')",
+    "open('x', mode='rt')",
+    "import asyncio\nasyncio.sleep(1)",
+    "import asyncio\nasyncio.get_running_loop()",
+    "x = 'replace'.replace('a', 'b')",
+    "import dataclasses\ndataclasses.replace(x)",
+    "import dataclasses\ndataclasses.replace(x, a=1)",
+    "import urllib.parse\nurllib.parse.quote('a')",
+    "from urllib.parse import urlsplit",
+    "import re\nre.compile('x')",
+    "getattr(obj, 'literal')",
+    "import logging\nlogging.getLogger('x').info('m')",
+    "from axis_runtime.models import ModelError",
+    "from collections.abc import Mapping",
+    "import hashlib, hmac, json, time, secrets, random, struct, zlib",
+    "from cryptography.fernet import Fernet",
+    "from google.protobuf import json_format",
+    "call = 1\nstream = 2\ncomplete = 3\nuse(call, stream, complete)",
+    "def f(call, stream):\n    return call.method, stream",
+    "class ModelGatewayError(Exception): ...",
+    "dt.replace(tzinfo=None)",
+    "from __future__ import annotations",
+]
+
+
+@pytest.mark.parametrize("source", BENIGN, ids=[f"{i}" for i in range(len(BENIGN))])
 def test_scanner_accepts_benign_code(source: str) -> None:
-    assert scan_source("fine.py", source) == []
+    assert bs.scan_source("fine.py", source) == []
+
+
+def test_path_open_reads_are_accepted_but_modes_are_checked_in_both_positions() -> None:
+    src = "from pathlib import Path"
+    assert not any("file-write" in p for p in bs.scan_source("x.py", f"{src}\nPath('x').open()"))
+    assert not any(
+        "file-write" in p for p in bs.scan_source("x.py", f"{src}\nPath('x').open('rb')")
+    )
+    assert any("file-write" in p for p in bs.scan_source("x.py", f"{src}\nPath('x').open('wb')"))
 
 
 def test_allowlist_is_scoped_to_exact_files() -> None:
-    assert scan_source("tools.py", "import httpx") == []
-    assert (
-        scan_source("models/adapters/openai.py", "import httpx") != []
-    )  # siblings are NOT allowlisted
-    assert scan_source("models/secrets.py", "open('x', 'w')") == []
-    assert scan_source("tools.py", "open('x', 'w')") != []
-    assert scan_source("gate.py", "import grpc\nimport grpc.aio") == []
-    assert scan_source("_gen/axis/runtime/v1/gate_pb2_grpc.py", "import grpc") == []
-    assert scan_source("run.py", "import subprocess") != []
+    assert bs.scan_source("tools.py", "import httpx") == []
+    assert bs.scan_source("models/adapters/openai.py", "import httpx") != []  # siblings: no
+    assert bs.scan_source("models/secrets.py", "import os\nos.replace('a', 'b')") == []
+    assert bs.scan_source("tools.py", "import os\nos.replace('a', 'b')") != []
+    assert bs.scan_source("gate.py", "import grpc\nimport grpc.aio") == []
+    assert bs.scan_source("temporal.py", "from temporalio import workflow") == []
+    assert bs.scan_source("run.py", "from temporalio import workflow") != []
+    assert bs.scan_source("_gen/axis/runtime/v1/gate_pb2_grpc.py", "import grpc") == []
+    assert bs.scan_source("run.py", "import subprocess") != []
+    # an IO import grant is per module: base.py may import socket but not subprocess
+    assert bs.scan_source("models/adapters/base.py", "import socket") == []
+    assert bs.scan_source("models/adapters/base.py", "import subprocess") != []
+    # an allowlisted file is still subject to every other rule
+    assert bs.scan_source("tools.py", "import httpx\neval('1')") != []
+    assert bs.scan_source("models/adapters/base.py", "loop.getaddrinfo('h', 1)") == []
+    assert bs.scan_source("models/adapters/base.py", "loop.create_connection(f, 'h', 1)") != []
+    # restricted names are per file
+    assert bs.scan_source("executor.py", "x = _TOKEN") == []
+    assert bs.scan_source("actions.py", "x = _TOKEN") != []
+    assert bs.scan_source("actions.py", "await models.complete(r)") == []
+    assert bs.scan_source("run.py", "await models.complete(r)") != []
 
 
 # ---- (a) behavioural guard -------------------------------------------------------------------------------
