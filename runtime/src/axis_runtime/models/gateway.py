@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -91,9 +90,9 @@ class ModelGateway:
         if max_breakers < 1:
             raise ValueError("max_breakers must be at least 1")
         self._max_breakers = max_breakers
-        # LRU order: least recently used first. Bounded because the key includes a tenant-controlled
-        # endpoint string.
-        self._breakers: OrderedDict[tuple[str, str, str], CircuitBreaker] = OrderedDict()
+        # LRU order (dicts keep insertion order; a hit re-inserts): least recently used first.
+        # Bounded because the key includes a tenant-controlled endpoint string.
+        self._breakers: dict[tuple[str, str, str], CircuitBreaker] = {}
         self._breaker_args = (breaker_threshold, breaker_reset_seconds)
         self._allow_http = allow_http_endpoints
         self._timeout = request_timeout
@@ -125,7 +124,7 @@ class ModelGateway:
         key = (tenant_id, provider, (endpoint or "").rstrip("/"))
         existing = self._breakers.get(key)
         if existing is not None:
-            self._breakers.move_to_end(key)
+            self._breakers[key] = self._breakers.pop(key)
             return existing
         if len(self._breakers) >= self._max_breakers:
             victim = next(
