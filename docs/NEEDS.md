@@ -1,0 +1,8 @@
+# NEEDS — blockers, credentials, gaps
+
+| #   | Need                                                                                                                     | Why                                                                                                                                            | Raised  |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1   | The existing five-file Python reference kernel and `ARCHITECTURE.md`, `DESIGN-DECISIONS.md`, `ABL-SPEC.md`, `ROADMAP.md` | Referenced by the master prompt; absent from the repo (see `INVENTORY.md`). Phase 1 specs are written from scratch unless supplied.            | Phase 0 |
+| 2   | Verify `make dev` on a machine with a Docker daemon                                                                      | Build sandbox has no Docker daemon. Compose file is only config-validated; image tags and healthchecks (notably temporal, opa) are unverified. | Phase 0 |
+| 3   | First GitHub Actions run                                                                                                 | CI has not executed remotely; action pins and trivy/CodeQL steps are unproven.                                                                 | Phase 0 |
+| 4   | Container scanning job                                                                                                   | Deferred to Phase 10, when service images exist.                                                                                               | Phase 0 |
