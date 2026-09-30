@@ -140,6 +140,7 @@ class FakeGate(gate_pb2_grpc.GateServiceServicer):  # type: ignore[misc]
             [gate_pb2.EvaluateRequest, Any], Awaitable[gate_pb2.EvaluateResponse]
         ] = self._default
         self.seen: list[gate_pb2.EvaluateRequest] = []
+        self.metadata: list[dict[str, str]] = []
 
     @staticmethod
     async def _default(req: gate_pb2.EvaluateRequest, ctx: Any) -> gate_pb2.EvaluateResponse:
@@ -149,6 +150,7 @@ class FakeGate(gate_pb2_grpc.GateServiceServicer):  # type: ignore[misc]
         self, request: gate_pb2.EvaluateRequest, context: Any
     ) -> gate_pb2.EvaluateResponse:
         self.seen.append(request)
+        self.metadata.append({m.key: m.value for m in context.invocation_metadata()})
         return await self.handler(request, context)
 
 
@@ -179,6 +181,22 @@ async def test_grpc_allow_and_request_mapping(server: tuple[FakeGate, str]) -> N
     assert seen.enforcement_point == common_pb2.ENFORCEMENT_POINT_TOOL_CALL
     assert seen.action == "lookup"
     assert seen.context["args"]["ssn"] == "123" and seen.context["data"]["phi"] is True
+
+
+async def test_grpc_sends_the_bearer_token_only_when_configured(
+    server: tuple[FakeGate, str],
+) -> None:
+    fake, target = server
+    with_token = GrpcGateClient(target, timeout=2, token="s3cret")
+    without = GrpcGateClient(target, timeout=2)
+    try:
+        await with_token.evaluate(REQ)
+        await without.evaluate(REQ)
+    finally:
+        await with_token.close()
+        await without.close()
+    assert fake.metadata[0]["authorization"] == "Bearer s3cret"
+    assert "authorization" not in fake.metadata[1]
 
 
 async def test_grpc_maps_all_decisions(server: tuple[FakeGate, str]) -> None:

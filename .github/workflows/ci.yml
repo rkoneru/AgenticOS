@@ -42,6 +42,30 @@ jobs:
       - run: uv run mypy runtime/src sdk/python/src
       - run: uv run pytest runtime sdk/python
 
+  e2e-core:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_PASSWORD: ci }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      PG_ADMIN_URL: postgres://postgres:ci@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: astral-sh/setup-uv@v3
+      - uses: open-policy-agent/setup-opa@v2
+        with: { version: 0.70.0 }
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages
+      - run: pnpm build
+      - run: uv run pytest e2e -p no:cacheprovider --no-cov
+
   compose-config:
     runs-on: ubuntu-latest
     steps:

@@ -1,4 +1,4 @@
-.PHONY: contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-core contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -49,6 +49,13 @@ cov:
 	pnpm cov
 	uv run pytest runtime sdk/python
 
+# Phase 2 exit: real ABL compiler + policy bundle + Risk Kernel (gRPC) + Postgres audit + Python runtime.
+# Needs node, pnpm, uv, opa, PostgreSQL 16 (uses $PG_ADMIN_URL or starts a throwaway cluster).
+e2e-core:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e -p no:cacheprovider --no-cov
+
+# (Phase 7) Playwright console + CLI e2e
 e2e:
 	@echo "(planned) Phase 7: Playwright + CLI e2e"; exit 1
 

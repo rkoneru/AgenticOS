@@ -1,0 +1,22 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: claims-triage
+  version: 1.0.0
+  description: End-to-end fixture. One read tool (allowed by policy) and one write tool (denied by default).
+spec:
+  riskClassification:
+    level: limited
+    rationale: Drafts routing recommendations for a human adjuster; makes no final decisions.
+    transparencyNotice: You are interacting with an AI system.
+  model:
+    primary: { provider: openai, model: gpt-4o }
+  instructions:
+    system: You triage insurance claims. Use lookup-claim to read; update-crm to write.
+  tools:
+    - { name: lookup-claim, kind: function, sideEffects: read }
+    - { name: update-crm, kind: function, sideEffects: write }
+  budgets:
+    toolCalls: { hard: 20 }
+  policy:
+    packs: ["baseline-deny@^1.0.0", "phi-redaction@^1.1.0"]

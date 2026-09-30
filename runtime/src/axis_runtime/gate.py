@@ -168,6 +168,7 @@ class GrpcGateClient:
         timeout: float = 2.0,
         credentials: grpc.ChannelCredentials | None = None,
         channel: grpc.aio.Channel | None = None,
+        token: str | None = None,
     ) -> None:
         if channel is None:
             if target is None:
@@ -180,10 +181,16 @@ class GrpcGateClient:
         self._channel = channel
         self._stub = gate_pb2_grpc.GateServiceStub(channel)  # type: ignore[no-untyped-call]
         self.timeout = timeout
+        # The kernel derives the tenant from this credential, never from the request alone.
+        self._metadata: tuple[tuple[str, str], ...] = (
+            (("authorization", f"Bearer {token}"),) if token else ()
+        )
 
     async def evaluate(self, request: EvaluateRequest) -> GateDecision:
         try:
-            resp = await self._stub.Evaluate(to_proto_request(request), timeout=self.timeout)
+            resp = await self._stub.Evaluate(
+                to_proto_request(request), timeout=self.timeout, metadata=self._metadata or None
+            )
         except grpc.aio.AioRpcError as exc:
             log.warning("gate rpc failed: %s", exc.code().name)
             return deny(f"gate_rpc_error:{exc.code().name}")

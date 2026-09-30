@@ -1,0 +1,13 @@
+{
+  "name": "@axis/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 2 exit: ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Driven by e2e/test_phase2_core_loop.py.",
+  "dependencies": {
+    "@axis/abl": "workspace:*",
+    "@axis/audit": "workspace:*",
+    "@axis/risk-kernel": "workspace:*",
+    "pg": "^8.13.0"
+  }
+}
