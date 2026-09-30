@@ -96,6 +96,10 @@ export async function seedTenant(
     [t],
   );
   await appendAudit(c, t, 1, ZERO, H("1"));
+  await q(
+    "INSERT INTO audit_checkpoints (tenant_id, seq, hash, ts, signature) VALUES ($1, 1, $2, now(), 'c2ln')",
+    [t, H("1")],
+  );
   const kb = await q(
     "INSERT INTO knowledge_bases (tenant_id, name) VALUES ($1, 'handbook') RETURNING id",
     [t],
