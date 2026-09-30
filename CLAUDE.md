@@ -41,11 +41,12 @@ docs/        adr/, plans/, compliance/, security/, runbooks/
 ```bash
 make dev            # full local stack via docker-compose
 make test           # all unit + integration tests
-make e2e            # Playwright + CLI e2e
+make e2e-core       # Phase 2 core loop: ABL -> runtime -> Risk Kernel (gRPC) -> Postgres audit
+make e2e            # (planned, Phase 7) Playwright + CLI e2e
 make cov            # coverage report; fails under thresholds
 make evals          # Eval Hub suites with CI thresholds
 make lint typecheck # eslint/ruff, tsc/mypy
-make policy-test    # compile YAML policies to Rego and run golden tests
+make policy-test    # compile YAML policies to Rego, check with opa, run golden cases (needs opa on PATH)
 make k3s-up         # deploy to local/home-lab k3s
 make tf-plan CLOUD=aws|gcp|azure   # plan only — never apply without me
 ```
@@ -70,27 +71,34 @@ make tf-plan CLOUD=aws|gcp|azure   # plan only — never apply without me
 
 ## Component status
 
-| Component                                                       | Status                                | Evidence                                                 |
-| --------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------- |
-| Python reference kernel (existing)                              | Not found in repo                     | `docs/INVENTORY.md`, `docs/NEEDS.md` #1                  |
-| Monorepo, tooling, CI workflow                                  | Built (CI unrun remotely)             | local `pnpm lint typecheck cov`, `uv run pytest`         |
-| Compose dev stack                                               | Designed (never started)              | `docker compose config` only                             |
-| Decision model skeleton (TS + Py)                               | Prototype                             | `packages/shared`, `runtime/` tests                      |
-| Process model, IPC envelope, audit event + hash-chain reference | Built (frozen v1)                     | `packages/contracts` tests (100% cov)                    |
-| gRPC + OpenAPI 3.1 contracts                                    | Built (frozen v1), no implementations | `buf lint/build`, `redocly lint`, drift test             |
-| Postgres schema + RLS + migrations                              | Built, tested on PG16+pgvector        | `packages/db` tenancy tests, mutation-checked            |
-| ABL v1 schema, spec, examples                                   | Built (frozen v1)                     | `packages/abl` tests, `docs/spec/abl-v1.md`              |
-| ABL compiler/linter                                             | Concept                               | Phase 2                                                  |
-| Policy DSL v1 schema + decision model                           | Built (frozen v1)                     | `packages/contracts` tests, `docs/spec/policy-dsl-v1.md` |
-| Policy compiler, Risk Kernel service                            | Concept                               | Phase 2                                                  |
-| TKI                                                             | Concept                               | —                                                        |
-| NEXUS router                                                    | Concept                               | —                                                        |
-| MPM                                                             | Concept (stub planned)                | —                                                        |
-| AGIL                                                            | Concept                               | —                                                        |
-| Eval Hub                                                        | Concept                               | —                                                        |
-| Control plane / console / CLI / SDKs                            | Concept                               | —                                                        |
-| Voice / omnichannel / marketplace                               | Concept                               | —                                                        |
-| _Update this table at every phase exit._                        |
+| Component                                                             | Status                                      | Evidence                                                                                                                             |
+| --------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Python reference kernel (existing)                                    | Not found in repo                           | `docs/INVENTORY.md`, `docs/NEEDS.md` #1                                                                                              |
+| Monorepo, tooling, CI workflow                                        | Built (CI unrun remotely)                   | local `pnpm lint typecheck cov`, `uv run pytest`                                                                                     |
+| Compose dev stack                                                     | Designed (never started)                    | `docker compose config` only                                                                                                         |
+| Decision model skeleton (TS + Py)                                     | Prototype                                   | `packages/shared`, `runtime/` tests                                                                                                  |
+| Process model, IPC envelope, audit event + hash-chain reference       | Built (frozen v1)                           | `packages/contracts` tests (100% cov)                                                                                                |
+| gRPC + OpenAPI 3.1 contracts                                          | Built (frozen v1), no implementations       | `buf lint/build`, `redocly lint`, drift test                                                                                         |
+| Postgres schema + RLS + migrations                                    | Built, tested on PG16+pgvector              | `packages/db` tenancy tests, mutation-checked                                                                                        |
+| ABL v1 schema, spec, examples                                         | Built (frozen v1)                           | `packages/abl` tests, `docs/spec/abl-v1.md`                                                                                          |
+| ABL compiler + linter                                                 | Built                                       | `packages/abl`: 163 tests, 100% cov, golden manifests, 10 lint rules                                                                 |
+| Policy DSL v1 schema + decision model                                 | Built (frozen v1)                           | `packages/contracts` tests, `docs/spec/policy-dsl-v1.md`                                                                             |
+| Policy compiler (DSL to Rego, Wasm bundles, `make policy-test`)       | Built                                       | `packages/policy`: 106 tests; Rego checked against real OPA (differential + property tests)                                          |
+| Risk Kernel (gRPC, Wasm policy, 6 gate types, kill-switches)          | Built, single-instance                      | `services/risk-kernel`: 155 tests, 99.5% cov; state is in-memory (Redis stores and cross-instance kill-switch propagation NOT built) |
+| Audit service (hash chain, checkpoints, WORM export)                  | Built as a library                          | `services/audit`: 71 tests on real Postgres; no network surface; KMS signer and S3 Object Lock NOT built                             |
+| Python runtime (process model, event sourcing, executor, gate client) | Built                                       | `runtime/`: 690 tests, 97.9% cov, mypy strict                                                                                        |
+| Temporal workflows                                                    | Built on the time-skipping test server only | `runtime/tests/test_temporal.py`; not run on a real cluster                                                                          |
+| ModelGateway (6 providers, BYO keys, endpoint SSRF guard)             | Prototype                                   | fixture-tested only; no live provider call has been made                                                                             |
+| Bypass guard (allowlist scanner + audit-hook test)                    | Built as a regression net                   | heuristic, not proof or isolation (`docs/NEEDS.md` #23)                                                                              |
+| Phase 2 core loop e2e (`make e2e-core`)                               | Built                                       | ABL to runtime to real kernel over gRPC to Postgres audit, 8 scenarios                                                               |
+| TKI                                                                   | Concept                                     | —                                                                                                                                    |
+| NEXUS router                                                          | Concept                                     | —                                                                                                                                    |
+| MPM                                                                   | Concept (stub planned)                      | —                                                                                                                                    |
+| AGIL                                                                  | Concept                                     | —                                                                                                                                    |
+| Eval Hub                                                              | Concept                                     | —                                                                                                                                    |
+| Control plane / console / CLI / SDKs                                  | Concept                                     | —                                                                                                                                    |
+| Voice / omnichannel / marketplace                                     | Concept                                     | —                                                                                                                                    |
+| _Update this table at every phase exit._                              |
 
 ## Companion files
 
