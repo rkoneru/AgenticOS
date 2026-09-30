@@ -77,4 +77,18 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: sbom, path: sbom.cdx.json }
 
+  freeze-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Frozen contracts may only change together with an ADR
+        run: |
+          base=origin/${{ github.base_ref }}
+          if git diff --name-only "$base"...HEAD | grep -q '^packages/contracts/FREEZE.json$'; then
+            git diff --name-only --diff-filter=AM "$base"...HEAD | grep -q '^docs/adr/' \
+              || { echo "FREEZE.json changed without a new or updated ADR under docs/adr/"; exit 1; }
+          fi
+
   # Container scanning activates in Phase 10 when service images exist.

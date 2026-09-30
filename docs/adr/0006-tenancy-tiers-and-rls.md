@@ -1,6 +1,6 @@
 # 0006. Tenancy tiers and database-enforced isolation
 
-Status: Accepted · Date: 2026-09-30
+Status: Accepted (amended by 0008: trust boundaries; `axis_admin` and owner role are planned, not built) · Date: 2026-09-30
 
 ## Context
 
