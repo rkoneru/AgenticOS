@@ -1,0 +1,105 @@
+{
+  "manifest_version": 1,
+  "blueprint": {
+    "name": "claims-triage",
+    "version": "2.3.1",
+    "content_hash": "32a8bedce79b8f22914f7faca924700ba16e4c73e7f082de9651e91ba45a6791"
+  },
+  "risk": {
+    "level": "high",
+    "human_oversight_required": true,
+    "approver_roles": ["claims-adjuster"],
+    "transparency_notice": "You are interacting with an AI system. A human adjuster reviews every decision."
+  },
+  "models": {
+    "primary": {
+      "provider": "bedrock",
+      "model": "anthropic.claude-sonnet",
+      "endpoint": null,
+      "params": {
+        "temperature": 0.1
+      }
+    },
+    "fallbacks": [
+      {
+        "provider": "azure-openai",
+        "model": "gpt-4o",
+        "endpoint": "https://example.openai.azure.com",
+        "params": {}
+      }
+    ]
+  },
+  "routing": {
+    "stages": ["cache", "rules", "rag", "llm"]
+  },
+  "system_prompt": "Classify the claim and recommend a queue. Never state coverage decisions as final.",
+  "tools": [
+    {
+      "name": "lookup-policy",
+      "kind": "function",
+      "ref": "policy-db@^1.0.0",
+      "mcp_server": null,
+      "side_effects": "read",
+      "timeout_seconds": 60
+    },
+    {
+      "name": "crm",
+      "kind": "mcp",
+      "ref": null,
+      "mcp_server": "https://mcp.example.com/crm",
+      "side_effects": "write",
+      "timeout_seconds": 60
+    },
+    {
+      "name": "notify-adjuster",
+      "kind": "channel",
+      "ref": null,
+      "mcp_server": null,
+      "side_effects": "external",
+      "timeout_seconds": 60
+    }
+  ],
+  "memory": {
+    "run": true,
+    "session": true,
+    "long_term": false,
+    "knowledge_bases": ["claims-handbook"]
+  },
+  "budgets": {
+    "tokens": {
+      "soft": 200000,
+      "hard": 400000
+    },
+    "cost_usd": {
+      "soft": 2,
+      "hard": 5
+    },
+    "runtime_seconds": {
+      "soft": null,
+      "hard": null
+    },
+    "tool_calls": {
+      "soft": null,
+      "hard": 50
+    }
+  },
+  "process": {
+    "restart_policy": "on-failure",
+    "max_restarts": 3,
+    "max_children": 0,
+    "timeout_seconds": 900,
+    "supervisor": "one-for-one"
+  },
+  "policy_packs": ["baseline-deny@^1.0.0", "phi-redaction@^1.1.0"],
+  "channels": ["web", "slack"],
+  "data": {
+    "phi": true,
+    "residency": "eu-west-1"
+  },
+  "evals": [
+    {
+      "ref": "claims-regression@^1.0.0",
+      "threshold": 0.92
+    }
+  ]
+}
