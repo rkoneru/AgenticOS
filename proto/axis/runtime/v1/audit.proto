@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package axis.runtime.v1;
+
+import "axis/runtime/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+service AuditService {
+  // Appends one event; the service assigns seq, prev_hash and hash.
+  rpc Append(AppendRequest) returns (AppendResponse);
+  rpc VerifyChain(VerifyChainRequest) returns (VerifyChainResponse);
+}
+
+message AppendRequest {
+  string tenant_id = 1;
+  string id = 2; // client-supplied UUID, used for idempotency
+  TraceContext trace = 3;
+  Actor actor = 4;
+  BlueprintRef blueprint = 5;
+  string policy_version = 6;
+  string enforcement_point = 7; // audit-event-v1 enum value
+  string action = 8;
+  Decision decision = 9;
+  string reason = 10;
+  string inputs_hash = 11; // 64 hex
+  string outputs_hash = 12; // 64 hex
+  google.protobuf.Timestamp ts = 13;
+}
+
+message AppendResponse {
+  uint64 seq = 1;
+  string hash = 2;
+  string prev_hash = 3;
+}
+
+message VerifyChainRequest {
+  string tenant_id = 1;
+  uint64 from_seq = 2;
+  uint64 to_seq = 3; // 0 = head
+}
+
+message VerifyChainResponse {
+  bool ok = 1;
+  uint64 verified = 2;
+  uint64 broken_at_seq = 3;
+  string reason = 4;
+}

@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package axis.runtime.v1;
+
+import "axis/runtime/v1/common.proto";
+import "google/protobuf/struct.proto";
+
+// The Risk Kernel. Every external action is evaluated here *before* execution.
+// Clients MUST treat transport errors, deadlines and DECISION_UNSPECIFIED as DENY.
+service GateService {
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+  rpc SetKillSwitch(SetKillSwitchRequest) returns (SetKillSwitchResponse);
+}
+
+message EvaluateRequest {
+  string tenant_id = 1;
+  TraceContext trace = 2;
+  Actor actor = 3;
+  BlueprintRef blueprint = 4;
+  EnforcementPoint enforcement_point = 5;
+  string action = 6; // e.g. tool name
+  google.protobuf.Struct context = 7; // tool, args, data.phi, ...
+}
+
+message EvaluateResponse {
+  Decision decision = 1;
+  string policy_version = 2;
+  string reason = 3;
+  repeated string matched_rule_ids = 4;
+  repeated string redact_fields = 5; // populated for DECISION_ALLOW_WITH_REDACTION
+  string approval_id = 6; // populated for DECISION_REQUIRE_APPROVAL
+  string audit_event_id = 7; // the decision is always audited
+}
+
+message SetKillSwitchRequest {
+  enum Scope {
+    SCOPE_UNSPECIFIED = 0;
+    SCOPE_GLOBAL = 1;
+    SCOPE_TENANT = 2;
+    SCOPE_AGENT = 3;
+    SCOPE_TOOL = 4;
+  }
+  string tenant_id = 1; // empty only for SCOPE_GLOBAL (platform operators)
+  Scope scope = 2;
+  string target = 3; // agent name or tool name for those scopes
+  bool engaged = 4;
+  string reason = 5;
+}
+
+message SetKillSwitchResponse {
+  bool engaged = 1;
+  string audit_event_id = 2;
+}

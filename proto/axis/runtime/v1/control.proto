@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package axis.runtime.v1;
+
+import "axis/runtime/v1/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Runtime workers <-> control plane.
+service RuntimeControlService {
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+  rpc SpawnProcess(SpawnProcessRequest) returns (SpawnProcessResponse);
+  rpc SignalProcess(SignalProcessRequest) returns (SignalProcessResponse);
+  rpc GetProcess(GetProcessRequest) returns (GetProcessResponse);
+  // Server-streams state transitions for a run (and its children).
+  rpc WatchRun(WatchRunRequest) returns (stream WatchRunResponse);
+}
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  string region = 2;
+  string node_pool = 3; // "shared" or a dedicated tenant pool
+  uint32 capacity = 4; // max concurrent processes
+}
+
+message RegisterWorkerResponse {
+  string task_queue = 1; // Temporal task queue to poll
+  uint32 heartbeat_seconds = 2;
+}
+
+message SpawnProcessRequest {
+  string tenant_id = 1;
+  string run_id = 2;
+  string parent_pid = 3; // empty for the run's init process
+  BlueprintRef blueprint = 4;
+  google.protobuf.Struct input = 5;
+  string idempotency_key = 6;
+  TraceContext trace = 7;
+}
+
+message SpawnProcessResponse {
+  Process process = 1;
+}
+
+message SignalProcessRequest {
+  string tenant_id = 1;
+  string pid = 2;
+  Signal signal = 3;
+  string reason = 4;
+  Actor requested_by = 5;
+}
+
+message SignalProcessResponse {
+  ProcessState state = 1;
+}
+
+message GetProcessRequest {
+  string tenant_id = 1;
+  string pid = 2;
+}
+
+message GetProcessResponse {
+  Process process = 1;
+}
+
+message WatchRunResponse {
+  ProcessEvent event = 1;
+}
+
+message Process {
+  string pid = 1;
+  string ppid = 2;
+  string tenant_id = 3;
+  string run_id = 4;
+  BlueprintRef blueprint = 5;
+  ProcessState state = 6;
+  string exit_reason = 7; // see process-model.json exitReasons; set when terminated
+  Timestamps timestamps = 8;
+}
+
+message WatchRunRequest {
+  string tenant_id = 1;
+  string run_id = 2;
+  uint64 after_sequence = 3; // resume point in the run event log
+}
+
+message ProcessEvent {
+  uint64 sequence = 1; // position in the run's append-only event log
+  string pid = 2;
+  ProcessState from_state = 3;
+  ProcessState to_state = 4;
+  string trigger = 5; // event or signal name
+  google.protobuf.Timestamp at = 6;
+  string audit_event_id = 7;
+}

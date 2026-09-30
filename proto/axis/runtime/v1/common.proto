@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package axis.runtime.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Mirrors packages/contracts/process-model.json. Keep in sync; a contract test compares them.
+enum ProcessState {
+  PROCESS_STATE_UNSPECIFIED = 0;
+  PROCESS_STATE_SPAWN = 1;
+  PROCESS_STATE_READY = 2;
+  PROCESS_STATE_RUNNING = 3;
+  PROCESS_STATE_WAITING = 4;
+  PROCESS_STATE_SUSPENDED = 5;
+  PROCESS_STATE_TERMINATED = 6;
+}
+
+enum Signal {
+  SIGNAL_UNSPECIFIED = 0;
+  SIGNAL_PAUSE = 1;
+  SIGNAL_RESUME = 2;
+  SIGNAL_TERM = 3;
+  SIGNAL_KILL = 4;
+  SIGNAL_INTERRUPT = 5;
+}
+
+// Policy decision outcomes. UNSPECIFIED must be treated as DENY by every consumer (fail-closed).
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOW = 1;
+  DECISION_DENY = 2;
+  DECISION_REQUIRE_APPROVAL = 3;
+  DECISION_ALLOW_WITH_REDACTION = 4;
+}
+
+enum EnforcementPoint {
+  ENFORCEMENT_POINT_UNSPECIFIED = 0;
+  ENFORCEMENT_POINT_TOOL_CALL = 1;
+  ENFORCEMENT_POINT_MCP_CALL = 2;
+  ENFORCEMENT_POINT_MODEL_CALL = 3;
+  ENFORCEMENT_POINT_MEMORY_WRITE = 4;
+  ENFORCEMENT_POINT_MESSAGE_SEND = 5;
+  ENFORCEMENT_POINT_CODE_EXEC = 6;
+  ENFORCEMENT_POINT_BROWSER_EXEC = 7;
+}
+
+message TraceContext {
+  string trace_id = 1; // 32 lowercase hex
+  string span_id = 2; // 16 lowercase hex
+}
+
+message Actor {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_HUMAN = 1;
+    TYPE_AGENT = 2;
+    TYPE_SYSTEM = 3;
+  }
+  Type type = 1;
+  string id = 2;
+  string pid = 3; // required when type == AGENT
+}
+
+message BlueprintRef {
+  string name = 1;
+  string version = 2;
+}
+
+message Timestamps {
+  google.protobuf.Timestamp created_at = 1;
+  google.protobuf.Timestamp updated_at = 2;
+}
