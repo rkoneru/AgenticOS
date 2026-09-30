@@ -22,6 +22,12 @@ export interface KillSwitchStore {
 export interface CounterStore {
   get(key: string): Promise<number>;
   add(key: string, n: number): Promise<number>;
+  /**
+   * ATOMIC check-and-add: adds `n` only if the result would stay <= `max`. Must be a single indivisible operation
+   * (a Lua script / INCRBY-with-check in Redis); a separate get-then-add is a race that lets parallel requests
+   * exceed a cap.
+   */
+  reserve(key: string, n: number, max: number): Promise<boolean>;
   /** Records one hit and returns the number of hits inside the trailing window (including this one). */
   hit(key: string, windowMs: number, nowMs: number): Promise<number>;
 }
@@ -78,6 +84,14 @@ export class MemoryCounterStore implements CounterStore {
     const v = (this.values.get(key) ?? 0) + n;
     this.values.set(key, v);
     return Promise.resolve(v);
+  }
+
+  reserve(key: string, n: number, max: number): Promise<boolean> {
+    // No await between the read and the write: atomic within this single-threaded process.
+    const next = (this.values.get(key) ?? 0) + n;
+    if (next > max) return Promise.resolve(false);
+    this.values.set(key, next);
+    return Promise.resolve(true);
   }
 
   hit(key: string, windowMs: number, nowMs: number): Promise<number> {

@@ -71,6 +71,35 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 const nonEmpty = (v: unknown, max = 256): v is string =>
   typeof v === "string" && v.length > 0 && v.length <= max;
 
+const MAX_DEPTH = 32;
+const MAX_NODES = 10_000;
+
+/**
+ * The context is untrusted and is hashed, forwarded to the policy engine and audited. Reject anything that cannot be
+ * canonically hashed or could exhaust the kernel: non-finite numbers, undefined/functions/bigint/symbols, cycles,
+ * excessive depth or size. Iterative, so a hostile 5000-level structure cannot overflow the stack.
+ */
+export function contextProblem(root: unknown): string | undefined {
+  const stack: { v: unknown; d: number }[] = [{ v: root, d: 0 }];
+  const seen = new Set<object>();
+  let nodes = 0;
+  while (stack.length > 0) {
+    const { v, d } = stack.pop() as { v: unknown; d: number };
+    if (++nodes > MAX_NODES) return "context too large";
+    if (d > MAX_DEPTH) return "context too deeply nested";
+    if (v === null || typeof v === "string" || typeof v === "boolean") continue;
+    if (typeof v === "number") {
+      if (!Number.isFinite(v)) return "context contains a non-finite number";
+      continue;
+    }
+    if (typeof v !== "object") return `context contains an unsupported ${typeof v}`;
+    if (seen.has(v)) return "context contains a cycle or shared reference";
+    seen.add(v);
+    for (const child of Array.isArray(v) ? v : Object.values(v)) stack.push({ v: child, d: d + 1 });
+  }
+  return undefined;
+}
+
 export type Validated<T> = { ok: true; value: T } | { ok: false; reason: string };
 
 /** Strict request validation. Anything unexpected is rejected (the kernel then answers DENY). */
@@ -102,6 +131,8 @@ export function validateRequest(raw: unknown): Validated<GateRequest> {
   }
   if (!nonEmpty(action)) return { ok: false, reason: "invalid action" };
   if (!isObj(context)) return { ok: false, reason: "invalid context" };
+  const bad = contextProblem(context);
+  if (bad) return { ok: false, reason: bad };
   return {
     ok: true,
     value: {

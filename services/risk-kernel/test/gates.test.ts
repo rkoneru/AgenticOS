@@ -108,26 +108,34 @@ describe("amount_cap gate", () => {
 
 describe("target_cap gate", () => {
   const g = gate("target_cap", { field: "args.amount", max: 100, perTarget: true });
-  it("accumulates per target only after commit, and blocks once the cap would be exceeded", async () => {
+  it("reserves atomically and blocks once the cap would be exceeded; rollback releases the reservation", async () => {
     const counters = new MemoryCounterStore();
     const run = (amount: number, target: string) =>
       evaluateGate(g, env({ args: { amount, target } }, { counters }));
     const a = await run(60, "venue-a");
     expect(a.pass).toBe(true);
-    expect(await run(60, "venue-a")).toMatchObject({ pass: true }); // not committed yet, so not counted
-    await a.commit?.();
-    expect((await run(60, "venue-a")).pass).toBe(false);
+    expect((await run(60, "venue-a")).pass).toBe(false); // the first reservation counts immediately: 60 + 60 > 100
     expect((await run(60, "venue-b")).pass).toBe(true); // separate target
+    await a.rollback?.(); // e.g. a later gate failed: the capacity comes back
+    expect((await run(60, "venue-a")).pass).toBe(true);
     expect((await run(40, "venue-a")).pass).toBe(true); // exactly at cap
+    expect((await run(1, "venue-a")).pass).toBe(false);
+  });
+  it("parallel reservations can never jointly exceed the cap (no read-then-add race)", async () => {
+    const counters = new MemoryCounterStore();
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        evaluateGate(g, env({ args: { amount: 60, target: "v" } }, { counters })),
+      ),
+    );
+    expect(results.filter((r) => r.pass)).toHaveLength(1);
   });
   it("perTarget=false shares one counter; target falls back to tool.name; fails with no target", async () => {
     const counters = new MemoryCounterStore();
     const shared = gate("target_cap", { field: "args.amount", max: 100, perTarget: false });
-    const first = await evaluateGate(
-      shared,
-      env({ args: { amount: 80, target: "x" } }, { counters }),
-    );
-    await first.commit?.();
+    expect(
+      (await evaluateGate(shared, env({ args: { amount: 80, target: "x" } }, { counters }))).pass,
+    ).toBe(true);
     expect(
       (await evaluateGate(shared, env({ args: { amount: 30, target: "y" } }, { counters }))).pass,
     ).toBe(false);
@@ -138,8 +146,7 @@ describe("target_cap gate", () => {
   });
   it("resets on the next UTC day", async () => {
     const counters = new MemoryCounterStore();
-    const r = await evaluateGate(g, env({ args: { amount: 100, target: "a" } }, { counters }));
-    await r.commit?.();
+    await evaluateGate(g, env({ args: { amount: 100, target: "a" } }, { counters }));
     const tomorrow = env(
       { args: { amount: 100, target: "a" } },
       { counters, now: NOW + 86_400_000 },
@@ -150,6 +157,20 @@ describe("target_cap gate", () => {
     expect((await evaluateGate(g, env({ args: { amount: -5, target: "a" } }))).pass).toBe(false);
     expect((await evaluateGate(g, env({ args: { target: "a" } }))).pass).toBe(false);
     expect((await evaluateGate(gate("target_cap", {}), env())).pass).toBe(false);
+  });
+  it("counter keys cannot collide through ':' in agent or target names", async () => {
+    const counters = new MemoryCounterStore();
+    const as = (agent: string, target: string) =>
+      evaluateGate(g, {
+        ...env({ args: { amount: 100, target } }, { counters }),
+        req: req({
+          blueprint: { name: agent, version: "1" },
+          context: { args: { amount: 100, target } },
+        }),
+      });
+    expect((await as("a", "b:g1:c")).pass).toBe(true);
+    expect((await as("a:g1:b", "c")).pass).toBe(true); // a different (agent,target) pair; must not share a counter
+    expect(budgetKey(T1, "a:b", "m", "day", NOW)).not.toBe(budgetKey(T1, "a", "b:m", "day", NOW));
   });
 });
 
@@ -239,6 +260,7 @@ describe("fail-closed", () => {
   it("store errors fail the gate instead of throwing", async () => {
     const broken = new MemoryCounterStore();
     broken.get = () => Promise.reject(new Error("redis down"));
+    broken.reserve = () => Promise.reject(new Error("redis down"));
     broken.hit = () => Promise.reject(new Error("redis down"));
     const ks = new MemoryKillSwitchStore();
     ks.isEngaged = () => Promise.reject(new Error("redis down"));

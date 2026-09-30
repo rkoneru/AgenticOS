@@ -14,6 +14,11 @@ export interface Principal {
   tenantId: string | null;
   subject: string;
   platformOperator: boolean;
+  /**
+   * Platform operators only: the tenant whose audit chain records platform-wide actions (a dedicated "platform" tenant).
+   * Without it a global kill-switch can be ENGAGED (safety first) but not RELEASED, because release requires an audit record.
+   */
+  auditTenantId?: string;
 }
 
 /** Derives the caller from credentials. The request's `tenant_id` is never trusted on its own. */
@@ -162,6 +167,13 @@ export function createGateServer(deps: GateServerDeps): grpc.Server {
           return cb({ code: grpc.status.UNAUTHENTICATED, message: "unauthenticated" });
         const raw = toRequest(call.request) as { tenant_id?: unknown };
         if (principal.tenantId === null || raw.tenant_id !== principal.tenantId) {
+          // Recorded in the AUTHENTICATED tenant's chain (never the claimed one): a cross-tenant probe signal.
+          const auditId = principal.tenantId
+            ? await deps.kernel.auditRejection(
+                principal.tenantId,
+                "tenant does not match credential",
+              )
+            : "";
           const denied: GateResponse = {
             decision: "DENY",
             policy_version: "",
@@ -170,11 +182,20 @@ export function createGateServer(deps: GateServerDeps): grpc.Server {
             redact_fields: [],
             approval: null,
             approval_id: "",
-            audit_event_id: "",
+            audit_event_id: auditId,
           };
           return cb(null, toWire(denied));
         }
-        cb(null, toWire(await deps.kernel.evaluate(raw)));
+        const resp = await deps.kernel.evaluate(raw);
+        if (
+          resp.decision === "DENY" &&
+          resp.audit_event_id === "" &&
+          resp.reason !== "audit unavailable"
+        ) {
+          // Invalid request or internal error: the tenant is authenticated, so record it in that tenant's chain.
+          resp.audit_event_id = await deps.kernel.auditRejection(principal.tenantId, resp.reason);
+        }
+        cb(null, toWire(resp));
       })().catch(() => cb({ code: grpc.status.INTERNAL, message: "internal" }));
     },
 
@@ -195,9 +216,9 @@ export function createGateServer(deps: GateServerDeps): grpc.Server {
         if ((scope === "agent" || scope === "tool") && !target) {
           return cb({ code: grpc.status.INVALID_ARGUMENT, message: "target required" });
         }
-        const auditTenant = scope === "global" ? principal.tenantId : tenantId;
+        const auditTenant = scope === "global" ? (principal.auditTenantId ?? null) : tenantId;
         const audit = async (): Promise<string> => {
-          if (!auditTenant) return ""; // platform-wide switch by an operator with no tenant: recorded in platform logs, not a tenant chain
+          if (!auditTenant) return ""; // no platform audit tenant configured for this operator
           const event: UnsealedEvent = {
             schema_version: 1,
             id: randomUUID(),
@@ -228,6 +249,12 @@ export function createGateServer(deps: GateServerDeps): grpc.Server {
           auditId = await audit().catch(() => "");
         } else {
           // Releasing is the risky direction: require the audit record first.
+          if (!auditTenant) {
+            return cb({
+              code: grpc.status.FAILED_PRECONDITION,
+              message: "no audit tenant: release refused",
+            });
+          }
           auditId = await audit();
           await deps.killSwitches.set(scope, { tenantId, target }, false);
         }

@@ -12,10 +12,18 @@ import {
 } from "../src/index.js";
 import { PID, T1, T2, harness, type Harness } from "./helpers.js";
 
+const PLATFORM = "99999999-9999-4999-8999-999999999999";
+
 const tokens: Record<string, Principal> = {
   "t1-token": { tenantId: T1, subject: "svc-runtime-1", platformOperator: false },
   "t2-token": { tenantId: T2, subject: "svc-runtime-2", platformOperator: false },
-  "ops-token": { tenantId: null, subject: "platform-oncall", platformOperator: true },
+  "ops-token": {
+    tenantId: null,
+    subject: "platform-oncall",
+    platformOperator: true,
+    auditTenantId: PLATFORM,
+  },
+  "ops-noaudit-token": { tenantId: null, subject: "platform-oncall-2", platformOperator: true },
 };
 
 type Client = grpc.Client &
@@ -153,15 +161,20 @@ describe("Evaluate", () => {
     );
   });
 
-  it("a tenant cannot evaluate on behalf of another tenant: DENY, not audited in the victim's chain", async () => {
+  it("a tenant cannot evaluate on behalf of another tenant: DENY, audited in the caller's own chain", async () => {
     const before = h.audit.events.get(T2)?.length ?? 0;
     const { res } = await call("Evaluate", evalReq({ tenant_id: T2 }), "t1-token");
     expect(res).toMatchObject({
       decision: "DECISION_DENY",
       reason: "tenant does not match credential",
-      audit_event_id: "",
     });
-    expect(h.audit.events.get(T2)?.length ?? 0).toBe(before);
+    expect(h.audit.events.get(T2)?.length ?? 0).toBe(before); // nothing lands in the claimed (victim) tenant's chain
+    // ...but the probe IS recorded in the authenticated caller's own chain.
+    expect(h.audit.events.get(T1)?.at(-1)).toMatchObject({
+      id: res["audit_event_id"],
+      action: "request_rejected",
+      decision: "DENY",
+    });
   });
 
   it("platform operator credentials (no tenant) cannot evaluate tenant requests", async () => {
@@ -178,7 +191,11 @@ describe("Evaluate", () => {
   ])("%s is DENY", async (_n, over) => {
     const { res } = await call("Evaluate", evalReq(over), "t1-token");
     expect(res["decision"]).toBe("DECISION_DENY");
-    expect(res["audit_event_id"]).toBe("");
+    // The tenant is authenticated, so the rejection is recorded in that tenant's chain.
+    expect(h.audit.events.get(T1)?.at(-1)).toMatchObject({
+      id: res["audit_event_id"],
+      action: "request_rejected",
+    });
   });
 
   it("an authenticator that throws means UNAUTHENTICATED", async () => {
@@ -236,8 +253,8 @@ describe("SetKillSwitch", () => {
     const off = await call("SetKillSwitch", ks({ engaged: false }), "t1-token");
     expect(off.res["engaged"]).toBe(false);
     expect((await call("Evaluate", evalReq(), "t1-token")).res["decision"]).toBe("DECISION_ALLOW");
-    const adminEvents = (h.audit.events.get(T1) ?? []).filter(
-      (e) => e.enforcement_point === "admin",
+    const adminEvents = (h.audit.events.get(T1) ?? []).filter((e) =>
+      e.action.startsWith("kill_switch:"),
     );
     expect(adminEvents.map((e) => e.action)).toEqual([
       "kill_switch:tenant:engage",
@@ -284,10 +301,10 @@ describe("SetKillSwitch", () => {
     expect((await call("Evaluate", evalReq(), "t1-token")).res["decision"]).toBe("DECISION_ALLOW");
   });
 
-  it("a platform operator can engage and release the global switch (no tenant chain to audit)", async () => {
+  it("a platform operator with an audit tenant engages and releases the global switch, both audited on the platform chain", async () => {
     const on = await call("SetKillSwitch", { scope: "SCOPE_GLOBAL", engaged: true }, "ops-token");
     expect(on.err).toBeNull();
-    expect(on.res["audit_event_id"]).toBe("");
+    expect(on.res["audit_event_id"]).not.toBe("");
     expect((await call("Evaluate", evalReq({ tenant_id: T2 }), "t2-token")).res["decision"]).toBe(
       "DECISION_DENY",
     );
@@ -296,6 +313,30 @@ describe("SetKillSwitch", () => {
     expect((await call("Evaluate", evalReq({ tenant_id: T2 }), "t2-token")).res["decision"]).toBe(
       "DECISION_ALLOW",
     );
+    expect((h.audit.events.get(PLATFORM) ?? []).map((e) => e.action)).toEqual([
+      "kill_switch:global:engage",
+      "kill_switch:global:release",
+    ]);
+  });
+
+  it("an operator with no audit tenant can engage (safety first) but release is refused, because it cannot be audited", async () => {
+    const on = await call(
+      "SetKillSwitch",
+      { scope: "SCOPE_GLOBAL", engaged: true },
+      "ops-noaudit-token",
+    );
+    expect(on.err).toBeNull();
+    expect(on.res["audit_event_id"]).toBe("");
+    const off = await call(
+      "SetKillSwitch",
+      { scope: "SCOPE_GLOBAL", engaged: false },
+      "ops-noaudit-token",
+    );
+    expect(off.err?.code).toBe(grpc.status.FAILED_PRECONDITION);
+    expect(await h.kill.isEngaged("global", { tenantId: T1, agent: "x" })).toBe(true); // still engaged
+    expect(
+      (await call("SetKillSwitch", { scope: "SCOPE_GLOBAL", engaged: false }, "ops-token")).err,
+    ).toBeNull(); // released by an auditable operator
   });
 
   it("engaging still applies when audit is down; releasing is refused when audit is down", async () => {

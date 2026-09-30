@@ -12,11 +12,14 @@ export interface GateResult {
   pass: boolean;
   /** Never contains request values (PHI-safe); names fields and limits only. */
   reason: string;
-  /** Applied only if every gate passes (e.g. cumulative counters). */
-  commit?: () => Promise<void>;
+  /** Undoes a reservation this gate made; the kernel calls it if a later gate or the audit append fails. */
+  rollback?: () => Promise<void>;
 }
 
 const FUTURE_SKEW_MS = 5000;
+
+/** Injection-proof counter key: each part is JSON-encoded, so ':' (or any char) in an agent/target name cannot collide. */
+export const key = (...parts: string[]): string => JSON.stringify(parts);
 
 export function getPath(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
@@ -63,7 +66,7 @@ export function budgetKey(
         : window === "day"
           ? `d:${t.d}`
           : `m:${t.m}`;
-  return `spent:${tenantId}:${agent}:${metric}:${w}`;
+  return key("spent", tenantId, agent, metric, w);
 }
 
 async function killSwitch(g: PolicyGate, env: GateEnv): Promise<GateResult> {
@@ -110,13 +113,21 @@ async function targetCap(g: PolicyGate, env: GateEnv): Promise<GateResult> {
   const target =
     g.params["perTarget"] === false ? "*" : typeof targetRaw === "string" ? targetRaw : undefined;
   if (target === undefined) return fail(g.id, "no target to attribute the amount to");
-  const key = `target:${env.req.tenant_id}:${env.req.blueprint.name}:${g.id}:${target}:${utc(env.now).d}`;
-  const spent = await env.counters.get(key);
-  if (spent + v > max) return fail(g.id, `cumulative cap ${max} would be exceeded`);
+  const ctr = key(
+    "target",
+    env.req.tenant_id,
+    env.req.blueprint.name,
+    g.id,
+    target,
+    utc(env.now).d,
+  );
+  // Atomic reserve: parallel requests cannot each pass a read-then-add check and jointly exceed the cap.
+  if (!(await env.counters.reserve(ctr, v, max)))
+    return fail(g.id, `cumulative cap ${max} would be exceeded`);
   return {
     pass: true,
     reason: `gate ${g.id}: ok`,
-    commit: async () => void (await env.counters.add(key, v)),
+    rollback: async () => void (await env.counters.add(ctr, -v)),
   };
 }
 
@@ -164,7 +175,7 @@ async function rateLimit(g: PolicyGate, env: GateEnv): Promise<GateResult> {
   const who = parts[by];
   if (who === undefined) return fail(g.id, `cannot resolve rate-limit key "${by}"`);
   const count = await env.counters.hit(
-    `rate:${env.req.tenant_id}:${g.id}:${by}:${who}`,
+    key("rate", env.req.tenant_id, g.id, by, who),
     windowSeconds * 1000,
     env.now,
   );

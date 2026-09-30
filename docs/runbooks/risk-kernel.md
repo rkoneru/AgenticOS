@@ -21,6 +21,8 @@ needs the Redis stores and the audit service (see `docs/NEEDS.md`).
 
 ## Operations
 
+- **Global kill-switch:** only platform operators. The operator's principal needs `auditTenantId` (a dedicated platform tenant)
+  for the action to be audited on a chain; without it the switch can be engaged (safety first) but **not released**.
 - **Engage a kill-switch:** `SetKillSwitch` (tenant/agent/tool by the tenant's credential; global by a platform operator).
   Takes effect on the next decision. Engaging is never blocked by an audit outage; releasing requires the audit record first.
 - **Deploy a new policy:** compile with `axis-policy bundle`, restart/reload the kernel with the new bundle. The response's
@@ -32,9 +34,17 @@ needs the Redis stores and the audit service (see `docs/NEEDS.md`).
 
 `reason` names the rule ids, gate id, or failure class (`policy evaluation timed out`, `audit unavailable`,
 `kill-switch state unavailable`, `gate state unavailable`, `invalid request: ...`). Reasons never contain request values.
-Invalid requests (no trustworthy tenant) are **not** written to a tenant's audit chain; they are logged as `gate request rejected`.
+Rejections are audited when a tenant can be trusted: over gRPC the tenant comes from the credential, so an invalid request,
+a context that cannot be hashed (non-finite numbers, cycles, excessive depth/size) or a tenant/credential mismatch is recorded as
+`request_rejected` (enforcement point `admin`) in the **authenticated** caller's chain, never in the claimed tenant's. In-process
+callers of `RiskKernel.evaluate` with an invalid request get a DENY with an empty `audit_event_id` and a logged warning.
 
 ## Known limits
+
+- Kill-switch and counter state is in-memory and single-instance, so **cross-instance kill-switch propagation (< 1 s) is not built**;
+  the Redis stores must implement `CounterStore.reserve` as one atomic script (Lua), not get-then-add.
+- Counter keys use the agent name and `run.id` supplied by the (trusted) runtime. There is no tenant-wide budget scope and no
+  agent registry binding yet, so a compromised runtime could reset per-agent counters by renaming its agent.
 
 - Policy evaluation is synchronous Wasm and cannot be pre-empted; an over-budget evaluation is denied after the fact (default 25 ms).
 - Static-token authentication is dev-only; mTLS/short-lived tokens are Phase 6.

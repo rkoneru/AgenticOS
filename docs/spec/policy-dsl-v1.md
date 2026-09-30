@@ -61,8 +61,9 @@ store error) **fails**, which forces `DENY`.
 - `staleness`: the value at `field` (ISO-8601 string or epoch milliseconds) must be no older than `maxAgeSeconds` (and not in the future by more than 5 s).
 - `amount_cap`: the numeric value at `field` must be <= `max`.
 - `target_cap`: cumulative sum of the numeric value at `field` per target (target = `args.target`, else `tool.name`) per tenant
-  and agent per UTC day must stay <= `max`; `perTarget: false` uses one counter across targets. The sum is committed only when the
-  request is otherwise allowed.
+  and agent per UTC day must stay <= `max`; `perTarget: false` uses one counter across targets. Capacity is **reserved
+  atomically** when the gate evaluates (a single check-and-add, so parallel requests cannot jointly exceed the cap) and
+  **rolled back** if a later gate fails or the audit append fails, so a denied request never consumes capacity.
 - `budget`: the spent amount of `metric` in `window` (maintained by TKI) must be below `hard`; crossing `soft` passes with a warning reason.
 - `rate_limit`: sliding window of `windowSeconds`; the request fails when it would make more than `max` hits for the `key` (tenant, agent, tool or actor).
 

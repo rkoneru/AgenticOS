@@ -215,7 +215,7 @@ describe("fail-closed: every failure mode denies, and never throws", () => {
     expect(r).toMatchObject({ decision: "DENY", reason: "kill-switch state unavailable" });
   });
 
-  it("gate commit failure denies", async () => {
+  it("gate reservation failure denies", async () => {
     const gates = [
       {
         id: "cap",
@@ -224,11 +224,12 @@ describe("fail-closed: every failure mode denies, and never throws", () => {
       },
     ];
     const h = await harness({}, engineReturning(goodResult({ gates })));
-    h.counters.add = () => Promise.reject(new Error("redis down"));
+    h.counters.reserve = () => Promise.reject(new Error("redis down"));
     const r = await h.kernel.evaluate(
       req({ context: { tool: { name: "t" }, args: { amount: 5, target: "v" } } }),
     );
-    expect(r).toMatchObject({ decision: "DENY", reason: "gate state unavailable" });
+    expect(r.decision).toBe("DENY");
+    expect(r.reason).toContain("evaluation error");
   });
 
   it("an unexpected internal exception still yields DENY", async () => {
@@ -326,7 +327,7 @@ describe("kill-switches", () => {
     expect((await h.kernel.evaluate(req({ tenant_id: T2 }))).decision).toBe("DENY");
   });
 
-  it("is effective on the very next decision (propagation well under 1 s)", async () => {
+  it("is effective on the very next decision (in-process store only; cross-instance propagation is NOT built)", async () => {
     const h = await harness();
     const t0 = performance.now();
     await h.kill.set("tenant", { tenantId: T1 }, true);
@@ -347,7 +348,7 @@ describe("stateful gates through the kernel", () => {
     expect((await h.kernel.evaluate(req())).decision).toBe("ALLOW");
   });
 
-  it("target cap commits only for allowed requests", async () => {
+  it("a request denied by a later gate does not consume target capacity (rollback)", async () => {
     const h = await harness(
       {},
       engineReturning(
@@ -464,5 +465,98 @@ describe("constructor defaults", () => {
     });
     expect((await k.evaluate(req())).decision).toBe("ALLOW");
     expect((await k.evaluate(null)).decision).toBe("DENY");
+  });
+});
+
+describe("review findings (Phase 2)", () => {
+  const capGate = [
+    { id: "cap", type: "target_cap", params: { field: "args.amount", max: 100, perTarget: true } },
+  ];
+  const capCall = (amount: number) =>
+    req({ context: { tool: { name: "t" }, args: { amount, target: "v" } } });
+
+  it("target cap is not raceable: 10 parallel requests of 60 against a cap of 100 allow exactly one", async () => {
+    const h = await harness({}, engineReturning(goodResult({ gates: capGate })));
+    const out = await Promise.all(Array.from({ length: 10 }, () => h.kernel.evaluate(capCall(60))));
+    expect(out.filter((r) => r.decision === "ALLOW")).toHaveLength(1);
+    expect(out.filter((r) => r.decision === "DENY")).toHaveLength(9);
+  });
+
+  it("an audit failure releases the reserved capacity", async () => {
+    let down = true;
+    const h = await harness(
+      {
+        audit: {
+          append: (e) =>
+            down
+              ? Promise.reject(new Error("down"))
+              : Promise.resolve({ ...e, seq: 1, prev_hash: "0".repeat(64), hash: "f".repeat(64) }),
+        },
+      },
+      engineReturning(goodResult({ gates: capGate })),
+    );
+    expect((await h.kernel.evaluate(capCall(100))).reason).toBe("audit unavailable");
+    down = false;
+    expect((await h.kernel.evaluate(capCall(100))).decision).toBe("ALLOW"); // the failed attempt did not consume the cap
+  });
+
+  it.each([
+    ["NaN", { args: { n: NaN } }, "non-finite"],
+    ["Infinity", { args: { n: Infinity } }, "non-finite"],
+    ["bigint", { args: { n: 10n } }, "unsupported"],
+    ["undefined", { args: { n: undefined } }, "unsupported"],
+    ["function", { args: { n: () => 1 } }, "unsupported"],
+  ])(
+    "a context containing %s is rejected as invalid (and does not crash)",
+    async (_n, ctx, why) => {
+      const h = await harness();
+      const r = await h.kernel.evaluate(
+        req({ context: { tool: { name: "lookup", side_effects: "read" }, ...ctx } }),
+      );
+      expect(r.decision).toBe("DENY");
+      expect(r.reason).toContain(why);
+    },
+  );
+
+  it("deep, cyclic and oversized contexts are rejected without overflowing the stack", async () => {
+    const h = await harness();
+    let deep: Record<string, unknown> = {};
+    const top = deep;
+    for (let i = 0; i < 5000; i++) deep = (deep["x"] = {}) as Record<string, unknown>;
+    expect(
+      (await h.kernel.evaluate(req({ context: { tool: { name: "t" }, deep: top } }))).reason,
+    ).toContain("deeply nested");
+    const cyc: Record<string, unknown> = {};
+    cyc["self"] = cyc;
+    expect((await h.kernel.evaluate(req({ context: { cyc } }))).reason).toContain("cycle");
+    const big = { list: Array.from({ length: 20000 }, (_, i) => i) };
+    expect((await h.kernel.evaluate(req({ context: { big } }))).reason).toContain("too large");
+    expect(h.audit.events.size).toBe(0); // in-process invalid requests have no trustworthy tenant to attribute
+  });
+
+  it("auditRejection records a rejection in the given tenant's chain, and reports failure as an empty id", async () => {
+    const h = await harness();
+    const id = await h.kernel.auditRejection(T1, "tenant does not match credential");
+    const e = h.audit.events.get(T1)?.[0];
+    expect(e).toMatchObject({
+      id,
+      action: "request_rejected",
+      decision: "DENY",
+      enforcement_point: "admin",
+    });
+    const broken = await harness({ audit: { append: () => Promise.reject(new Error("down")) } });
+    expect(await broken.kernel.auditRejection(T1, "x")).toBe("");
+  });
+
+  it("a tool kill-switch applies even when the caller omits context.tool.name", async () => {
+    const h = await harness({}, engineReturning(goodResult()));
+    await h.kill.set("tool", { tenantId: T1, target: "payments" }, true);
+    const noToolContext = req({ action: "payments", enforcement_point: "model_call", context: {} });
+    expect(await h.kernel.evaluate(noToolContext)).toMatchObject({
+      decision: "DENY",
+      reason: "kill-switch engaged (tool)",
+    });
+    const other = req({ action: "lookup", context: {} });
+    expect((await h.kernel.evaluate(other)).decision).toBe("ALLOW");
   });
 });

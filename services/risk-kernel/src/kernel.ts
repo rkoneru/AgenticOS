@@ -28,6 +28,15 @@ export interface KernelDeps {
   logger?: Logger;
 }
 
+/** Hash that cannot throw: an unhashable payload still gets an audit record (with a sentinel hash), never none. */
+const safeHash = (v: unknown): string => {
+  try {
+    return hashJson(v);
+  } catch {
+    return hashJson({ unhashable: true });
+  }
+};
+
 const SCOPES: KillScope[] = ["global", "tenant", "agent", "tool"];
 const MAX_REASON = 1000;
 
@@ -69,23 +78,42 @@ export class RiskKernel {
   }
 
   private async decide(req: GateRequest): Promise<GateResponse> {
-    const outcome = await this.outcome(req);
-    return this.seal(req, outcome);
+    const reservations: GateResult[] = [];
+    const outcome = await this.outcome(req, reservations);
+    return this.seal(req, outcome, reservations);
   }
 
-  private async outcome(req: GateRequest): Promise<Omit<GateResponse, "audit_event_id">> {
+  /** Undo capacity reserved by passing gates (best effort; a failed rollback is logged, never turned into an ALLOW). */
+  private async rollback(results: GateResult[]): Promise<void> {
+    for (const r of results) {
+      try {
+        await r.rollback?.();
+      } catch (err) {
+        this.log.error("gate rollback failed", { error: String(err) });
+      }
+    }
+  }
+
+  private async outcome(
+    req: GateRequest,
+    reservations: GateResult[],
+  ): Promise<Omit<GateResponse, "audit_event_id">> {
     const now = this.clock();
 
-    // 1. kill-switches, before any policy work
+    // 1. kill-switches, before any policy work. Tool-scope switches are checked against BOTH the declared tool name and the
+    //    action, so omitting `context.tool.name` cannot sidestep a tool kill-switch.
     try {
-      const tool = (req.context["tool"] as { name?: unknown } | undefined)?.name;
+      const declared = (req.context["tool"] as { name?: unknown } | undefined)?.name;
+      const tools = [...new Set([req.action, ...(typeof declared === "string" ? [declared] : [])])];
       for (const scope of SCOPES) {
-        const engaged = await this.deps.killSwitches.isEngaged(scope, {
-          tenantId: req.tenant_id,
-          agent: req.blueprint.name,
-          tool: typeof tool === "string" ? tool : undefined,
-        });
-        if (engaged) return this.base("DENY", `kill-switch engaged (${scope})`, "");
+        for (const tool of scope === "tool" ? tools : [undefined]) {
+          const engaged = await this.deps.killSwitches.isEngaged(scope, {
+            tenantId: req.tenant_id,
+            agent: req.blueprint.name,
+            tool,
+          });
+          if (engaged) return this.base("DENY", `kill-switch engaged (${scope})`, "");
+        }
       }
     } catch (err) {
       this.log.error("kill-switch store error", { error: String(err) });
@@ -110,25 +138,23 @@ export class RiskKernel {
       return { ...this.base("DENY", policy.reason, policy.policy_version), ...summary };
     }
 
-    // 3. gates (a failing gate forces DENY, for every non-DENY outcome)
+    // 3. gates (a failing gate forces DENY, for every non-DENY outcome). Gates that reserve capacity (target_cap) return a
+    //    rollback, applied if a later gate fails so a denied request never consumes budget.
     const results: GateResult[] = [];
-    for (const g of policy.gates)
-      results.push(
-        await evaluateGate(g, {
-          now,
-          req,
-          killSwitches: this.deps.killSwitches,
-          counters: this.deps.counters,
-        }),
-      );
-    const failed = results.find((r) => !r.pass);
-    if (failed) return { ...this.base("DENY", failed.reason, policy.policy_version), ...summary };
-    try {
-      for (const r of results) await r.commit?.();
-    } catch (err) {
-      this.log.error("gate commit failed", { error: String(err) });
-      return { ...this.base("DENY", "gate state unavailable", policy.policy_version), ...summary };
+    for (const g of policy.gates) {
+      const r = await evaluateGate(g, {
+        now,
+        req,
+        killSwitches: this.deps.killSwitches,
+        counters: this.deps.counters,
+      });
+      results.push(r);
+      if (!r.pass) {
+        await this.rollback(results);
+        return { ...this.base("DENY", r.reason, policy.policy_version), ...summary };
+      }
     }
+    reservations.push(...results);
 
     return {
       decision: policy.decision,
@@ -190,10 +216,41 @@ export class RiskKernel {
     return { ...this.base(decision, reason, ""), audit_event_id: "", ...extra };
   }
 
+  /**
+   * Records a rejected call (invalid request, tenant/credential mismatch, internal error) in the AUTHENTICATED tenant's
+   * chain. The caller must have established `tenantId` from a credential, never from the request. Returns the audit id,
+   * or "" if the append failed (logged).
+   */
+  async auditRejection(tenantId: string, reason: string): Promise<string> {
+    try {
+      const sealed = await this.deps.audit.append({
+        schema_version: 1,
+        id: randomUUID(),
+        tenant_id: tenantId,
+        ts: new Date(this.clock()).toISOString(),
+        trace_id: randomUUID().replace(/-/g, ""),
+        actor: { type: "system", id: "risk-kernel" },
+        blueprint: { name: "unknown", version: "0" },
+        policy_version: "none",
+        enforcement_point: "admin",
+        action: "request_rejected",
+        decision: "DENY",
+        reason: reason.slice(0, MAX_REASON),
+        inputs_hash: safeHash({ rejected: true }),
+        outputs_hash: safeHash({ decision: "DENY", reason }),
+      });
+      return sealed.id;
+    } catch (err) {
+      this.log.error("audit of rejection failed", { error: String(err) });
+      return "";
+    }
+  }
+
   /** Appends the decision to the audit log BEFORE returning it. A failed append turns the decision into DENY. */
   private async seal(
     req: GateRequest,
     o: Omit<GateResponse, "audit_event_id">,
+    reservations: GateResult[],
   ): Promise<GateResponse> {
     const event: UnsealedEvent = {
       schema_version: 1,
@@ -208,8 +265,8 @@ export class RiskKernel {
       action: req.action,
       decision: o.decision,
       reason: o.reason,
-      inputs_hash: hashJson(req.context),
-      outputs_hash: hashJson({
+      inputs_hash: safeHash(req.context),
+      outputs_hash: safeHash({
         decision: o.decision,
         matched_rule_ids: o.matched_rule_ids,
         redact_fields: o.redact_fields,
@@ -221,6 +278,7 @@ export class RiskKernel {
       return { ...o, audit_event_id: sealed.id };
     } catch (err) {
       this.log.error("audit append failed; denying", { error: String(err) });
+      await this.rollback(reservations);
       return { ...this.base("DENY", "audit unavailable", o.policy_version), audit_event_id: "" };
     }
   }
