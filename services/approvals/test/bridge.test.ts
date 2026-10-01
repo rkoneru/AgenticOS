@@ -117,6 +117,29 @@ describe("kernel ports", () => {
     }
   });
 
+  it("review: an old approval stops verifying (a stale record cannot be replayed after the window)", async () => {
+    const { svc, signer, clock } = setup();
+    const expected = { tenant_id: T1, run_id: "run-1", tool: "payments.refund", args_hash: HASH };
+    const a = await svc.create(input());
+    await svc.approve({ tenant_id: T1, ...FIN }, a.id);
+    const rec = await new ApprovalResolver(svc).resolve(T1, a.id);
+    const ports = kernelApprovalPorts(svc, signer, { maxAgeMs: 60_000 });
+    clock.advance(59);
+    expect(await ports.verifier.verify(rec, expected)).toBe(true);
+    clock.advance(2);
+    expect(await ports.verifier.verify(rec, expected)).toBe(false);
+    // the default window is bounded too (15 minutes)
+    const dflt = kernelApprovalPorts(svc, signer);
+    clock.advance(-61);
+    expect(await dflt.verifier.verify(rec, expected)).toBe(true);
+    clock.advance(16 * 60);
+    expect(await dflt.verifier.verify(rec, expected)).toBe(false);
+    // a record dated in the future is not valid either
+    clock.advance(-(30 * 60));
+    expect(await dflt.verifier.verify(rec, expected)).toBe(false);
+    expect(() => kernelApprovalPorts(svc, signer, { maxAgeMs: 0 })).toThrow();
+  });
+
   it("isDecisionRecord rejects non-objects and mistyped fields", () => {
     expect(isDecisionRecord(null)).toBe(false);
     expect(isDecisionRecord([])).toBe(false);
