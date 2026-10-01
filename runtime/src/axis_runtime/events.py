@@ -45,6 +45,10 @@ class EventType(StrEnum):
     # Additive (ADR 0012): NEXUS routing telemetry. Folded into RunState; older readers reject them.
     NEXUS_STAGE = "nexus_stage"
     NEXUS_ROUTE = "nexus_route"
+    # Additive (ADR 0015): voice call lifecycle, transcript turns and per-stage latency.
+    VOICE_CALL = "voice_call"
+    VOICE_TURN = "voice_turn"
+    VOICE_STAGE = "voice_stage"
 
 
 class CorruptLogError(Exception):
@@ -225,6 +229,48 @@ class NexusRouteRecord:
 
 
 @dataclass(frozen=True)
+class VoiceCallRecord:
+    """A call lifecycle step (``connected`` / ``consent`` / ``ended`` ...): docs/spec/voice.md."""
+
+    pid: str
+    call_id: str
+    phase: str
+    reason: str | None
+    duration_ms: int | None
+    detail: Mapping[str, JSON]
+
+
+@dataclass(frozen=True)
+class VoiceTurnRecord:
+    """One transcript turn as PERSISTED: ``text`` is already redacted in PHI mode, and there is no
+    audio, only its hash and size."""
+
+    pid: str
+    call_id: str
+    turn: int
+    role: str  # "user" | "agent" | "system" | "dtmf"
+    text: str
+    redacted: bool
+    truncated: bool
+    start_ms: int
+    end_ms: int
+    text_sha256: str
+    text_chars: int
+    audio_sha256: str | None
+    audio_bytes: int
+    intended_chars: int = 0  # agent turns: characters the agent meant to say (>= text_chars if cut)
+
+
+@dataclass(frozen=True)
+class VoiceStageRecord:
+    pid: str
+    call_id: str
+    turn: int
+    stage: str  # "stt" | "agent" | "tts" | "response" | "barge_in"
+    latency_ms: int
+
+
+@dataclass(frozen=True)
 class RunState:
     run_id: str
     tenant_id: str
@@ -240,6 +286,9 @@ class RunState:
     signals: tuple[tuple[str, str], ...] = ()
     nexus_stages: tuple[NexusStageRecord, ...] = ()
     nexus_routes: tuple[NexusRouteRecord, ...] = ()
+    voice_calls: tuple[VoiceCallRecord, ...] = ()
+    voice_turns: tuple[VoiceTurnRecord, ...] = ()
+    voice_stages: tuple[VoiceStageRecord, ...] = ()
 
     @property
     def tokens_used(self) -> int:
@@ -470,6 +519,64 @@ def apply_event(state: RunState | None, event: RunEvent) -> RunState:
             cost_by_stage=dict(by_stage),
         )
         return replace(base, nexus_routes=(*state.nexus_routes, rrec))
+
+    if event.type == EventType.VOICE_CALL:
+        info = _proc(state, event)
+        reason = d.get("reason")
+        dur = d.get("duration_ms")
+        detail = d.get("detail", {})
+        if reason is not None and not isinstance(reason, str):
+            raise CorruptLogError("voice_call reason must be a string or null", seq)
+        if dur is not None and (not isinstance(dur, int) or isinstance(dur, bool)):
+            raise CorruptLogError("voice_call duration_ms must be an integer or null", seq)
+        if not isinstance(detail, dict):
+            raise CorruptLogError("voice_call detail must be an object", seq)
+        crec = VoiceCallRecord(
+            pid=info.pid,
+            call_id=_get(d, "call_id", str, seq),
+            phase=_get(d, "phase", str, seq),
+            reason=reason,
+            duration_ms=dur,
+            detail=dict(detail),
+        )
+        return replace(base, voice_calls=(*state.voice_calls, crec))
+
+    if event.type == EventType.VOICE_TURN:
+        info = _proc(state, event)
+        role = _get(d, "role", str, seq)
+        if role not in ("user", "agent", "system", "dtmf"):
+            raise CorruptLogError("unknown voice turn role", seq)
+        audio_hash = d.get("audio_sha256")
+        if audio_hash is not None and not isinstance(audio_hash, str):
+            raise CorruptLogError("audio_sha256 must be a string or null", seq)
+        vtrec = VoiceTurnRecord(
+            pid=info.pid,
+            call_id=_get(d, "call_id", str, seq),
+            turn=_get(d, "turn", int, seq),
+            role=role,
+            text=_get(d, "text", str, seq),
+            redacted=_get(d, "redacted", bool, seq),
+            truncated=_get(d, "truncated", bool, seq),
+            start_ms=_get(d, "start_ms", int, seq),
+            end_ms=_get(d, "end_ms", int, seq),
+            text_sha256=_get(d, "text_sha256", str, seq),
+            text_chars=_get(d, "text_chars", int, seq),
+            audio_sha256=audio_hash,
+            audio_bytes=_get(d, "audio_bytes", int, seq),
+            intended_chars=int(d.get("intended_chars") or 0),
+        )
+        return replace(base, voice_turns=(*state.voice_turns, vtrec))
+
+    if event.type == EventType.VOICE_STAGE:
+        info = _proc(state, event)
+        vrec = VoiceStageRecord(
+            pid=info.pid,
+            call_id=_get(d, "call_id", str, seq),
+            turn=_get(d, "turn", int, seq),
+            stage=_get(d, "stage", str, seq),
+            latency_ms=_get(d, "latency_ms", int, seq),
+        )
+        return replace(base, voice_stages=(*state.voice_stages, vrec))
 
     raise CorruptLogError(f"unknown event type {event.type!r}", seq)
 
