@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { hashJson, type AuditSink, type UnsealedEvent } from "@axis/contracts";
 import { isReject } from "./adapters/base.js";
 import { WebHub } from "./adapters/web.js";
-import { sha256Hex } from "./crypto.js";
+import { keyedDigest, tenantDigestKey } from "./crypto.js";
 import { IdentityService, parseLinkCommand } from "./identity.js";
 import { DEFAULT_LIMITS, splitText, type Limits } from "./limits.js";
 import { transcriptContent, type RedactionHook } from "./redact.js";
@@ -62,6 +62,13 @@ export interface GatewayDeps {
   systemAudit?: { sink: AuditSink; tenant_id: string };
   idempotencyTtlMs?: number;
   httpTimeoutMs?: number;
+  /**
+   * Secret (>= 32 bytes) from which each tenant's audit-digest key is derived (HMAC). Every hash of end-user text, every end-user
+   * reference and every route reference in the chain or the message log is keyed with it, so a low-entropy value cannot be
+   * confirmed by guessing (NEEDS 151). Omitted: a random per-process key is used (safe, but digests are not comparable across
+   * restarts or instances), and a warning is logged.
+   */
+  hashKey?: string | Buffer;
 }
 
 export interface SendRequest {
@@ -112,20 +119,42 @@ const STATUS: Record<Reject["code"], number> = {
 };
 
 const traceId = (): string => randomBytes(16).toString("hex");
-const userRef = (channel: ChannelId, ext: string): string =>
-  `${channel}:${sha256Hex(ext).slice(0, 16)}`;
 
 export class ChannelGateway {
   private readonly adapters = new Map<ChannelId, ChannelAdapter>();
   private readonly limits: Limits;
   private readonly now: () => number;
   private readonly log: Logger;
+  private readonly digestMaster: Buffer;
+  private readonly tenantKeys = new Map<string, Buffer>();
 
   constructor(private readonly d: GatewayDeps) {
     for (const a of d.adapters) this.adapters.set(a.channel, a);
     this.limits = d.limits ?? DEFAULT_LIMITS;
     this.now = d.now ?? Date.now;
     this.log = d.logger ?? silentLogger;
+    if (d.hashKey === undefined) {
+      this.digestMaster = randomBytes(32);
+      this.log.warn("no hashKey configured: audit digests use an ephemeral per-process key");
+    } else {
+      const k = typeof d.hashKey === "string" ? Buffer.from(d.hashKey, "utf8") : d.hashKey;
+      if (k.length < 32) throw new ChannelError("INVALID", "hashKey must be at least 32 bytes");
+      this.digestMaster = k;
+    }
+  }
+
+  /** Keyed digest of `data` under the tenant's key (see `GatewayDeps.hashKey`). */
+  private digest(tenant: string, label: string, data: string | Buffer): string {
+    let k = this.tenantKeys.get(tenant);
+    if (!k) {
+      k = tenantDigestKey(this.digestMaster, tenant);
+      this.tenantKeys.set(tenant, k);
+    }
+    return keyedDigest(k, label, data);
+  }
+
+  private userRef(tenant: string, channel: ChannelId, ext: string): string {
+    return `${channel}:${this.digest(tenant, `user:${channel}`, ext).slice(0, 16)}`;
   }
 
   adapter(channel: ChannelId): ChannelAdapter {
@@ -227,7 +256,7 @@ export class ChannelGateway {
           enforcement_point: "lifecycle",
           action: "channel.inbound.rejected",
           decision: "DENY",
-          reason: `channel=${channel} code=${r.code} route=${r.route ? sha256Hex(r.route.provider_key).slice(0, 12) : "unknown"} detail=${r.reason}`,
+          reason: `channel=${channel} code=${r.code} route=${r.route ? this.digest(tenant, "route", r.route.provider_key).slice(0, 12) : "unknown"} detail=${r.reason}`,
           inputs: { channel, code: r.code },
           outputs: { rejected: true },
         }),
@@ -292,26 +321,26 @@ export class ChannelGateway {
       const identity = await this.d.identity.resolve(tenant, m.channel, m.external_user_id);
       const conv = await this.conversationFor(route, m, identity.end_user_id);
       const t = transcriptContent(m.text, route.transcript.mode, route.phi, this.d.redactionHook);
-      const contentHash = sha256Hex(m.text);
+      const contentHash = this.digest(tenant, "text", m.text);
       const size = Buffer.byteLength(m.text, "utf8");
       const trace = traceId();
       const ev = await this.appendAudit(
         this.event(tenant, route.agent, {
-          actor: { type: "human", id: userRef(m.channel, m.external_user_id) },
+          actor: { type: "human", id: this.userRef(tenant, m.channel, m.external_user_id) },
           enforcement_point: "lifecycle",
           trace_id: trace,
           action: "channel.inbound.message",
           decision: "ALLOW",
-          reason: `channel=${m.channel} dir=in conv=${conv.id} size=${size} sha256=${contentHash} mode=${t.mode} attachments=${m.attachments.length} dropped=${m.dropped_attachments}`,
+          reason: `channel=${m.channel} dir=in conv=${conv.id} size=${size} hmac=${contentHash} mode=${t.mode} attachments=${m.attachments.length} dropped=${m.dropped_attachments}`,
           inputs: {
             channel: m.channel,
             direction: "in",
             idempotency_key: m.idempotency_key,
             conversation_id: conv.id,
-            user: userRef(m.channel, m.external_user_id),
+            user: this.userRef(tenant, m.channel, m.external_user_id),
           },
           outputs: {
-            content_sha256: contentHash,
+            content_hmac: contentHash,
             size_bytes: size,
             attachments: m.attachments.map((a) => ({ type: a.content_type, size: a.size })),
           },
@@ -389,7 +418,7 @@ export class ChannelGateway {
     const res = await this.d.identity.redeem(tenant, m.channel, m.external_user_id, code);
     await this.appendAudit(
       this.event(tenant, route.agent, {
-        actor: { type: "human", id: userRef(m.channel, m.external_user_id) },
+        actor: { type: "human", id: this.userRef(tenant, m.channel, m.external_user_id) },
         enforcement_point: "lifecycle",
         action: "channel.identity.link",
         decision: res.ok ? "ALLOW" : "DENY",
@@ -397,7 +426,7 @@ export class ChannelGateway {
         reason: res.ok
           ? `channel=${m.channel} linked moved_conversations=${res.moved_conversations}`
           : `channel=${m.channel} link refused: ${res.reason}`,
-        inputs: { channel: m.channel, user: userRef(m.channel, m.external_user_id) },
+        inputs: { channel: m.channel, user: this.userRef(tenant, m.channel, m.external_user_id) },
         outputs: { ok: res.ok },
       }),
     );
@@ -416,8 +445,11 @@ export class ChannelGateway {
           enforcement_point: "lifecycle",
           action: "channel.inbound.replayed",
           decision: "DENY",
-          reason: `channel=${m.channel} duplicate idempotency key ${sha256Hex(m.idempotency_key).slice(0, 16)}`,
-          inputs: { channel: m.channel, key: sha256Hex(m.idempotency_key) },
+          reason: `channel=${m.channel} duplicate idempotency key ${this.digest(route.tenant_id, "idem", m.idempotency_key).slice(0, 16)}`,
+          inputs: {
+            channel: m.channel,
+            key: this.digest(route.tenant_id, "idem", m.idempotency_key),
+          },
           outputs: { duplicate: true },
         }),
       );
@@ -488,7 +520,7 @@ export class ChannelGateway {
           },
           route,
         );
-        const contentHash = sha256Hex(text);
+        const contentHash = this.digest(tenant, "text", text);
         const size = Buffer.byteLength(text, "utf8");
         const t = transcriptContent(text, route.transcript.mode, route.phi, this.d.redactionHook);
         const ev = await this.appendAudit(
@@ -497,15 +529,15 @@ export class ChannelGateway {
             enforcement_point: "message_send",
             action: "channel.outbound.message",
             decision: "ALLOW",
-            reason: `channel=${req.channel} dir=out conv=${target.conversation?.id ?? "none"} size=${size} sha256=${contentHash} mode=${t.mode} run=${req.run_id ?? "-"}`,
+            reason: `channel=${req.channel} dir=out conv=${target.conversation?.id ?? "none"} size=${size} hmac=${contentHash} mode=${t.mode} run=${req.run_id ?? "-"}`,
             inputs: {
               channel: req.channel,
               direction: "out",
               idempotency_key: key,
               conversation_id: target.conversation?.id ?? null,
-              to: userRef(req.channel, target.to),
+              to: this.userRef(tenant, req.channel, target.to),
             },
-            outputs: { content_sha256: contentHash, size_bytes: size },
+            outputs: { content_hmac: contentHash, size_bytes: size },
             trace_id: trace,
           }),
         );
@@ -555,7 +587,12 @@ export class ChannelGateway {
     tenant: string,
     e: TranscriptEvent,
   ): Promise<{ audit_event_id: string; audit_hash: string }> {
-    const actorId = `voice:${sha256Hex(e.call_id).slice(0, 16)}`;
+    const actorId = `voice:${this.digest(tenant, "voice-call", e.call_id).slice(0, 16)}`;
+    // The runtime hashed the (already redacted) text with plain SHA-256; re-key it so the chain never holds a guessable digest.
+    const textHmac =
+      e.text_sha256 === undefined ? "-" : this.digest(tenant, "voice-text", e.text_sha256);
+    const audioHmac =
+      e.audio_sha256 === undefined ? null : this.digest(tenant, "voice-audio", e.audio_sha256);
     let ev: UnsealedEvent;
     if (e.kind === "call") {
       const detail = Object.entries(e.detail ?? {})
@@ -582,7 +619,7 @@ export class ChannelGateway {
         enforcement_point: outbound ? "message_send" : "lifecycle",
         action: `voice.turn.${e.role}`,
         decision: "ALLOW",
-        reason: `channel=voice dir=${outbound ? "out" : "in"} call=${e.call_id} turn=${e.turn} role=${e.role} size=${e.size} sha256=${e.text_sha256} redacted=${e.redacted} truncated=${e.truncated} audio_bytes=${e.audio_bytes} run=${e.run_id ?? "-"}`,
+        reason: `channel=voice dir=${outbound ? "out" : "in"} call=${e.call_id} turn=${e.turn} role=${e.role} size=${e.size} hmac=${textHmac} redacted=${e.redacted} truncated=${e.truncated} audio_bytes=${e.audio_bytes} run=${e.run_id ?? "-"}`,
         inputs: {
           channel: "voice",
           direction: outbound ? "out" : "in",
@@ -591,9 +628,9 @@ export class ChannelGateway {
           role: e.role,
         },
         outputs: {
-          content_sha256: e.text_sha256,
+          content_hmac: textHmac,
           size_bytes: e.size,
-          audio_sha256: e.audio_sha256 ?? null,
+          audio_hmac: audioHmac,
           audio_bytes: e.audio_bytes,
         },
         trace_id: e.trace_id,

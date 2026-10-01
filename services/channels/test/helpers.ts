@@ -20,6 +20,8 @@ import {
   slackSignature,
   twilioSignature,
   hmacSha256Hex,
+  keyedDigest,
+  tenantDigestKey,
   type ChannelAdapter,
   type EmailCall,
   type EmailTransport,
@@ -82,6 +84,10 @@ export const WA_SECRET = "wa-app-secret";
 export const WA_VERIFY = "wa-verify-token";
 export const WEB_SECRET = "web-session-secret";
 export const SMS_URL = "https://hooks.example.test/v1/channels/sms/inbound";
+export const HASH_KEY = "test-audit-digest-key-0123456789abcdef";
+/** What the gateway writes to the chain / message log for `data` (HMAC under the tenant's derived key). */
+export const digestOf = (tenant: string, label: string, data: string): string =>
+  keyedDigest(tenantDigestKey(Buffer.from(HASH_KEY), tenant), label, data);
 export const AGENT = { name: "support", version: "1.0.0" };
 
 const base = {
@@ -414,6 +420,7 @@ export function rig(
     email,
     hub,
     now: clock.now,
+    hashKey: HASH_KEY,
     onMessage: async (c) => {
       received.push({ tenant: c.message.tenant_id, text: c.message.text, conv: c.conversation.id });
     },

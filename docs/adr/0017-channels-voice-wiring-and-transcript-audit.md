@@ -47,8 +47,8 @@ voice with transcripts in the chain.
    consent), `reason` a `key=value` list, hashes in `inputs_hash`/`outputs_hash`, `trace_id` = the call's trace (the same one the
    gated STT, TTS and agent model calls use). Every free-form field is checked against a narrow charset because the service builds
    `reason` from it.
-6. **What is in the chain for a transcript:** channel, direction, size, SHA-256 of the text AS PERSISTED (so in PHI mode, of the
-   redacted text), whether it was redacted/truncated, the audio hash and byte count; never the text (ADR 0015 section 4). The
+6. **What is in the chain for a transcript:** channel, direction, size, keyed digest (HMAC, ADR 0015 addendum) of the text AS PERSISTED (so in PHI mode, of the
+   redacted text; the runtime hashes, the channels service re-keys), whether it was redacted/truncated, the audio hash and byte count; never the text (ADR 0015 section 4). The
    redacted preview of a voice turn lives in the run log's `voice_turn` event (redacted before it is built, ADR 0016); the
    preview of a chat message lives in `conversation_messages`. Voice has no `ChannelId`/route and is not linked to an end user's
    conversation yet (NEEDS #148).

@@ -6,6 +6,7 @@ import {
   AGENT,
   T1,
   T2,
+  digestOf,
   emailReq,
   raw,
   rig,
@@ -41,7 +42,7 @@ describe("inbound pipeline", () => {
       content_mode: "redacted_preview",
       content: "my email is [email]",
       size_bytes: 27,
-      content_hash: sha256Hex("my email is bob@example.com"),
+      content_hash: digestOf(T1, "text", "my email is bob@example.com"),
     });
     const events = await r.audit.events(T1);
     expect(events).toHaveLength(1);
@@ -54,7 +55,8 @@ describe("inbound pipeline", () => {
       blueprint: AGENT,
     });
     expect(e.reason).toContain("channel=slack");
-    expect(e.reason).toContain(`sha256=${sha256Hex("my email is bob@example.com")}`);
+    expect(e.reason).toContain(`hmac=${digestOf(T1, "text", "my email is bob@example.com")}`);
+    expect(e.reason).not.toContain(sha256Hex("my email is bob@example.com"));
     expect(e.reason).toContain("size=27");
     expect(JSON.stringify(e)).not.toContain("bob@example.com");
     expect(JSON.stringify(e)).not.toContain("U111");

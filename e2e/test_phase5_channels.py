@@ -75,6 +75,13 @@ ROOT = Path(__file__).resolve().parent.parent
 T1 = "e2e00000-0000-4000-8000-0000000000c1"
 T2 = "e2e00000-0000-4000-8000-0000000000c2"
 TP = "e2e00000-0000-4000-8000-0000000000c0"  # platform tenant: audits requests that name no known route
+HASH_KEY = "e2e-channels-audit-digest-key-0123456789"  # keys every digest the service writes to the chain (NEEDS 151)
+
+
+def tenant_digest(tenant: str, label: str, data: bytes) -> str:
+    """The service's keyed digest (HMAC under a per-tenant key): what the chain holds instead of a plain SHA-256."""
+    key = hmac.new(HASH_KEY.encode(), f"axis-digest.v1:{tenant}".encode(), hashlib.sha256).digest()
+    return hmac.new(key, label.encode() + b"\0" + data, hashlib.sha256).hexdigest()
 KTOKEN = {T1: "e2e-k1-" + secrets.token_hex(8), T2: "e2e-k2-" + secrets.token_hex(8)}
 CTOKEN = {T1: "e2e-c1-" + secrets.token_hex(8), T2: "e2e-c2-" + secrets.token_hex(8)}
 AGENT = {"name": "concierge", "version": "1.0.0"}
@@ -223,7 +230,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         kernel_target = f"127.0.0.1:{json.loads(line)['port']}"
         cfg = work / "channels.json"
         cfg.write_text(json.dumps({
-            "db_url": db_url, "role": "axis_app", "system_tenant": TP, "routes": ROUTES,
+            "db_url": db_url, "role": "axis_app", "system_tenant": TP, "routes": ROUTES, "hash_key": HASH_KEY,
             "tokens": {CTOKEN[t]: {"tenantId": t} for t in (T1, T2)},
         }))  # fmt: skip
         chan, line = _spawn(
@@ -799,10 +806,11 @@ async def test_the_same_agent_answers_on_every_chat_channel_with_one_trace_per_t
     assert rows[0]["blueprint"] == AGENT == rows[3]["blueprint"]
     assert all(r["policy_version"] for r in rows)
     reasons = rows[3]["reason"]
-    assert f"channel={channel}" in reasons and "dir=out" in reasons and "sha256=" in reasons
+    assert f"channel={channel}" in reasons and "dir=out" in reasons and "hmac=" in reasons
     assert (
-        hashlib.sha256(b"Your refund is on its way.").hexdigest() in reasons
-    )  # hash only: the text is not in the chain
+        tenant_digest(T1, "text", b"Your refund is on its way.") in reasons
+    )  # keyed hash only: the text is not in the chain, and its plain SHA-256 is not either
+    assert hashlib.sha256(b"Your refund is on its way.").hexdigest() not in reasons
     assert "refund" not in json.dumps(audit_dump(stack)["events"])
     chain_ok(stack)
 
@@ -1346,7 +1354,9 @@ async def test_voice_serves_the_same_agent_with_consent_and_transcripts_in_the_a
         ("agent", "Your refund is on its way."),
     ):
         row = next(r for r in rows if r["action"] == f"voice.turn.{role}")
-        assert f"sha256={hashlib.sha256(text.encode()).hexdigest()}" in row["reason"]
+        sha = hashlib.sha256(text.encode()).hexdigest()  # what the runtime sends; the service re-keys it
+        assert f"hmac={tenant_digest(T1, 'voice-text', sha.encode())}" in row["reason"]
+        assert sha not in row["reason"]
     assert persisted and "refund" not in json.dumps(rows)
     assert (
         next(r for r in rows if r["action"] == "voice.turn.agent")["enforcement_point"]
@@ -1457,7 +1467,8 @@ async def test_voice_phi_mode_redacts_the_transcript_before_persistence(
     assert SSN not in json.dumps(rows) and "Maria" not in json.dumps(rows)
     row = next(r for r in rows if r["action"] == "voice.turn.user")
     assert (
-        f"sha256={hashlib.sha256(user.text.encode()).hexdigest()}" in row["reason"]
+        f"hmac={tenant_digest(T1, 'voice-text', hashlib.sha256(user.text.encode()).hexdigest().encode())}"
+        in row["reason"]
         and "redacted=true" in row["reason"]
     )
     chain_ok(stack)

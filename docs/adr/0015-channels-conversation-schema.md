@@ -33,3 +33,14 @@ audit event shape (hashes only, `reason` free text) cannot change either.
 
 - Tests: `packages/db` migration list, `services/channels` store tests on real Postgres (tenancy, FK, RLS).
 - Voice (component B) reuses `end_users`/`conversations`; the `voice` channel value is already allowed.
+
+## Addendum (Phase 5 adversarial review): digests are keyed
+
+Section 4 said the audit event carries a SHA-256 of the content. A plain SHA-256 of low-entropy chat text (a lone SSN, phone number,
+"yes") is confirmable by guessing, including in PHI mode (NEEDS 151), and the same holds for the end-user reference (a hash of a
+phone number) in the actor id. Decision: every digest the gateway writes to the chain or to `conversation_messages.content_hash`
+(text, end-user reference, route reference, idempotency key, and the re-keyed voice text/audio digests) is
+`HMAC-SHA256(tenantKey, label || 0x00 || data)` with `tenantKey = HMAC-SHA256(hashKey, "axis-digest.v1:" || tenant_id)` and `hashKey`
+a configured service secret (>= 32 bytes). The frozen audit shape is unchanged: the `reason` token is now `hmac=<64 hex>` (free
+text) and the hashed `outputs` carry `content_hmac`. Rotating `hashKey` makes old digests incomparable with new ones (acceptable: they
+are evidence of integrity within the chain, not a lookup key). A KMS-held key replaces the env secret in production (NEEDS 156).
