@@ -21,6 +21,7 @@ describe("migration runner", () => {
       "0003_audit_and_memory",
       "0004_hardening",
       "0005_audit_checkpoints",
+      "0006_memory_service",
     ]);
     for (const x of m) expect(x.checksum).toMatch(/^[0-9a-f]{64}$/);
   });

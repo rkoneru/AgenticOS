@@ -105,6 +105,10 @@ export async function seedTenant(
     [t],
   );
   await q(
+    "INSERT INTO memory_documents (tenant_id, kb_id, content_hash, acl, acl_key, created_by) VALUES ($1, $2, $3, '{}', '{}', 'seed')",
+    [t, kb.rows[0].id, H("d")],
+  );
+  await q(
     "INSERT INTO memory_chunks (tenant_id, kb_id, scope, content, embedding) VALUES ($1, $2, 'kb', 'hello', $3::vector)",
     [t, kb.rows[0].id, `[${[1, ...Array<number>(1535).fill(0)].join(",")}]`],
   );
