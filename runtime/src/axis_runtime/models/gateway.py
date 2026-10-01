@@ -35,6 +35,16 @@ from axis_runtime.models.secrets import (
     SecretStore,
     scrub,
 )
+from axis_runtime.models.speech import (
+    SttAdapter,
+    SttRequest,
+    SttSession,
+    TtsAdapter,
+    TtsRequest,
+    TtsSession,
+    WsTransport,
+    open_error,
+)
 from axis_runtime.models.types import (
     Attempt,
     ErrorKind,
@@ -44,6 +54,8 @@ from axis_runtime.models.types import (
     ModelTarget,
     StreamEvent,
 )
+from axis_runtime.voice.clock import VoiceClock
+from axis_runtime.voice.interfaces import SttStream, TtsStream
 
 log = logging.getLogger("axis_runtime.models")
 
@@ -77,6 +89,10 @@ class ModelGateway:
         request_timeout: float = 120.0,
         resolver: Resolver | None = None,
         extra_endpoint_ports: frozenset[int] = frozenset(),
+        stt_adapters: dict[str, SttAdapter] | None = None,
+        tts_adapters: dict[str, TtsAdapter] | None = None,
+        ws_transport: WsTransport | None = None,
+        voice_clock: VoiceClock | None = None,
     ) -> None:
         self._secrets = secrets
         self._platform = platform_secrets
@@ -99,6 +115,11 @@ class ModelGateway:
         # Only built on first use (never at import/construction time): the default does real DNS.
         self._resolver = resolver
         self._extra_ports = extra_endpoint_ports
+        # speech plane (docs/spec/voice.md): vendors by name; none unless the deployment lists them
+        self._stt_adapters = dict(stt_adapters or {})
+        self._tts_adapters = dict(tts_adapters or {})
+        self._ws = ws_transport
+        self._voice_clock = voice_clock
 
     # ---- public API (guarded) -----------------------------------------------------------
     async def complete(self, request: ModelRequest) -> ModelResponse:
@@ -108,6 +129,85 @@ class ModelGateway:
     def stream(self, request: ModelRequest) -> AsyncIterator[StreamEvent]:
         _require_executor()
         return self._stream(request)
+
+    # ---- speech plane (guarded the same way) -----------------------------------------------
+    async def open_stt(self, request: SttRequest) -> SttStream:
+        """Open a streaming recognition session.  One gated ``SttOpen`` covers the stream."""
+        _require_executor()
+        adapter = self._stt_adapters.get(request.provider)
+        if adapter is None:
+            raise ModelError(ErrorKind.INVALID_REQUEST, request.provider, "unknown stt provider")
+        base = request.endpoint or adapter.default_endpoint
+        await self._check_endpoint_for(
+            request.tenant_id, request.provider, request.endpoint, websocket=True
+        )
+        secret = await self._resolve_secret(
+            request.tenant_id,
+            adapter.provider,
+            request.key_label,
+            custom_endpoint=bool(request.endpoint),
+            auth_optional=adapter.auth_optional,
+        )
+        if self._ws is None:
+            raise ModelError(ErrorKind.CONFIGURATION, request.provider, "no websocket transport")
+        breaker = self.breaker(request.tenant_id, request.provider, request.endpoint)
+        if not breaker.allow():
+            raise ModelError(ErrorKind.CIRCUIT_OPEN, request.provider, "circuit breaker open")
+        try:
+            spec = adapter.connect_spec(request, secret, base)
+            conn = await self._ws.connect(spec)
+            for first in spec.init_messages:
+                await conn.send(first)
+        except Exception as exc:
+            err = open_error(request.provider, exc)
+            if err.retryable:
+                breaker.record_failure()
+            raise ModelError(err.kind, request.provider, scrub(err.detail, secret)) from None
+        breaker.record_success()
+        return SttSession(conn, adapter, clock=self._voice_clock, secret=secret)
+
+    async def synthesize(self, request: TtsRequest) -> TtsStream:
+        """Start synthesising ``request.text``; the audio streams back until cancelled."""
+        _require_executor()
+        adapter = self._tts_adapters.get(request.provider)
+        if adapter is None:
+            raise ModelError(ErrorKind.INVALID_REQUEST, request.provider, "unknown tts provider")
+        base = request.endpoint or adapter.default_endpoint
+        await self._check_endpoint_for(request.tenant_id, request.provider, request.endpoint)
+        secret = await self._resolve_secret(
+            request.tenant_id,
+            adapter.provider,
+            request.key_label,
+            custom_endpoint=bool(request.endpoint),
+            auth_optional=adapter.auth_optional,
+        )
+        encoding, rate = adapter.output_format(request)
+        breaker = self.breaker(request.tenant_id, request.provider, request.endpoint)
+        if not breaker.allow():
+            raise ModelError(ErrorKind.CIRCUIT_OPEN, request.provider, "circuit breaker open")
+        call = adapter.build(request, secret, base)
+        cm = self._transport.stream(
+            HttpCall(call.method, call.url, call.headers, call.body, self._timeout)
+        )
+        try:
+            handle = await cm.__aenter__()
+            if handle.status >= 400:
+                body = await handle.read()
+                await cm.__aexit__(None, None, None)
+                raise adapter.classify(handle.status, handle.headers, body, secret)
+        except ModelError as err:
+            if err.retryable:
+                breaker.record_failure()
+            else:
+                breaker.record_success()
+            raise
+        except Exception as exc:
+            breaker.record_failure()
+            raise ModelError(ErrorKind.NETWORK, request.provider, type(exc).__name__) from None
+        breaker.record_success()
+        return TtsSession(
+            cm, handle, encoding=encoding, sample_rate=rate, provider=request.provider
+        )
 
     def unguarded_for_tests(self) -> UnguardedModelGateway:
         """TEST-ONLY seam. Production code must go through ActionExecutor (see bypass test)."""
@@ -160,35 +260,62 @@ class ModelGateway:
         return adapter
 
     async def _check_endpoint(self, request: ModelRequest, target: ModelTarget) -> None:
-        if not target.endpoint:
+        await self._check_endpoint_for(request.tenant_id, target.provider, target.endpoint)
+
+    async def _check_endpoint_for(
+        self, tenant_id: str, provider: str, endpoint: str | None, *, websocket: bool = False
+    ) -> None:
+        if not endpoint:
             return
         resolver = self._resolver or default_resolver()
+        checked = endpoint
+        if websocket:  # the SSRF rules are about the host, not the scheme: validate as http(s)
+            if endpoint.startswith("wss://"):
+                checked = "https://" + endpoint[len("wss://") :]
+            elif endpoint.startswith("ws://"):
+                checked = "http://" + endpoint[len("ws://") :]
         try:
             await validate_endpoint(
-                target.endpoint,
+                checked,
                 allow_http=self._allow_http,
-                allow_private=self._policy(request.tenant_id).allow_private_endpoints,
+                allow_private=self._policy(tenant_id).allow_private_endpoints,
                 extra_ports=self._extra_ports,
                 resolver=resolver,
             )
         except EndpointError as exc:
-            raise ModelError(ErrorKind.INVALID_REQUEST, target.provider, str(exc)) from None
+            raise ModelError(ErrorKind.INVALID_REQUEST, provider, str(exc)) from None
 
     async def _secret(
         self, request: ModelRequest, adapter: Adapter, target: ModelTarget
     ) -> Secret | None:
-        provider = adapter.provider
+        return await self._resolve_secret(
+            request.tenant_id,
+            adapter.provider,
+            request.key_label,
+            custom_endpoint=bool(target.endpoint),
+            auth_optional=adapter.auth_optional,
+        )
+
+    async def _resolve_secret(
+        self,
+        tenant_id: str,
+        provider: str,
+        key_label: str,
+        *,
+        custom_endpoint: bool,
+        auth_optional: bool,
+    ) -> Secret | None:
         try:
-            return await self._secrets.get(request.tenant_id, provider, request.key_label)
+            return await self._secrets.get(tenant_id, provider, key_label)
         except SecretNotFoundError:
             pass
-        if self._platform is not None and self._policy(request.tenant_id).allow_platform_keys:
+        if self._platform is not None and self._policy(tenant_id).allow_platform_keys:
             try:
                 platform_secret = await self._platform.get(PLATFORM_TENANT, provider, "default")
             except SecretNotFoundError:
                 pass
             else:
-                if target.endpoint:
+                if custom_endpoint:
                     # An ABL-supplied endpoint plus the platform's key would exfiltrate that key.
                     raise ModelError(
                         ErrorKind.CONFIGURATION,
@@ -197,7 +324,7 @@ class ModelGateway:
                         "platform keys never go to a custom endpoint",
                     )
                 return platform_secret
-        if adapter.auth_optional:
+        if auth_optional:
             return None
         raise ModelError(
             ErrorKind.NO_CREDENTIALS,

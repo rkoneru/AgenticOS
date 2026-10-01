@@ -179,7 +179,7 @@ _Ev = _TransportEv | _SttEv | _SttEnded | _Timer | _TurnDone | _PumpFailed
 class _Sentence:
     text: str  # what was sent to TTS (speakable form)
     sent_ms: int = 0
-    complete: bool = False
+    done: bool = False
     #: (cumulative ms after the chunk, chars_through) for each chunk sent
     chunks: list[tuple[int, int | None]] = field(default_factory=list)
 
@@ -198,7 +198,7 @@ class _Turn:
     producer: asyncio.Task[None] | None = None
     speaker: asyncio.Task[None] | None = None
     runner: asyncio.Task[None] | None = None
-    stream: TtsStream | None = None
+    synth: TtsStream | None = None
     first_text_ms: int | None = None
     agent_done_ms: int | None = None
     first_audio_ms: int | None = None
@@ -332,7 +332,7 @@ class VoiceSession:
         if self._stt is not None:
             return
         try:
-            self._stt = await self._stt_provider.open(self.config.stt)
+            self._stt = await self._stt_provider.start(self.config.stt)
         except SpeechDeniedError:
             self._end("stt_denied")
             return
@@ -780,7 +780,7 @@ class VoiceSession:
                 turn.error = f"tts:{type(exc).__name__}"
                 self._stop_producer(turn)
                 return
-            turn.stream = stream
+            turn.synth = stream
             try:
                 async for chunk in stream.chunks():
                     if turn.first_audio_ms is None:
@@ -789,7 +789,7 @@ class VoiceSession:
                     sentence.sent_ms += chunk.duration_ms
                     turn.sent_ms_total += chunk.duration_ms
                     sentence.chunks.append((sentence.sent_ms, chunk.chars_through))
-                sentence.complete = True
+                sentence.done = True
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -797,10 +797,10 @@ class VoiceSession:
                 self._stop_producer(turn)
                 return
             finally:
-                if not sentence.complete:
+                if not sentence.done:
                     with contextlib.suppress(Exception):
                         await stream.cancel()
-                turn.stream = None
+                turn.synth = None
 
     @staticmethod
     def _stop_producer(turn: _Turn) -> None:
@@ -812,7 +812,7 @@ class VoiceSession:
         self._cancel_timer("agent")
         spoken = self._spoken_text(turn, discarded_ms=0)
         intended = "".join(turn.intended)
-        completed = turn.error is None and all(s.complete for s in turn.sentences)
+        completed = turn.error is None and all(s.done for s in turn.sentences)
         if turn.kind == "consent":
             await self._record_system(turn, spoken)
             self._turn = None
@@ -929,9 +929,9 @@ class VoiceSession:
             discarded = await self._transport.clear_output()
         tasks = [t for t in (turn.runner, turn.producer, turn.speaker) if t is not None]
         await asyncio.gather(*tasks, return_exceptions=True)
-        if turn.stream is not None:
+        if turn.synth is not None:
             with contextlib.suppress(Exception):
-                await turn.stream.cancel()
+                await turn.synth.cancel()
         if turn.kind == "consent":
             return  # an unfinished notice is handled by the caller (consent not given)
         if not record:
@@ -949,9 +949,9 @@ class VoiceSession:
         parts: list[str] = []
         for s in turn.sentences:
             total = (
-                s.sent_ms if s.complete else max(s.sent_ms, self.config.ms_per_char * len(s.text))
+                s.sent_ms if s.done else max(s.sent_ms, self.config.ms_per_char * len(s.text))
             )
-            if s.complete and s.sent_ms <= remaining:
+            if s.done and s.sent_ms <= remaining:
                 parts.append(s.text)
                 remaining -= s.sent_ms
                 continue

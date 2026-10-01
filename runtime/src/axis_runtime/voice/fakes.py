@@ -125,7 +125,7 @@ class FakeSttProvider:
     opens: list[SttConfig] = field(default_factory=list)
     streams: list[ScriptedSttStream] = field(default_factory=list)
 
-    async def open(self, config: SttConfig) -> ScriptedSttStream:
+    async def start(self, config: SttConfig) -> ScriptedSttStream:
         if self.fail_open is not None:
             raise self.fail_open
         self.opens.append(config)

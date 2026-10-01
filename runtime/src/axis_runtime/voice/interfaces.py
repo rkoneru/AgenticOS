@@ -40,7 +40,7 @@ class SttStream(Protocol):
 
 
 class SttProvider(Protocol):
-    async def open(self, config: SttConfig) -> SttStream: ...
+    async def start(self, config: SttConfig) -> SttStream: ...
 
 
 @runtime_checkable
