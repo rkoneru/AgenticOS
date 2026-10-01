@@ -7,12 +7,12 @@ import json
 import pytest
 from axis_runtime.events import EventType
 from axis_runtime.voice.clock import ManualVoiceClock
+from axis_runtime.voice.endpointing import EndpointingConfig
 from axis_runtime.voice.errors import SpeechDeniedError
 from axis_runtime.voice.fakes import FakeSttProvider, FakeTtsProvider
-from axis_runtime.voice.endpointing import EndpointingConfig
 from axis_runtime.voice.session import BargeInConfig, DtmfConfig, VoiceSessionConfig
 from axis_runtime.voice.types import AudioFrame, Frame
-from voice_helpers import ScriptedAgent, make_rig
+from voice_helpers import make_rig
 
 LONG = "I can look that up for you right now. Your claim was filed on Monday. It is under review."
 
