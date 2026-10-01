@@ -7,3 +7,5 @@ export * from "./transports.js";
 export * from "./signer.js";
 export * from "./service.js";
 export * from "./resolver.js";
+export * from "./kernel-ports.js";
+export * from "./dev-bridge.js";
