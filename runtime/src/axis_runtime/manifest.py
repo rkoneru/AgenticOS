@@ -159,11 +159,16 @@ def _str(raw: Mapping[str, Any], key: str, path: str) -> str:
 
 
 def _model(raw: Mapping[str, Any], path: str) -> ModelSpec:
+    params = dict(raw.get("params") or {})
+    # The ABL compiler emits ``max_output_tokens`` (from ``maxOutputTokens``); the adapters and the
+    # TKI token estimate read ``max_tokens``. Without this the ABL cap was silently ignored.
+    if "max_output_tokens" in params:
+        params.setdefault("max_tokens", params.pop("max_output_tokens"))
     return ModelSpec(
         provider=_str(raw, "provider", path),
         model=_str(raw, "model", path),
         endpoint=raw.get("endpoint"),
-        params=dict(raw.get("params") or {}),
+        params=params,
     )
 
 
