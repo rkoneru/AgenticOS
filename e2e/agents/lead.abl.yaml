@@ -1,0 +1,31 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: orchestrator
+  version: 1.0.0
+  description: Phase 3 e2e. Delegates to two workers and takes payment actions that need human approval.
+spec:
+  riskClassification:
+    level: limited
+    rationale: Prepares payment instructions for a human finance approver; never moves money alone.
+    transparencyNotice: You are interacting with an AI system.
+  model:
+    primary: { provider: openai, model: gpt-4o, params: { maxOutputTokens: 64 } }
+  instructions:
+    system: You coordinate workers and request payments.
+  routing:
+    stages: [cache, rules, llm]
+  tools:
+    - { name: lookup-claim, kind: function, sideEffects: read }
+    - { name: payments, kind: function, sideEffects: external }
+    - { name: wire-transfer, kind: function, sideEffects: external }
+    - { name: delegate-a, kind: agent, ref: "worker-a@^1.0.0", sideEffects: read }
+    - { name: delegate-b, kind: agent, ref: "worker-b@^1.0.0", sideEffects: read }
+  budgets:
+    tokens: { soft: 40000, hard: 60000 }
+    toolCalls: { hard: 50 }
+  process:
+    maxChildren: 4
+    supervisor: one-for-one
+  policy:
+    packs: ["phase3-orchestration@^1.0.0", "phi-redaction@^1.1.0"]

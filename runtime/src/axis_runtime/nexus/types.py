@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
-from axis_runtime.models.types import ToolCallRequest
+from axis_runtime.models.types import Message, ToolCallRequest, ToolDefinition
 
 STAGE_NAMES = ("cache", "rules", "mpm", "rag", "llm")
 ZERO = Decimal(0)
@@ -35,6 +35,12 @@ class RouteRequest:
     capability: str | None = None
     trace_id: str = ""
     system_prompt: str = ""
+    #: The agent loop's whole conversation and tool definitions (additive). When ``messages`` is set
+    #: the LLM stage sends exactly these (``prompt`` stays the latest user text for rules matching)
+    #: and the cache key covers all of it, so a cached answer is only ever replayed for an
+    #: identical conversation with identical tools.
+    messages: tuple[Message, ...] = ()
+    tools: tuple[ToolDefinition, ...] = ()
 
 
 @dataclass(frozen=True)

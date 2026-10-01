@@ -67,7 +67,7 @@ describe("decisions", () => {
       escalate_to: ["finance-director"],
       on_timeout: "DENY",
     });
-    expect(r.approval_id).toBe(""); // assigned by the approvals service (Phase 3)
+    expect(r.approval_id).toBe(""); // no ApprovalRequester injected: empty id, clients treat it as DENY
   });
 
   it("a failing gate turns REQUIRE_APPROVAL into DENY (amount above the cap)", async () => {

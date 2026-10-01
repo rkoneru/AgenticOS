@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Phase 2 exit: ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Driven by e2e/test_phase2_core_loop.py.",
+  "description": "Phase 2 exit (test_phase2_core_loop.py): ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Phase 3 exit (test_phase3_orchestration.py): multi-agent TKI run, budgets, NEXUS stage metrics, approvals end to end.",
   "dependencies": {
     "@axis/abl": "workspace:*",
     "@axis/audit": "workspace:*",

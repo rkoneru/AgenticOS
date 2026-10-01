@@ -1,4 +1,4 @@
-.PHONY: e2e-core contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-core e2e-phase3 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -53,7 +53,15 @@ cov:
 # Needs node, pnpm, uv, opa, PostgreSQL 16 (uses $PG_ADMIN_URL or starts a throwaway cluster).
 e2e-core:
 	pnpm build
-	bash infra/scripts/with-pg.sh uv run pytest e2e -p no:cacheprovider --no-cov
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase2_core_loop.py -p no:cacheprovider --no-cov
+
+# Phase 3 exit: multi-agent run under TKI with enforced budgets, NEXUS stage metrics in the trace, approvals end to end
+# (Risk Kernel + approvals service + dev bridge + runtime resolver/re-gate), then the bypass guard stays green.
+# Same prerequisites as e2e-core.
+e2e-phase3:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase3_orchestration.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
 
 # (Phase 7) Playwright console + CLI e2e
 e2e:
@@ -65,6 +73,7 @@ evals:
 # Compiles policies/**, checks Rego (opa check --strict), proves Wasm builds, runs generated `opa test` cases. Needs `opa` (>= 0.70) on PATH.
 policy-test:
 	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../policies
+	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../e2e/policies
 
 k3s-up:
 	@echo "(planned) Phase 10"; exit 1

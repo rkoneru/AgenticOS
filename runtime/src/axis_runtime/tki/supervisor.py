@@ -212,6 +212,9 @@ class Supervisor:
         """Wait until no restart handling is in flight."""
         while self._tasks:
             await asyncio.gather(*list(self._tasks))
+            # gather() over already-finished tasks does not yield; give their done-callbacks (which
+            # drop them from ``_tasks``) a loop turn or this spins forever.
+            await asyncio.sleep(0)
 
     async def shutdown(self) -> None:
         """Stop supervising and terminate every live child (no restarts)."""

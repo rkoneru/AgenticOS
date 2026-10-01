@@ -51,7 +51,8 @@ class RecordedSpan:
 
 
 class InMemoryTracer:
-    """Test/dev tracer: every span is kept in ``spans`` in start order."""
+    """Test/dev tracer: every span is kept in ``spans`` in start order. ``export`` is the
+    JSON-able trace (the shape an OTLP exporter serialises: ids, parent ids, name, attributes)."""
 
     def __init__(self) -> None:
         self.spans: list[RecordedSpan] = []
@@ -71,6 +72,21 @@ class InMemoryTracer:
 
     def named(self, name: str) -> list[RecordedSpan]:
         return [s for s in self.spans if s.name == name]
+
+    def export(self) -> list[dict[str, Any]]:
+        ids = {id(s): i + 1 for i, s in enumerate(self.spans)}
+        return [
+            {
+                "span_id": ids[id(s)],
+                "parent_span_id": ids[id(s.parent)] if s.parent is not None else None,
+                "name": s.name,
+                "attributes": dict(s.attributes),
+                "ok": s.ok,
+                "status": s.status_description,
+                "ended": s.ended,
+            }
+            for s in self.spans
+        ]
 
 
 class _NoopSpan:

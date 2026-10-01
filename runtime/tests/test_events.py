@@ -252,6 +252,31 @@ def _seal_next(rec: RunRecorder, typ: str, pid: str | None, data: dict[str, Any]
     )
 
 
+def _nexus_stage(**over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "stage": "cache",
+        "outcome": "miss",
+        "reason": "not_cached",
+        "latency_ms": 0.25,
+        "tokens": 0,
+        "cost_usd": "0",
+        "cache_key_hash": "ab" * 8,
+        "confidence": None,
+    }
+    return {**base, **over}
+
+
+def _nexus_route(**over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "status": "hit",
+        "hit_stage": "llm",
+        "total_tokens": 15,
+        "total_cost_usd": "0.0001",
+        "cost_by_stage": {"cache": "0", "llm": "0.0001"},
+    }
+    return {**base, **over}
+
+
 BAD_EVENTS: list[tuple[str, str | None, dict[str, Any], str]] = [
     ("nonsense", None, {}, "unknown event type"),
     (EventType.RUN_STARTED, None, {"tenant_id": "t"}, "duplicate run_started"),
@@ -313,6 +338,18 @@ BAD_EVENTS: list[tuple[str, str | None, dict[str, Any], str]] = [
     (EventType.MODEL_CALL, PID, _model(input_tokens=True), "mistyped"),
     (EventType.PROCESS_OUTPUT, PID, {"output": 3}, "mistyped"),
     (EventType.BUDGET_WARNING, PID, {}, "mistyped"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(outcome="maybe"), "hit or miss"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(cost_usd=0.5), "mistyped"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(tokens=True), "mistyped"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(confidence="high"), "confidence"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(confidence=True), "confidence"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(cache_key_hash=3), "cache_key_hash"),
+    (EventType.NEXUS_STAGE, PID, _nexus_stage(latency_ms="fast"), "mistyped"),
+    (EventType.NEXUS_STAGE, "axp_01ARZ3NDEKTSV4RRFFQ69G5FAW", _nexus_stage(), "unknown pid"),
+    (EventType.NEXUS_ROUTE, PID, _nexus_route(hit_stage=4), "hit_stage"),
+    (EventType.NEXUS_ROUTE, PID, _nexus_route(cost_by_stage={"llm": 0.1}), "decimal strings"),
+    (EventType.NEXUS_ROUTE, PID, _nexus_route(cost_by_stage="x"), "mistyped"),
+    (EventType.NEXUS_ROUTE, PID, _nexus_route(total_cost_usd=1), "mistyped"),
 ]
 
 
@@ -464,3 +501,33 @@ async def test_apply_event_is_pure() -> None:
     assert before == rec.state and PID not in before.processes and PID in after.processes
     assert new_pid() != PID
     assert TENANT == before.tenant_id
+
+
+async def test_nexus_events_fold_into_the_state_and_replay_exactly() -> None:
+    rec = await started_recorder()
+    await rec.record(EventType.PROCESS_SPAWNED, PID, {"ppid": None, "agent": "a@1"})
+    await rec.record(EventType.NEXUS_STAGE, PID, _nexus_stage())
+    await rec.record(
+        EventType.NEXUS_STAGE,
+        PID,
+        _nexus_stage(
+            stage="llm",
+            outcome="hit",
+            reason="",
+            tokens=15,
+            cost_usd="0.0001",
+            confidence=1,
+            cache_key_hash=None,
+        ),  # fmt: skip
+    )
+    await rec.record(EventType.NEXUS_ROUTE, PID, _nexus_route(hit_stage=None, status="blocked"))
+    st = rec.state
+    assert [(n.stage, n.outcome, n.cost_usd, n.tokens) for n in st.nexus_stages] == [
+        ("cache", "miss", "0", 0),
+        ("llm", "hit", "0.0001", 15),
+    ]
+    assert st.nexus_stages[1].confidence == 1.0 and st.nexus_stages[1].cache_key_hash is None
+    assert st.nexus_stages[0].latency_ms == 0.25
+    assert st.nexus_routes[0].status == "blocked" and st.nexus_routes[0].hit_stage is None
+    assert st.nexus_routes[0].cost_by_stage == {"cache": "0", "llm": "0.0001"}
+    assert replay(await rec.log.read("run_1")) == st

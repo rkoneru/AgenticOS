@@ -1,6 +1,6 @@
 # TKI — the AXIS process kernel
 
-Status: **Built (single instance, in-memory state)** · Code: `runtime/src/axis_runtime/tki/` · Tests: `runtime/tests/test_tki_*.py`
+Status: **Built (single instance, in-memory state); runs real multi-agent runs in `make e2e-phase3`** · Code: `runtime/src/axis_runtime/tki/` · Tests: `runtime/tests/test_tki_*.py`
 · Decision record: `docs/adr/0011-tki-design.md` · Gaps: `docs/NEEDS.md` #55-#61
 
 TKI schedules, supervises, connects and meters agent processes. It sits **below** nothing and **beside** the gate: it never
@@ -108,7 +108,26 @@ Accounts: `tenant -> agent -> run -> process -> child process`. Resources (integ
 Property tests (seeded random + concurrent asyncio tasks) assert: `committed + reserved <= hard` at every account at every
 step, never negative, committed totals conserved up the tree, no oversubscription under overlapping reservations.
 
+## In-run children (Phase 3)
+
+`RunDeps.child_spawner` replaces the built-in one-for-one loop of `AgentProcess.spawn_child`. `tki.adapter.TkiChildSpawner` (built
+by `tki_spawner_factory(scheduler, SupervisorConfig, deps)` and passed to `agent_workload(spawner_factory=...)`) starts each
+`agent`-kind tool call as a TKI child under a `Supervisor`:
+
+- the child is a real agent run through the same gate-wrapped `ActionExecutor` (+ `BudgetedRunner`), in **its own run id**
+  (`<parent run>.c<n>`, restarts `.c<n>r<k>`: a run id is never reused) on the **parent's trace id**;
+- its limits come from the child's ABL budgets (`ChildSpec.from_manifest`); its account hangs under the parent's process account,
+  so the spend rolls up to the parent, the run and the tenant;
+- a hard-cap trip (refused reserve, or a commit clamped at the cap) ends only that child with `budget_exceeded`; the parent sees a
+  failed tool call (`child '<ref>' exited: budget_exceeded`) and carries on; siblings are unaffected; it is never restarted;
+- while a child runs the parent's TKI process is `waiting` (its slot is free, so a one-slot tenant does not deadlock);
+- `max_children` on the manifest still bounds spawns; the supervisor strategy/restart policy apply to the child.
+
+Children of one parent run one after another (the agent loop dispatches tool calls sequentially). Evidence:
+`runtime/tests/test_tki_spawner.py`, `e2e/test_phase3_orchestration.py::test_multi_agent_run_...`. This also fixed a spin in
+`Supervisor.settle` (a gather over finished tasks never yielded).
+
 ## What is not proven or built
 
-See NEEDS #55-#61: in-memory single-instance ledger/queue/router, no durable or distributed budgets, agent-initiated IPC not
-exposed, in-run `spawn_child` (run.py) not yet supervised by TKI, cost not reserved before spend without an estimator.
+See NEEDS #55-#61, #67: in-memory single-instance ledger/queue/router, no durable or distributed budgets, ledger events outside
+the audit chain, agent-initiated IPC not exposed, cost not reserved before spend without an estimator.

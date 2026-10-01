@@ -2,11 +2,18 @@
 
 ``run(action)`` = build gate request -> gate (fail-closed) -> append ``gate_decision`` event ->
 perform iff ALLOW / ALLOW_WITH_REDACTION.  DENY and REQUIRE_APPROVAL perform nothing.
-"""
+
+With an ``ApprovalResolver`` configured, REQUIRE_APPROVAL does not end the call: the executor waits
+for the human decision and, if (and only if) it is APPROVED, RE-SUBMITS the same action to the gate
+carrying the signed decision record.  The kernel verifies the record for exactly that
+tenant/run/tool/arguments, applies every DENY policy and cap again and consumes the approval; only
+that second ALLOW performs the action.  Denied, expired, unresolvable or unaccepted approvals
+perform nothing.  There is no loop: a second REQUIRE_APPROVAL is a DENY."""
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -18,6 +25,7 @@ from axis_runtime.actions import (
     bind_executor_token,
     to_jsonable,
 )
+from axis_runtime.approvals import ApprovalResolver
 from axis_runtime.events import EventType, RunRecorder
 from axis_runtime.gate import (
     ActorType,
@@ -93,7 +101,9 @@ class ActionExecutor:
         identity: RunIdentity,
         backends: Backends,
         gate_timeout: float = 5.0,
+        approvals: ApprovalResolver | None = None,
     ) -> None:
+        self._approvals = approvals
         self._gate: GateClient = (
             gate if isinstance(gate, FailClosedGate) else FailClosedGate(gate, gate_timeout)
         )
@@ -107,10 +117,12 @@ class ActionExecutor:
         self._counter += 1
         return f"act_{self._counter:06d}"
 
-    def _request(self, action: Action, pid: str) -> EvaluateRequest:
+    def _request(
+        self, action: Action, pid: str, approval: Mapping[str, Any] | None = None
+    ) -> EvaluateRequest:
         ident = self._identity
         ep = action.enforcement_point
-        context = {
+        context: dict[str, Any] = {
             "tool": action.tool_descriptor(),
             "args": to_jsonable(action.gate_args()),
             "data": {"phi": ident.phi},
@@ -120,6 +132,8 @@ class ActionExecutor:
             "actor": {"type": ident.actor_type.value, "id": ident.actor_id or pid},
             "enforcement_point": ep.value,
         }
+        if approval is not None:
+            context["approval"] = dict(approval)  # evidence for the kernel's own verification
         return EvaluateRequest(
             tenant_id=ident.tenant_id,
             trace_id=ident.trace_id,
@@ -151,22 +165,15 @@ class ActionExecutor:
         )
         return Denied(reason, deny(reason))
 
-    async def run(self, action: Action, *, pid: str) -> ActionOutcome:
-        if pid not in self._recorder.state.processes:
-            raise KeyError(f"unknown pid {pid!r}")
-        action_id = self._next_action_id()
-        if not self._runnable(pid):
-            state = self._recorder.state.processes[pid].state.value
-            return await self._block(pid, action_id, action, f"process_not_runnable:{state}")
-
+    async def _gate_once(self, request: EvaluateRequest) -> GateDecision:
         try:
-            decision = validate_decision(await self._gate.evaluate(self._request(action, pid)))
+            return validate_decision(await self._gate.evaluate(request))
         except Exception as exc:  # FailClosedGate should prevent this; never trust it
-            decision = deny(f"gate_error:{type(exc).__name__}")
+            return deny(f"gate_error:{type(exc).__name__}")
 
-        if not self._runnable(pid):  # killed/paused while the gate was thinking
-            return await self._block(pid, action_id, action, "process_terminated_during_gate")
-
+    async def _record_decision(
+        self, pid: str, action_id: str, action: Action, decision: GateDecision
+    ) -> None:
         await self._recorder.record(
             EventType.GATE_DECISION,
             pid,
@@ -183,10 +190,63 @@ class ActionExecutor:
             },
         )
 
+    async def _resume_after_approval(
+        self, action: Action, pid: str, action_id: str, pending: GateDecision
+    ) -> GateDecision | Denied:
+        """Wait for the human decision, then re-gate the SAME action with the signed record."""
+        assert self._approvals is not None  # noqa: S101 - narrowed by the caller
+        ident = self._identity
+        try:
+            record = await self._approvals.resolve(ident.tenant_id, pending.approval_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # unresolvable approval is a DENY; type name only
+            reason = f"approval_unavailable:{type(exc).__name__}"
+            return await self._block(pid, action_id, action, reason)
+        if not self._runnable(pid):
+            return await self._block(pid, action_id, action, "process_terminated_during_approval")
+        outcome = record.get("outcome")
+        if outcome != "APPROVED":
+            label = outcome.lower() if isinstance(outcome, str) else "malformed"
+            return await self._block(pid, action_id, action, f"approval_{label}")
+        if (
+            record.get("request_id") != pending.approval_id
+            or record.get("tenant_id") != ident.tenant_id
+            or record.get("run_id") != ident.run_id
+        ):
+            return await self._block(pid, action_id, action, "approval_mismatch")
+        regated = await self._gate_once(self._request(action, pid, approval=record))
+        if not self._runnable(pid):
+            return await self._block(pid, action_id, action, "process_terminated_during_gate")
+        await self._record_decision(pid, action_id, action, regated)
+        if regated.decision is Decision.REQUIRE_APPROVAL:  # not accepted by the kernel: no loop
+            return Denied("approval_not_accepted", regated)
+        if regated.decision is Decision.DENY:
+            return Denied(regated.reason or "denied", regated)
+        return regated
+
+    async def run(self, action: Action, *, pid: str) -> ActionOutcome:
+        if pid not in self._recorder.state.processes:
+            raise KeyError(f"unknown pid {pid!r}")
+        action_id = self._next_action_id()
+        if not self._runnable(pid):
+            state = self._recorder.state.processes[pid].state.value
+            return await self._block(pid, action_id, action, f"process_not_runnable:{state}")
+
+        decision = await self._gate_once(self._request(action, pid))
+        if not self._runnable(pid):  # killed/paused while the gate was thinking
+            return await self._block(pid, action_id, action, "process_terminated_during_gate")
+        await self._record_decision(pid, action_id, action, decision)
+
+        if decision.decision is Decision.REQUIRE_APPROVAL:
+            if self._approvals is None:
+                return PendingApproval(decision.approval_id, decision.reason, decision)
+            resumed = await self._resume_after_approval(action, pid, action_id, decision)
+            if isinstance(resumed, Denied):
+                return resumed
+            decision = resumed
         if decision.decision is Decision.DENY:
             return Denied(decision.reason or "denied", decision)
-        if decision.decision is Decision.REQUIRE_APPROVAL:
-            return PendingApproval(decision.approval_id, decision.reason, decision)
         if decision.decision not in (Decision.ALLOW, Decision.ALLOW_WITH_REDACTION):
             return Denied("unknown_decision", decision)  # defence in depth
 

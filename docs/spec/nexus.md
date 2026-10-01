@@ -1,6 +1,7 @@
 # NEXUS and MPM stub (Python runtime)
 
-Status: **Prototype** (tested with in-memory fakes; not wired into `run.py`; see `docs/NEEDS.md` #41-47).
+Status: **Prototype** (in-memory cache, tracer and run log; wired into the run loop and proven in `make e2e-phase3`; see
+`docs/NEEDS.md` #41-47, #65). Decision record: `docs/adr/0012-phase3-integration.md`.
 Code: `runtime/src/axis_runtime/nexus/`. Tests: `runtime/tests/test_nexus_*.py`.
 
 NEXUS decides how a request is answered as cheaply as is safe: **cache -> rules -> MPM -> RAG -> LLM**. The stages that run,
@@ -74,7 +75,30 @@ deterministic lexical fake that filters by both. `RagStage` re-checks both on wh
 retriever cannot widen access). A passage scoring >= `answer_threshold` answers extractively; lower-scoring passages ride along as
 LLM context. Real retrieval is Phase 4 (NEEDS #42).
 
+## In the run loop (Phase 3)
+
+- `RunDeps.nexus_factory(ctx) -> NexusRouter` builds the router per run; `ctx.runner` (the gated executor, budget-wrapped under
+  TKI) is what its `LlmStage` calls, and `ctx.nexus_event_sink()` appends events to the run log. When set, **every model step of
+  every agent in the run** is routed (`routing.stages`, e.g. `cache -> rules -> llm`) instead of calling the model directly.
+- `RouteRequest` gained additive `messages` and `tools`: the agent loop's whole conversation and tool definitions. The LLM stage
+  sends exactly those (plus the same `provider/model` action name the direct path uses), `prompt` stays the latest user text for the
+  rules stage, and the **cache key covers the whole conversation and tool set**, so a hit is replayed only for an identical call.
+  Responses with tool calls are never cached; PHI runs never cache.
+- Outcome mapping (same as the direct path): LLM stage `blocked` on a gate DENY -> process exit `policy_denied`; approval pending ->
+  run parks (`awaiting_approval`); a failed model call or exhausted route -> `failed`.
+- **Not gated:** only the LLM stage is a `ModelCall`. A cache or rules hit is served with no Risk Kernel call and no audit row
+  (NEEDS #65). Tool calls from a model answer are still dispatched through the executor by the agent loop.
+- **Run log:** `nexus_stage` (stage, `hit`/`miss`, reason, latency, tokens, `cost_usd` as a decimal string, cache-key hash,
+  confidence) and `nexus_route` (status, hit stage, totals, `cost_by_stage`) are additive run-event types (ADR 0012), folded into
+  `RunState.nexus_stages` / `nexus_routes`, hash-chained and replayable like every other event. Not in the audit chain (frozen
+  contract; NEEDS #45).
+- **Trace:** `InMemoryTracer.export()` returns JSON spans (`span_id`, `parent_span_id`, `name`, `attributes`, `ok`): `nexus.route`
+  with a `nexus.stage.<name>` child per attempted stage carrying `nexus.hit`, `nexus.cost_usd`, `nexus.tokens`,
+  `nexus.latency_ms`; `nexus.trace_id` equals the run's trace id (the audit chain's `trace_id`). No OTLP exporter yet (NEXUS #44).
+- Evidence: `runtime/tests/test_run_nexus.py` and `e2e/test_phase3_orchestration.py` (second identical call: cache hit, no gate
+  call, no provider call, route cost 0 against > 0 for the first).
+
 ## Not covered
 
-See `docs/NEEDS.md` #41-47: real micro-models, real RAG, shared cache backends, OTel exporter, run-log/audit append of NEXUS
-events, linear-time regex, and wiring into `run.py` / ABL parameters.
+See `docs/NEEDS.md` #41-47, #65: real micro-models, real RAG, shared cache backends, an OTLP exporter, the audit-chain append of
+NEXUS events, linear-time regex, ABL parameters for stage configuration, and gating of cache/rules hits.

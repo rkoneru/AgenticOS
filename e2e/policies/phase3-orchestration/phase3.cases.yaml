@@ -1,0 +1,39 @@
+packs: [pack.yaml]
+cases:
+  - name: read tool and delegation are allowed
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: delegate-a, kind: agent, side_effects: read },
+        args: {},
+      }
+    expect: { decision: ALLOW, winners: [phase3-orchestration/allow-reads] }
+  - name: payments need approval, gated by kill-switch and both caps
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: payments, side_effects: external },
+        args: { amount: 5000 },
+      }
+    expect:
+      {
+        decision: REQUIRE_APPROVAL,
+        winners: [phase3-orchestration/approve-payments],
+        gates:
+          [
+            phase3-orchestration/amount-cap,
+            phase3-orchestration/target-cap,
+            phase3-orchestration/tenant-kill,
+          ],
+      }
+  - name: wire transfers need approval with a one second SLA
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: wire-transfer, side_effects: external },
+        args: {},
+      }
+    expect: { decision: REQUIRE_APPROVAL, winners: [phase3-orchestration/approve-wire-transfers] }
+  - name: any other external tool is denied by default
+    input: { enforcement_point: tool_call, tool: { name: crm, side_effects: external }, args: {} }
+    expect: { decision: DENY, winners: [] }

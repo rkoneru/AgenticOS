@@ -42,6 +42,9 @@ class EventType(StrEnum):
     ACTION_BLOCKED = "action_blocked"
     BUDGET_WARNING = "budget_warning"
     PROCESS_OUTPUT = "process_output"
+    # Additive (ADR 0012): NEXUS routing telemetry. Folded into RunState; older readers reject them.
+    NEXUS_STAGE = "nexus_stage"
+    NEXUS_ROUTE = "nexus_route"
 
 
 class CorruptLogError(Exception):
@@ -197,6 +200,31 @@ class ModelCallSummary:
 
 
 @dataclass(frozen=True)
+class NexusStageRecord:
+    """One routing stage attempt (``docs/spec/nexus.md``): name, hit/miss, tokens and cost."""
+
+    pid: str
+    stage: str
+    outcome: str  # "hit" | "miss"
+    reason: str
+    latency_ms: float
+    tokens: int
+    cost_usd: str  # decimal string: never a float
+    cache_key_hash: str | None
+    confidence: float | None
+
+
+@dataclass(frozen=True)
+class NexusRouteRecord:
+    pid: str
+    status: str  # "hit" | "blocked" | "exhausted"
+    hit_stage: str | None
+    total_tokens: int
+    total_cost_usd: str
+    cost_by_stage: Mapping[str, str]
+
+
+@dataclass(frozen=True)
 class RunState:
     run_id: str
     tenant_id: str
@@ -210,6 +238,8 @@ class RunState:
     warnings: tuple[str, ...] = ()
     outputs: Mapping[str, str] = field(default_factory=dict)
     signals: tuple[tuple[str, str], ...] = ()
+    nexus_stages: tuple[NexusStageRecord, ...] = ()
+    nexus_routes: tuple[NexusRouteRecord, ...] = ()
 
     @property
     def tokens_used(self) -> int:
@@ -398,6 +428,48 @@ def apply_event(state: RunState | None, event: RunEvent) -> RunState:
     if event.type == EventType.PROCESS_OUTPUT:
         info = _proc(state, event)
         return replace(base, outputs={**state.outputs, info.pid: _get(d, "output", str, seq)})
+
+    if event.type == EventType.NEXUS_STAGE:
+        info = _proc(state, event)
+        conf = d.get("confidence")
+        if conf is not None and (not isinstance(conf, int | float) or isinstance(conf, bool)):
+            raise CorruptLogError("confidence must be a number or null", seq)
+        key_hash = d.get("cache_key_hash")
+        if key_hash is not None and not isinstance(key_hash, str):
+            raise CorruptLogError("cache_key_hash must be a string or null", seq)
+        outcome = _get(d, "outcome", str, seq)
+        if outcome not in ("hit", "miss"):
+            raise CorruptLogError("nexus stage outcome must be hit or miss", seq)
+        srec = NexusStageRecord(
+            pid=info.pid,
+            stage=_get(d, "stage", str, seq),
+            outcome=outcome,
+            reason=_get(d, "reason", str, seq),
+            latency_ms=float(_get(d, "latency_ms", (int, float), seq)),
+            tokens=_get(d, "tokens", int, seq),
+            cost_usd=_get(d, "cost_usd", str, seq),
+            cache_key_hash=key_hash,
+            confidence=None if conf is None else float(conf),
+        )
+        return replace(base, nexus_stages=(*state.nexus_stages, srec))
+
+    if event.type == EventType.NEXUS_ROUTE:
+        info = _proc(state, event)
+        hit_stage = d.get("hit_stage")
+        if hit_stage is not None and not isinstance(hit_stage, str):
+            raise CorruptLogError("hit_stage must be a string or null", seq)
+        by_stage = _get(d, "cost_by_stage", dict, seq)
+        if not all(isinstance(k, str) and isinstance(v, str) for k, v in by_stage.items()):
+            raise CorruptLogError("cost_by_stage must map stage names to decimal strings", seq)
+        rrec = NexusRouteRecord(
+            pid=info.pid,
+            status=_get(d, "status", str, seq),
+            hit_stage=hit_stage,
+            total_tokens=_get(d, "total_tokens", int, seq),
+            total_cost_usd=_get(d, "total_cost_usd", str, seq),
+            cost_by_stage=dict(by_stage),
+        )
+        return replace(base, nexus_routes=(*state.nexus_routes, rrec))
 
     raise CorruptLogError(f"unknown event type {event.type!r}", seq)
 

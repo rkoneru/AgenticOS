@@ -17,7 +17,7 @@ import dataclasses
 import hashlib
 import json
 import secrets
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,6 +33,7 @@ from axis_runtime.actions import (
     ToolCall,
     to_jsonable,
 )
+from axis_runtime.approvals import ApprovalResolver
 from axis_runtime.events import (
     Clock,
     EventType,
@@ -63,6 +64,8 @@ from axis_runtime.models.types import (
     ToolCallRequest,
     ToolDefinition,
 )
+from axis_runtime.nexus.router import NexusRouter
+from axis_runtime.nexus.types import RouteRequest, RouteResult
 from axis_runtime.process import (
     ExitReason,
     Lifecycle,
@@ -79,6 +82,12 @@ ACTING_PID: ContextVar[str | None] = ContextVar("axis_acting_pid", default=None)
 
 class ChildError(RuntimeError):
     """A child process did not complete (surfaced to the parent as a failed tool call)."""
+
+
+#: ``(run context, child ref, tool args) -> child output``; raises ``ChildError`` if the child did
+#: not complete. TKI supplies one (``tki.adapter.TkiChildSpawner``) so children run under a
+#: supervisor with budgets; the child's actions still go through the same gate and executor.
+ChildSpawner = Callable[["RunContext", str, Mapping[str, Any]], Awaitable[Any]]
 
 
 @dataclass
@@ -99,6 +108,17 @@ class RunDeps:
     exit_on_deny: bool = False
     term_grace_seconds: float = 5.0
     gate_timeout: float = 5.0
+    #: When set, a REQUIRE_APPROVAL is resolved inline and the approved action is RE-GATED
+    #: (executor.py); when absent the run parks with ``awaiting_approval`` as before.
+    approvals: ApprovalResolver | None = None
+    #: Builds the run's NEXUS router (``ctx.runner`` is the gated executor its LLM stage calls;
+    #: ``ctx.nexus_event_sink()`` appends stage events to the run log). When set, every model
+    #: step of every agent in the run is routed cache -> rules -> ... -> llm instead of calling
+    #: the model directly. The LLM stage is still a gated ``ModelCall``; cache and rule hits are
+    #: not actions.
+    nexus_factory: Callable[[RunContext], NexusRouter] | None = None
+    #: Replaces the built-in one-for-one child loop of ``AgentProcess.spawn_child`` (see TKI).
+    child_spawner: ChildSpawner | None = None
 
 
 class _Exit(Exception):
@@ -106,6 +126,12 @@ class _Exit(Exception):
         super().__init__(detail)
         self.reason = reason
         self.detail = detail
+
+
+@dataclass(frozen=True)
+class _ModelAnswer:
+    text: str
+    tool_calls: tuple[ToolCallRequest, ...]
 
 
 class _Parked(Exception):
@@ -123,6 +149,12 @@ class RunContext:
     identity: RunIdentity
     runner: ActionRunner
     processes: dict[str, AgentProcess] = field(default_factory=dict)
+    nexus: NexusRouter | None = None
+
+    def nexus_event_sink(self) -> NexusRunSink:
+        """An ``EventSink`` for ``NexusRouter`` that appends ``nexus_stage`` / ``nexus_route``
+        events to THIS run's log, attributed to the process that is routing."""
+        return NexusRunSink(self)
 
     async def spawn_child(self, ref: str, args: Mapping[str, Any]) -> Any:
         """``Backends.spawn``: called by an ``agent``-kind ToolCall performed for ACTING_PID."""
@@ -131,6 +163,19 @@ class RunContext:
         if parent is None:
             raise ChildError("no acting process")
         return await parent.spawn_child(ref, args)
+
+
+class NexusRunSink:
+    """Appends NEXUS telemetry to the run log (the run's own hash-chained, replayable record)."""
+
+    def __init__(self, ctx: RunContext) -> None:
+        self._ctx = ctx
+
+    async def emit(self, event_type: str, data: Mapping[str, Any]) -> None:
+        pid = ACTING_PID.get()
+        if pid is None or pid not in self._ctx.processes:
+            return  # telemetry only: nothing is routing on behalf of a process of this run
+        await self._ctx.recorder.record(event_type, pid, data)
 
 
 @dataclass(frozen=True)
@@ -421,20 +466,7 @@ class AgentProcess:
             while self._interrupts:
                 messages.append(Message("user", f"[interrupt] {self._interrupts.pop(0)}"))
             await self._check_budgets(before_model=True)
-            primary = self.manifest.primary
-            outcome = await self._act(
-                ModelCall(
-                    name=f"{primary.provider}/{primary.model}",
-                    request=self._model_request(messages),
-                )
-            )
-            if isinstance(outcome, Denied):
-                raise _Exit(ExitReason.POLICY_DENIED, f"model call denied: {outcome.reason}")
-            if isinstance(outcome, Failed):
-                raise _Exit(ExitReason.FAILED, f"model call failed: {outcome.error}")
-            if not isinstance(outcome, Completed):
-                raise _Exit(ExitReason.FAILED, "unexpected action outcome")
-            response = outcome.result
+            response = await self._model_step(messages)
             await self._check_budgets()
             if not response.tool_calls:
                 return str(response.text)
@@ -443,6 +475,61 @@ class AgentProcess:
                 await self._safe_point()
                 messages.append(await self._run_tool(call))
         raise _Exit(ExitReason.FAILED, f"max_steps ({self.ctx.deps.max_steps}) reached")
+
+    async def _model_step(self, messages: list[Message]) -> _ModelAnswer:
+        """One model turn: a gated ``ModelCall``, or (NEXUS configured) a routed one."""
+        if self.ctx.nexus is not None:
+            return await self._routed_model_step(self.ctx.nexus, messages)
+        primary = self.manifest.primary
+        outcome = await self._act(
+            ModelCall(
+                name=f"{primary.provider}/{primary.model}",
+                request=self._model_request(messages),
+            )
+        )
+        if isinstance(outcome, Denied):
+            raise _Exit(ExitReason.POLICY_DENIED, f"model call denied: {outcome.reason}")
+        if isinstance(outcome, Failed):
+            raise _Exit(ExitReason.FAILED, f"model call failed: {outcome.error}")
+        if not isinstance(outcome, Completed):
+            raise _Exit(ExitReason.FAILED, "unexpected action outcome")
+        return _ModelAnswer(str(outcome.result.text), tuple(outcome.result.tool_calls))
+
+    async def _routed_model_step(
+        self, router: NexusRouter, messages: list[Message]
+    ) -> _ModelAnswer:
+        """Same transitions and failure mapping as ``_act``, with NEXUS deciding the answer."""
+        m = self.manifest
+        last_user = next((x.content for x in reversed(messages) if x.role == "user"), "")
+        request = RouteRequest(
+            tenant_id=self.ctx.deps.tenant_id,
+            prompt=last_user,
+            pid=self.pid,
+            agent=m.name,
+            agent_version=m.version,
+            phi=m.phi,
+            trace_id=self.ctx.identity.trace_id,
+            system_prompt=m.system_prompt,
+            messages=tuple(messages),
+            tools=self._tool_definitions(),
+        )
+        await self._go(Lifecycle.AWAIT)
+        marker = ACTING_PID.set(self.pid)
+        try:
+            route: RouteResult = await router.route(request)
+        finally:
+            ACTING_PID.reset(marker)
+        if route.status == "blocked":
+            reason = route.blocked_reason
+            if reason.startswith("approval_pending:"):
+                raise _Parked(reason.removeprefix("approval_pending:"))  # stays `waiting`
+            raise _Exit(
+                ExitReason.POLICY_DENIED, f"model call denied: {reason.removeprefix('denied:')}"
+            )
+        if route.status != "hit" or route.answer is None:
+            raise _Exit(ExitReason.FAILED, "model call failed: no routing stage produced an answer")
+        await self._go(Lifecycle.WAKE)
+        return _ModelAnswer(route.answer, tuple(route.tool_calls))
 
     async def _run_tool(self, call: ToolCallRequest) -> Message:
         def reply(content: str, *, error: bool = False) -> Message:
@@ -463,7 +550,7 @@ class AgentProcess:
             outcome.error if isinstance(outcome, Failed) else "unexpected outcome", error=True
         )
 
-    # ---- children (supervisor: one-for-one) ---------------------------------------------
+    # ---- children (supervisor: one-for-one, or TKI via ``RunDeps.child_spawner``) ----------
     async def spawn_child(self, ref: str, args: Mapping[str, Any]) -> Any:
         child_manifest = self.ctx.deps.child_manifests.get(ref)
         if child_manifest is None:
@@ -471,6 +558,8 @@ class AgentProcess:
         if self._spawned_children >= self.manifest.process.max_children:
             raise ChildError(f"max_children ({self.manifest.process.max_children}) reached")
         self._spawned_children += 1
+        if self.ctx.deps.child_spawner is not None:
+            return await self.ctx.deps.child_spawner(self.ctx, ref, args)
         input_text = str(args.get("input") or json.dumps(to_jsonable(args)))
         restarts = 0
         while True:
@@ -581,8 +670,11 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
             identity=identity,
             backends=backends,
             gate_timeout=deps.gate_timeout,
+            approvals=deps.approvals,
         )
     )
+    if deps.nexus_factory is not None:
+        ctx.nexus = deps.nexus_factory(ctx)
     root = AgentProcess(manifest, ctx)
     await root.spawn()
     task = asyncio.create_task(root.run(input_text))

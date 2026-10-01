@@ -77,6 +77,28 @@ class InMemoryCache:
         return len(self._data.get(tenant_id, ()))
 
 
+def _conversation(request: RouteRequest) -> object:
+    """The prompt, or (agent loop) the full conversation and tool definitions, canonicalised."""
+    if not request.messages:
+        return _WS.sub(" ", request.prompt).strip()
+    return {
+        "messages": [
+            [
+                m.role,
+                m.content,
+                m.tool_call_id,
+                m.name,
+                [[c.id, c.name, json.dumps(c.arguments, sort_keys=True)] for c in m.tool_calls],
+            ]
+            for m in request.messages
+        ],
+        "tools": [
+            [t.name, t.description, json.dumps(t.input_schema, sort_keys=True)]
+            for t in request.tools
+        ],
+    }
+
+
 def cache_key(request: RouteRequest, *, scope_principal: bool = True) -> str:
     """SHA-256 hex digest of the canonical (tenant, principal, agent, system prompt, prompt)."""
     material = json.dumps(
@@ -86,7 +108,7 @@ def cache_key(request: RouteRequest, *, scope_principal: bool = True) -> str:
             request.agent,
             request.agent_version,
             hashlib.sha256(request.system_prompt.encode()).hexdigest(),
-            _WS.sub(" ", request.prompt).strip(),
+            _conversation(request),
         ],
         separators=(",", ":"),
         ensure_ascii=True,

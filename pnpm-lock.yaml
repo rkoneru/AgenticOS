@@ -154,6 +154,9 @@ importers:
 
   services/risk-kernel:
     dependencies:
+      '@axis/approvals':
+        specifier: workspace:*
+        version: link:../approvals
       '@axis/audit':
         specifier: workspace:*
         version: link:../audit

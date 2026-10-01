@@ -153,6 +153,7 @@ async def make_executor(
     *,
     phi: bool = False,
     to_state: str = "running",
+    approvals: Any = None,
 ) -> tuple[ActionExecutor, RunRecorder, Effects, ScriptedGate]:
     effects = effects or Effects()
     gate = gate or ScriptedGate()
@@ -164,5 +165,6 @@ async def make_executor(
         identity=identity(phi),
         backends=recording_backends(effects, clock),
         gate_timeout=0.2,
+        approvals=approvals,
     )
     return ex, rec, effects, gate

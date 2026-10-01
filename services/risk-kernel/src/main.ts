@@ -1,5 +1,15 @@
 /* Process entry point (dev/e2e): env-configured kernel with in-memory stores and audit. Excluded from coverage. */
 import { readFileSync } from "node:fs";
+import {
+  ApprovalResolver,
+  ApprovalService,
+  HmacSigner,
+  MemoryApprovalStore,
+  createDevBridge,
+  kernelApprovalPorts,
+  listenLoopback,
+  staticTenantAuthenticator,
+} from "@axis/approvals";
 import { PgAuditLog } from "@axis/audit";
 import type { AuditSink } from "@axis/contracts";
 import pg from "pg";
@@ -28,21 +38,60 @@ const audit: AuditSink = pgUrl
   : new MemoryAuditSink();
 const killSwitches = new MemoryKillSwitchStore();
 const counters = new MemoryCounterStore();
+// AXIS_APPROVALS_HMAC_KEY (hex, >= 32 bytes): wires an in-process approvals service (in-memory store, same audit chain) into the
+// kernel's requester/verifier ports. Without it REQUIRE_APPROVAL yields an empty approval_id (clients DENY).
+// AXIS_APPROVALS_DEV_BRIDGE=1 additionally serves the loopback dev bridge (docs/NEEDS.md #62): e2e/dev only, NOT an approver API.
+const tokenTable = JSON.parse(readFileSync(tokens, "utf8")) as Record<string, Principal>;
+const hmacKey = process.env["AXIS_APPROVALS_HMAC_KEY"];
+const approvals = hmacKey
+  ? (() => {
+      const signer = new HmacSigner(Buffer.from(hmacKey, "hex"));
+      const service = new ApprovalService({
+        store: new MemoryApprovalStore(),
+        audit,
+        signer,
+        logger: {
+          info: () => undefined,
+          warn: (m, f) => console.error(JSON.stringify({ level: "warn", m, ...f })),
+          error: (m, f) => console.error(JSON.stringify({ level: "error", m, ...f })),
+        },
+      });
+      service.startSweeper(1000);
+      return { service, ports: kernelApprovalPorts(service, signer) };
+    })()
+  : undefined;
 const kernel = new RiskKernel({
   engine,
   audit,
   killSwitches,
   counters,
+  ...(approvals
+    ? {
+        approvalRequester: approvals.ports.requester,
+        approvalVerifier: approvals.ports.verifier,
+      }
+    : {}),
   logger: {
     warn: (m, f) => console.error(JSON.stringify({ level: "warn", m, ...f })),
     error: (m, f) => console.error(JSON.stringify({ level: "error", m, ...f })),
   },
 });
-const authenticate = staticTokenAuthenticator(
-  JSON.parse(readFileSync(tokens, "utf8")) as Record<string, Principal>,
-);
+const authenticate = staticTokenAuthenticator(tokenTable);
 const server = createGateServer({ kernel, audit, killSwitches, authenticate });
 const port = await listen(server, `127.0.0.1:${process.env["AXIS_RK_PORT"] ?? "0"}`);
-console.log(JSON.stringify({ event: "listening", port }));
+let approvalsPort: number | undefined;
+if (approvals && process.env["AXIS_APPROVALS_DEV_BRIDGE"] === "1") {
+  const tenants: Record<string, string> = {};
+  for (const [token, p] of Object.entries(tokenTable)) if (p.tenantId) tenants[token] = p.tenantId;
+  approvalsPort = await listenLoopback(
+    createDevBridge({
+      service: approvals.service,
+      resolver: new ApprovalResolver(approvals.service),
+      authenticate: staticTenantAuthenticator(tenants),
+    }),
+    Number(process.env["AXIS_APPROVALS_PORT"] ?? "0"),
+  );
+}
+console.log(JSON.stringify({ event: "listening", port, approvals_port: approvalsPort ?? null }));
 for (const sig of ["SIGINT", "SIGTERM"] as const)
   process.on(sig, () => server.tryShutdown(() => process.exit(0)));

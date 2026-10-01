@@ -1,0 +1,36 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: phase3-orchestration
+  version: 1.0.0
+  description: "Phase 3 e2e fixture (not a shipped pack): reads and delegation allowed; payments need a human, with caps that still apply after approval."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+    - { id: amount-cap, type: amount_cap, params: { field: args.amount, max: 10000 } }
+    - {
+        id: target-cap,
+        type: target_cap,
+        params: { field: args.amount, max: 10000, perTarget: true },
+      }
+  rules:
+    - id: allow-reads
+      enforcementPoints: [tool_call, mcp_call]
+      when: { all: [{ field: tool.side_effects, op: in, value: [none, read] }] }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: approve-payments
+      priority: 200
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: payments }
+      gates: [tenant-kill, amount-cap, target-cap]
+      decision: REQUIRE_APPROVAL
+      approval: { roles: [finance-approver], slaSeconds: 60, escalateTo: [] }
+    - id: approve-wire-transfers
+      priority: 200
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: wire-transfer }
+      gates: [tenant-kill]
+      decision: REQUIRE_APPROVAL
+      approval: { roles: [finance-approver], slaSeconds: 1, escalateTo: [] }

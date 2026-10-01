@@ -89,6 +89,11 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
     "gate.py": {
         "grpc": "GrpcGateClient: the gate's own transport to the Risk Kernel (not an action).",
     },
+    "approvals.py": {
+        "httpx": "HttpApprovalResolver: control-plane read of an approval decision from the "
+        "approvals service (loopback dev bridge, NEEDS #62); not an agent action. It only fetches a "
+        "record that the executor forwards to the Risk Kernel, which re-gates and verifies it.",
+    },
     "temporal.py": {
         "temporalio": "Temporal workflow/activity wiring: talks to the Temporal server, runs "
         "ActionExecutor inside the activity.",
