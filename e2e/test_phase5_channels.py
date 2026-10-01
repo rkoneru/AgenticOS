@@ -82,6 +82,8 @@ def tenant_digest(tenant: str, label: str, data: bytes) -> str:
     """The service's keyed digest (HMAC under a per-tenant key): what the chain holds instead of a plain SHA-256."""
     key = hmac.new(HASH_KEY.encode(), f"axis-digest.v1:{tenant}".encode(), hashlib.sha256).digest()
     return hmac.new(key, label.encode() + b"\0" + data, hashlib.sha256).hexdigest()
+
+
 KTOKEN = {T1: "e2e-k1-" + secrets.token_hex(8), T2: "e2e-k2-" + secrets.token_hex(8)}
 CTOKEN = {T1: "e2e-c1-" + secrets.token_hex(8), T2: "e2e-c2-" + secrets.token_hex(8)}
 AGENT = {"name": "concierge", "version": "1.0.0"}
@@ -1354,7 +1356,9 @@ async def test_voice_serves_the_same_agent_with_consent_and_transcripts_in_the_a
         ("agent", "Your refund is on its way."),
     ):
         row = next(r for r in rows if r["action"] == f"voice.turn.{role}")
-        sha = hashlib.sha256(text.encode()).hexdigest()  # what the runtime sends; the service re-keys it
+        sha = hashlib.sha256(
+            text.encode()
+        ).hexdigest()  # what the runtime sends; the service re-keys it
         assert f"hmac={tenant_digest(T1, 'voice-text', sha.encode())}" in row["reason"]
         assert sha not in row["reason"]
     assert persisted and "refund" not in json.dumps(rows)
