@@ -121,4 +121,14 @@ export interface ConversationStore {
     m: NewMessage,
   ): Promise<{ inserted: boolean; message: StoredMessage }>;
   messages(tenant: string, conversationId: string, limit?: number): Promise<StoredMessage[]>;
+  /**
+   * Is there already a message with this (channel, direction, idempotency key)? The durable half of replay protection: the
+   * idempotency store expires and is per process, the message log does not.
+   */
+  hasMessage(
+    tenant: string,
+    channel: ChannelId,
+    direction: "in" | "out",
+    idempotencyKey: string,
+  ): Promise<boolean>;
 }

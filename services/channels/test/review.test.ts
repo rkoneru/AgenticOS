@@ -81,3 +81,29 @@ describe("audit digests are keyed (NEEDS 151)", () => {
     expect(r.gateway).toBeInstanceOf(ChannelGateway);
   });
 });
+
+describe("replay beyond the idempotency store", () => {
+  it("a genuine, validly signed webhook replayed after the idempotency claim is gone (TTL, restart) is not run again", async () => {
+    const r = rig({ idempotencyTtlMs: 1000 });
+    const req = slackReq({ eventId: "EvOLD", text: "cancel my order" });
+    expect((await r.gateway.handleInbound("slack", req)).outcomes[0]!.kind).toBe("accepted");
+    r.clock.advance(2000); // claim expired; still inside Slack's 5 minute window
+    const again = await r.gateway.handleInbound("slack", req);
+    expect(again.outcomes[0]!.kind).toBe("duplicate");
+    expect(r.received).toHaveLength(1); // the agent is not triggered a second time
+    expect(
+      (await r.audit.events(T1)).filter((e) => e.action === "channel.inbound.message"),
+    ).toHaveLength(1);
+  });
+
+  it("a restart (fresh idempotency store) does not re-run a message the log already holds", async () => {
+    const first = rig();
+    const req = slackReq({ eventId: "EvRESTART" });
+    await first.gateway.handleInbound("slack", req);
+    // a second process: new idempotency store and gateway, same Postgres-like store
+    const second = rig({ store: first.store, identity: first.identity, audit: first.audit });
+    const res = await second.gateway.handleInbound("slack", req);
+    expect(res.outcomes[0]!.kind).toBe("duplicate");
+    expect(second.received).toHaveLength(0);
+  });
+});

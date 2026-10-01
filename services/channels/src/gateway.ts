@@ -306,6 +306,12 @@ export class ChannelGateway {
       return { kind: "duplicate" };
     }
     try {
+      // The idempotency store expires and is per process; the message log is durable. A message the log already holds is a replay
+      // (an SMS webhook carries no timestamp; any signed request replays after a restart) and must not trigger the agent again.
+      if (await this.d.store.hasMessage(tenant, m.channel, "in", m.idempotency_key)) {
+        await this.auditReplay(route, m);
+        return { kind: "duplicate" };
+      }
       if (
         !this.d.limiter.take(
           `in:${tenant}:${m.channel}:${m.external_user_id}`,
