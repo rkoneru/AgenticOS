@@ -198,3 +198,51 @@ async def test_originated_call_becomes_a_transport_once_answered() -> None:
     with pytest.raises(KeyError):
         await gw.transport_for("nope")
     _ = allow
+
+
+# ---- adversarial review ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("variant", ["\n", " ", "\t", "\r\n", "​", "\x00"])
+async def test_a_number_with_trailing_junk_is_not_a_different_destination(variant: str) -> None:
+    """`re.match(r"...$")` accepts a trailing newline: ``"+1415...\\n"`` passed the validator, was counted as a different
+    destination (cool-down bypass) and was handed to the dialer verbatim."""
+    caller, gw, *_ = await rig()
+    await caller.place("+14155550100")
+    with pytest.raises(CallRefusedError) as ei:
+        await caller.place("+14155550100" + variant)
+    assert ei.value.reason in {"invalid_number", "destination_cooldown"}
+    assert len(gw.originated) == 1
+
+
+def test_unicode_digits_are_not_numbers() -> None:
+    lim = OutboundLimiter({TENANT: POLICY}, ManualVoiceClock())
+    with pytest.raises(CallRefusedError) as ei:
+        lim.check_and_reserve(TENANT, "+１４１５５５５０１００")  # full-width digits
+    assert ei.value.reason == "invalid_number"
+
+
+async def test_caller_id_cannot_be_chosen_by_the_agent() -> None:
+    """The ``from`` number is an agent-supplied argument the gate never saw: spoofing a caller ID is toll-fraud / impersonation."""
+    caller, gw, *_ = await rig()
+    with pytest.raises(CallRefusedError) as ei:
+        await caller.place("+14155550100", from_number="+14155559999")
+    assert ei.value.reason == "caller_id_not_allowed"
+    assert gw.originated == []
+    # nothing was reserved by the refused call
+    await caller.place("+14155550101")
+
+
+async def test_only_the_tenants_own_numbers_are_valid_caller_ids() -> None:
+    policy = OutboundCallPolicy(
+        allowed_prefixes=("+1",), allowed_from_numbers=("+14155550000",), max_per_destination=5
+    )
+    caller, gw, *_ = await rig(policy=policy)
+    await caller.place("+14155550100", from_number="+14155550000")
+    assert gw.originated[0].from_number == "+14155550000"
+    for bad in ("+14155550000\n", "+14155550001", "tel:+14155550000", "14155550000"):
+        with pytest.raises(CallRefusedError):
+            await caller.place("+14155550101", from_number=bad)
+    await caller.place(
+        "+14155550102"
+    )  # no caller id asked for: the gateway's default for the tenant
