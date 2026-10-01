@@ -25,11 +25,19 @@ from axis_runtime.tki.scheduler import (
     SpawnSpec,
     WorkloadResult,
 )
+from axis_runtime.tki.supervisor import (
+    ChildSpec,
+    RestartPolicy,
+    Strategy,
+    Supervisor,
+    SupervisorConfig,
+)
 
 __all__ = [
     "AccountKey",
     "BudgetExceededError",
     "BudgetLedger",
+    "ChildSpec",
     "Envelope",
     "EventSink",
     "InMemoryLedger",
@@ -42,10 +50,14 @@ __all__ = [
     "ProcessContext",
     "Reservation",
     "Resource",
+    "RestartPolicy",
     "Scheduler",
     "SchedulerConfig",
     "ScopeKind",
     "SpawnSpec",
+    "Strategy",
+    "Supervisor",
+    "SupervisorConfig",
     "TkiEvent",
     "TkiEventType",
     "WorkloadResult",
