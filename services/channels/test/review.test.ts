@@ -1,7 +1,18 @@
 /** Phase 5 adversarial review: regression tests for defects found after the phase was declared done. */
 import { createHash } from "node:crypto";
+import http from "node:http";
 import { describe, expect, it } from "vitest";
-import { ChannelGateway, parseTranscriptEvent, sha256Hex } from "../src/index.js";
+import {
+  ChannelGateway,
+  InboxQueue,
+  WebHub,
+  createDevServer,
+  listenLoopback,
+  parseTranscriptEvent,
+  sha256Hex,
+  staticTokenAuthenticator,
+  type InboxItem,
+} from "../src/index.js";
 import {
   T1,
   T2,
@@ -162,5 +173,79 @@ describe("email self-address loop guard", () => {
     await expect(
       r.gateway.send(T1, { channel: "email", to: "SUPPORT@axis.example", text: "x" }),
     ).rejects.toMatchObject({ code: expect.stringMatching(/INVALID|FORBIDDEN/) });
+  });
+});
+
+describe("inbox long poll", () => {
+  const mk = (tenant: string, text: string): InboxItem => ({
+    id: `i-${text}`,
+    tenant_id: tenant,
+    channel: "slack",
+    provider_key: "T0001",
+    agent: AGENT,
+    external_user_id: "U1",
+    end_user_id: "eu",
+    conversation_id: "c",
+    message_id: "m",
+    trace_id: "a".repeat(32),
+    text,
+    timestamp_ms: 0,
+  });
+
+  it("a poller that went away does not swallow the next message", async () => {
+    const q = new InboxQueue();
+    const ac = new AbortController();
+    const gone = q.take(T1, 30_000, ac.signal);
+    ac.abort(); // the runner restarted / its HTTP client timed out
+    expect(await gone).toBeUndefined();
+    q.push(mk(T1, "important"));
+    expect(q.size(T1)).toBe(1); // queued, not delivered to a dead waiter
+    expect((await q.take(T1, 0))?.text).toBe("important");
+  });
+
+  it("over HTTP: a dropped long-poll connection does not lose the next inbound message", async () => {
+    const inbox = new InboxQueue();
+    const r = rig({ onMessage: inbox.handler });
+    const server = createDevServer({
+      gateway: r.gateway,
+      routes: r.table,
+      store: r.store,
+      identity: r.identity,
+      hub: r.hub,
+      inbox,
+      authenticate: staticTokenAuthenticator({ t1: { tenantId: T1 } }),
+      now: r.clock.now,
+    });
+    const port = await listenLoopback(server);
+    try {
+      const req = http.request({
+        host: "127.0.0.1",
+        port,
+        method: "POST",
+        path: "/v1/channels/inbox/next",
+        headers: { authorization: "Bearer t1", "content-type": "application/json" },
+      });
+      req.on("error", () => {});
+      req.end(JSON.stringify({ wait_ms: 30_000 }));
+      await new Promise((res) => setTimeout(res, 100)); // the waiter is registered
+      req.destroy();
+      await new Promise((res) => setTimeout(res, 100));
+      await r.gateway.handleInbound("slack", slackReq({ text: "do not lose me" }));
+      expect(inbox.size(T1)).toBe(1);
+    } finally {
+      await new Promise<void>((res) => server.close(() => res()));
+    }
+  });
+});
+
+describe("web hub memory", () => {
+  it("does not keep an unbounded replay buffer per anonymous session", () => {
+    const hub = new WebHub({ maxSessions: 100 });
+    for (let i = 0; i < 1000; i++) hub.publish(T1, `sid-${i}`.padEnd(16, "x"), "message", { n: i });
+    expect(hub.bufferedSessions()).toBeLessThanOrEqual(100);
+    // the newest session is kept, an old one is gone
+    const got: number[] = [];
+    hub.subscribe(T1, `sid-999`.padEnd(16, "x"), (e) => got.push(e.id));
+    expect(got).toHaveLength(1);
   });
 });
