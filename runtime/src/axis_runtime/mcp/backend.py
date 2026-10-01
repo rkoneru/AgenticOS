@@ -136,6 +136,10 @@ class TenantMcpClient:
             await self._drop(cfg.name)
             raise
 
+    def check_manifest(self, manifest: RuntimeManifest) -> None:
+        """Spawn-time check against THIS tenant's registry (raises ``McpServerNotAllowed``)."""
+        self._registry.check_manifest(self._tenant, manifest)
+
     async def definitions_for(self, manifest: RuntimeManifest) -> dict[str, ToolDefinition]:
         """Model-facing definitions for the manifest's ``mcp`` tools, keyed by manifest tool name.
         Descriptions are sanitised, truncated data; they confer no capability."""

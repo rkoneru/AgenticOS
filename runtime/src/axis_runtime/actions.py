@@ -100,6 +100,7 @@ __all__ = [
     "DirectExecutionError",
     "ExecutionToken",
     "McpCall",
+    "MemoryRead",
     "MemoryWrite",
     "MessageSend",
     "ModelCall",
@@ -361,6 +362,79 @@ class MemoryWrite(_ArgsAction):
     async def _execute(self, backends: Backends) -> Any:
         memory: MemoryStore = backends.need("memory")
         return await memory.write(self.scope, self.args)
+
+
+@dataclass(frozen=True)
+class MemoryRead(_ArgsAction):
+    """Agent-facing memory search: ``args = {"query": str, "scope"?: str, "limit"?: int}``.
+
+    ``scopes`` is wiring, never an agent argument: the scopes the manifest's ``memory.*`` flags
+    allow. The frozen policy DSL has no ``memory_read`` enforcement point, so a read is gated as a
+    ``tool_call`` whose ``tool.kind`` is ``memory:read`` (docs/adr/0014). The gate sees the scopes,
+    the limit and the query's hash and length, NEVER the query text; the event log keeps hits as
+    ids, scores and content hashes. The agent itself receives the passages it is allowed to read.
+    """
+
+    enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.TOOL_CALL
+    scopes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scopes", tuple(self.scopes))
+        self._parsed()  # validate early: a bad call is a tool error, never a gated action
+
+    def _parsed(self) -> tuple[str, tuple[str, ...], int]:
+        query = self.args.get("query")
+        if not isinstance(query, str) or not query or len(query) > 4000:
+            raise ValueError("memory search needs a 'query' of 1..4000 characters")
+        scope = self.args.get("scope")
+        if scope is None:
+            chosen = self.scopes
+        elif isinstance(scope, str) and scope in self.scopes:
+            chosen = (scope,)
+        else:
+            raise ValueError("memory scope is not enabled for this agent")
+        if not chosen:
+            raise ValueError("this agent has no readable memory")
+        limit = self.args.get("limit", 5)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 20:
+            raise ValueError("limit must be an integer 1..20")
+        return query, chosen, limit
+
+    def tool_descriptor(self) -> dict[str, str]:
+        return {"name": self.name, "kind": "memory:read", "side_effects": "read"}
+
+    def gate_args(self) -> dict[str, Any]:
+        query, chosen, limit = self._parsed()
+        return {
+            "scopes": list(chosen),
+            "limit": limit,
+            "query_len": len(query),
+            "query_sha256": sha256_hex(query.encode()),
+        }
+
+    def with_args(self, doc: Mapping[str, Any]) -> Action:
+        return self  # the gate document is metadata only: there is nothing in it to redact into
+
+    def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
+        hits = result.get("hits") if isinstance(result, Mapping) else None
+        summary = [
+            {
+                "id": h.get("id"),
+                "scope": h.get("scope"),
+                "kb": h.get("kb"),
+                "score": h.get("score"),
+                "content_sha256": sha256_hex(str(h.get("content", "")).encode()),
+                "content_bytes": len(str(h.get("content", "")).encode()),
+            }
+            for h in (hits if isinstance(hits, list) else [])
+            if isinstance(h, Mapping)
+        ]
+        return super().result_event({"hits": summary})
+
+    async def _execute(self, backends: Backends) -> Any:
+        memory: MemoryStore = backends.need("memory")
+        query, chosen, limit = self._parsed()
+        return await memory.search(query, scopes=chosen, limit=limit)
 
 
 @dataclass(frozen=True)

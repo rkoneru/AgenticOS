@@ -217,6 +217,17 @@ class BrowserWorker:
             await session.close()
 
 
+def static_policies(
+    configs: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> PolicyProvider:
+    """A ``(tenant_id, agent) -> BrowserPolicy | None`` provider over an operator-held mapping of
+    tool-config documents (``BrowserPolicy.from_config``). Parsed eagerly so a bad policy fails at
+    startup; an unlisted ``(tenant, agent)`` has no policy, which means every request is blocked.
+    The ABL schema (frozen) has no field for this: see docs/adr/0014."""
+    built = {key: BrowserPolicy.from_config(cfg) for key, cfg in configs.items()}
+    return lambda tenant_id, agent: built.get((tenant_id, agent))
+
+
 class BrowserWorkerFactory:
     """One worker per run. Policy comes from ``policies(tenant_id, agent)``; no policy: deny all."""
 
