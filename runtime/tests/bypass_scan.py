@@ -515,6 +515,23 @@ RESTRICTED_NAMES: dict[str, dict[str, str]] = {
         "models/__init__.py": "re-export",
     },
 }
+# Phase 4 review: the executor-only names above guard ``call_tool`` / ``call`` / ``complete``, but the Phase 4
+# backends (sandbox ``run``, browser ``run``, memory ``write`` / ``search``, channels ``send``) have generic method
+# names that cannot be restricted by name. They are only reachable through ``Backends``, so the HANDLE is guarded:
+# a ``<x>.backends.<name>`` / ``<x>._backends.<name>`` load may only be used as an ``is None`` test (wiring checks)
+# or, where listed here, assigned (``mcp = ctx.backends.mcp``). Calling a method on it from anywhere but
+# ``actions.py`` (``Action._execute`` via ``Backends.need``) is a finding, as is passing the handle on.
+BACKEND_NAMES = frozenset(
+    {"tools", "mcp", "sandbox", "browser", "memory", "channels", "models", "spawn"}
+)
+BACKEND_HOLDERS = frozenset({"backends", "_backends"})
+BACKEND_HANDLE_FILES: dict[str, str] = {
+    "actions.py": "Backends itself and Action._execute",
+    "run.py": "wiring: builds the run's backends, tests them for None and reads the MCP manifest source",
+}
+BACKEND_HANDLE_USES = frozenset(
+    {("run.py", "mcp")}
+)  # `mcp = self.ctx.backends.mcp` (manifest checks only)
 # Generic words: restricted only as attribute accesses / method definitions (``x.call(...)``), because
 # ``call``/``stream`` are also ordinary local variable and parameter names in the adapters.
 MEMBER_ONLY_NAMES = frozenset({"call", "complete", "stream", "need"})
@@ -790,7 +807,59 @@ def raw_findings(rel: str, source: str) -> list[Finding]:
             ):
                 add("gateway-construction", node, "constructs ModelGateway")
     out += _restricted_uses(tree)
+    out += _backend_handles(tree, rel)
     return out
+
+
+def _backend_handles(tree: ast.AST, rel: str) -> list[Finding]:
+    """Findings for loads of a ``Backends`` member that are not plain wiring checks (see BACKEND_NAMES)."""
+    parents: dict[int, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[id(child)] = node
+    found: list[Finding] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Attribute)
+            and node.attr in BACKEND_NAMES
+            and isinstance(node.ctx, ast.Load)
+        ):
+            continue
+        holder = node.value
+        held = (
+            holder.attr
+            if isinstance(holder, ast.Attribute)
+            else holder.id
+            if isinstance(holder, ast.Name)
+            else ""
+        )
+        if held not in BACKEND_HOLDERS:
+            continue
+        parent = parents.get(id(node))
+        if rel == "actions.py":
+            continue
+        # `... backends.memory is None` / `is not None`: a wiring check, no capability used
+        if (
+            isinstance(parent, ast.Compare)
+            and parent.left is node
+            and all(isinstance(op, (ast.Is, ast.IsNot)) for op in parent.ops)
+            and all(isinstance(c, ast.Constant) and c.value is None for c in parent.comparators)
+        ):
+            continue
+        if (
+            rel in BACKEND_HANDLE_FILES
+            and (rel, node.attr) in BACKEND_HANDLE_USES
+            and isinstance(parent, ast.Assign)
+        ):
+            continue
+        found.append(
+            Finding(
+                "backend-handle",
+                node.lineno,
+                f"uses the .{node.attr} backend handle outside Action._execute",
+            )
+        )
+    return found
 
 
 def _restricted_uses(tree: ast.AST) -> list[Finding]:

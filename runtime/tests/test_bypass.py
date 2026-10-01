@@ -704,3 +704,42 @@ def test_exemption_details_are_exact() -> None:
             actual = {f.detail for f in bs.raw_findings(rel, mods[rel]) if f.rule == rule}
             assert (rule, rel) in bs.EXEMPTION_DETAILS, f"{rel} [{rule}] is not narrowed"
             assert actual == set(bs.EXEMPTION_DETAILS[(rule, rel)]), (rule, rel)
+
+
+@pytest.mark.parametrize(
+    "rel", ["run.py", "tki/scheduler.py", "nexus/router.py", "browser/worker.py", "memory.py"]
+)
+@pytest.mark.parametrize(
+    "source",
+    [
+        "async def f(self):\n    await self.ctx.backends.memory.write('run', {})",
+        "async def f(self):\n    await self.ctx.backends.memory.search('q', scopes=[], limit=1)",
+        "async def f(self, spec):\n    await self.ctx.backends.sandbox.run(spec)",
+        "async def f(self):\n    await self.ctx.backends.browser.run({})",
+        "async def f(self):\n    await self._backends.channels.send('c', {})",
+        "async def f(self):\n    m = self.ctx.backends.memory\n    await m.write('run', {})",
+        "async def f(self, backends):\n    return await backends.sandbox.run(None)",
+        "def f(self):\n    return self.ctx.backends.memory",
+    ],
+)  # fmt: skip
+def test_backend_handles_cannot_be_driven_from_outside_the_executor(rel: str, source: str) -> None:
+    """Phase 4 backends have generic method names (run / write / search / send) that cannot be restricted by
+    name, so the Backends handle is guarded instead: only an ``is None`` wiring test may touch it."""
+    assert any("backend-handle" in p for p in bs.scan_source(rel, source)), (rel, source)
+
+
+def test_backend_handle_wiring_checks_and_the_executor_path_stay_allowed() -> None:
+    wiring = "def f(self):\n    return self.ctx.backends.memory is not None and x"
+    assert bs.scan_source("run.py", wiring) == []
+    assert bs.scan_source("run.py", "mcp = self.ctx.backends.mcp") == []
+    assert bs.scan_source("run.py", "backends.memory = backend") == []  # a store is not a use
+    assert bs.scan_source("actions.py", "x = backends.memory.write") == []
+    # the narrow assignment grant does not cover other handles or other files
+    assert bs.scan_source("run.py", "m = self.ctx.backends.memory") != []
+    assert bs.scan_source("tki/scheduler.py", "mcp = self.ctx.backends.mcp") != []
+    assert (
+        bs.scan_source("run.py", "mcp = self.ctx.backends.mcp\nmcp.call_tool('s', 't', {})") != []
+    )
+    for rel, name in bs.BACKEND_HANDLE_USES:
+        src = (SRC / rel).read_text()
+        assert f"backends.{name}" in src, f"stale BACKEND_HANDLE_USES entry {(rel, name)}"
