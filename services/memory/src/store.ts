@@ -10,7 +10,7 @@ import {
 } from "./acl.js";
 import { chunkText, type ChunkOptions } from "./chunk.js";
 import { EMBEDDING_DIMENSIONS, vectorLiteral } from "./embedder.js";
-import { redactForPhi } from "./redact.js";
+import { redactForPhi, scrubText } from "./redact.js";
 import {
   ENTRY_SCOPES,
   MemoryError,
@@ -205,7 +205,8 @@ export class PgMemoryService {
                                     subject, phi, embedding_model, expires_at, created_by)
          VALUES ($1, $2, $3, $4, $5::vector, $6::jsonb, $7, $8::jsonb, $9, $10, $11, $12, $13, $14)
          ON CONFLICT (tenant_id, scope, COALESCE(owner_ref, ''), content_hash, acl_key) WHERE document_id IS NULL
-         DO UPDATE SET expires_at = EXCLUDED.expires_at, metadata = EXCLUDED.metadata, subject = EXCLUDED.subject
+         DO UPDATE SET expires_at = EXCLUDED.expires_at, metadata = EXCLUDED.metadata,
+                       subject = COALESCE(memory_chunks.subject, EXCLUDED.subject)
          RETURNING id, (xmax = 0) AS inserted`,
         [
           tenantId,
@@ -241,12 +242,16 @@ export class PgMemoryService {
     const principal = validatePrincipal(req.principal);
     if (req.acl === undefined) throw new MemoryError("INVALID", "acl is required for a document");
     const acl = canonicalAcl(req.acl);
-    const source = optionalName(req.source, "source");
-    const title = optionalName(req.title, "title");
+    const rawSource = optionalName(req.source, "source");
+    const rawTitle = optionalName(req.title, "title");
     const subject = optionalName(req.subject, "subject");
     const expires = ttlToExpiry(this.now(), req.ttlSeconds);
     return this.inTenant(tenantId, async (c) => {
       const p = await this.prepare(c, tenantId, req, MAX_CONTENT_CHARS);
+      // In PHI mode a title or source ("Chart for SSN ...", a URL carrying an email) is persisted in the document row
+      // and in every chunk's metadata, so it gets the same free-text scrub as the content.
+      const source = p.phi && rawSource !== undefined ? scrubText(rawSource) : rawSource;
+      const title = p.phi && rawTitle !== undefined ? scrubText(rawTitle) : rawTitle;
       const chunks = chunkText(p.content, this.o.chunking);
       if (chunks.length > MAX_CHUNKS_PER_DOCUMENT)
         throw new MemoryError("INVALID", `document exceeds ${MAX_CHUNKS_PER_DOCUMENT} chunks`);
