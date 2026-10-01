@@ -559,3 +559,30 @@ async def test_a_new_unregistered_action_subclass_is_picked_up_by_the_registry()
         del Rogue
         gc.collect()  # subclasses are weakly referenced: make sure the test class does not leak
     assert set(all_action_types()) == set(SAMPLES)
+
+
+# ---- browser backend allowlist (Phase 4 D) ---------------------------------------------------------------
+
+
+def test_playwright_is_allowed_in_the_browser_backend_module_only() -> None:
+    assert bs.scan_source("browser/playwright_backend.py", "import playwright.async_api") == []
+    assert (
+        bs.scan_source("browser/playwright_backend.py", "from playwright.async_api import Page")
+        == []
+    )
+    for rel in ("browser/worker.py", "browser/policy.py", "tools.py", "run.py", "actions.py"):
+        assert bs.scan_source(rel, "import playwright.async_api") != [], rel
+        assert bs.scan_source(rel, "from playwright.sync_api import sync_playwright") != [], rel
+    # the grant is per module: the backend file still may not spawn processes or open sockets
+    assert bs.scan_source("browser/playwright_backend.py", "import subprocess") != []
+    assert bs.scan_source("browser/playwright_backend.py", "import socket") != []
+    assert bs.scan_source("browser/playwright_backend.py", "import httpx") != []
+    assert bs.scan_source("browser/playwright_backend.py", "eval('1')") != []
+    assert bs.scan_source("browser/playwright_backend.py", "import os\nos.system('x')") != []
+
+
+def test_browser_modules_other_than_the_backend_reach_no_io() -> None:
+    for rel in ("browser/worker.py", "browser/policy.py", "browser/args.py", "browser/backend.py"):
+        src = (SRC / rel).read_text()
+        assert bs.scan_source(rel, src) == [], rel
+        assert "playwright" not in "".join(m for m, _ in bs.imported_modules(ast.parse(src)))

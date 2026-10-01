@@ -94,6 +94,11 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "approvals service (loopback dev bridge, NEEDS #62); not an agent action. It only fetches a "
         "record that the executor forwards to the Risk Kernel, which re-gates and verifies it.",
     },
+    "browser/playwright_backend.py": {
+        "playwright": "PlaywrightBackend: the single place a browser is driven. Reachable only via "
+        "BrowserWorker, which only runs inside ActionExecutor (BrowserExec); every request the page "
+        "makes is gated by UrlGuard at the network layer (docs/spec/browser.md).",
+    },
     "temporal.py": {
         "temporalio": "Temporal workflow/activity wiring: talks to the Temporal server, runs "
         "ActionExecutor inside the activity.",
