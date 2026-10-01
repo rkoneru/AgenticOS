@@ -24,7 +24,7 @@ from axis_runtime import Decision, all_action_types
 from axis_runtime.actions import Action
 from axis_runtime.executor import Denied, PendingApproval
 from axis_runtime.gate import GateDecision
-from conftest import ScriptedGate, deny
+from conftest import ScriptedGate, allow, deny
 from helpers import PID, SAMPLES, make_executor
 
 SRC = Path(axis_runtime.__file__).resolve().parent
@@ -451,6 +451,79 @@ async def test_approval_pending_yields_zero_side_effects_for_every_action_type(
     ex, rec, effects, _ = await make_executor(gate)
     assert isinstance(await ex.run(SAMPLES[cls](), pid=PID), PendingApproval)
     assert effects.total() == 0
+
+
+class _Approvals:
+    def __init__(self, record: dict[str, Any] | Exception) -> None:
+        self.record = record
+
+    async def resolve(self, tenant_id: str, approval_id: str) -> dict[str, Any]:
+        if isinstance(self.record, Exception):
+            raise self.record
+        return self.record
+
+
+def _gate_after_approval(second: GateDecision) -> ScriptedGate:
+    return ScriptedGate(
+        lambda r: (
+            second
+            if "approval" in r.context
+            else GateDecision(Decision.REQUIRE_APPROVAL, "ask", approval_id="ap_1")
+        )
+    )
+
+
+def _rec(outcome: str = "APPROVED", **over: Any) -> dict[str, Any]:
+    from conftest import TENANT
+
+    base = {"request_id": "ap_1", "tenant_id": TENANT, "run_id": "run_1", "outcome": outcome}
+    return {**base, **over}
+
+
+@pytest.mark.parametrize("cls", list(all_action_types()), ids=lambda c: c.__name__)
+@pytest.mark.parametrize(
+    "resolution",
+    [
+        _rec("DENIED"),
+        _rec("EXPIRED"),
+        _rec("APPROVED", request_id="someone-elses"),
+        RuntimeError("approvals down"),
+    ],
+    ids=["denied", "expired", "mismatch", "unavailable"],
+)
+async def test_unapproved_resolution_yields_zero_side_effects_for_every_action_type(
+    cls: type[Action], resolution: dict[str, Any] | Exception
+) -> None:
+    ex, _, effects, gate = await make_executor(
+        _gate_after_approval(allow()), approvals=_Approvals(resolution)
+    )
+    assert isinstance(await ex.run(SAMPLES[cls](), pid=PID), Denied)
+    assert effects.total() == 0
+    assert len(gate.requests) == 1  # nothing was re-submitted without an APPROVED record
+
+
+@pytest.mark.parametrize("cls", list(all_action_types()), ids=lambda c: c.__name__)
+async def test_an_approval_never_bypasses_the_gate_for_every_action_type(
+    cls: type[Action],
+) -> None:
+    for second in (deny("cap exceeded"), GateDecision(Decision.REQUIRE_APPROVAL, "again", "", "v")):
+        ex, _, effects, gate = await make_executor(
+            _gate_after_approval(second), approvals=_Approvals(_rec())
+        )
+        gate_decision = second.decision
+        assert isinstance(await ex.run(SAMPLES[cls](), pid=PID), Denied), gate_decision
+        assert effects.total() == 0 and len(gate.requests) == 2
+
+
+@pytest.mark.parametrize("cls", list(all_action_types()), ids=lambda c: c.__name__)
+async def test_approved_and_regated_does_perform_so_the_guard_above_is_not_vacuous(
+    cls: type[Action],
+) -> None:
+    ex, _, effects, _ = await make_executor(
+        _gate_after_approval(allow()), approvals=_Approvals(_rec())
+    )
+    await ex.run(SAMPLES[cls](), pid=PID)
+    assert effects.total() >= 1
 
 
 @pytest.mark.parametrize("cls", list(all_action_types()), ids=lambda c: c.__name__)

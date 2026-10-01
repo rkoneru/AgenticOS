@@ -33,6 +33,7 @@ from axis_runtime.actions import (
     ToolCall,
     to_jsonable,
 )
+from axis_runtime.approvals import ApprovalResolver
 from axis_runtime.events import (
     Clock,
     EventType,
@@ -99,6 +100,9 @@ class RunDeps:
     exit_on_deny: bool = False
     term_grace_seconds: float = 5.0
     gate_timeout: float = 5.0
+    #: When set, a REQUIRE_APPROVAL is resolved inline and the approved action is RE-GATED
+    #: (executor.py); when absent the run parks with ``awaiting_approval`` as before.
+    approvals: ApprovalResolver | None = None
 
 
 class _Exit(Exception):
@@ -581,6 +585,7 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
             identity=identity,
             backends=backends,
             gate_timeout=deps.gate_timeout,
+            approvals=deps.approvals,
         )
     )
     root = AgentProcess(manifest, ctx)

@@ -96,6 +96,7 @@ def budgeted_deps(deps: RunDeps, ctx: ProcessContext) -> RunDeps:
             identity=run_ctx.identity,
             backends=backends,
             gate_timeout=deps.gate_timeout,
+            approvals=deps.approvals,
         )
         return BudgetedRunner(inner, ctx)
 
