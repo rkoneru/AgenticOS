@@ -131,6 +131,9 @@ class ProcessView:
     priority: int
     exit_reason: ExitReason | None = None
     detail: str = ""
+    #: Resources this process committed (final once exited). A supervisor uses it so a
+    #: restarted child inherits what its predecessors spent instead of getting a fresh budget.
+    spent: Mapping[Resource, int] = field(default_factory=dict)
 
 
 class CancelToken:
@@ -194,6 +197,7 @@ class _Proc:
     timers: list[asyncio.Task[None]] = field(default_factory=list)
     started_at: float | None = None
     entered: bool = False  # the task body has begun (a task cancelled earlier never runs at all)
+    spent: dict[Resource, int] = field(default_factory=dict)
 
     def view(self) -> ProcessView:
         return ProcessView(
@@ -206,6 +210,7 @@ class _Proc:
             self.spec.priority,
             self.exit_reason,
             self.detail,
+            dict(self.spent),
         )
 
 
@@ -721,6 +726,7 @@ class Scheduler:
             self.ledger.release(res)
         proc.reservations.clear()
         self.router.unregister(proc.pid)
+        proc.spent = dict(self.ledger.usage(proc.account).committed)
         self.ledger.close_account(proc.account)
         if proc.grant is not None and not proc.grant.done():
             proc.grant.cancel()

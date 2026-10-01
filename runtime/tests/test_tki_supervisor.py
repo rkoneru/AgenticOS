@@ -453,3 +453,57 @@ async def test_children_inherit_tenant_and_run_and_unknown_parent_is_rejected() 
     with pytest.raises(Exception):  # noqa: B017
         Supervisor(k.sched, "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV", CFG)
     await sup.shutdown()
+
+
+# ---- review: a restart must not reset the child's budget ----------------------------------------------
+
+
+async def test_review_restarts_share_one_budget_so_the_child_cap_is_never_exceeded_in_total() -> (
+    None
+):
+    """A child with tokens hard=100 that crashes after spending 60 used to get a FRESH 100 on every
+    restart (new process account), i.e. 60 x (1 + max_restarts) tokens against a cap of 100."""
+    k = make_kernel()
+    _pid, sup = await boot(k, CFG)
+    attempts: list[str] = []
+
+    async def spender(ctx: ProcessContext) -> WorkloadResult | None:
+        attempts.append(ctx.pid)
+        res = ctx.reserve({Resource.TOKENS: 60})  # BudgetExceededError ends the attempt
+        ctx.commit(res)
+        raise RuntimeError("crash after spending")
+
+    sup.start_child(
+        child(
+            "c",
+            spender,
+            restart=RestartPolicy.ON_FAILURE,
+            max_restarts=5,
+            limits={Resource.TOKENS: Limit(hard=100)},
+        )
+    )
+    await until(lambda: len(attempts) >= 2)
+    await asyncio.sleep(0.2)  # let every restart the policy allows play out
+    await sup.settle()
+    total = sum(
+        e.data["granted"].get("tokens", 0) for e in k.sink.of(TkiEventType.BUDGET_COMMITTED)
+    )
+    assert total <= 100, f"child cap 100 exceeded across restarts: {total}"
+    assert len(attempts) == 2  # 60 fits; the restart is left with 40 and is refused
+    assert sup.children()[0].exit_reason is ExitReason.BUDGET_EXCEEDED
+    k.gate.set()  # type: ignore[attr-defined]
+
+
+def test_review_remaining_limits_never_go_negative_and_do_not_rearm_a_crossed_soft_cap() -> None:
+    from axis_runtime.tki.supervisor import remaining_limits
+
+    lim = {
+        Resource.TOKENS: Limit(soft=50, hard=100),
+        Resource.TOOL_CALLS: Limit(soft=2, hard=3),
+        Resource.RUNTIME_MS: Limit(),
+    }
+    out = remaining_limits(lim, {Resource.TOKENS: 60, Resource.TOOL_CALLS: 5})
+    assert out[Resource.TOKENS] == Limit(soft=None, hard=40)  # soft was crossed: not re-armed
+    assert out[Resource.TOOL_CALLS] == Limit(soft=None, hard=0)  # overspent: refuse everything
+    assert out[Resource.RUNTIME_MS] == Limit()
+    assert remaining_limits(lim, {Resource.TOKENS: 10})[Resource.TOKENS] == Limit(40, 90)
