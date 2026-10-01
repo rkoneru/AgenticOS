@@ -4,6 +4,7 @@
    AXIS_CHANNELS_TOKENS        JSON {"<token>": {"tenantId": "<uuid>"}} for the runtime's outbound client
    AXIS_CHANNELS_ROUTES        JSON array of RouteConfig (secrets inline: dev only)
    Audit: PgAuditLog on the same pool when a database URL is set, otherwise an in-memory log.
+   Inbound messages are queued per tenant for the runtime's ChannelAgentRunner (POST /v1/channels/inbox/next; docs/adr/0017).
    AXIS_CHANNELS_PORT          listen port (default random). Prints `listening <port>` on stdout.
    Real HTTP/SMTP egress is NOT wired: outbound uses an HTTP transport that REFUSES every call until a provider transport is
    configured (NEEDS). */
@@ -15,6 +16,7 @@ import {
   GuardedHttpTransport,
   FetchTransport,
   IdentityService,
+  InboxQueue,
   MemoryConversationStore,
   MemoryIdempotencyStore,
   MemoryRateLimiter,
@@ -48,6 +50,7 @@ const store = pool
 const routes = new StaticRoutingTable(JSON.parse(routesJson) as RouteConfig[]);
 const limiter = new MemoryRateLimiter();
 const hub = new WebHub();
+const inbox = new InboxQueue();
 const gateway = new ChannelGateway({
   adapters: [
     new WebAdapter(),
@@ -63,6 +66,7 @@ const gateway = new ChannelGateway({
   idempotency: new MemoryIdempotencyStore(),
   limiter,
   hub,
+  onMessage: inbox.handler,
   http: new GuardedHttpTransport(new FetchTransport(), [
     ...PROVIDER_HOSTS.slack,
     ...PROVIDER_HOSTS.twilio,
@@ -75,6 +79,7 @@ const server = createDevServer({
   store,
   identity: new IdentityService({ store, limiter }),
   hub,
+  inbox,
   authenticate: staticTokenAuthenticator(JSON.parse(tokens) as Record<string, ServiceAuth>),
 });
 const port = await listenLoopback(server, Number(process.env["AXIS_CHANNELS_PORT"] ?? 0));

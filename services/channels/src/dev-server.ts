@@ -5,6 +5,8 @@ import { isReject } from "./adapters/base.js";
 import { safeEqual } from "./crypto.js";
 import type { ChannelGateway, SendRequest } from "./gateway.js";
 import type { IdentityService } from "./identity.js";
+import type { InboxQueue } from "./inbox.js";
+import { parseTranscriptEvent } from "./transcript-events.js";
 import type { ConversationStore } from "./store.js";
 import {
   CHANNELS,
@@ -47,6 +49,8 @@ export interface DevServerDeps {
   store: ConversationStore;
   identity: IdentityService;
   hub: WebHub;
+  /** The inbound-message to agent-run bridge (docs/adr/0017). Without it the inbox route is 404. */
+  inbox?: InboxQueue;
   authenticate: ServiceAuthenticator;
   now?: () => number;
   maxBodyBytes?: number;
@@ -232,6 +236,8 @@ export function createDevServer(deps: DevServerDeps): http.Server {
     const isSvc =
       path === "/v1/channels/send" ||
       path === "/v1/channels/identity/link-code" ||
+      path === "/v1/channels/inbox/next" ||
+      path === "/v1/channels/transcript-events" ||
       /^\/v1\/channels\/conversations\/[^/]+\/messages$/.test(path);
     if (!isSvc) return json(res, 404, { error: "not found" });
     if (!svc) return json(res, 401, { error: "unauthorized" });
@@ -255,6 +261,18 @@ export function createDevServer(deps: DevServerDeps): http.Server {
 
     if (path === "/v1/channels/send")
       return json(res, 200, await deps.gateway.send(svc.tenantId, parseSend(b)));
+    if (path === "/v1/channels/transcript-events")
+      return json(
+        res,
+        200,
+        await deps.gateway.recordTranscriptEvent(svc.tenantId, parseTranscriptEvent(b)),
+      );
+    if (path === "/v1/channels/inbox/next") {
+      if (!deps.inbox) return json(res, 404, { error: "not found" });
+      const wait =
+        typeof b["wait_ms"] === "number" ? Math.min(Math.max(b["wait_ms"], 0), 30_000) : 0;
+      return json(res, 200, { item: (await deps.inbox.take(svc.tenantId, wait)) ?? null });
+    }
     const channel = str(b["channel"], "channel", 32) as ChannelId;
     if (!CHANNELS.includes(channel)) throw new ChannelError("INVALID", "unknown channel");
     return json(

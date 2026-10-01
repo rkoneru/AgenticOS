@@ -9,6 +9,7 @@ import { transcriptContent, type RedactionHook } from "./redact.js";
 import type { IdempotencyStore, RateLimiter } from "./replay.js";
 import type { Conversation, ConversationStore, StoredMessage } from "./store.js";
 import type { EmailTransport, HttpTransport } from "./transport.js";
+import type { TranscriptEvent } from "./transcript-events.js";
 import {
   ChannelError,
   silentLogger,
@@ -30,6 +31,8 @@ const DAY_MS = 86_400_000;
 const REJECT_AUDIT_PER_MINUTE = 20;
 
 export interface InboundContext {
+  /** The trace id of the inbound audit event. An agent run started for this message should use it, so one trace shows the whole turn. */
+  trace_id: string;
   message: InboundMessage;
   conversation: Conversation;
   stored: StoredMessage;
@@ -291,10 +294,12 @@ export class ChannelGateway {
       const t = transcriptContent(m.text, route.transcript.mode, route.phi, this.d.redactionHook);
       const contentHash = sha256Hex(m.text);
       const size = Buffer.byteLength(m.text, "utf8");
+      const trace = traceId();
       const ev = await this.appendAudit(
         this.event(tenant, route.agent, {
           actor: { type: "human", id: userRef(m.channel, m.external_user_id) },
           enforcement_point: "lifecycle",
+          trace_id: trace,
           action: "channel.inbound.message",
           decision: "ALLOW",
           reason: `channel=${m.channel} dir=in conv=${conv.id} size=${size} sha256=${contentHash} mode=${t.mode} attachments=${m.attachments.length} dropped=${m.dropped_attachments}`,
@@ -330,6 +335,7 @@ export class ChannelGateway {
       if (this.d.onMessage) {
         try {
           await this.d.onMessage({
+            trace_id: trace,
             message: m,
             conversation: conv,
             stored: message,
@@ -536,6 +542,65 @@ export class ChannelGateway {
       }
     }
     return result;
+  }
+
+  // ---- transcript relay (voice) --------------------------------------------------------------------------------------------------
+
+  /**
+   * Appends one voice call/turn event to the tenant's audit chain (fail closed: no audit, no success). The runtime has already
+   * redacted the transcript before hashing it (PHI mode), so `text_sha256` is the hash of what was persisted. Direction: the caller
+   * speaking is inbound (`lifecycle`), the agent speaking is outbound (`message_send`); call lifecycle events are `lifecycle`.
+   */
+  async recordTranscriptEvent(
+    tenant: string,
+    e: TranscriptEvent,
+  ): Promise<{ audit_event_id: string; audit_hash: string }> {
+    const actorId = `voice:${sha256Hex(e.call_id).slice(0, 16)}`;
+    let ev: UnsealedEvent;
+    if (e.kind === "call") {
+      const detail = Object.entries(e.detail ?? {})
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join(",");
+      ev = this.event(tenant, e.agent, {
+        actor: { type: "system", id: "voice" },
+        enforcement_point: "lifecycle",
+        action: `voice.call.${e.phase}`,
+        decision: e.detail?.["granted"] === false ? "DENY" : "ALLOW",
+        reason: `channel=voice call=${e.call_id} phase=${e.phase} reason=${e.reason ?? "-"} duration_ms=${e.duration_ms ?? "-"} detail=${detail || "-"}`,
+        inputs: { channel: "voice", call_id: e.call_id, phase: e.phase },
+        outputs: {
+          reason: e.reason ?? null,
+          duration_ms: e.duration_ms ?? null,
+          detail: e.detail ?? {},
+        },
+        trace_id: e.trace_id,
+      });
+    } else {
+      const outbound = e.role === "agent";
+      ev = this.event(tenant, e.agent, {
+        actor: outbound ? { type: "system", id: "voice" } : { type: "human", id: actorId },
+        enforcement_point: outbound ? "message_send" : "lifecycle",
+        action: `voice.turn.${e.role}`,
+        decision: "ALLOW",
+        reason: `channel=voice dir=${outbound ? "out" : "in"} call=${e.call_id} turn=${e.turn} role=${e.role} size=${e.size} sha256=${e.text_sha256} redacted=${e.redacted} truncated=${e.truncated} audio_bytes=${e.audio_bytes} run=${e.run_id ?? "-"}`,
+        inputs: {
+          channel: "voice",
+          direction: outbound ? "out" : "in",
+          call_id: e.call_id,
+          turn: e.turn,
+          role: e.role,
+        },
+        outputs: {
+          content_sha256: e.text_sha256,
+          size_bytes: e.size,
+          audio_sha256: e.audio_sha256 ?? null,
+          audio_bytes: e.audio_bytes,
+        },
+        trace_id: e.trace_id,
+      });
+    }
+    const out = await this.appendAudit(ev);
+    return { audit_event_id: out.id, audit_hash: out.hash };
   }
 
   private pickRoute(tenant: string, req: SendRequest): RouteConfig {
