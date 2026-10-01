@@ -25,6 +25,9 @@ export interface KernelApprovalPorts {
   verifier: { verify(record: unknown, expected: ExpectedAction): Promise<boolean> };
 }
 
+/** An approval is only honoured this long after it was decided (the runtime re-submits immediately). */
+export const DEFAULT_MAX_APPROVAL_AGE_MS = 15 * 60_000;
+
 const STRING_FIELDS = [
   "request_id",
   "tenant_id",
@@ -56,7 +59,10 @@ export function isDecisionRecord(v: unknown): v is DecisionRecord {
 export function kernelApprovalPorts(
   service: ApprovalService,
   signer: DecisionSigner,
+  opts: { maxAgeMs?: number } = {},
 ): KernelApprovalPorts {
+  const maxAgeMs = opts.maxAgeMs ?? DEFAULT_MAX_APPROVAL_AGE_MS;
+  if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0) throw new Error("maxAgeMs must be positive");
   return {
     requester: {
       async create(input) {
@@ -66,7 +72,10 @@ export function kernelApprovalPorts(
     },
     verifier: {
       async verify(record, expected) {
-        return isDecisionRecord(record) && (await isApprovalValidFor(record, expected, signer));
+        return (
+          isDecisionRecord(record) &&
+          (await isApprovalValidFor(record, expected, signer, { nowMs: service.now(), maxAgeMs }))
+        );
       },
     },
   };

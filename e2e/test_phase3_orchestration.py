@@ -970,7 +970,48 @@ async def test_multi_agent_run_budgets_nexus_stage_metrics_and_one_audit_trace(
 # ---- NEXUS ---------------------------------------------------------------------------------------------------------
 
 
-async def test_a_cache_hit_second_call_is_cheaper_and_never_reaches_the_gate_or_provider(
+async def test_a_cached_answer_is_not_served_while_a_kill_switch_is_engaged(stack: Stack) -> None:
+    """Review: a cache hit used to bypass the gate, so an answer cached before a kill-switch kept being served."""
+    lead = RuntimeManifest.from_dict(stack.manifests["lead"])
+    cache, tracer = InMemoryCache(Mono()), InMemoryTracer()  # type: ignore[arg-type]
+    prompt = "what is the status of claim C-43? " + secrets.token_hex(4)
+    before = head(stack)
+
+    async def one(answer: str) -> tuple[RunResult, World]:
+        world = World(Provider(lambda _b: openai_turn(answer, prompt=200, completion=50)))
+        return await run_agent(
+            lead, prompt, deps_for(stack, world, nexus=(lead, cache, tracer))
+        ), world
+
+    r1, _ = await one("claim C-43 is open")
+    assert r1.output == "claim C-43 is open"
+    async with grpc.aio.insecure_channel(stack.target) as ch:
+        stub = gate_pb2_grpc.GateServiceStub(ch)  # type: ignore[no-untyped-call]
+        md = (("authorization", f"Bearer {TOKEN1}"),)
+        scope = gate_pb2.SetKillSwitchRequest.Scope.SCOPE_TENANT
+        await stub.SetKillSwitch(
+            gate_pb2.SetKillSwitchRequest(tenant_id=T1, scope=scope, engaged=True, reason="e2e"),
+            metadata=md,
+        )
+        try:
+            r2, w2 = await one("MUST NOT BE REQUESTED")
+        finally:
+            await stub.SetKillSwitch(
+                gate_pb2.SetKillSwitchRequest(tenant_id=T1, scope=scope, engaged=False),
+                metadata=md,
+            )
+    assert r2.output is None and r2.exit_reason is ExitReason.POLICY_DENIED
+    assert len(w2.provider.calls) == 0
+    rows = rows_since(stack, before)
+    assert [r for r in shape(rows) if r[0] == "model_call"] == [
+        ("model_call", "openai/gpt-4o", "ALLOW"),
+        ("model_call", "openai/gpt-4o", "DENY"),
+    ]
+    assert "kill-switch engaged (tenant)" in [r["reason"] for r in rows]
+    chain_ok(stack)
+
+
+async def test_a_cache_hit_second_call_is_cheaper_and_gated_but_never_reaches_the_provider(
     stack: Stack,
 ) -> None:
     lead = RuntimeManifest.from_dict(stack.manifests["lead"])
@@ -1000,9 +1041,10 @@ async def test_a_cache_hit_second_call_is_cheaper_and_never_reaches_the_gate_or_
     assert [(s.stage, s.outcome, s.cost_usd) for s in r2.state.nexus_stages] == [
         ("cache", "hit", "0")
     ]
-    assert r2.state.nexus_routes[0].hit_stage == "cache" and r2.state.model_calls == ()
-    # the cache hit is not an external action: exactly one model_call row exists for the two runs
-    assert shape(rows_since(stack, before)) == [("model_call", "openai/gpt-4o", "ALLOW")]
+    assert r2.state.nexus_routes[0].hit_stage == "cache"
+    assert [c.provider for c in r2.state.model_calls] == ["nexus-cache"]
+    # the cache hit is a gated model_call (NEEDS #65 closed): one audit row per run, one provider call in all
+    assert shape(rows_since(stack, before)) == [("model_call", "openai/gpt-4o", "ALLOW")] * 2
     # stage metrics are visible in the exported trace, tied to the run's trace id
     trace_ids = [
         s["attributes"]["nexus.trace_id"] for s in tracer.export() if s["name"] == "nexus.route"

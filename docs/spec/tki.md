@@ -71,7 +71,10 @@ before the parent's own `terminated` event. A child that ignores cancellation is
   Optional `max_total_restarts` bounds the whole supervisor; exceeding it terminates every child and emits
   `supervisor_escalated`. Exceeding a per-child budget leaves that child down and emits `supervisor_escalated`.
 - **Limits.** `max_children` bounds _live_ children (restarts replace, they do not add).
-- A restarted child is a **new process** (new PID, new account under the same parent), so ledger totals keep counting.
+- A restarted child is a **new process** (new PID, new account under the same parent), so ledger totals keep counting, and it **continues
+  its predecessors' budget**: `ProcessView.spent` is added to the slot and subtracted from the next incarnation's limits
+  (`remaining_limits`), so N restarts cannot multiply a child's cap by N + 1 (Phase 3 review; the built-in loop does the same).
+- An approval wait (`ApprovalResolver.resolve`) runs inside `ctx.waiting()`: the process releases its scheduler slot meanwhile.
 
 ## IPC
 

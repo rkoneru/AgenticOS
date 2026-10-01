@@ -45,6 +45,9 @@ const tokenTable = JSON.parse(readFileSync(tokens, "utf8")) as Record<string, Pr
 const hmacKey = process.env["AXIS_APPROVALS_HMAC_KEY"];
 const approvals = hmacKey
   ? (() => {
+      // Buffer.from(x, "hex") silently truncates at the first bad character, which would quietly weaken the key.
+      if (!/^(?:[0-9a-fA-F]{2}){32,}$/.test(hmacKey))
+        throw new Error("AXIS_APPROVALS_HMAC_KEY must be hex, at least 32 bytes (64 hex chars)");
       const signer = new HmacSigner(Buffer.from(hmacKey, "hex"));
       const service = new ApprovalService({
         store: new MemoryApprovalStore(),

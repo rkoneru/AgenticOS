@@ -66,13 +66,21 @@ export interface ExpectedAction {
 /**
  * The only function a caller needs to decide "may I run this action now?". True iff the record is a verified APPROVED
  * decision for exactly this tenant, run, tool and arguments hash. Anything else (denied, expired, forged, replayed for
- * different arguments or another tenant) is false.
+ * different arguments or another tenant) is false. With `freshness`, a record decided more than `maxAgeMs` ago (or in
+ * the future) is false too, so an approval that was never consumed cannot be replayed indefinitely.
  */
 export async function isApprovalValidFor(
   rec: DecisionRecord,
   expected: ExpectedAction,
   signer: DecisionSigner,
+  freshness?: { nowMs: number; maxAgeMs: number },
 ): Promise<boolean> {
+  if (freshness !== undefined) {
+    // `decided_at` is covered by the signature, so it is only trusted once that verifies (below); an
+    // unparsable or future-dated value fails here as well.
+    const age = freshness.nowMs - Date.parse(rec.decided_at);
+    if (!(age >= 0 && age <= freshness.maxAgeMs)) return false;
+  }
   return (
     rec.outcome === "APPROVED" &&
     rec.decision === "ALLOW" &&

@@ -191,6 +191,63 @@ def test_unsafe_patterns_rejected(pattern: str) -> None:
         compile_safe(pattern)
 
 
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"(a|aa)+$",  # overlapping alternation under a quantifier: exponential, no inner quantifier
+        r"^(\w|\d)+$",
+        r"(a|a)*b",
+        r"(?:a|aa)+c",
+        r"(ab)+(ab)+(ab)+x",
+        r"(a?){30}a{30}",
+        r"a*a*a*b",  # polynomial: three adjacent unbounded repeats
+        r".*.*.*x",
+        r"\d+\s*\d+\s*\d+;",
+        r"a?" * 12 + "a" * 12,  # 2^12 optional atoms
+        r"a*+a*+a*+b",
+    ],
+)
+def test_review_redos_shapes_the_denylist_missed_are_rejected(pattern: str) -> None:
+    with pytest.raises(UnsafePatternError):
+        compile_safe(pattern)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        r"^order\s+#\d+$",
+        r"needle",
+        r"^(?i:hello|hi)\s+there[!.]?$",
+        r"\bfoo\b.*bar",
+        r"[a-z]+@x\.io",
+        r"[]a]+x",
+        r"[^]x\]]+y",
+        r"a+?b",
+        r"x{3}y",
+        r"a{,5}b",
+        r"\d{1,3}\.",
+        r"a{b",
+        r"(?:ab)?c",
+        r"a|b|c",
+    ],
+)
+def test_review_ordinary_rule_patterns_still_compile(pattern: str) -> None:
+    compile_safe(pattern)
+
+
+async def test_review_a_hostile_regex_cannot_stall_the_event_loop() -> None:
+    import time
+
+    start = time.monotonic()
+    for pattern in (r"a*a*a*a*a*b", r"(a|aa)+$"):
+        try:
+            RulesStage([Rule("r", "regex", pattern, "x")])
+        except UnsafePatternError:
+            continue
+        await RulesStage([Rule("r", "regex", pattern, "x")]).run(req("a" * 40 + "!"), S)
+    assert time.monotonic() - start < 2.0
+
+
 async def test_rules_bound_regex_input_and_validate_config() -> None:
     rules = RulesStage([Rule("r", "regex", r"needle", "found")])
     assert (await rules.run(req("x" * 5000 + " needle"), S)).__class__.__name__ == "Miss"

@@ -107,7 +107,7 @@ async def test_model_step_is_routed_cache_rules_llm_and_stage_metrics_reach_log_
     assert gate.requests[0].action == "openai/gpt-4o"
 
 
-async def test_second_identical_run_is_a_cache_hit_with_no_gate_call_no_provider_call_and_zero_cost() -> (
+async def test_second_identical_run_is_a_cache_hit_that_is_gated_but_has_no_provider_call_and_zero_cost() -> (
     None
 ):
     m = make_manifest()
@@ -123,11 +123,56 @@ async def test_second_identical_run_is_a_cache_hit_with_no_gate_call_no_provider
     assert Decimal(r2.state.nexus_routes[0].total_cost_usd) == 0
     assert Decimal(r1.state.nexus_routes[0].total_cost_usd) > 0  # the second call is cheaper
     assert len(second.models._transport.calls) == 0  # type: ignore[attr-defined]  # noqa: SLF001
-    assert r2.state.model_calls == () and r1.state.model_calls != ()
-    assert len(gate.requests) == 1  # only the first run's model call was a gated action
+    # (review) the cache hit is still a gated model_call (NEEDS #65 closed), served without the provider
+    assert [c.provider for c in r2.state.model_calls] == ["nexus-cache"] and r1.state.model_calls
+    assert len(gate.requests) == 2 and len(r1.state.model_calls) == 1
     # trace shows the short-circuit
     names = [s["name"] for s in h.tracer.export()]
     assert names.count("nexus.stage.llm") == 1
+
+
+async def test_review_a_cached_answer_is_not_served_after_policy_turns_to_deny() -> None:
+    """NEEDS #65: a cache hit used to bypass the gate, so a kill-switch / new DENY rule did not stop
+    an answer cached earlier (until the TTL ran out)."""
+    m = make_manifest()
+    h = Harness()
+    await run_agent(m, "same question", deps(h, m, final("cached answer"), gate=ScriptedGate()))
+    closed = ScriptedGate(lambda _r: deny("kill-switch engaged (tenant)"))
+    d2 = deps(h, m, final("MUST NOT BE REQUESTED"), gate=closed)
+    r2 = await run_agent(m, "same question", d2)
+    assert r2.output is None and r2.status == "policy_denied"
+    assert "cached answer" not in repr(r2.state.model_calls)
+    assert [(q.enforcement_point.value, q.action) for q in closed.requests] == [
+        ("model_call", "openai/gpt-4o")
+    ]
+    assert len(d2.models._transport.calls) == 0  # type: ignore[attr-defined]  # noqa: SLF001
+
+
+async def test_review_a_cache_hit_is_an_audited_gated_model_call_without_provider_or_cost() -> None:
+    m = make_manifest()
+    h = Harness()
+    gate = ScriptedGate()
+    await run_agent(m, "same question", deps(h, m, final("cached answer"), gate=gate))
+    d2 = deps(h, m, final("MUST NOT BE REQUESTED"), gate=gate)
+    r2 = await run_agent(m, "same question", d2)
+    assert r2.output == "cached answer" and r2.state.nexus_routes[0].hit_stage == "cache"
+    assert [q.enforcement_point.value for q in gate.requests] == ["model_call", "model_call"]
+    assert len(d2.models._transport.calls) == 0  # type: ignore[attr-defined]  # noqa: SLF001
+    (call,) = r2.state.model_calls
+    assert (call.provider, call.input_tokens, call.output_tokens) == ("nexus-cache", 0, 0)
+
+
+async def test_review_a_cached_answer_gets_the_gates_redaction() -> None:
+    m = make_manifest()
+    h = Harness()
+    await run_agent(m, "same question", deps(h, m, final("cached answer"), gate=ScriptedGate()))
+    redacting = ScriptedGate(
+        lambda _r: GateDecision(
+            Decision.ALLOW_WITH_REDACTION, "r", "v2", redact_fields=("result.text",)
+        )
+    )
+    r2 = await run_agent(m, "same question", deps(h, m, final("NO"), gate=redacting))
+    assert r2.output is not None and "cached answer" not in r2.output
 
 
 async def test_rules_stage_answers_without_a_model_call() -> None:

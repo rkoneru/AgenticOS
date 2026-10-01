@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -145,6 +145,21 @@ class _Slot:
     pid: str
     restarts: list[float] = field(default_factory=list)
     total_restarts: int = 0
+    #: Committed by every earlier incarnation of this child: a restart is the same child, so it
+    #: continues the same budget (otherwise N restarts would multiply the cap by N + 1).
+    spent: dict[Resource, int] = field(default_factory=dict)
+
+
+def remaining_limits(limits: Limits, spent: Mapping[Resource, int]) -> Limits:
+    """``limits`` minus what earlier incarnations spent. A hard cap never goes negative (0 refuses
+    every further reservation of that resource); a soft cap already crossed is not re-armed."""
+    out: dict[Resource, Limit] = {}
+    for r, lim in limits.items():
+        used = spent.get(r, 0)
+        hard = None if lim.hard is None else max(0, lim.hard - used)
+        soft = None if lim.soft is None or lim.soft <= used else lim.soft - used
+        out[r] = Limit(soft, hard)
+    return out
 
 
 @dataclass(frozen=True)
@@ -190,7 +205,7 @@ class Supervisor:
         live = sum(1 for s in self._slots if not is_terminal(self._sched.get(s.pid).state))
         if live >= self._config.max_children:
             raise ChildLimitError(f"max_children ({self._config.max_children}) reached")
-        slot = _Slot(spec, self._spawn(spec))
+        slot = _Slot(spec, self._spawn(spec, {}))
         self._slots.append(slot)
         self._by_pid[slot.pid] = slot
         return slot.pid
@@ -226,7 +241,7 @@ class Supervisor:
         await asyncio.gather(*(self._sched.wait(p) for p in live))
 
     # ---- internals -------------------------------------------------------------------------
-    def _spawn(self, spec: ChildSpec) -> str:
+    def _spawn(self, spec: ChildSpec, spent: Mapping[Resource, int]) -> str:
         return self._sched.spawn(
             SpawnSpec(
                 tenant_id=self._tenant,
@@ -234,7 +249,7 @@ class Supervisor:
                 run_id=self._run_id,
                 ppid=self._parent,
                 priority=spec.priority,
-                limits=spec.limits,
+                limits=remaining_limits(spec.limits, spent),
                 timeout_seconds=spec.timeout_seconds,
             ),
             spec.workload,
@@ -242,6 +257,9 @@ class Supervisor:
 
     def _on_exit(self, view: ProcessView) -> None:
         slot = self._by_pid.get(view.pid)
+        if slot is not None:
+            for r, v in view.spent.items():
+                slot.spent[r] = slot.spent.get(r, 0) + v
         if slot is None or self._stopped or view.pid in self._bouncing:
             return
         reason = view.exit_reason
@@ -319,7 +337,7 @@ class Supervisor:
         old = slot.pid
         del self._by_pid[old]
         self._bouncing.discard(old)
-        slot.pid = self._spawn(slot.spec)
+        slot.pid = self._spawn(slot.spec, slot.spent)
         slot.total_restarts += 1
         self._by_pid[slot.pid] = slot
         self._sched.sink.emit(
