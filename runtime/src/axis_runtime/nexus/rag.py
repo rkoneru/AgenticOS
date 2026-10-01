@@ -1,4 +1,4 @@
-"""RAG stage: retrieval interface plus an in-memory fake (the real memory service is Phase 4).
+"""RAG stage: retrieval interface plus an in-memory fake (real retriever: `axis_runtime.memory`).
 
 Every retrieval carries ``tenant_id`` AND the requesting principal; a retriever must never return a
 passage of another tenant or one the principal may not read.  The stage re-checks both (defence in
