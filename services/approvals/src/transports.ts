@@ -41,7 +41,7 @@ export class SmtpClient implements SmtpTransport {
     if (o.auth && !o.secure) throw new Error("refusing to send SMTP credentials without TLS");
   }
 
-  send(msg: EmailMessage): Promise<void> {
+  async send(msg: EmailMessage): Promise<void> {
     const { o } = this;
     const from = noCrlf(msg.from);
     const to = msg.to.map(noCrlf);
@@ -54,11 +54,15 @@ export class SmtpClient implements SmtpTransport {
         .replace(/^\./gm, "..")
         .replace(/(?<!\r\n)$/, "\r\n");
 
-    return new Promise<void>((resolve, reject) => {
+    return await new Promise<void>((resolve, reject) => {
       const sock = o.connect
         ? o.connect(o)
         : o.secure
-          ? tls.connect({ host: o.host, port: o.port, servername: o.host })
+          ? tls.connect({
+              host: o.host,
+              port: o.port,
+              ...(net.isIP(o.host) ? {} : { servername: o.host }),
+            })
           : net.connect({ host: o.host, port: o.port });
       let buf = "";
       let done = false;

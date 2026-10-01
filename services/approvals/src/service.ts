@@ -123,13 +123,7 @@ export class ApprovalService {
       decision_audit_hash: null,
       version: 1,
     };
-    await this.appendRequired(
-      r,
-      "approval.requested",
-      "REQUIRE_APPROVAL",
-      r.requester,
-      `request=${r.id}`,
-    );
+    await this.appendRequired(r, "approval.requested", "REQUIRE_APPROVAL", r.requester, "created");
     await this.store.insert(r);
     this.notify("requested", r);
     return r;
@@ -183,7 +177,7 @@ export class ApprovalService {
         "approval.claimed",
         "REQUIRE_APPROVAL",
         humanActor(principal),
-        `request=${r.id}`,
+        `claimed by ${principal.id}`,
       );
       await this.write(next, r.version);
       return next;
@@ -203,7 +197,7 @@ export class ApprovalService {
         "approval.released",
         "REQUIRE_APPROVAL",
         humanActor(principal),
-        `request=${r.id}`,
+        `released by ${principal.id}`,
       );
       await this.write(next, r.version);
       return next;
@@ -373,7 +367,7 @@ export class ApprovalService {
         "approval.escalated",
         "REQUIRE_APPROVAL",
         SYSTEM,
-        `request=${r.id} sla elapsed at level ${r.level}; escalated to level ${nextLevel.level}`,
+        `sla elapsed at level ${r.level}; escalated to level ${nextLevel.level}`,
       );
       await this.write(next, r.version);
       this.notify("escalated", next);
@@ -448,7 +442,7 @@ export class ApprovalService {
       enforcement_point: "admin",
       action,
       decision,
-      reason: `${reason} tool=${r.tool} args=${r.args_hash}`.slice(0, 1000),
+      reason: `request=${r.id} ${reason} tool=${r.tool} args=${r.args_hash}`.slice(0, 1000),
       inputs_hash: hashJson({
         request_id: r.id,
         run_id: r.run_id,
