@@ -12,6 +12,7 @@ from axis_runtime.actions import (
     BrowserExec,
     CodeRunAction,
     McpCall,
+    MemoryRead,
     MemoryWrite,
     MessageSend,
     ModelCall,
@@ -61,6 +62,12 @@ class _Rec:
     async def write(self, scope: str, args: Mapping[str, Any]) -> Any:
         self.effects.calls.append((self.kind, (scope, dict(args))))
         return {"written": True}
+
+    async def search(self, query: str, *, scopes: Any, limit: int) -> Any:
+        self.effects.calls.append((self.kind, (query, tuple(scopes), limit)))
+        return {
+            "hits": [{"id": "m1", "scope": "agent", "content": "ssn 111-22-3333", "score": 0.5}]
+        }
 
     async def send(self, channel: str, args: Mapping[str, Any]) -> Any:
         self.effects.calls.append((self.kind, (channel, dict(args))))
@@ -112,6 +119,7 @@ SAMPLES: dict[type[Action], Callable[[], Action]] = {
         name="notify", channel="slack", args={"to": "#ops", "body": "hi"}
     ),
     MemoryWrite: lambda: MemoryWrite(name="remember", scope="long_term", args={"k": "v"}),
+    MemoryRead: lambda: MemoryRead(name="recall", scopes=("long_term",), args={"query": "x"}),
     ModelCall: model_call,
 }
 

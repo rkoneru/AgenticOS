@@ -17,6 +17,7 @@ failure into a failed result and the NEXUS router turns a stage failure into a m
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -102,6 +103,7 @@ class HttpMemoryBackend:
         principal: str,
         groups: Sequence[str] = (),
         owner_refs: Mapping[str, str] | None = None,
+        kbs: Sequence[str] = (),
         client: httpx.AsyncClient | None = None,
         timeout: float = 30.0,
     ) -> None:
@@ -112,6 +114,7 @@ class HttpMemoryBackend:
         )
         self._principal = _principal(principal, groups)
         self._owners = dict(owner_refs or {})
+        self._kbs = list(kbs)
 
     def _owner(self, scope: str) -> str | None:
         if scope == "tenant":
@@ -140,6 +143,52 @@ class HttpMemoryBackend:
             if key in args:
                 body[key] = args[key]
         return await self._c.post("write", body)
+
+    async def search(self, query: str, *, scopes: Sequence[str], limit: int = 5) -> dict[str, Any]:
+        """ACL-aware similarity search over ``scopes`` (agent-facing names plus ``kb``), as THIS
+        principal. One service call per scope (the owner filter is per scope); hits are merged by
+        score. The service filters unreadable rows in SQL: nothing here widens access."""
+        if not isinstance(query, str) or not query:
+            raise ValueError("memory search needs a non-empty string 'query'")
+        limit = max(1, min(int(limit), 20))
+        hits: list[dict[str, Any]] = []
+        for scope in dict.fromkeys(scopes):
+            body: dict[str, Any] = {
+                "query": query,
+                "limit": limit,
+                "principal": self._principal,
+            }
+            if scope == "kb":
+                if not self._kbs:
+                    continue
+                body.update(scopes=["kb"], kbs=self._kbs)
+            else:
+                svc_scope = _SCOPES.get(scope)
+                if svc_scope is None:
+                    raise ValueError(f"unknown memory scope {scope!r}")
+                body["scopes"] = [svc_scope]
+                owner = self._owner(svc_scope)
+                if owner is not None:
+                    body["owner_ref"] = owner
+            out = await self._c.post("search", body)
+            found = out.get("hits")
+            if not isinstance(found, list):
+                raise MemoryUnavailable("invalid response from memory service")
+            for h in found:
+                try:
+                    hits.append(
+                        {
+                            "id": str(h["id"]),
+                            "scope": str(h["scope"]),
+                            "kb": h.get("kb"),
+                            "content": str(h["content"]),
+                            "score": float(h["score"]),
+                        }
+                    )
+                except (KeyError, TypeError, ValueError, AttributeError) as exc:
+                    raise MemoryUnavailable("invalid response from memory service") from exc
+        hits.sort(key=lambda h: (-h["score"], h["id"]))
+        return {"hits": hits[:limit]}
 
     async def recall(self, scope: str, *, limit: int = 20) -> list[dict[str, Any]]:
         svc_scope = _SCOPES.get(scope)
@@ -232,3 +281,50 @@ class MemoryRagRetriever:
 
     async def aclose(self) -> None:
         await self._c.aclose()
+
+
+@dataclass(frozen=True)
+class MemoryWiring:
+    """How a run reaches the memory service (the service derives the tenant from ``token``).
+
+    ``transport`` is a test seam (an ``httpx`` mock transport); production leaves it ``None``."""
+
+    base_url: str
+    token: str = field(repr=False)
+    timeout: float = 30.0
+    transport: httpx.AsyncBaseTransport | None = field(default=None, repr=False)
+
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=self.timeout, transport=self.transport)
+
+    def backend(
+        self,
+        *,
+        tenant_id: str,
+        principal: str,
+        groups: Sequence[str],
+        owner_refs: Mapping[str, str],
+        kbs: Sequence[str],
+    ) -> HttpMemoryBackend:
+        return HttpMemoryBackend(
+            self.base_url,
+            token=self.token,
+            tenant_id=tenant_id,
+            principal=principal,
+            groups=groups,
+            owner_refs=owner_refs,
+            kbs=kbs,
+            client=self._client(),
+        )
+
+    def retriever(
+        self, *, tenant_id: str, kbs: Sequence[str], groups: Sequence[str]
+    ) -> MemoryRagRetriever:
+        return MemoryRagRetriever(
+            self.base_url,
+            token=self.token,
+            tenant_id=tenant_id,
+            kbs=kbs,
+            groups_for=lambda _principal: groups,
+            client=self._client(),
+        )

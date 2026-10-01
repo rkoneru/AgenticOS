@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import inspect
 import itertools
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import httpx
+
+if TYPE_CHECKING:
+    from axis_runtime.manifest import RuntimeManifest
+    from axis_runtime.models.types import ToolDefinition
 
 ToolHandler = Callable[[Mapping[str, Any]], Any]
 
@@ -74,8 +78,21 @@ class BrowserRunner(Protocol):
     async def run(self, args: Mapping[str, Any]) -> Any: ...
 
 
+@runtime_checkable
+class McpManifestSource(Protocol):
+    """What the run needs of an MCP backend at SPAWN time (``mcp.backend.TenantMcpClient``): refuse
+    a manifest naming servers or tools the tenant may not use, and the sanitised tool definitions
+    the model is shown. A bare ``McpClient`` (e.g. ``HttpMcpClient``) offers neither."""
+
+    def check_manifest(self, manifest: RuntimeManifest) -> None: ...
+
+    async def definitions_for(self, manifest: RuntimeManifest) -> Mapping[str, ToolDefinition]: ...
+
+
 class MemoryStore(Protocol):
     async def write(self, scope: str, args: Mapping[str, Any]) -> Any: ...
+
+    async def search(self, query: str, *, scopes: Sequence[str], limit: int) -> Any: ...
 
 
 class ChannelSender(Protocol):

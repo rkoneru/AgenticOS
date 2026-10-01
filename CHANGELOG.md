@@ -1,5 +1,39 @@
 # Changelog
 
+## Phase 4 - Memory, tools and execution surfaces (e2e integration)
+
+Components A-D (memory service, MCP client/server, code sandbox, browser workers) were built as libraries; this entry is the
+integration (component E, ADR 0014). **No frozen contract changed.**
+
+- **Run loop wiring.** ABL `memory.*` flags and knowledge bases reach the runtime (`RuntimeManifest.memory`) and build a per-run
+  `HttpMemoryBackend` / `MemoryRagRetriever` (`RunDeps.memory`, `principal`, `session_id`); the model gets `memory_write` (gated
+  `memory_write`) and `memory_search` (a new `MemoryRead` action, gated as `tool_call` kind `memory:read`). MCP: `check_manifest` and
+  `definitions_for` run at spawn (an invalid manifest fails before any model call) and the model sees the server's schemas. Code and
+  browser tools have fixed model-facing definitions; `RunDeps.browser` gives each run one `BrowserWorker` (policy from
+  `static_policies`, no ABL field added) that is closed when the run ends. NEXUS now carries the run's principal and the rag stage's
+  passages reach the model (they were dropped whenever the agent loop supplied messages).
+- **`make e2e-phase4`** (+ CI job `e2e-phase4`, unrun remotely): 17 scenarios through the real Risk Kernel (gRPC), OPA Wasm policy
+  pack, Postgres audit chain, memory service on Postgres+pgvector, stdio MCP server, inbound MCP HTTP server, real sandbox namespaces
+  and real Chromium. Allow path for all four tools in one run with a decision row per call (gate requests == run-log decisions ==
+  audit rows, the run log points at those rows); a DENY path per tool (MCP write, shell, foreign browser host, unredacted PHI) that
+  performs nothing; code `network=true` denied before the sandbox runs; PHI agents get no code or browser; memory ACL (principal A
+  cannot retrieve B's document by rag or by tool) and cross-tenant isolation through the whole stack; tool-scoped kernel
+  kill-switch stops each of the five tools and releasing it restores them; prompt injection in an MCP result and in a browser page
+  (the scripted model obeys it) produces a follow-up call that is gated and denied; an inbound MCP client is authenticated, gated
+  and audited; an unreachable kernel denies all four tool kinds. Chain verifies after every scenario.
+- **Mutation-checked.** Forcing ALLOW on `code_exec`, `browser_exec`, `mcp_call`, `memory_write` or `tool_call` each fails 5-9 of
+  the 17 e2e scenarios and 7-14 bypass tests.
+- **Defects the real stack found, fixed.** (1) Inbound MCP calls were all denied ("audit unavailable"): a `system` actor carried a
+  pid that the audit table's CHECK rejects. (2) The sandbox `isolation` map, usage and duration never reached the event log. (3)
+  `LlmStage` dropped retrieved passages whenever messages were supplied, and the run never set the NEXUS principal. (4) ABL v1
+  cannot name a registered MCP server (URI-typed `mcpServer`): `mcp://<name>` is now the documented runtime convention.
+- **Gaps, stated plainly** (`docs/NEEDS.md` #74-#111): the memory service is a loopback dev surface with a hash embedder; the
+  sandbox is process-level and not a security boundary; Chromium egress is enforced in-process; MCP was only exercised against
+  in-repo fakes; the LLM in the e2e is scripted; rag retrieval is not a gated action; policy cannot match `context.inbound`; the
+  Temporal path is not wired; children share the root's memory/browser/principal; the CI job has never run.
+- **Housekeeping.** NEEDS rows from the four component branches (100-106, 200-206, 300-308, 400-407) are renumbered #74-#104
+  (memory #74-#81, MCP #82-#88, sandbox #89-#95, browser #96-#104) and every reference is updated.
+
 ## Phase 3 - Orchestration and routing (e2e integration)
 
 - **Approvals end to end.** The Risk Kernel opens approval requests (`ApprovalRequester`), returns the id, and re-gates a signed

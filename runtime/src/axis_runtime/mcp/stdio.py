@@ -7,7 +7,7 @@ file for the ``process`` rule).
 Hardening: argv and environment come from the operator's ``StdioCommand`` (the child inherits
 NOTHING from this process: no API keys, no tenant data), stderr is discarded, every line is capped
 (``limit``), every exchange has a deadline, and the child is killed on close/timeout/overrun.
-Known limit: no filesystem/network/seccomp isolation of the child (docs/NEEDS.md #101).
+Known limit: no filesystem/network/seccomp isolation of the child (docs/NEEDS.md #83).
 """
 
 from __future__ import annotations

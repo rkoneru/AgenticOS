@@ -5,7 +5,7 @@ encoding), bounded request line and headers, bounded body, per-connection read d
 request per connection (``Connection: close``), JSON responses only (no SSE; the spec allows a
 server to answer ``GET`` with 405).  ``Origin`` is checked against an allowlist when present
 (DNS-rebinding defence, MCP transport spec).  Binds to loopback unless told otherwise; TLS is
-the deployment's job (reverse proxy), see docs/NEEDS.md #102.
+the deployment's job (reverse proxy), see docs/NEEDS.md #84.
 """
 
 from __future__ import annotations

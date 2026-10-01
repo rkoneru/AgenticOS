@@ -48,9 +48,18 @@ class LlmStage:
 
     def _request(self, request: RouteRequest, state: RouteState) -> ModelRequest:
         if request.messages:  # the agent loop's own conversation, tools included
+            messages = request.messages
+            if state.retrieved:
+                # Passages the RAG stage found ride along as extra context, placed right after the
+                # leading system messages (they are data for the model, never instructions).
+                lead = 0
+                while lead < len(messages) and messages[lead].role == "system":
+                    lead += 1
+                context = Message("system", "Context:\n" + build_context_message(state.retrieved))
+                messages = (*messages[:lead], context, *messages[lead:])
             return ModelRequest(
                 tenant_id=request.tenant_id,
-                messages=request.messages,
+                messages=messages,
                 target=self._target,
                 tools=request.tools,
                 fallbacks=self._fallbacks,

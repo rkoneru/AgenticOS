@@ -5,7 +5,7 @@ Status: **Prototype** (process-level isolation, tested on one Linux kernel). Not
 > **Honest label: process-level isolation, not a hard security boundary.** `LocalProcessBackend`
 > shares the host kernel, has no seccomp filter and does not hide the host filesystem from reads.
 > It narrows what accidental or lazy untrusted code can do; it is not evidence that a determined
-> attacker cannot escape. A container/gVisor/Firecracker backend is recorded as NEEDS #200-#202
+> attacker cannot escape. A container/gVisor/Firecracker backend is recorded as NEEDS #89-#91
 > (ADR-0005 stays the target). Do not run hostile multi-tenant code on it in production.
 
 ## Interfaces (`runtime/src/axis_runtime/sandbox/`)
@@ -21,6 +21,15 @@ Status: **Prototype** (process-level isolation, tested on one Linux kernel). Not
   map stating what protections this run actually had.
 - `CodeRunAction` (`actions.py`, enforcement point `code_exec`, `tool.kind="code"`): the only way
   agent code reaches a backend. It replaced the Phase 2 `CodeExec` placeholder.
+
+## Run-loop wiring (Phase 4 / E)
+
+A manifest tool `{kind: code}` becomes `CodeRunAction` with a fixed model-facing schema (`language: python|shell`, `code`); the
+host supplies the backend in `Backends.sandbox`. `network` stays wiring. The e2e runs real Python in `LocalProcessBackend`
+(`make e2e-phase4` calls `check_isolation()` first and FAILS on a host that cannot isolate: it never skips and never runs code
+unisolated), shows an outbound connect to a local site failing inside the sandbox while the site sees no request from it, and policy
+denies shell, `network=true` (driven straight at the executor because no agent can set it) and PHI agents. The event log keeps the
+`isolation` map, usage and duration (they were being dropped on the dict path until the e2e noticed, ADR 0014).
 
 ## Gate and audit contract
 
@@ -87,7 +96,7 @@ files are never read into memory. `FSIZE` bounds what the code can write per fil
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Outbound network / exfiltration       | empty netns (only `lo`, down); verified by self-test                                                                                                                         | `network=True` is a full host network; a kernel netns escape defeats it                                                                                                                                                |
 | Reading host files and secrets        | env cleared; uid `nobody`; `/proc` is the pid namespace's own                                                                                                                | **The host filesystem is readable wherever world-readable** (`/etc`, `/usr`, `/tmp`, other users' world-readable files). If the runtime is not root there is no uid drop, so the code reads/writes as the runtime user |
-| Writing outside the workdir           | uid drop (root runtimes)                                                                                                                                                     | world-writable dirs (`/tmp`, `/var/tmp`, `/dev/shm`) stay writable; non-root runtimes can write anywhere their user can. No read-only remount/pivot_root yet (NEEDS #201)                                              |
+| Writing outside the workdir           | uid drop (root runtimes)                                                                                                                                                     | world-writable dirs (`/tmp`, `/var/tmp`, `/dev/shm`) stay writable; non-root runtimes can write anywhere their user can. No read-only remount/pivot_root yet (NEEDS #90)                                               |
 | CPU / memory / fork / disk exhaustion | rlimits, wall timeout, disk poll, process-group + pid-ns kill                                                                                                                | RLIMIT_AS is per process; many processes x AS can still use RAM (NPROC bounds it); no cgroup memory cap; disk poll has 200 ms granularity                                                                              |
 | Output flood                          | per-stream cap + kill                                                                                                                                                        | none material                                                                                                                                                                                                          |
 | Artifact symlink/hardlink/traversal   | fd-relative, `O_NOFOLLOW`, regular files, nlink 1                                                                                                                            | none known                                                                                                                                                                                                             |
@@ -109,4 +118,4 @@ user namespaces and **fail** (not skip) without them. Safety logic was mutation-
 ## Not built
 
 gVisor/container/Firecracker backends, seccomp, read-only root / pivot_root, cgroup limits, per-tenant
-quotas, image/package provisioning for code, languages beyond Python and shell: NEEDS #200-#206.
+quotas, image/package provisioning for code, languages beyond Python and shell: NEEDS #89-#95.

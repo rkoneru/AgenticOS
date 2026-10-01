@@ -1,0 +1,85 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: phase4-tools
+  version: 1.0.0
+  description: "Phase 4 e2e fixture (not a shipped pack): memory, MCP, code and browser tools. Reads and sandboxed Python are allowed; writes, network code, shell, foreign browser hosts, credentials typing and unredacted PHI are denied."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+  rules:
+    - id: allow-model-calls
+      enforcementPoints: [model_call]
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-reads
+      enforcementPoints: [tool_call, mcp_call]
+      when: { field: tool.side_effects, op: in, value: [none, read] }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-memory-writes
+      enforcementPoints: [memory_write]
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-sandboxed-python
+      enforcementPoints: [code_exec]
+      when:
+        all:
+          - { field: args.network, op: eq, value: false }
+          - { field: args.language, op: eq, value: python }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-browser-on-the-allowed-host
+      enforcementPoints: [browser_exec]
+      when:
+        all:
+          - { field: args.host, op: eq, value: "127.0.0.1" }
+          - { field: args.operation, op: in, value: [navigate, extract, screenshot, click] }
+      gates: [tenant-kill]
+      decision: ALLOW
+
+    # ---- denials (priority 400 beats every allow) ----
+    - id: deny-mcp-writes
+      priority: 400
+      enforcementPoints: [mcp_call]
+      when: { field: tool.side_effects, op: in, value: [write, external] }
+      decision: DENY
+    - id: deny-inbound-writes
+      priority: 400
+      enforcementPoints: [tool_call, mcp_call]
+      when:
+        all:
+          - { field: actor.type, op: eq, value: system } # inbound MCP clients are 'system' on the wire (NEEDS: no inbound.* policy root)
+          - { field: tool.side_effects, op: in, value: [write, external] }
+      decision: DENY
+    - id: deny-memory-write-unredacted-phi
+      priority: 400
+      enforcementPoints: [memory_write]
+      when: { field: args.content, op: matches, value: '\b\d{3}-\d{2}-\d{4}\b' }
+      decision: DENY
+    - id: deny-code-network
+      priority: 400
+      enforcementPoints: [code_exec]
+      when: { field: args.network, op: eq, value: true }
+      decision: DENY
+    - id: deny-code-shell
+      priority: 400
+      enforcementPoints: [code_exec]
+      when: { field: args.language, op: neq, value: python }
+      decision: DENY
+    - id: deny-browser-foreign-host
+      priority: 400
+      enforcementPoints: [browser_exec]
+      when: { field: args.host, op: neq, value: "127.0.0.1" }
+      decision: DENY
+    - id: deny-browser-typing
+      priority: 400
+      enforcementPoints: [browser_exec]
+      when: { field: args.operation, op: eq, value: type }
+      decision: DENY
+    - id: deny-phi-to-code-and-browser
+      priority: 400
+      enforcementPoints: [code_exec, browser_exec]
+      when: { field: data.phi, op: eq, value: true }
+      decision: DENY

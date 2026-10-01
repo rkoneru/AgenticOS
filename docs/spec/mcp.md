@@ -1,8 +1,9 @@
 # MCP integration (client and server)
 
-Status: **Prototype**. Implemented in `runtime/src/axis_runtime/mcp/`, tested with in-repo fakes only (no third-party MCP
-client or server has been exercised: NEEDS #106). Protocol: MCP revisions 2025-06-18 and 2025-03-26, JSON-RPC 2.0, **tools
-only**. Contracts (proto, OpenAPI, ABL, DB) are unchanged; see NEEDS #100 for the one contract gap.
+Status: **Prototype**. Implemented in `runtime/src/axis_runtime/mcp/`, wired into the run loop and tested with in-repo fakes only
+(`make e2e-phase4` drives the fake stdio server `runtime/tests/fake_mcp_stdio.py` and the inbound HTTP server over a real socket; no
+third-party MCP client or server has been exercised: NEEDS #88). Protocol: MCP revisions 2025-06-18 and 2025-03-26, JSON-RPC 2.0, **tools
+only**. Contracts (proto, OpenAPI, ABL, DB) are unchanged; see NEEDS #82 for the one contract gap.
 
 ## Client: agents consuming MCP servers
 
@@ -25,13 +26,28 @@ manifest tool {kind: mcp, mcp_server: "kb", ref?: "search"}
   through the calling tenant's entries, and "unknown" and "belongs to another tenant" are the same error.
 - **HTTP servers** are tenant-registered; the URL passes `models/endpoints.validate_endpoint` before **every** request
   (https only, no userinfo, public addresses only unless the entry opts in, DNS checked), redirects are never followed,
-  bodies are read with a byte cap, and the exchange has a deadline. Known limit: no connect-time pinning (NEEDS #104/#22).
+  bodies are read with a byte cap, and the exchange has a deadline. Known limit: no connect-time pinning (NEEDS #86/#22).
 - **stdio servers** come only from an **operator catalog** (`StdioCommand`: absolute argv, full environment, cwd). Tenants
   select a catalog id; there is no API to pass a command, argument, environment variable or working directory. The child gets
   exactly the operator's environment (nothing inherited), no stderr, capped lines, deadlines; it is killed on timeout,
-  overrun, protocol violation or close, and never respawned mid-session. No sandbox (NEEDS #101).
+  overrun, protocol violation or close, and never respawned mid-session. No sandbox (NEEDS #83).
 - **Limits** (`McpLimits`): message, result, description, schema sizes; tools per server; list pages; content items; call
   and connect timeouts; tool-list TTL.
+
+### Run-loop wiring (Phase 4 / E, ADR 0014)
+
+- **At spawn** (`AgentProcess._prepare_tools`, before `init_complete`): if the backend is a `TenantMcpClient`, `check_manifest` and
+  `definitions_for` run. An unknown/other-tenant server, a shadowing name, or a tool the server does not list fails the process with
+  `init:` detail and makes no model call. The model is shown the server's sanitised description and schema.
+- **Naming.** ABL v1 (frozen) types `mcpServer` as a URI and `ref` as a versioned ref, so the runtime reads `mcpServer: "mcp://<name>"`
+  as the registry entry `<name>` (anything else is passed through and will not resolve), and the remote tool name is the manifest tool's
+  `name`. Policy and audit see the qualified name `server/tool` in `tool.name`; the action name is the manifest name.
+- **Injection.** A tool result is data: the e2e has the (scripted) model obey an injected "call write-note" in a result; the follow-up
+  call is gated (`deny-mcp-writes`), audited as a DENY and never reaches the server.
+- **Inbound** (e2e): unauthenticated calls reach no gate; an authenticated tenant-1 client lists its catalog, a read tool is
+  ALLOWed, a write tool is DENYed ("Denied by policy", not performed), a tenant-2 client cannot see or call tenant 1's tools. The kernel
+  receives `context.inbound`; policy cannot match on it (NEEDS #106), so the pack matches `actor.type eq system`. The wire actor carries
+  no pid (the audit table rejects one on a non-agent actor, ADR 0014 #10).
 
 ## Server: external MCP clients calling AXIS
 
@@ -45,14 +61,14 @@ manifest tool {kind: mcp, mcp_server: "kb", ref?: "search"}
 - `tools/call` builds an Action and runs it through the injected `ActionRunner` (the `ActionExecutor` for the principal's
   tenant, see `mcp_identity`): **gate -> audit -> perform**. The server module never performs anything (a test asserts the
   source contains no `perform`/`_execute`, and the bypass scanner forbids it). Actor is `mcp_client` (wire: `system`, with
-  `context.inbound`; NEEDS #100).
+  `context.inbound`; NEEDS #82).
 - Results: policy denial, approval-required and tool failure are fixed generic `isError` texts: gate reasons, approval ids,
   exception text and policy names never reach the client. Result text is capped.
 - Hardening: request-size cap, rate limit (token bucket per principal), in-flight cap per principal, call timeout,
   duplicate in-flight id rejected, ids echoed with exact type, `notifications/cancelled` honoured only for the caller's own
   requests, notifications never produce a body (a `tools/call` sent as a notification does nothing), batches rejected,
   duplicate JSON keys / `NaN` / depth > 32 rejected, `Origin` allowlist, `Content-Length` only (no chunked), header and
-  connection caps, read deadlines. Stateless: no `Mcp-Session-Id` (NEEDS #102/#106).
+  connection caps, read deadlines. Stateless: no `Mcp-Session-Id` (NEEDS #84/#88).
 
 ## Threat model
 
@@ -79,5 +95,5 @@ data**; so is everything an inbound client sends except the authenticated identi
 
 Residual risks (not mitigated): a legitimate-looking description can still persuade the model to call a _declared_ tool with
 harmful arguments, which is why every call is gated, argument-checked by policy and capped by budgets, and why side effects
-come from the manifest; model-side prompt-injection resistance is out of scope. Flags can be evaded. See NEEDS #100-#106 for
+come from the manifest; model-side prompt-injection resistance is out of scope. Flags can be evaded. See NEEDS #82-#88 for
 the unbuilt isolation, TLS, authentication and pinning work.

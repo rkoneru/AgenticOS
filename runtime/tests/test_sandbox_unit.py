@@ -259,6 +259,31 @@ def test_gate_args_carry_hash_size_limits_network_but_never_the_code() -> None:
     assert _action(network=True).gate_args()["network"] is True
 
 
+def test_the_event_log_keeps_the_isolation_map_and_usage_but_never_output_text() -> None:
+    """The executor hands the action the DICT form of the result: the evidence must survive that path."""
+    result = {
+        "exit_code": 0,
+        "ok": True,
+        "stdout": "patient SSN 111-22-3333",
+        "stderr": "",
+        "stdout_bytes": 5000,
+        "duration_seconds": 0.5,
+        "usage": {"max_rss_kib": 9},
+        "isolation": {"network": "none", "pid_namespace": True},
+        "artifacts": [{"path": "a", "size": 1, "sha256": "x", "content_b64": "eA=="}],
+    }
+    _etype, data = _action().result_event(result)
+    ev = data["result"]
+    assert ev["isolation"] == {"network": "none", "pid_namespace": True} and ev["usage"] == {
+        "max_rss_kib": 9
+    }
+    assert ev["stdout_bytes"] == 5000 and ev["stdout_sha256"] == sha256_hex(
+        b"patient SSN 111-22-3333"
+    )
+    assert ev["artifacts"] == [{"path": "a", "size": 1, "sha256": "x"}]
+    assert "111-22-3333" not in json.dumps(data) and "content_b64" not in json.dumps(data)
+
+
 def test_network_cannot_be_enabled_by_agent_args() -> None:
     a = CodeRunAction(name="py", args={"language": "python", "code": "1", "network": True})
     assert a.gate_args()["network"] is False and a._spec().network is False

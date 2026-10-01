@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -61,6 +62,29 @@ class ProcessConfig:
 
 
 @dataclass(frozen=True)
+class MemorySpec:
+    """ABL ``memory.*`` as the compiler emits it. All-off when the manifest has no ``memory`` key (a
+    runtime never exposes memory the manifest did not ask for)."""
+
+    run: bool = False
+    session: bool = False
+    long_term: bool = False
+    knowledge_bases: tuple[str, ...] = ()
+
+    @property
+    def any(self) -> bool:
+        return self.run or self.session or self.long_term or bool(self.knowledge_bases)
+
+    def writable_scopes(self) -> tuple[str, ...]:
+        """Agent-facing scopes ``memory_write`` may target (never ``tenant`` or ``kb``)."""
+        flags = (("run", self.run), ("session", self.session), ("long_term", self.long_term))
+        return tuple(name for name, on in flags if on)
+
+    def readable_scopes(self) -> tuple[str, ...]:
+        return (*self.writable_scopes(), *(("kb",) if self.knowledge_bases else ()))
+
+
+@dataclass(frozen=True)
 class RuntimeManifest:
     name: str
     version: str
@@ -74,6 +98,7 @@ class RuntimeManifest:
     process: ProcessConfig = field(default_factory=ProcessConfig)
     phi: bool = False
     routing_stages: tuple[str, ...] = ("llm",)
+    memory: MemorySpec = field(default_factory=MemorySpec)
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> RuntimeManifest:
@@ -90,7 +115,7 @@ class RuntimeManifest:
                 name=_str(t, "name", path),
                 kind=t.get("kind", "function"),
                 ref=t.get("ref"),
-                mcp_server=t.get("mcp_server"),
+                mcp_server=_mcp_server_name(t.get("mcp_server")),
                 side_effects=t.get("side_effects", "write"),
                 timeout_seconds=int(t.get("timeout_seconds", 60)),
             )
@@ -126,6 +151,7 @@ class RuntimeManifest:
             ),
             phi=bool((raw.get("data") or {}).get("phi", False)),
             routing_stages=_routing_stages(raw.get("routing")),
+            memory=_memory(raw.get("memory")),
         )
 
     def validate_supported(self) -> None:
@@ -169,6 +195,42 @@ def _model(raw: Mapping[str, Any], path: str) -> ModelSpec:
         model=_str(raw, "model", path),
         endpoint=raw.get("endpoint"),
         params=params,
+    )
+
+
+_MCP_URI = re.compile(r"^mcp://([a-z][a-z0-9_-]{0,31})$")
+
+
+def _mcp_server_name(raw: Any) -> str | None:
+    """ABL v1 (frozen) types ``mcpServer`` as a URI, but the tenant registry is keyed by a short
+    server NAME. ``mcp://<name>`` is the runtime's convention for naming a registered server; any
+    other value is kept verbatim and will not resolve in the registry (fail closed at spawn).
+    See docs/adr/0014."""
+    if not isinstance(raw, str):
+        return None
+    m = _MCP_URI.match(raw)
+    return m.group(1) if m else raw
+
+
+def _memory(raw: Any) -> MemorySpec:
+    if raw is None:
+        return MemorySpec()
+    if not isinstance(raw, Mapping):
+        raise ManifestError("memory", "must be an object")
+    flags: dict[str, bool] = {}
+    for key in ("run", "session", "long_term"):
+        v = raw.get(key, False)
+        if not isinstance(v, bool):
+            raise ManifestError(f"memory.{key}", "must be a boolean")
+        flags[key] = v
+    kbs = raw.get("knowledge_bases") or []
+    if not isinstance(kbs, list | tuple) or not all(isinstance(k, str) and k for k in kbs):
+        raise ManifestError("memory.knowledge_bases", "must be a list of names")
+    return MemorySpec(
+        run=flags["run"],
+        session=flags["session"],
+        long_term=flags["long_term"],
+        knowledge_bases=tuple(kbs),
     )
 
 

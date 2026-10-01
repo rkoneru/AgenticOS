@@ -16,6 +16,7 @@ import contextlib
 import dataclasses
 import hashlib
 import json
+import logging
 import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
@@ -29,12 +30,15 @@ from axis_runtime.actions import (
     BrowserExec,
     CodeRunAction,
     McpCall,
+    MemoryRead,
+    MemoryWrite,
     MessageSend,
     ModelCall,
     ToolCall,
     to_jsonable,
 )
 from axis_runtime.approvals import ApprovalResolver
+from axis_runtime.browser.worker import BrowserWorker, BrowserWorkerFactory
 from axis_runtime.events import (
     Clock,
     EventType,
@@ -56,6 +60,7 @@ from axis_runtime.executor import (
 )
 from axis_runtime.gate import GateClient
 from axis_runtime.manifest import ManifestError, RuntimeManifest, ToolSpec
+from axis_runtime.memory import MemoryRagRetriever, MemoryWiring
 from axis_runtime.models.gateway import ModelGateway
 from axis_runtime.models.types import (
     CacheHints,
@@ -80,7 +85,17 @@ from axis_runtime.process import (
     next_state,
 )
 from axis_runtime.sandbox.types import SandboxError
-from axis_runtime.tools import ToolRegistry
+from axis_runtime.tooldefs import (
+    MEMORY_SEARCH,
+    MEMORY_TOOL_NAMES,
+    MEMORY_WRITE,
+    browser_definition,
+    code_definition,
+    memory_definitions,
+)
+from axis_runtime.tools import McpManifestSource, ToolRegistry
+
+log = logging.getLogger("axis_runtime.run")
 
 ACTING_PID: ContextVar[str | None] = ContextVar("axis_acting_pid", default=None)
 
@@ -124,6 +139,19 @@ class RunDeps:
     nexus_factory: Callable[[RunContext], NexusRouter] | None = None
     #: Replaces the built-in one-for-one child loop of ``AgentProcess.spawn_child`` (see TKI).
     child_spawner: ChildSpawner | None = None
+    #: Who the agent acts for. It is the ACL principal of every memory read and write and of NEXUS
+    #: retrieval; empty means the agent itself (``agent:<name>``). Supplied by the trusted host.
+    principal: str = ""
+    principal_groups: tuple[str, ...] = ()
+    #: Owner of ``session`` memory; without it a session-scoped call is a tool error.
+    session_id: str | None = None
+    #: Memory service connection. With it, a manifest whose ``memory.*`` flags or knowledge bases
+    #: are set gets an ``HttpMemoryBackend`` (``memory_write`` / ``memory_search`` tools) and a
+    #: ``MemoryRagRetriever`` (``RunContext.memory_retriever``, for the host's NEXUS ``rag`` stage).
+    memory: MemoryWiring | None = None
+    #: One ``BrowserWorker`` (own browser context, policy from the provider) per run, closed at
+    #: the end of the run. Mutually exclusive with ``backends.browser``.
+    browser: BrowserWorkerFactory | None = None
 
 
 class _Exit(Exception):
@@ -155,6 +183,17 @@ class RunContext:
     runner: ActionRunner
     processes: dict[str, AgentProcess] = field(default_factory=dict)
     nexus: NexusRouter | None = None
+    backends: Backends = field(default_factory=Backends)
+    principal: str = ""
+    #: Built from ``RunDeps.memory`` + the root manifest's knowledge bases (None when not wired).
+    memory_retriever: MemoryRagRetriever | None = None
+    browser_worker: BrowserWorker | None = None
+    closers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
+
+    async def aclose(self) -> None:
+        """Release what the run built (memory HTTP clients, the run's browser context)."""
+        closers, self.closers = self.closers, []
+        await _close_all(closers)  # cleanup must not mask the run's own outcome
 
     def nexus_event_sink(self) -> NexusRunSink:
         """An ``EventSink`` for ``NexusRouter`` that appends ``nexus_stage`` / ``nexus_route``
@@ -232,6 +271,7 @@ class AgentProcess:
             self._budget_pids |= predecessor._budget_pids  # noqa: SLF001
             self._started = predecessor._started  # noqa: SLF001
         self._spawned_children = 0
+        self._defs: tuple[ToolDefinition, ...] | None = None
         ctx.processes[self.pid] = self
 
     # ---- state (always derived from the log) ---------------------------------------------
@@ -354,8 +394,11 @@ class AgentProcess:
     async def _lifecycle(self, input_text: str) -> str:
         try:
             self.manifest.validate_supported()
+            await self._prepare_tools()
         except ManifestError as exc:
             raise _Exit(ExitReason.FAILED, f"init: {exc}") from exc
+        except Exception as exc:  # e.g. an MCP server the tenant may not use, or one that is down
+            raise _Exit(ExitReason.FAILED, f"init: {type(exc).__name__}: {str(exc)[:200]}") from exc
         await self._go(Lifecycle.INIT_COMPLETE)
         await self._go(Lifecycle.SCHEDULED)
         return await self._agent_loop(input_text)
@@ -439,14 +482,86 @@ class AgentProcess:
                 **common, side_effects=spec.side_effects, timeout_seconds=spec.timeout_seconds
             )
         if spec.kind == "browser":
-            return BrowserExec(**common, side_effects=spec.side_effects)
+            # The page an operation acts on is the worker's own state, never the agent's claim.
+            clean = {k: v for k, v in args.items() if k != "target_url"}
+            worker = self.ctx.browser_worker
+            if worker is not None:
+                return worker.action(spec.name, clean, side_effects=spec.side_effects)
+            return BrowserExec(name=spec.name, args=clean, side_effects=spec.side_effects)
         if spec.kind == "channel":
             return MessageSend(
                 **common, channel=spec.ref or spec.name, side_effects=spec.side_effects
             )
         return ToolCall(**common, kind=spec.kind, side_effects=spec.side_effects, ref=spec.ref)
 
+    # ---- tools shown to the model ---------------------------------------------------------
+    @property
+    def _memory_exposed(self) -> bool:
+        return self.ctx.backends.memory is not None and self.manifest.memory.any
+
+    async def _prepare_tools(self) -> None:
+        """Spawn-time validation and the definitions the model sees.
+
+        MCP: the tenant's registry must allow every server and tool the manifest names (else the
+        process fails to spawn), and the model is shown the server's sanitised schemas. Built-in
+        code/browser/memory tools get fixed definitions. Memory tool names are reserved."""
+        m = self.manifest
+        mcp = self.ctx.backends.mcp
+        mcp_defs: Mapping[str, ToolDefinition] = {}
+        mcp_specs = [t for t in m.tools if t.kind == "mcp"]
+        if mcp_specs and isinstance(mcp, McpManifestSource):
+            mcp.check_manifest(m)
+            mcp_defs = await mcp.definitions_for(m)
+            missing = [t.name for t in mcp_specs if t.name not in mcp_defs]
+            if missing:
+                raise ManifestError("tools", f"MCP tool(s) not offered by the server: {missing}")
+        memory_defs: list[ToolDefinition] = []
+        if self._memory_exposed:
+            clash = sorted(t.name for t in m.tools if t.name in MEMORY_TOOL_NAMES)
+            if clash:
+                raise ManifestError("tools", f"names reserved for memory tools: {clash}")
+            memory_defs = memory_definitions(m.memory.writable_scopes(), m.memory.readable_scopes())
+        registry = self.ctx.deps.tools
+        defs: list[ToolDefinition] = []
+        for spec in m.tools:
+            reg = registry.get(spec.ref or spec.name)
+            if spec.kind == "mcp" and spec.name in mcp_defs:
+                defs.append(mcp_defs[spec.name])
+            elif reg is None and spec.kind == "code":
+                defs.append(code_definition(spec.name))
+            elif reg is None and spec.kind == "browser":
+                defs.append(browser_definition(spec.name))
+            else:
+                defs.append(
+                    ToolDefinition(
+                        spec.name,
+                        reg.description if reg else "",
+                        reg.input_schema if reg else {"type": "object"},
+                    )
+                )
+        self._defs = (*defs, *memory_defs)
+
+    def _memory_action(self, call: ToolCallRequest) -> Action:
+        """``memory_write`` / ``memory_search``: arguments are validated here and anything that
+        decides WHO may read (ACL), PHI handling or scopes is wiring, not the model's choice."""
+        m = self.manifest.memory
+        args = dict(call.arguments)
+        if call.name == MEMORY_WRITE:
+            scope = args.pop("scope", None)
+            if scope not in m.writable_scopes():
+                raise ValueError("memory scope is not enabled for this agent")
+            if not set(args) <= {"content", "metadata", "subject", "ttl_seconds"}:
+                raise ValueError("unexpected memory_write argument")
+            if self.manifest.phi:
+                args["phi"] = True
+            return MemoryWrite(name=MEMORY_WRITE, args=args, scope=str(scope))
+        if not set(args) <= {"query", "scope", "limit"}:
+            raise ValueError("unexpected memory_search argument")
+        return MemoryRead(name=MEMORY_SEARCH, args=args, scopes=m.readable_scopes())
+
     def _tool_definitions(self) -> tuple[ToolDefinition, ...]:
+        if self._defs is not None:
+            return self._defs
         registry = self.ctx.deps.tools
         defs = []
         for spec in self.manifest.tools:
@@ -531,6 +646,7 @@ class AgentProcess:
             system_prompt=m.system_prompt,
             messages=tuple(messages),
             tools=self._tool_definitions(),
+            principal=self.ctx.principal,
         )
         await self._go(Lifecycle.AWAIT)
         marker = ACTING_PID.set(self.pid)
@@ -595,11 +711,15 @@ class AgentProcess:
             return Message("tool", content, tool_call_id=call.id, name=call.name, is_error=error)
 
         spec = self.manifest.tool(call.name)
-        if spec is None:
+        if spec is None and not (self._memory_exposed and call.name in MEMORY_TOOL_NAMES):
             return reply(f"unknown tool {call.name!r}", error=True)
         await self._check_budgets(extra_tool_call=True)
         try:
-            action = self._action_for(spec, call.arguments)
+            action = (
+                self._action_for(spec, call.arguments)
+                if spec is not None
+                else self._memory_action(call)
+            )
         except (ValueError, SandboxError) as exc:  # e.g. unsupported language: a tool error, no run
             return reply(
                 f"invalid arguments for tool {call.name!r}: {type(exc).__name__}", error=True
@@ -698,54 +818,116 @@ class RunHandle:
 
 
 async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps) -> RunHandle:
-    run_id = deps.run_id or f"run_{secrets.token_hex(12)}"
-    trace_id = deps.trace_id or secrets.token_hex(16)
-    recorder = await RunRecorder.start(
-        deps.log,
-        deps.clock,
-        run_id=run_id,
-        tenant_id=deps.tenant_id,
-        meta={
-            "blueprint": manifest.name,
-            "version": manifest.version,
-            "content_hash": manifest.content_hash,
-            "input_hash": hashlib.sha256(input_text.encode("utf-8")).hexdigest(),
-            "trace_id": trace_id,
-        },
-    )
-    identity = RunIdentity(
-        tenant_id=deps.tenant_id,
-        run_id=run_id,
-        trace_id=trace_id,
-        span_id=hashlib.sha256(run_id.encode("utf-8")).hexdigest()[:16],  # deterministic (Temporal)
-        blueprint_name=manifest.name,
-        blueprint_version=manifest.version,
-        phi=manifest.phi,
-    )
     backends = dataclasses.replace(
         deps.backends or Backends(), tools=deps.tools, models=deps.models
     )
-    placeholder: Any = None
-    ctx = RunContext(deps, recorder, identity, placeholder)
-    backends.spawn = ctx.spawn_child
-    ctx.runner = (
-        deps.runner_factory(ctx)
-        if deps.runner_factory
-        else ActionExecutor(
-            gate=deps.gate,
-            recorder=recorder,
-            identity=identity,
-            backends=backends,
-            gate_timeout=deps.gate_timeout,
-            approvals=deps.approvals,
+    if deps.browser is not None and backends.browser is not None:
+        raise ValueError("RunDeps.browser and backends.browser are mutually exclusive")
+    if deps.memory is not None and manifest.memory.any and backends.memory is not None:
+        raise ValueError("RunDeps.memory and backends.memory are mutually exclusive")
+    run_id = deps.run_id or f"run_{secrets.token_hex(12)}"
+    trace_id = deps.trace_id or secrets.token_hex(16)
+    principal = deps.principal or f"agent:{manifest.name}"
+    closers: list[Callable[[], Awaitable[None]]] = []
+    worker: BrowserWorker | None = None
+    retriever: MemoryRagRetriever | None = None
+    if deps.browser is not None:
+        worker = deps.browser.for_run(tenant_id=deps.tenant_id, agent=manifest.name, run_id=run_id)
+        backends.browser = worker
+        closers.append(worker.aclose)
+    if deps.memory is not None and manifest.memory.any:
+        owners = {"run": run_id, "agent": manifest.name}
+        if deps.session_id:
+            owners["session"] = deps.session_id
+        kbs = manifest.memory.knowledge_bases
+        backend = deps.memory.backend(
+            tenant_id=deps.tenant_id,
+            principal=principal,
+            groups=deps.principal_groups,
+            owner_refs=owners,
+            kbs=kbs,
         )
-    )
-    if deps.nexus_factory is not None:
-        ctx.nexus = deps.nexus_factory(ctx)
-    root = AgentProcess(manifest, ctx)
-    await root.spawn()
-    task = asyncio.create_task(root.run(input_text))
+        backends.memory = backend
+        closers.append(backend.aclose)
+        if kbs:
+            retriever = deps.memory.retriever(
+                tenant_id=deps.tenant_id, kbs=kbs, groups=deps.principal_groups
+            )
+            closers.append(retriever.aclose)
+    try:
+        recorder = await RunRecorder.start(
+            deps.log,
+            deps.clock,
+            run_id=run_id,
+            tenant_id=deps.tenant_id,
+            meta={
+                "blueprint": manifest.name,
+                "version": manifest.version,
+                "content_hash": manifest.content_hash,
+                "input_hash": hashlib.sha256(input_text.encode("utf-8")).hexdigest(),
+                "trace_id": trace_id,
+            },
+        )
+        identity = RunIdentity(
+            tenant_id=deps.tenant_id,
+            run_id=run_id,
+            trace_id=trace_id,
+            span_id=hashlib.sha256(run_id.encode("utf-8")).hexdigest()[
+                :16
+            ],  # deterministic (Temporal)
+            blueprint_name=manifest.name,
+            blueprint_version=manifest.version,
+            phi=manifest.phi,
+        )
+        placeholder: Any = None
+        ctx = RunContext(
+            deps,
+            recorder,
+            identity,
+            placeholder,
+            backends=backends,
+            principal=principal,
+            memory_retriever=retriever,
+            browser_worker=worker,
+            closers=closers,
+        )
+        backends.spawn = ctx.spawn_child
+        ctx.runner = (
+            deps.runner_factory(ctx)
+            if deps.runner_factory
+            else ActionExecutor(
+                gate=deps.gate,
+                recorder=recorder,
+                identity=identity,
+                backends=backends,
+                gate_timeout=deps.gate_timeout,
+                approvals=deps.approvals,
+            )
+        )
+        if deps.nexus_factory is not None:
+            ctx.nexus = deps.nexus_factory(ctx)
+        root = AgentProcess(manifest, ctx)
+        await root.spawn()
+    except BaseException:
+        await _close_all(closers)
+        raise
+
+    async def drive() -> ProcessResult:
+        try:
+            return await root.run(input_text)
+        finally:
+            await ctx.aclose()
+
+    task = asyncio.create_task(drive())
     return RunHandle(ctx, root, task)
+
+
+async def _close_all(closers: list[Callable[[], Awaitable[None]]]) -> None:
+    for close in reversed(closers):
+        try:
+            await close()
+        except Exception:  # noqa: BLE001
+            log.warning("run resource failed to close", exc_info=True)
 
 
 async def run_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps) -> RunResult:

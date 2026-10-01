@@ -122,7 +122,7 @@ _ACTOR_TO_PROTO = {
     ActorType.HUMAN: common_pb2.Actor.TYPE_HUMAN,
     ActorType.AGENT: common_pb2.Actor.TYPE_AGENT,
     ActorType.SYSTEM: common_pb2.Actor.TYPE_SYSTEM,
-    ActorType.MCP_CLIENT: common_pb2.Actor.TYPE_SYSTEM,  # NEEDS #100: no wire value yet
+    ActorType.MCP_CLIENT: common_pb2.Actor.TYPE_SYSTEM,  # NEEDS #82: no wire value yet
 }
 _DECISION_FROM_PROTO = {
     common_pb2.DECISION_ALLOW: Decision.ALLOW,
@@ -140,7 +140,12 @@ def to_proto_request(request: EvaluateRequest) -> gate_pb2.EvaluateRequest:
         tenant_id=request.tenant_id,
         trace=common_pb2.TraceContext(trace_id=request.trace_id, span_id=request.span_id),
         actor=common_pb2.Actor(
-            type=_ACTOR_TO_PROTO[request.actor_type], id=request.actor_id, pid=request.pid
+            type=_ACTOR_TO_PROTO[request.actor_type],
+            id=request.actor_id,
+            # Only an agent actor has a process id: the audit table rejects a pid on any other
+            # actor type (CHECK actor_type = 'agent' <=> actor_pid IS NOT NULL), so an inbound MCP
+            # client (wire type `system`) that carried one had every call denied (ADR 0014 #10).
+            pid=request.pid if request.actor_type is ActorType.AGENT else "",
         ),
         blueprint=common_pb2.BlueprintRef(
             name=request.blueprint_name, version=request.blueprint_version

@@ -175,7 +175,7 @@ async def backend() -> AsyncIterator[PlaywrightBackend]:
     b = PlaywrightBackend()
     try:
         await b.start()
-    except BrowserError as exc:  # documented in docs/NEEDS.md #306: chromium must be launchable
+    except BrowserError as exc:  # documented in docs/NEEDS.md #102: chromium must be launchable
         pytest.skip(f"chromium cannot be launched here: {exc}")
     yield b
     await b.aclose()

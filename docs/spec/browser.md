@@ -2,7 +2,7 @@
 
 Status: **Prototype** (real Chromium, local fixture server, no live-internet run, no egress proxy).
 Code: `runtime/src/axis_runtime/browser/`. Tests: `runtime/tests/test_browser_*.py`. Threat model:
-`docs/security/browser-threat-model.md`. Gaps: `docs/NEEDS.md` #300-#308.
+`docs/security/browser-threat-model.md`. Gaps: `docs/NEEDS.md` #96-#104.
 
 ## Shape
 
@@ -21,6 +21,18 @@ BrowserExec (Action, gate: browser_exec, tool.kind="browser")
 - `BrowserBackend` / `BrowserSession` are protocols (`browser/backend.py`); `PlaywrightBackend` is the only
   implementation. A failing launch, context or operation is a `BrowserError`, which the executor records as
   `Failed` (a `tool_call_result` with `ok=false`): there is no partial approval.
+
+## Run-loop wiring (Phase 4 / E, ADR 0014)
+
+`RunDeps.browser = BrowserWorkerFactory(PlaywrightBackend, static_policies({(tenant, agent): config}))`. `start_agent` builds one worker
+per run for `(tenant, manifest name)`, installs it as `backends.browser`, builds each action with `worker.action(...)` (the page the
+operation acts on comes from the worker, a model-supplied `target_url` is dropped) and `aclose()`s it when the run ends. No ABL
+field carries the allowlist (frozen schema; ADR 0014 #9): it is operator configuration, `{"allowed_domains": [...], "private_hosts":
+[...], ...}` as in `BrowserPolicy.from_config`; no entry = no policy = every request blocked. The e2e (real Chromium, local fixture site)
+shows: an allowed read-only session; a subresource on a non-allowlisted origin blocked at the network (the other server saw nothing); a
+`localhost` navigation denied by the Risk Kernel's policy while the network allowlist would have permitted it (so the decisive control
+is the gate); an injected instruction in page text followed by a model that obeys it hits the gate and is denied; typing is denied;
+PHI agents get no browser; the tool-scoped kill-switch stops it.
 
 ## Operations
 
@@ -93,4 +105,4 @@ request or even a TCP connection on the disallowed server.
 
 ## Limits
 
-Not pinned to the resolved IP, in-process enforcement, no sandbox, in-memory artifacts: see NEEDS #300-#305.
+Not pinned to the resolved IP, in-process enforcement, no sandbox, in-memory artifacts: see NEEDS #96-#101.
