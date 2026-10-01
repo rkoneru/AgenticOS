@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -114,7 +115,7 @@ class RuntimeManifest:
                 name=_str(t, "name", path),
                 kind=t.get("kind", "function"),
                 ref=t.get("ref"),
-                mcp_server=t.get("mcp_server"),
+                mcp_server=_mcp_server_name(t.get("mcp_server")),
                 side_effects=t.get("side_effects", "write"),
                 timeout_seconds=int(t.get("timeout_seconds", 60)),
             )
@@ -195,6 +196,20 @@ def _model(raw: Mapping[str, Any], path: str) -> ModelSpec:
         endpoint=raw.get("endpoint"),
         params=params,
     )
+
+
+_MCP_URI = re.compile(r"^mcp://([a-z][a-z0-9_-]{0,31})$")
+
+
+def _mcp_server_name(raw: Any) -> str | None:
+    """ABL v1 (frozen) types ``mcpServer`` as a URI, but the tenant registry is keyed by a short
+    server NAME. ``mcp://<name>`` is the runtime's convention for naming a registered server; any
+    other value is kept verbatim and will not resolve in the registry (fail closed at spawn).
+    See docs/adr/0014."""
+    if not isinstance(raw, str):
+        return None
+    m = _MCP_URI.match(raw)
+    return m.group(1) if m else raw
 
 
 def _memory(raw: Any) -> MemorySpec:

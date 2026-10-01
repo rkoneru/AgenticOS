@@ -613,3 +613,24 @@ async def test_no_gate_decision_means_no_tool_runs_for_the_new_tool_kinds() -> N
     result = await run_agent(make_manifest(tools=tools), "go", deps)
     assert result.exit_reason is ExitReason.POLICY_DENIED  # the first model call is denied
     assert effects == []
+
+
+@pytest.mark.parametrize(
+    ("raw", "name"),
+    [
+        ("mcp://kb", "kb"),
+        ("mcp://my_server-2", "my_server-2"),
+        (
+            "https://mcp.example.com/crm",
+            "https://mcp.example.com/crm",
+        ),  # never resolves: fails at spawn
+        ("mcp://KB", "mcp://KB"),
+        ("mcp://kb/extra", "mcp://kb/extra"),
+        ("kb", "kb"),
+    ],
+)
+def test_the_abl_mcp_server_uri_names_a_registered_server_only_through_the_mcp_scheme(
+    raw: str, name: str
+) -> None:
+    tools = [{"name": "lookup", "kind": "mcp", "mcp_server": raw, "side_effects": "read"}]
+    assert make_manifest(tools=tools).tools[0].mcp_server == name

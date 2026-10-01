@@ -1,4 +1,4 @@
-.PHONY: e2e-core e2e-phase3 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-core e2e-phase3 e2e-phase4 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -62,6 +62,15 @@ e2e-phase3:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase3_orchestration.py -p no:cacheprovider --no-cov
 	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
+
+# Phase 4 exit: an agent uses memory, MCP (stdio + inbound), sandboxed code and a real-Chromium browser in real runs through the
+# real Risk Kernel (gRPC) and the Postgres audit chain; every call has a decision row; DENY, ACL, tenancy, kill-switch and
+# prompt-injection scenarios; then the bypass guard stays green. Same prerequisites as e2e-core, plus unprivileged user
+# namespaces (the sandbox refuses to run otherwise: the e2e FAILS, it never skips) and the Playwright Chromium build.
+e2e-phase4:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase4_tools.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py runtime/tests/test_mcp_bypass.py -q -p no:cacheprovider --no-cov
 
 # (Phase 7) Playwright console + CLI e2e
 e2e:

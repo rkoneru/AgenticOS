@@ -360,6 +360,13 @@ async def test_grpc_constructor_variants() -> None:
     await wrapped.close()
 
 
+def test_only_an_agent_actor_carries_a_pid_on_the_wire() -> None:
+    """The audit table rejects a pid on a non-agent actor, which would deny every inbound MCP call."""
+    for actor in ActorType:
+        pid = to_proto_request(EvaluateRequest(**{**REQ.__dict__, "actor_type": actor})).actor.pid
+        assert (pid != "") is (actor is ActorType.AGENT), actor
+
+
 def test_proto_mappings_cover_every_enforcement_point() -> None:
     for ep in EnforcementPoint:
         msg = to_proto_request(EvaluateRequest(**{**REQ.__dict__, "enforcement_point": ep}))

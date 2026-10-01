@@ -285,12 +285,26 @@ class CodeRunAction(_ArgsAction):
 
 def _summarise_result_dict(result: Mapping[str, Any]) -> dict[str, Any]:
     """Audit form of a result that is already a dict: hashes and sizes, never output text."""
-    out = {k: result[k] for k in ("exit_code", "ok", "killed_reason", "signal") if k in result}
+    keep = (
+        "exit_code",
+        "ok",
+        "killed_reason",
+        "signal",
+        "stdout_bytes",
+        "stderr_bytes",
+        "stdout_truncated",
+        "stderr_truncated",
+        "duration_seconds",
+        "usage",
+        "skipped_artifacts",
+        "isolation",  # what protections this run actually had: part of the evidence
+    )
+    out = {k: result[k] for k in keep if k in result}
     for stream in ("stdout", "stderr"):
         text = result.get(stream)
         if isinstance(text, str):
             out[f"{stream}_sha256"] = sha256_hex(text.encode())
-            out[f"{stream}_bytes"] = len(text.encode())
+            out.setdefault(f"{stream}_bytes", len(text.encode()))
     arts = result.get("artifacts")
     if isinstance(arts, list):
         out["artifacts"] = [
