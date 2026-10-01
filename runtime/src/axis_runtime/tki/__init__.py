@@ -16,6 +16,15 @@ from axis_runtime.tki.budget import (
 )
 from axis_runtime.tki.events import EventSink, ListSink, TkiEvent, TkiEventType
 from axis_runtime.tki.ipc import Envelope, Kind, MessageRouter
+from axis_runtime.tki.scheduler import (
+    Priority,
+    ProcessCancelled,
+    ProcessContext,
+    Scheduler,
+    SchedulerConfig,
+    SpawnSpec,
+    WorkloadResult,
+)
 
 __all__ = [
     "AccountKey",
@@ -28,9 +37,16 @@ __all__ = [
     "Limit",
     "ListSink",
     "MessageRouter",
+    "Priority",
+    "ProcessCancelled",
+    "ProcessContext",
     "Reservation",
     "Resource",
+    "Scheduler",
+    "SchedulerConfig",
     "ScopeKind",
+    "SpawnSpec",
     "TkiEvent",
     "TkiEventType",
+    "WorkloadResult",
 ]
