@@ -160,6 +160,21 @@ EXEMPTIONS: dict[str, dict[str, str]] = {
     },
 }
 
+# Narrowing of an exemption: when (rule, file) is listed here the exemption covers ONLY findings whose
+# detail is in the set (so the sandbox files may use subprocess.Popen / os.killpg / shutil.rmtree and
+# nothing else of the banned-qualified family, e.g. not os.system).
+EXEMPTION_DETAILS: dict[tuple[str, str], frozenset[str]] = {
+    ("banned-qualified", "sandbox/backends/local.py"): frozenset(
+        {
+            "uses subprocess.Popen",
+            "uses subprocess.PIPE",
+            "uses subprocess.DEVNULL",
+            "uses os.killpg",
+        }
+    ),
+    ("banned-qualified", "sandbox/workdir.py"): frozenset({"uses shutil.rmtree"}),
+}
+
 # Name references that are never acceptable in src.
 BANNED_NAMES = frozenset(
     {
@@ -734,7 +749,9 @@ def scan_source(rel: str, source: str) -> list[str]:
         elif f.rule == "gateway-construction":
             if rel in GATEWAY_CONSTRUCTION_FILES:
                 continue
-        elif rel in EXEMPTIONS.get(f.rule, {}):
+        elif rel in EXEMPTIONS.get(f.rule, {}) and f.detail in EXEMPTION_DETAILS.get(
+            (f.rule, rel), {f.detail}
+        ):
             continue
         problems.append(f.render(rel))
     return problems
