@@ -324,7 +324,7 @@ async def test_file_scheme_is_blocked_at_every_layer(
     s = await open_session(backend, site.policy())
     try:
         for url in ("file:///etc/hostname", "chrome://version", "about:blank", "data:text/html,x"):
-            with pytest.raises(BrowserError):
+            with pytest.raises(BrowserError, match="scheme_not_allowed"):
                 await s.navigate(url)
         await s.navigate(site.url("/file-frame"))  # an iframe pointing at file:// loads nothing
         assert "file frame" in (await s.extract(None))[0]
