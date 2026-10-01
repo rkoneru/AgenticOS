@@ -1,0 +1,75 @@
+{
+  "note": "Dev HTTP wire format shared by test/server.test.ts (real server) and runtime/tests/test_memory.py (Python client). Responses are examples: the server must return the same key structure.",
+  "exchanges": [
+    {
+      "name": "write long-term (agent) memory",
+      "route": "write",
+      "admin": false,
+      "request": {
+        "tenant_id": "{tenant}",
+        "scope": "agent",
+        "owner_ref": "support-bot",
+        "content": "Customer prefers email.",
+        "metadata": { "topic": "prefs" },
+        "subject": "cust-1",
+        "ttl_seconds": 3600,
+        "principal": { "id": "agent:support-bot", "groups": ["agents"] }
+      },
+      "response": {
+        "id": "0b6d1c1e-0000-4000-8000-000000000001",
+        "deduped": false,
+        "phi": false,
+        "expires_at": "2030-01-01T01:00:00.000Z"
+      }
+    },
+    {
+      "name": "search",
+      "route": "search",
+      "admin": false,
+      "request": {
+        "tenant_id": "{tenant}",
+        "principal": { "id": "agent:support-bot", "groups": ["agents"] },
+        "query": "how does the customer want to be contacted",
+        "limit": 3
+      },
+      "response": {
+        "hits": [
+          {
+            "id": "0b6d1c1e-0000-4000-8000-000000000001",
+            "document_id": null,
+            "scope": "agent",
+            "owner_ref": "support-bot",
+            "kb": null,
+            "content": "Customer prefers email.",
+            "metadata": { "topic": "prefs" },
+            "score": 0.42
+          }
+        ]
+      }
+    },
+    {
+      "name": "recall",
+      "route": "recall",
+      "admin": false,
+      "request": {
+        "tenant_id": "{tenant}",
+        "principal": { "id": "agent:support-bot", "groups": ["agents"] },
+        "scope": "agent",
+        "owner_ref": "support-bot",
+        "limit": 10
+      },
+      "response": {
+        "entries": [
+          {
+            "id": "0b6d1c1e-0000-4000-8000-000000000001",
+            "scope": "agent",
+            "owner_ref": "support-bot",
+            "content": "Customer prefers email.",
+            "metadata": { "topic": "prefs" },
+            "created_at": "2030-01-01T00:00:00.000Z"
+          }
+        ]
+      }
+    }
+  ]
+}

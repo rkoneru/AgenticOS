@@ -94,6 +94,11 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "approvals service (loopback dev bridge, NEEDS #62); not an agent action. It only fetches a "
         "record that the executor forwards to the Risk Kernel, which re-gates and verifies it.",
     },
+    "memory.py": {
+        "httpx": "HttpMemoryBackend / MemoryRagRetriever: client of the memory service (loopback dev "
+        "surface, NEEDS). The write backend is reachable only through MemoryWrite performed by "
+        "ActionExecutor; the retriever is read-only, ACL-filtered server side and re-checked by RagStage.",
+    },
     "temporal.py": {
         "temporalio": "Temporal workflow/activity wiring: talks to the Temporal server, runs "
         "ActionExecutor inside the activity.",
