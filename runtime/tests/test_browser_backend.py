@@ -101,7 +101,7 @@ ws.onmessage = (e) => document.getElementById('out').append(e.data);
     )
     r(
         "/echo-cookie",
-        lambda_page := page(
+        page(
             "<pre id=c></pre><script>document.getElementById('c').innerText="
             "'cookie=[' + document.cookie + '] ls=[' + (localStorage.getItem('k')||'') + "
             "'] bc=[' + (window.__bc||'') + ']';"

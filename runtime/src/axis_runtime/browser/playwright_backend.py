@@ -362,7 +362,7 @@ class PlaywrightSession:
         raise BrowserError("navigation blocked: too_many_redirects")
 
     async def navigate(self, url: str) -> PageState:
-        self._live
+        _ = self._live
         if urlsplit(url).scheme.lower() not in ("http", "https"):
             raise BrowserError("navigation blocked: scheme_not_allowed")
         if self._pages_visited >= self._policy.max_pages:

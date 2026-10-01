@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 """Redirect handling, failure paths and caps of the Playwright backend (real Chromium)."""
 
 from __future__ import annotations

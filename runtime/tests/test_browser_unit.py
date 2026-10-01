@@ -215,7 +215,7 @@ async def test_empty_allowlist_denies_everything_and_never_resolves() -> None:
         "192.168.1.1",
         "169.254.169.254",
         "100.100.100.200",
-        "0.0.0.0",
+        "0.0.0.0",  # noqa: S104
         "::1",
         "fe80::1",
         "fd00:ec2::254",
