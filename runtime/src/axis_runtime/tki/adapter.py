@@ -64,6 +64,10 @@ class BudgetedRunner:
         self._cost = cost_estimator
 
     async def run(self, action: Action, *, pid: str) -> ActionOutcome:
+        if isinstance(action, ModelCall) and action.replay is not None:
+            # A cached answer replayed through the gate has no provider: nothing to reserve.
+            # (Charging the prompt estimate could trip a cap a cache hit can never spend.)
+            return await self._inner.run(action, pid=pid)
         want: dict[Resource, int] = {}
         if isinstance(action, ModelCall):  # run.py counts tool_calls for tools, not model calls
             want[Resource.TOKENS] = estimate_model_tokens(action)

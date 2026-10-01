@@ -273,6 +273,10 @@ class ModelCall(Action):
     enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.MODEL_CALL
     request: ModelRequest = field(kw_only=True)
     name: str = "model"
+    #: A model answer NEXUS already holds (cache hit). The call is still gated and audited like the
+    #: real one (same name, arguments and enforcement point), but ``perform`` returns this response
+    #: instead of reaching the provider. Never serialised: a replay is not a Temporal activity.
+    replay: ModelResponse | None = field(default=None, kw_only=True)
 
     def tool_descriptor(self) -> dict[str, str]:
         return {"name": self.name, "kind": "model", "side_effects": "external"}
@@ -326,12 +330,16 @@ class ModelCall(Action):
         }
 
     def to_spec(self) -> dict[str, Any]:
+        if self.replay is not None:
+            raise ValueError("a replayed model call cannot be serialised")
         return {
             "type": "ModelCall",
             "fields": {"name": self.name, "request": self.request.to_dict()},
         }
 
     async def _execute(self, backends: Backends) -> Any:
+        if self.replay is not None:
+            return self.replay
         models: ModelGateway = backends.need("models")
         return await models.complete(self.request)
 

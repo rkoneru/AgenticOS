@@ -20,6 +20,7 @@ import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 from axis_runtime.actions import (
@@ -58,11 +59,14 @@ from axis_runtime.manifest import ManifestError, RuntimeManifest, ToolSpec
 from axis_runtime.models.gateway import ModelGateway
 from axis_runtime.models.types import (
     CacheHints,
+    FinishReason,
     Message,
     ModelRequest,
+    ModelResponse,
     ModelTarget,
     ToolCallRequest,
     ToolDefinition,
+    Usage,
 )
 from axis_runtime.nexus.router import NexusRouter
 from axis_runtime.nexus.types import RouteRequest, RouteResult
@@ -528,8 +532,48 @@ class AgentProcess:
             )
         if route.status != "hit" or route.answer is None:
             raise _Exit(ExitReason.FAILED, "model call failed: no routing stage produced an answer")
+        answer = route.answer
+        if route.hit_stage == "cache":
+            answer = await self._regate_cached_answer(messages, answer)
         await self._go(Lifecycle.WAKE)
-        return _ModelAnswer(route.answer, tuple(route.tool_calls))
+        return _ModelAnswer(answer, tuple(route.tool_calls))
+
+    async def _regate_cached_answer(self, messages: list[Message], answer: str) -> str:
+        """A cache hit is a model answer the gate has not seen THIS time: it would outlive a
+        kill-switch or a new DENY rule until its TTL ran out (NEEDS #65). Replay it as the very
+        ``model_call`` it substitutes: same name and arguments, gated and audited, but ``perform``
+        hands back the cached text (no provider, no tokens, no cost). The gate may deny it or
+        redact it; the returned text is what the agent gets."""
+        primary = self.manifest.primary
+        action = ModelCall(
+            name=f"{primary.provider}/{primary.model}",
+            request=self._model_request(messages),
+            replay=ModelResponse(
+                text=answer,
+                tool_calls=(),
+                usage=Usage(),
+                finish_reason=FinishReason.STOP,
+                provider="nexus-cache",
+                model="cache",
+                cost_usd=Decimal(0),
+            ),
+        )
+        marker = ACTING_PID.set(
+            self.pid
+        )  # still `waiting` (the routed step's AWAIT): no new transition
+        try:
+            outcome = await self.ctx.runner.run(action, pid=self.pid)
+        finally:
+            ACTING_PID.reset(marker)
+        if isinstance(outcome, PendingApproval):
+            raise _Parked(outcome.approval_id)
+        if isinstance(outcome, Denied):
+            raise _Exit(ExitReason.POLICY_DENIED, f"model call denied: {outcome.reason}")
+        if isinstance(outcome, Failed):
+            raise _Exit(ExitReason.FAILED, f"model call failed: {outcome.error}")
+        if not isinstance(outcome, Completed) or not isinstance(outcome.result, ModelResponse):
+            raise _Exit(ExitReason.FAILED, "unexpected action outcome")
+        return outcome.result.text
 
     async def _run_tool(self, call: ToolCallRequest) -> Message:
         def reply(content: str, *, error: bool = False) -> Message:

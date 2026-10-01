@@ -86,8 +86,11 @@ LLM context. Real retrieval is Phase 4 (NEEDS #42).
   Responses with tool calls are never cached; PHI runs never cache.
 - Outcome mapping (same as the direct path): LLM stage `blocked` on a gate DENY -> process exit `policy_denied`; approval pending ->
   run parks (`awaiting_approval`); a failed model call or exhausted route -> `failed`.
-- **Not gated:** only the LLM stage is a `ModelCall`. A cache or rules hit is served with no Risk Kernel call and no audit row
-  (NEEDS #65). Tool calls from a model answer are still dispatched through the executor by the agent loop.
+- **Cache hits are gated (review fix, NEEDS #65):** `RunContext` replays a cached answer as the very `model_call` it substitutes
+  (`ModelCall(replay=...)`: same name and arguments, gated and audited, `perform` returns the cached text, provider `nexus-cache`,
+  zero tokens and cost, no budget reservation). A kill-switch or DENY rule stops it; a redaction applies to it. **Rules (and MPM/RAG)
+  hits are still not gated or audited** (static tenant configuration / retrieval, no model output). Tool calls from a model answer
+  are dispatched through the executor by the agent loop.
 - **Run log:** `nexus_stage` (stage, `hit`/`miss`, reason, latency, tokens, `cost_usd` as a decimal string, cache-key hash,
   confidence) and `nexus_route` (status, hit stage, totals, `cost_by_stage`) are additive run-event types (ADR 0012), folded into
   `RunState.nexus_stages` / `nexus_routes`, hash-chained and replayable like every other event. Not in the audit chain (frozen

@@ -297,3 +297,47 @@ async def test_budgeted_deps_keeps_everything_else_and_swaps_only_the_runner() -
     assert wrapped.runner_factory is not None and deps.runner_factory is None
     box["stop"].set()
     await k.sched.wait(box["pid"])
+
+
+async def test_review_a_replayed_cached_answer_reserves_nothing_but_is_still_gated() -> None:
+    from axis_runtime.models.types import FinishReason, ModelResponse, Usage
+
+    gate = ScriptedGate()
+    k = make_kernel()
+    seen: list[Any] = []
+
+    async def work(ctx: Any) -> None:
+        deps = make_deps(gate=gate, transport=ScriptedTransport([]), tools=registry())
+        runner = budgeted_deps(deps, ctx).runner_factory
+        assert runner is not None
+        # a hard cap far below any prompt estimate: a charged replay would trip it
+        replay = ModelResponse("cached", (), Usage(), FinishReason.STOP, "nexus-cache", "cache")
+        inner = _Inner(replay)
+        seen.append(await BudgetedRunner(inner, ctx).run(_replay_call(replay), pid=ctx.pid))
+
+    pid = k.sched.spawn(spec(limits={TOK: Limit(hard=1)}), work)
+    v = await k.sched.wait(pid)
+    assert v.exit_reason is ExitReason.COMPLETED and isinstance(seen[0], Completed)
+    assert not k.sink.of(TkiEventType.BUDGET_DENIED)
+    assert not [e for e in k.sink.of(TkiEventType.BUDGET_RESERVED) if "tokens" in e.data["amounts"]]
+
+
+class _Inner:
+    def __init__(self, replay: Any) -> None:
+        self._replay = replay
+
+    async def run(self, action: Any, *, pid: str) -> Any:
+        return Completed(self._replay, allow())
+
+
+def _replay_call(replay: Any) -> ModelCall:
+    req = ModelRequest("t", (Message("user", "x" * 4000),), ModelTarget("openai", "gpt-4o"))
+    return ModelCall(name="openai/gpt-4o", request=req, replay=replay)
+
+
+def test_review_a_replayed_model_call_cannot_be_serialised_for_an_activity() -> None:
+    from axis_runtime.models.types import FinishReason, ModelResponse, Usage
+
+    replay = ModelResponse("c", (), Usage(), FinishReason.STOP, "nexus-cache", "cache")
+    with pytest.raises(ValueError, match="replayed"):
+        _replay_call(replay).to_spec()
