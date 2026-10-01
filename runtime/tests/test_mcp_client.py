@@ -550,3 +550,13 @@ async def test_server_text_cannot_change_policy_input_on_the_next_call() -> None
 
 def test_effects_helper_is_used() -> None:
     assert Effects().total() == 0
+
+
+async def test_backend_refuses_a_listed_tool_that_shadows_a_builtin_even_without_allow_tools() -> (
+    None
+):
+    t = FakeTransport([tool("builtin")])
+    c, _ = backend(t)  # no allow_tools: the server may list anything well-formed
+    with pytest.raises(McpToolNotAllowed):
+        await c.call_tool("kb", "builtin", {})
+    assert t.sent == []  # refused before even connecting

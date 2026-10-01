@@ -100,10 +100,10 @@ def test_same_id_is_type_exact(a: object, b: object, same: bool) -> None:
 
 def test_route_incoming_id_confusion() -> None:
     for wrong in ('"1"', "2"):  # valid ids that are not ours: ignored
-        obj = json.loads('{"jsonrpc":"2.0","id":%s,"result":{}}' % wrong)
+        obj = json.loads(f'{{"jsonrpc":"2.0","id":{wrong},"result":{{}}}}')
         assert p.route_incoming(obj, 1) == (None, None)
     for wrong in ("1.0", "true", "null"):  # not valid ids at all: malformed, never a match
-        obj = json.loads('{"jsonrpc":"2.0","id":%s,"result":{}}' % wrong)
+        obj = json.loads(f'{{"jsonrpc":"2.0","id":{wrong},"result":{{}}}}')
         with pytest.raises(p.ProtocolError):
             p.route_incoming(obj, 1)
     ours = {"jsonrpc": "2.0", "id": 1, "result": {}}

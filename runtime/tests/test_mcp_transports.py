@@ -218,7 +218,7 @@ async def test_http_sse_framing_edge_cases() -> None:
     await s.invoke_tool("t", {})
     s = make(
         lambda m: sse(
-            raw='data: {"jsonrpc":"2.0",\ndata: "id": %d, "result": {"content": []}}\n\n' % m["id"]
+            raw=f'data: {{"jsonrpc":"2.0",\ndata: "id": {m["id"]}, "result": {{"content": []}}}}\n\n'
         )
     )
     await s.initialize()
@@ -395,3 +395,25 @@ async def test_http_config_without_url_and_owned_client() -> None:
         ServerConfig("t", "kb", "http", url=URL), McpLimits(), resolver=public
     )
     await t.close()  # owns and closes its client; no session so no DELETE
+
+
+async def test_http_body_reading_stops_at_the_cap_instead_of_buffering_an_endless_stream() -> None:
+    import asyncio
+
+    produced = [0]
+
+    async def endless() -> Any:
+        while True:
+            produced[0] += 4096
+            yield b"x" * 4096
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if rpc(req).get("method") != "tools/call":
+            return standard(req)
+        return httpx.Response(200, content=endless(), headers={"content-type": "application/json"})
+
+    s = McpSession("kb", http(handler, max_message_bytes=10_000, call_timeout_seconds=5))
+    await s.initialize()
+    with pytest.raises(McpResponseTooLarge):
+        await asyncio.wait_for(s.invoke_tool("t", {}), 2)  # the parser's own check never runs
+    assert produced[0] <= 10_000 + 2 * 4096  # we stopped reading at the cap
