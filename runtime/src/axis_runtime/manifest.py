@@ -10,6 +10,7 @@ TOOL_KINDS = frozenset({"function", "mcp", "code", "browser", "channel", "agent"
 SIDE_EFFECTS = frozenset({"none", "read", "write", "external"})
 SUPPORTED_SUPERVISORS = frozenset({"one-for-one"})
 SUPPORTED_RESTART_POLICIES = frozenset({"never", "on_failure"})
+ROUTING_STAGES = frozenset({"cache", "rules", "mpm", "rag", "llm"})
 
 
 class ManifestError(ValueError):
@@ -72,6 +73,7 @@ class RuntimeManifest:
     budgets: Budgets = field(default_factory=Budgets)
     process: ProcessConfig = field(default_factory=ProcessConfig)
     phi: bool = False
+    routing_stages: tuple[str, ...] = ("llm",)
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> RuntimeManifest:
@@ -123,6 +125,7 @@ class RuntimeManifest:
                 supervisor=str(proc.get("supervisor", "one-for-one")),
             ),
             phi=bool((raw.get("data") or {}).get("phi", False)),
+            routing_stages=_routing_stages(raw.get("routing")),
         )
 
     def validate_supported(self) -> None:
@@ -162,6 +165,24 @@ def _model(raw: Mapping[str, Any], path: str) -> ModelSpec:
         endpoint=raw.get("endpoint"),
         params=dict(raw.get("params") or {}),
     )
+
+
+def _routing_stages(raw: Any) -> tuple[str, ...]:
+    if raw is None:
+        return ("llm",)
+    if not isinstance(raw, Mapping):
+        raise ManifestError("routing", "must be an object")
+    stages = raw.get("stages")
+    if stages is None:
+        return ("llm",)
+    if not isinstance(stages, list | tuple) or not all(isinstance(s, str) for s in stages):
+        raise ManifestError("routing.stages", "must be a list of stage names")
+    for s in stages:
+        if s not in ROUTING_STAGES:
+            raise ManifestError("routing.stages", f"unknown stage {s!r}")
+    if len(set(stages)) != len(stages):
+        raise ManifestError("routing.stages", "duplicate stage")
+    return tuple(stages)
 
 
 def _budgets(raw: Mapping[str, Any]) -> Budgets:
