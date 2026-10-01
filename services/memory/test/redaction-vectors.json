@@ -1,0 +1,76 @@
+{
+  "note": "Shared by services/memory (redact.ts) and runtime (redaction.py): both must produce `expected`.",
+  "vectors": [
+    {
+      "name": "top-level key",
+      "doc": { "a": 1, "b": "x" },
+      "paths": ["a"],
+      "expected": { "a": "[REDACTED]", "b": "x" }
+    },
+    {
+      "name": "nested key",
+      "doc": { "p": { "ssn": "1", "ok": "2" } },
+      "paths": ["p.ssn"],
+      "expected": { "p": { "ssn": "[REDACTED]", "ok": "2" } }
+    },
+    {
+      "name": "whole subtree",
+      "doc": { "p": { "ssn": "1", "ok": "2" } },
+      "paths": ["p"],
+      "expected": { "p": "[REDACTED]" }
+    },
+    {
+      "name": "star over object values",
+      "doc": { "p": { "x": 1, "y": 2 } },
+      "paths": ["p.*"],
+      "expected": { "p": { "x": "[REDACTED]", "y": "[REDACTED]" } }
+    },
+    {
+      "name": "star over list then key",
+      "doc": {
+        "rows": [
+          { "email": "a", "n": 1 },
+          { "email": "b", "n": 2 }
+        ]
+      },
+      "paths": ["rows.*.email"],
+      "expected": {
+        "rows": [
+          { "email": "[REDACTED]", "n": 1 },
+          { "email": "[REDACTED]", "n": 2 }
+        ]
+      }
+    },
+    {
+      "name": "list index",
+      "doc": { "items": ["a", "b", "c"] },
+      "paths": ["items.1"],
+      "expected": { "items": ["a", "[REDACTED]", "c"] }
+    },
+    {
+      "name": "index out of range is a no-op",
+      "doc": { "items": ["a"] },
+      "paths": ["items.5"],
+      "expected": { "items": ["a"] }
+    },
+    {
+      "name": "missing path is a no-op",
+      "doc": { "a": 1 },
+      "paths": ["b.c"],
+      "expected": { "a": 1 }
+    },
+    {
+      "name": "path through a scalar is a no-op",
+      "doc": { "a": "text" },
+      "paths": ["a.b"],
+      "expected": { "a": "text" }
+    },
+    {
+      "name": "several paths",
+      "doc": { "a": 1, "b": 2, "c": 3 },
+      "paths": ["a", "c"],
+      "expected": { "a": "[REDACTED]", "b": 2, "c": "[REDACTED]" }
+    }
+  ],
+  "malformed": ["", ".", "a..b", ".a", "a."]
+}
