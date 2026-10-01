@@ -203,7 +203,12 @@ class RunResult:
 
 class AgentProcess:
     def __init__(
-        self, manifest: RuntimeManifest, ctx: RunContext, *, ppid: str | None = None
+        self,
+        manifest: RuntimeManifest,
+        ctx: RunContext,
+        *,
+        ppid: str | None = None,
+        predecessor: AgentProcess | None = None,
     ) -> None:
         self.manifest = manifest
         self.ctx = ctx
@@ -218,7 +223,13 @@ class AgentProcess:
         self._resume = asyncio.Event()
         self._interrupts: list[str] = []
         self._escalation: asyncio.Task[None] | None = None
+        # A restart is the same child: its budget is spent across every incarnation, so N restarts
+        # cannot multiply the cap by N + 1.
+        self._budget_pids: frozenset[str] = frozenset({self.pid})
         self._started = ctx.deps.clock.now()
+        if predecessor is not None:
+            self._budget_pids |= predecessor._budget_pids  # noqa: SLF001
+            self._started = predecessor._started  # noqa: SLF001
         self._spawned_children = 0
         ctx.processes[self.pid] = self
 
@@ -365,13 +376,13 @@ class AgentProcess:
 
     def _usage(self) -> dict[str, float]:
         st = self.ctx.recorder.state
-        mine = [m for m in st.model_calls if m.pid == self.pid]
+        mine = [m for m in st.model_calls if m.pid in self._budget_pids]
         elapsed = (self.ctx.deps.clock.now() - self._started).total_seconds()
         return {
             "tokens": float(sum(m.input_tokens + m.output_tokens for m in mine)),
             "cost_usd": sum(m.cost_micro_usd or 0 for m in mine) / 1_000_000,
             "runtime_seconds": elapsed,
-            "tool_calls": float(sum(1 for t in st.tool_calls if t.pid == self.pid)),
+            "tool_calls": float(sum(1 for t in st.tool_calls if t.pid in self._budget_pids)),
         }
 
     async def _check_budgets(
@@ -606,8 +617,10 @@ class AgentProcess:
             return await self.ctx.deps.child_spawner(self.ctx, ref, args)
         input_text = str(args.get("input") or json.dumps(to_jsonable(args)))
         restarts = 0
+        previous: AgentProcess | None = None
         while True:
-            child = AgentProcess(child_manifest, self.ctx, ppid=self.pid)
+            child = AgentProcess(child_manifest, self.ctx, ppid=self.pid, predecessor=previous)
+            previous = child
             self.children.append(child)
             await child.spawn()
             task = asyncio.create_task(child.run(input_text))

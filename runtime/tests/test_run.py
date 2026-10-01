@@ -753,3 +753,33 @@ def test_manifest_validation_errors_carry_a_path(patch: dict[str, Any], path: st
     with pytest.raises(ManifestError) as exc:
         RuntimeManifest.from_dict(raw)
     assert exc.value.path == path
+
+
+async def test_review_in_run_restart_continues_the_childs_token_budget() -> None:
+    """The built-in one-for-one loop gave every restart a fresh budget (usage was summed per pid)."""
+    parent = make_manifest(
+        blueprint={"name": "lead", "version": "1.0.0"},
+        tools=[{"name": "delegate", "kind": "agent", "ref": "worker", "side_effects": "write"}],
+        process={"max_children": 1},
+    )
+    worker = make_manifest(
+        blueprint={"name": "worker", "version": "2.0.0"},
+        tools=[],
+        process={"restart_policy": "on_failure", "max_restarts": 1},
+        budgets={"tokens": {"soft": None, "hard": 30}},
+    )
+    deps = deps_for(child_manifests={"worker": worker})
+    deps.models._transport.responses = [  # type: ignore[attr-defined]  # noqa: SLF001
+        (200, tool_turn(("delegate", {"input": "t"}))),
+        (200, tool_turn(("noop", {}))),  # attempt 1: 15 tokens...
+        (400, {"error": {}}),  # ...then fails
+        (200, tool_turn(("noop", {}))),  # attempt 2: another 15 = the whole 30 token budget
+        (200, final("c2 would complete on a fresh budget")),
+        (200, final("lead final")),
+    ]
+    result = await run_agent(parent, "go", deps)
+    kids = [p for p in result.state.processes.values() if p.ppid == result.pid]
+    assert [k.exit_reason for k in kids] == [ExitReason.FAILED, ExitReason.BUDGET_EXCEEDED]
+    pids = {k.pid for k in kids}
+    spent = sum(m.input_tokens + m.output_tokens for m in result.state.model_calls if m.pid in pids)
+    assert spent <= 30  # across both incarnations (a fresh budget let the worker spend 45)
