@@ -1,55 +1,152 @@
 packs: [pack.yaml]
 cases:
   - name: model calls are allowed
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: model_call, tool: { name: openai/gpt-4o, kind: model, side_effects: external }, args: {} }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: model_call,
+        tool: { name: openai/gpt-4o, kind: model, side_effects: external },
+        args: {},
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-model-calls] }
   - name: an MCP read is allowed, an MCP write is denied
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: mcp_call, tool: { name: kb/lookup, kind: mcp, side_effects: read }, args: {} }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: mcp_call,
+        tool: { name: kb/lookup, kind: mcp, side_effects: read },
+        args: {},
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-reads] }
   - name: an MCP write tool is denied
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: mcp_call, tool: { name: kb/write_note, kind: mcp, side_effects: write }, args: {} }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: mcp_call,
+        tool: { name: kb/write_note, kind: mcp, side_effects: write },
+        args: {},
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-mcp-writes] }
   - name: an inbound MCP write is denied, an inbound read is allowed
     input:
-      { data: { phi: false }, enforcement_point: tool_call, tool: { name: close-claim, kind: function, side_effects: write }, args: {}, actor: { type: system, id: partner } }
+      {
+        data: { phi: false },
+        enforcement_point: tool_call,
+        tool: { name: close-claim, kind: function, side_effects: write },
+        args: {},
+        actor: { type: system, id: partner },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-inbound-writes] }
   - name: an inbound read is allowed
     input:
-      { data: { phi: false }, enforcement_point: tool_call, tool: { name: lookup-claim, kind: function, side_effects: read }, args: {}, actor: { type: system, id: partner } }
+      {
+        data: { phi: false },
+        enforcement_point: tool_call,
+        tool: { name: lookup-claim, kind: function, side_effects: read },
+        args: {},
+        actor: { type: system, id: partner },
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-reads] }
   - name: a memory read is a read tool call
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: tool_call, tool: { name: memory_search, kind: "memory:read", side_effects: read }, args: { scopes: [long_term] } }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: tool_call,
+        tool: { name: memory_search, kind: "memory:read", side_effects: read },
+        args: { scopes: [long_term] },
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-reads] }
   - name: a plain memory write is allowed
     input:
-      { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: memory_write, tool: { name: memory_write, kind: "memory:long_term", side_effects: write }, args: { content: "prefers email" } }
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: memory_write,
+        tool: { name: memory_write, kind: "memory:long_term", side_effects: write },
+        args: { content: "prefers email" },
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-memory-writes] }
   - name: a memory write with an unredacted SSN is denied
     input:
-      { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: memory_write, tool: { name: memory_write, kind: "memory:long_term", side_effects: write }, args: { content: "ssn 123-45-6789" } }
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: memory_write,
+        tool: { name: memory_write, kind: "memory:long_term", side_effects: write },
+        args: { content: "ssn 123-45-6789" },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-memory-write-unredacted-phi] }
   - name: sandboxed python without network is allowed
     input:
-      { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: code_exec, tool: { name: py, kind: code, side_effects: external }, args: { language: python, network: false } }
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: code_exec,
+        tool: { name: py, kind: code, side_effects: external },
+        args: { language: python, network: false },
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-sandboxed-python] }
   - name: code with network is denied
     input:
-      { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: code_exec, tool: { name: py, kind: code, side_effects: external }, args: { language: python, network: true } }
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: code_exec,
+        tool: { name: py, kind: code, side_effects: external },
+        args: { language: python, network: true },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-code-network] }
   - name: shell is denied
     input:
-      { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: code_exec, tool: { name: py, kind: code, side_effects: external }, args: { language: shell, network: false } }
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: code_exec,
+        tool: { name: py, kind: code, side_effects: external },
+        args: { language: shell, network: false },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-code-shell] }
   - name: browsing the allowed host is allowed
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: browser_exec, tool: { name: web, kind: browser, side_effects: external }, args: { host: 127.0.0.1, operation: navigate } }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: browser_exec,
+        tool: { name: web, kind: browser, side_effects: external },
+        args: { host: 127.0.0.1, operation: navigate },
+      }
     expect: { decision: ALLOW, winners: [phase4-tools/allow-browser-on-the-allowed-host] }
   - name: browsing another host is denied
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: browser_exec, tool: { name: web, kind: browser, side_effects: external }, args: { host: localhost, operation: navigate } }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: browser_exec,
+        tool: { name: web, kind: browser, side_effects: external },
+        args: { host: localhost, operation: navigate },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-browser-foreign-host] }
   - name: typing into a page is denied
-    input: { actor: { type: agent, id: a1 }, data: { phi: false }, enforcement_point: browser_exec, tool: { name: web, kind: browser, side_effects: external }, args: { host: 127.0.0.1, operation: type } }
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: browser_exec,
+        tool: { name: web, kind: browser, side_effects: external },
+        args: { host: 127.0.0.1, operation: type },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-browser-typing] }
   - name: PHI agents get no code and no browser
     input:
-      { actor: { type: agent, id: a1 }, enforcement_point: code_exec, tool: { name: py, kind: code, side_effects: external }, args: { language: python, network: false }, data: { phi: true } }
+      {
+        actor: { type: agent, id: a1 },
+        enforcement_point: code_exec,
+        tool: { name: py, kind: code, side_effects: external },
+        args: { language: python, network: false },
+        data: { phi: true },
+      }
     expect: { decision: DENY, winners: [phase4-tools/deny-phi-to-code-and-browser] }

@@ -1,7 +1,8 @@
 # MCP integration (client and server)
 
-Status: **Prototype**. Implemented in `runtime/src/axis_runtime/mcp/`, tested with in-repo fakes only (no third-party MCP
-client or server has been exercised: NEEDS #106). Protocol: MCP revisions 2025-06-18 and 2025-03-26, JSON-RPC 2.0, **tools
+Status: **Prototype**. Implemented in `runtime/src/axis_runtime/mcp/`, wired into the run loop and tested with in-repo fakes only
+(`make e2e-phase4` drives the fake stdio server `runtime/tests/fake_mcp_stdio.py` and the inbound HTTP server over a real socket; no
+third-party MCP client or server has been exercised: NEEDS #106). Protocol: MCP revisions 2025-06-18 and 2025-03-26, JSON-RPC 2.0, **tools
 only**. Contracts (proto, OpenAPI, ABL, DB) are unchanged; see NEEDS #100 for the one contract gap.
 
 ## Client: agents consuming MCP servers
@@ -32,6 +33,21 @@ manifest tool {kind: mcp, mcp_server: "kb", ref?: "search"}
   overrun, protocol violation or close, and never respawned mid-session. No sandbox (NEEDS #101).
 - **Limits** (`McpLimits`): message, result, description, schema sizes; tools per server; list pages; content items; call
   and connect timeouts; tool-list TTL.
+
+### Run-loop wiring (Phase 4 / E, ADR 0014)
+
+- **At spawn** (`AgentProcess._prepare_tools`, before `init_complete`): if the backend is a `TenantMcpClient`, `check_manifest` and
+  `definitions_for` run. An unknown/other-tenant server, a shadowing name, or a tool the server does not list fails the process with
+  `init:` detail and makes no model call. The model is shown the server's sanitised description and schema.
+- **Naming.** ABL v1 (frozen) types `mcpServer` as a URI and `ref` as a versioned ref, so the runtime reads `mcpServer: "mcp://<name>"`
+  as the registry entry `<name>` (anything else is passed through and will not resolve), and the remote tool name is the manifest tool's
+  `name`. Policy and audit see the qualified name `server/tool` in `tool.name`; the action name is the manifest name.
+- **Injection.** A tool result is data: the e2e has the (scripted) model obey an injected "call write-note" in a result; the follow-up
+  call is gated (`deny-mcp-writes`), audited as a DENY and never reaches the server.
+- **Inbound** (e2e): unauthenticated calls reach no gate; an authenticated tenant-1 client lists its catalog, a read tool is
+  ALLOWed, a write tool is DENYed ("Denied by policy", not performed), a tenant-2 client cannot see or call tenant 1's tools. The kernel
+  receives `context.inbound`; policy cannot match on it (NEEDS #X2), so the pack matches `actor.type eq system`. The wire actor carries
+  no pid (the audit table rejects one on a non-agent actor, ADR 0014 #10).
 
 ## Server: external MCP clients calling AXIS
 

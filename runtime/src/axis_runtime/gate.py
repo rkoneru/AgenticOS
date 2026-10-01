@@ -142,9 +142,9 @@ def to_proto_request(request: EvaluateRequest) -> gate_pb2.EvaluateRequest:
         actor=common_pb2.Actor(
             type=_ACTOR_TO_PROTO[request.actor_type],
             id=request.actor_id,
-            # Only an agent actor has a process id: the audit table rejects a pid on any other actor
-            # type (CHECK actor_type = 'agent' <=> actor_pid IS NOT NULL), so an inbound MCP client
-            # (wire type `system`) that carried one would have every call denied as "audit unavailable".
+            # Only an agent actor has a process id: the audit table rejects a pid on any other
+            # actor type (CHECK actor_type = 'agent' <=> actor_pid IS NOT NULL), so an inbound MCP
+            # client (wire type `system`) that carried one had every call denied (ADR 0014 #10).
             pid=request.pid if request.actor_type is ActorType.AGENT else "",
         ),
         blueprint=common_pb2.BlueprintRef(

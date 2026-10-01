@@ -1,8 +1,8 @@
 # Memory service
 
-Status: **Prototype** (real Postgres + pgvector, fake embedder, loopback dev HTTP only) · Code: `services/memory` (`@axis/memory`),
+Status: **Built as a dev surface** (real Postgres + pgvector, fake embedder, loopback dev HTTP only; wired into the run loop and exercised by `make e2e-phase4`) · Code: `services/memory` (`@axis/memory`),
 `runtime/src/axis_runtime/memory.py` · Tests: `services/memory/test` (real Postgres), `runtime/tests/test_memory.py` ·
-ADR: `docs/adr/0013-memory-service-schema.md` · Gaps: `docs/NEEDS.md` #400-#407.
+ADR: `docs/adr/0013-memory-service-schema.md` · Gaps: `docs/NEEDS.md` #400-#407 (and #X1, #X5 for the run wiring).
 
 ## What it stores
 
@@ -50,7 +50,25 @@ Agent routes: `write`, `search`, `recall`. Admin routes (token `admin: true`): `
 Examples: `services/memory/contract/wire-v1.json`, checked by the server tests and by the Python client tests. Errors:
 401 / 403 / 400 `INVALID` / 404 `NOT_FOUND` / 502 `EMBEDDER` / opaque 500.
 
-## Runtime
+## Runtime wiring (Phase 4 / E, ADR 0014)
+
+`RunDeps.memory = MemoryWiring(base_url, token)` plus the manifest's `memory.*` flags and knowledge bases make `start_agent` build, per
+run, an `HttpMemoryBackend` (principal = `RunDeps.principal`, default `agent:<name>`; owners: run id, agent name, `session_id`) and,
+when knowledge bases are listed, a `MemoryRagRetriever` (`RunContext.memory_retriever`, for the host's NEXUS `rag` stage). Both are
+closed when the run ends. The model gets two tools, only for scopes the flags allow:
+
+| Tool            | Action / enforcement point                                 | Model controls                                 | Wiring (not the model)                     |
+| --------------- | ---------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------ |
+| `memory_write`  | `MemoryWrite` / `memory_write`, `tool.kind memory:<scope>` | scope, content, metadata, subject, ttl_seconds | ACL (default: writer alone), `phi`, owner  |
+| `memory_search` | `MemoryRead` / `tool_call`, `tool.kind memory:read` (read) | query, scope, limit (1-20)                     | scopes allowed, principal, knowledge bases |
+
+The policy DSL has no `memory_read` point, hence the `tool_call` encoding (ADR 0014). The gate sees scopes, limit and the query's
+length and SHA-256, never its text; the run log keeps hits as ids, scores and content hashes. Retrieval through the NEXUS rag stage is
+**not** a gated action (NEEDS #X1). `e2e/test_phase4_tools.py` proves: principal A cannot retrieve principal B's document (by rag or by
+tool), tenant 2 cannot see tenant 1's memory with the same principal name and a tenant-2 credential cannot be pointed at tenant 1,
+an unredacted SSN write is denied by policy and never stored, and the tool-scoped kernel kill-switch stops reads and writes.
+
+### Library
 
 `HttpMemoryBackend` implements `tools.MemoryStore`: `MemoryWrite(scope=run|session|long_term|tenant, args={content, metadata?, acl?,
 subject?, ttl_seconds?, phi?})` goes gate -> audit -> `write`. The gate's redaction paths are applied to `args` by the executor

@@ -22,6 +22,15 @@ Status: **Prototype** (process-level isolation, tested on one Linux kernel). Not
 - `CodeRunAction` (`actions.py`, enforcement point `code_exec`, `tool.kind="code"`): the only way
   agent code reaches a backend. It replaced the Phase 2 `CodeExec` placeholder.
 
+## Run-loop wiring (Phase 4 / E)
+
+A manifest tool `{kind: code}` becomes `CodeRunAction` with a fixed model-facing schema (`language: python|shell`, `code`); the
+host supplies the backend in `Backends.sandbox`. `network` stays wiring. The e2e runs real Python in `LocalProcessBackend`
+(`make e2e-phase4` calls `check_isolation()` first and FAILS on a host that cannot isolate: it never skips and never runs code
+unisolated), shows an outbound connect to a local site failing inside the sandbox while the site sees no request from it, and policy
+denies shell, `network=true` (driven straight at the executor because no agent can set it) and PHI agents. The event log keeps the
+`isolation` map, usage and duration (they were being dropped on the dict path until the e2e noticed, ADR 0014).
+
 ## Gate and audit contract
 
 The gate request's `args` document is `{language, code_sha256, code_bytes, limits, network}`. The code
