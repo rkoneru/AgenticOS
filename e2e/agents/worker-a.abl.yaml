@@ -1,0 +1,23 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: worker-a
+  version: 1.0.0
+  description: Phase 3 e2e worker.
+spec:
+  riskClassification:
+    level: limited
+    rationale: Summarises a claim for the orchestrator.
+    transparencyNotice: You are interacting with an AI system.
+  model:
+    primary: { provider: openai, model: gpt-4o, params: { maxOutputTokens: 64 } }
+  instructions:
+    system: You summarise one claim.
+  routing:
+    stages: [cache, rules, llm]
+  budgets:
+    tokens: { soft: 400, hard: 1000 }
+  process:
+    restartPolicy: never
+  policy:
+    packs: ["phase3-orchestration@^1.0.0", "phi-redaction@^1.1.0"]
