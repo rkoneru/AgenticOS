@@ -559,3 +559,67 @@ async def test_a_new_unregistered_action_subclass_is_picked_up_by_the_registry()
         del Rogue
         gc.collect()  # subclasses are weakly referenced: make sure the test class does not leak
     assert set(all_action_types()) == set(SAMPLES)
+
+
+# ---- sandbox: the process-spawning exemption is exactly one file ------------------------------------
+
+
+@pytest.mark.parametrize(
+    "rel",
+    ["run.py", "executor.py", "actions.py", "tools.py", "tki/scheduler.py", "nexus/router.py",
+     "sandbox/types.py", "sandbox/artifacts.py", "sandbox/workdir.py", "sandbox/__init__.py",
+     "sandbox/backends/__init__.py"],
+)  # fmt: skip
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import subprocess",
+        "from subprocess import Popen",
+        "import asyncio\nasyncio.create_subprocess_exec('ls')",
+        "import os\nos.system('ls')",
+        "import os\nos.killpg(1, 9)",
+        "import threading",
+    ],
+)
+def test_only_the_sandbox_backend_may_spawn_processes(rel: str, source: str) -> None:
+    assert bs.scan_source(rel, source) != []
+
+
+def test_sandbox_backend_exemption_is_narrow() -> None:
+    be = "sandbox/backends/local.py"
+    assert bs.scan_source(be, "import subprocess\nsubprocess.Popen(['x'])") == []
+    # ...but every OTHER rule still applies to that file
+    for src in (
+        "import ctypes",
+        "import socket",
+        "import pickle",
+        "import httpx",
+        "eval('1')",
+        "import os\nos.system('ls')",
+        "import os\nos.putenv('A', 'b')",
+        "import shutil\nshutil.rmtree('/')",
+        "import asyncio\nasyncio.create_subprocess_shell('ls')",
+        "import asyncio\nloop.create_connection(f, 'h', 1)",
+        "getattr(x, name)",
+    ):
+        assert bs.scan_source(be, src) != [], src
+    # the per-file grants do not leak to the sibling sandbox modules
+    assert bs.scan_source("sandbox/artifacts.py", "import subprocess") != []
+    assert bs.scan_source("sandbox/workdir.py", "import subprocess") != []
+    assert bs.scan_source("sandbox/artifacts.py", "import shutil\nshutil.rmtree('x')") != []
+
+
+def test_sandbox_backend_is_not_reachable_without_the_executor_tripwire() -> None:
+    src = (
+        Path(bs.__file__).parent.parent / "src/axis_runtime/sandbox/backends/local.py"
+    ).read_text()
+    assert "in_executor()" in src
+    assert "sandbox/backends/local.py" in bs.RESTRICTED_NAMES["in_executor"]
+
+
+def test_agent_loop_code_cannot_import_the_sandbox_internals_to_spawn() -> None:
+    """Importing the backend is allowed (it is gated by in_executor); spawning from the loop is not."""
+    loop_like = (
+        "from axis_runtime.sandbox.backends.local import LocalProcessBackend\nimport subprocess"
+    )
+    assert any("import:subprocess" in p for p in bs.scan_source("run.py", loop_like))

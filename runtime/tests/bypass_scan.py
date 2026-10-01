@@ -111,6 +111,27 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
     "tki/ipc.py": {
         "pathlib": "locates the frozen ipc-envelope-v1 schema (read only); patterns are not copied.",
     },
+    "sandbox/types.py": {
+        "base64": "SandboxResult.to_dict encodes artifact bytes for the agent (pure encoding).",
+    },
+    "sandbox/artifacts.py": {
+        "os": "captures artifacts from the sandbox output dir: fd-relative, O_NOFOLLOW, read-only.",
+        "stat": "file-type predicates for the capture (regular file / symlink / dir).",
+    },
+    "sandbox/workdir.py": {
+        "os": "creates the private per-run working directory and writes the code file into it.",
+        "shutil": "rmtree of that working directory (path-checked against the sandbox prefix).",
+        "stat": "chmod bits used when wiping a tree the untrusted code made unreadable.",
+        "tempfile": "mkdtemp for the per-run working directory.",
+    },
+    "sandbox/backends/local.py": {
+        "os": "wait4/killpg/set_blocking on the sandbox process group; reads no host state.",
+        "selectors": "multiplexes the sandbox's stdout/stderr pipes with a deadline.",
+        "signal": "signal names for the exit-status decoding and SIGKILL of the process group.",
+        "subprocess": "the ONLY place agent-runtime code spawns a process: the sandbox child "
+        "(fixed argv, no shell, cleared env), reachable only via CodeRunAction in the executor.",
+        "threading": "cancel Event + probe lock; the blocking supervisor runs in a worker thread.",
+    },
     "process.py": {
         "os": "reads AXIS_PROCESS_MODEL_PATH (environment read only).",
         "pathlib": "locates the frozen process-model.json (read only).",
@@ -123,13 +144,40 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
 EXEMPTIONS: dict[str, dict[str, str]] = {
     "file-write": {
         "models/secrets.py": "FileSecretStore atomic write (os.open/fdopen/replace); dev-only store.",
+        "sandbox/workdir.py": "creates, fills and wipes the per-run sandbox working directory.",
+        "sandbox/artifacts.py": "os.open is used read-only (O_RDONLY|O_NOFOLLOW) for fd-relative "
+        "artifact capture; the scanner cannot prove the flags.",
     },
     "dns": {
         "models/adapters/base.py": "default_resolver uses loop.getaddrinfo (DNS lookup only).",
     },
+    "banned-qualified": {
+        "sandbox/backends/local.py": "subprocess.Popen (the sandbox child) and os.killpg (kill its "
+        "process group).",
+        "sandbox/workdir.py": "shutil.rmtree of the per-run working directory.",
+    },
+    "thread-escape": {
+        "sandbox/backends/local.py": "run_in_executor: the blocking supervisor (wait4 gives exact "
+        "rusage) runs in a worker thread; cancellation is signalled through an Event.",
+    },
     "introspection": {
         "actions.py": "all_action_types() walks Action.__subclasses__() (registry for the bypass test).",
     },
+}
+
+# Narrowing of an exemption: when (rule, file) is listed here the exemption covers ONLY findings whose
+# detail is in the set (so the sandbox files may use subprocess.Popen / os.killpg / shutil.rmtree and
+# nothing else of the banned-qualified family, e.g. not os.system).
+EXEMPTION_DETAILS: dict[tuple[str, str], frozenset[str]] = {
+    ("banned-qualified", "sandbox/backends/local.py"): frozenset(
+        {
+            "uses subprocess.Popen",
+            "uses subprocess.PIPE",
+            "uses subprocess.DEVNULL",
+            "uses os.killpg",
+        }
+    ),
+    ("banned-qualified", "sandbox/workdir.py"): frozenset({"uses shutil.rmtree"}),
 }
 
 # Name references that are never acceptable in src.
@@ -381,6 +429,7 @@ RESTRICTED_NAMES: dict[str, dict[str, str]] = {
     },
     "in_executor": {
         "guard.py": "defines it",
+        "sandbox/backends/local.py": "the LocalProcessBackend tripwire (runs only in the executor)",
         "actions.py": "re-export",
         "models/gateway.py": "the ModelGateway tripwire",
     },
@@ -705,7 +754,9 @@ def scan_source(rel: str, source: str) -> list[str]:
         elif f.rule == "gateway-construction":
             if rel in GATEWAY_CONSTRUCTION_FILES:
                 continue
-        elif rel in EXEMPTIONS.get(f.rule, {}):
+        elif rel in EXEMPTIONS.get(f.rule, {}) and f.detail in EXEMPTION_DETAILS.get(
+            (f.rule, rel), {f.detail}
+        ):
             continue
         problems.append(f.render(rel))
     return problems

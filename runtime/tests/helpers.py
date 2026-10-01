@@ -10,7 +10,7 @@ from axis_runtime.actions import (
     Action,
     Backends,
     BrowserExec,
-    CodeExec,
+    CodeRunAction,
     McpCall,
     MemoryWrite,
     MessageSend,
@@ -104,7 +104,9 @@ def model_call() -> ModelCall:
 SAMPLES: dict[type[Action], Callable[[], Action]] = {
     ToolCall: lambda: ToolCall(name="lookup", args={"q": "x", "ssn": "111-22-3333"}),
     McpCall: lambda: McpCall(name="search", mcp_server="kb", args={"q": "x", "ssn": "111-22-3333"}),
-    CodeExec: lambda: CodeExec(name="py", args={"language": "python", "code": "print(1)"}),
+    CodeRunAction: lambda: CodeRunAction(
+        name="py", args={"language": "python", "code": "print(1)"}
+    ),
     BrowserExec: lambda: BrowserExec(name="web", args={"url": "https://example.com"}),
     MessageSend: lambda: MessageSend(
         name="notify", channel="slack", args={"to": "#ops", "body": "hi"}

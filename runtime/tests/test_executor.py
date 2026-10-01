@@ -409,7 +409,7 @@ def test_registry_lists_every_concrete_action_and_no_abstract_ones() -> None:
     assert concrete == {
         "ToolCall",
         "McpCall",
-        "CodeExec",
+        "CodeRunAction",
         "BrowserExec",
         "MessageSend",
         "MemoryWrite",

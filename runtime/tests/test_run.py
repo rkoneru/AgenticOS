@@ -194,7 +194,9 @@ async def test_every_tool_kind_routes_through_the_gate_to_its_backend(
 ) -> None:
     effects = Effects()
     gate = ScriptedGate()
-    deps = deps_for(tool_turn(("t", {"a": 1})), final(), gate=gate)
+    deps = deps_for(
+        tool_turn(("t", {"a": 1, "language": "python", "code": "print(1)"})), final(), gate=gate
+    )
     deps.backends = recording_backends(effects)
     m = make_manifest(tools=[{"name": "t", "kind": kind, "side_effects": "external", **extra}])
     result = await run_agent(m, "x", deps)
@@ -783,3 +785,16 @@ async def test_review_in_run_restart_continues_the_childs_token_budget() -> None
     pids = {k.pid for k in kids}
     spent = sum(m.input_tokens + m.output_tokens for m in result.state.model_calls if m.pid in pids)
     assert spent <= 30  # across both incarnations (a fresh budget let the worker spend 45)
+
+
+async def test_invalid_code_tool_arguments_are_a_tool_error_not_a_crashed_run() -> None:
+    effects = Effects()
+    gate = ScriptedGate()
+    deps = deps_for(
+        tool_turn(("t", {"language": "cobol", "code": "SECRET-CODE"})), final(), gate=gate
+    )
+    deps.backends = recording_backends(effects)
+    m = make_manifest(tools=[{"name": "t", "kind": "code", "side_effects": "external"}])
+    result = await run_agent(m, "x", deps)
+    assert result.status == "completed" and effects.total() == 0
+    assert all(r.enforcement_point.value != "code_exec" for r in gate.requests)
