@@ -17,7 +17,7 @@ import dataclasses
 import hashlib
 import json
 import secrets
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
@@ -82,6 +82,12 @@ class ChildError(RuntimeError):
     """A child process did not complete (surfaced to the parent as a failed tool call)."""
 
 
+#: ``(run context, child ref, tool args) -> child output``; raises ``ChildError`` if the child did
+#: not complete. TKI supplies one (``tki.adapter.TkiChildSpawner``) so children run under a
+#: supervisor with budgets; the child's actions still go through the same gate and executor.
+ChildSpawner = Callable[["RunContext", str, Mapping[str, Any]], Awaitable[Any]]
+
+
 @dataclass
 class RunDeps:
     tenant_id: str
@@ -103,6 +109,8 @@ class RunDeps:
     #: When set, a REQUIRE_APPROVAL is resolved inline and the approved action is RE-GATED
     #: (executor.py); when absent the run parks with ``awaiting_approval`` as before.
     approvals: ApprovalResolver | None = None
+    #: Replaces the built-in one-for-one child loop of ``AgentProcess.spawn_child`` (see TKI).
+    child_spawner: ChildSpawner | None = None
 
 
 class _Exit(Exception):
@@ -467,7 +475,7 @@ class AgentProcess:
             outcome.error if isinstance(outcome, Failed) else "unexpected outcome", error=True
         )
 
-    # ---- children (supervisor: one-for-one) ---------------------------------------------
+    # ---- children (supervisor: one-for-one, or TKI via ``RunDeps.child_spawner``) ----------
     async def spawn_child(self, ref: str, args: Mapping[str, Any]) -> Any:
         child_manifest = self.ctx.deps.child_manifests.get(ref)
         if child_manifest is None:
@@ -475,6 +483,8 @@ class AgentProcess:
         if self._spawned_children >= self.manifest.process.max_children:
             raise ChildError(f"max_children ({self.manifest.process.max_children}) reached")
         self._spawned_children += 1
+        if self.ctx.deps.child_spawner is not None:
+            return await self.ctx.deps.child_spawner(self.ctx, ref, args)
         input_text = str(args.get("input") or json.dumps(to_jsonable(args)))
         restarts = 0
         while True:
