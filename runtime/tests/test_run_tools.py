@@ -634,3 +634,74 @@ def test_the_abl_mcp_server_uri_names_a_registered_server_only_through_the_mcp_s
 ) -> None:
     tools = [{"name": "lookup", "kind": "mcp", "mcp_server": raw, "side_effects": "read"}]
     assert make_manifest(tools=tools).tools[0].mcp_server == name
+
+
+# ---- Phase 4 review: a child agent is not its root --------------------------------------------------------
+
+
+def _lead_and_worker(
+    *, lead_phi: bool, worker_phi: bool
+) -> tuple[RuntimeManifest, RuntimeManifest]:
+    mem = {"run": False, "session": False, "long_term": True}
+    lead = make_manifest(
+        blueprint={"name": "lead", "version": "1.0.0"},
+        tools=[{"name": "delegate", "kind": "agent", "ref": "worker", "side_effects": "write"}],
+        process={"max_children": 1},
+        memory={**mem, "knowledge_bases": ["lead-private-kb"]},
+        data={"phi": lead_phi},
+    )
+    worker = make_manifest(
+        blueprint={"name": "worker", "version": "1.0.0"},
+        tools=[],
+        memory={**mem, "knowledge_bases": ["worker-kb"]},
+        data={"phi": worker_phi},
+    )
+    return lead, worker
+
+
+async def _run_lead(lead: RuntimeManifest, worker: RuntimeManifest) -> MemService:
+    svc = MemService()
+    transport = ScriptedTransport(
+        [
+            (200, turn(("delegate", {"input": "go"}))),  # lead delegates
+            (  # the child's own memory calls
+                200,
+                turn(
+                    (MEMORY_WRITE, {"scope": "long_term", "content": "child note"}),
+                    (MEMORY_SEARCH, {"query": "anything"}),
+                ),
+            ),
+            (200, openai_body("child done")),
+            (200, openai_body("lead done")),
+        ]
+    )
+    deps = make_deps(
+        transport=transport,
+        memory=svc.wiring(),
+        principal="alice",
+        child_manifests={"worker": worker},
+    )
+    result = await run_agent(lead, "go", deps)
+    assert result.status == "completed", result
+    return svc
+
+
+async def test_a_child_agent_gets_its_own_agent_scope_owner_and_its_own_knowledge_bases() -> None:
+    """Agent-scope memory is owned by the AGENT. A child used the ROOT's backend, so its long-term writes
+    landed in (and its searches read) the root's agent memory, and its search ran over the ROOT's
+    knowledge bases whatever the child's own manifest declared."""
+    svc = await _run_lead(*_lead_and_worker(lead_phi=False, worker_phi=False))
+    write, *searches = svc.bodies()
+    assert write["owner_ref"] == "worker", write
+    by_scope = {b["scopes"][0]: b for b in searches}
+    assert by_scope["agent"]["owner_ref"] == "worker", by_scope
+    assert by_scope["kb"]["kbs"] == ["worker-kb"], by_scope
+    assert "lead-private-kb" not in json.dumps(searches)
+
+
+async def test_a_child_of_a_phi_run_writes_memory_as_phi_even_if_its_own_manifest_is_not() -> None:
+    """The run is PHI (the gate is told ``data.phi``): a child's memory write must not drop to non-PHI
+    because the child's manifest did not repeat the flag."""
+    svc = await _run_lead(*_lead_and_worker(lead_phi=True, worker_phi=False))
+    write = svc.bodies()[0]
+    assert write.get("phi") is True, write

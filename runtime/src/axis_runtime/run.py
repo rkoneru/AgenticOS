@@ -552,12 +552,20 @@ class AgentProcess:
                 raise ValueError("memory scope is not enabled for this agent")
             if not set(args) <= {"content", "metadata", "subject", "ttl_seconds"}:
                 raise ValueError("unexpected memory_write argument")
-            if self.manifest.phi:
+            if self.manifest.phi or self.ctx.identity.phi:  # a child of a PHI run is PHI too
                 args["phi"] = True
-            return MemoryWrite(name=MEMORY_WRITE, args=args, scope=str(scope))
+            return MemoryWrite(
+                name=MEMORY_WRITE, args=args, scope=str(scope), agent=self.manifest.name
+            )
         if not set(args) <= {"query", "scope", "limit"}:
             raise ValueError("unexpected memory_search argument")
-        return MemoryRead(name=MEMORY_SEARCH, args=args, scopes=m.readable_scopes())
+        return MemoryRead(
+            name=MEMORY_SEARCH,
+            args=args,
+            scopes=m.readable_scopes(),
+            agent=self.manifest.name,
+            kbs=m.knowledge_bases,
+        )
 
     def _tool_definitions(self) -> tuple[ToolDefinition, ...]:
         if self._defs is not None:
