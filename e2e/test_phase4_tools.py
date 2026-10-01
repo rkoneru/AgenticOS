@@ -1228,7 +1228,7 @@ async def test_an_external_mcp_client_call_into_the_server_is_authenticated_gate
     ]
     assert all(
         r["actor"] == {"type": "system", "id": "partner-1"} for r in rows
-    )  # NEEDS #100: wire actor is `system`
+    )  # NEEDS #82: wire actor is `system`
     chain_ok(stack)
 
 

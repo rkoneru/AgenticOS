@@ -1,6 +1,6 @@
 # Runbook: Memory service
 
-Status: **Prototype**. Spec: `docs/spec/memory.md`. Gaps: `docs/NEEDS.md` #400-#407.
+Status: **Prototype**. Spec: `docs/spec/memory.md`. Gaps: `docs/NEEDS.md` #74-#81.
 
 ## Run the dev server (NOT production)
 
@@ -17,10 +17,10 @@ Migrations (`0001`-`0006`) must already be applied (`pnpm --filter @axis/db migr
 ## Operations
 
 - **Expiry:** reads ignore expired rows; delete them with `purgeExpired(tenantId)` on a schedule per tenant (no built-in sweeper).
-- **DSAR delete:** `forgetSubject(tenantId, subject)` (admin route `forget`). Returns counts only. It is not audited yet (NEEDS #402).
+- **DSAR delete:** `forgetSubject(tenantId, subject)` (admin route `forget`). Returns counts only. It is not audited yet (NEEDS #76).
 - **Change who can read a document:** `setDocumentAcl` (rewrites the document's chunks atomically).
 - **Changing the embedder:** rows carry `embedding_model`; searches only match the active id. Old rows become invisible to search
-  until re-embedded (no re-embed job yet, NEEDS #406).
+  until re-embedded (no re-embed job yet, NEEDS #80).
 - **Suspected ACL/tenant leak:** run `pnpm --filter @axis/memory test`; the isolation tests include an RLS-off mutation check and an
   ACL oracle property test. Check `pg_class.relforcerowsecurity` on `memory_chunks`, `memory_documents`, `knowledge_bases`.
 

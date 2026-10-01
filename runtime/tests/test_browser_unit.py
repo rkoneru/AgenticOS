@@ -231,7 +231,7 @@ async def test_an_allowlisted_name_resolving_to_a_non_public_address_is_blocked(
 
 async def test_dns_rebinding_is_caught_per_request_but_not_pinned() -> None:
     """The guard re-resolves per request: a flip to a private address is caught on the NEXT request.
-    The window between check and Chromium's own lookup is the documented limit (NEEDS #303)."""
+    The window between check and Chromium's own lookup is the documented limit (NEEDS #99)."""
     answers = [[PUBLIC], ["127.0.0.1"]]
 
     async def flip(host: str, port: int) -> list[str]:

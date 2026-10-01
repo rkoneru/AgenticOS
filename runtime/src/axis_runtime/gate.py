@@ -122,7 +122,7 @@ _ACTOR_TO_PROTO = {
     ActorType.HUMAN: common_pb2.Actor.TYPE_HUMAN,
     ActorType.AGENT: common_pb2.Actor.TYPE_AGENT,
     ActorType.SYSTEM: common_pb2.Actor.TYPE_SYSTEM,
-    ActorType.MCP_CLIENT: common_pb2.Actor.TYPE_SYSTEM,  # NEEDS #100: no wire value yet
+    ActorType.MCP_CLIENT: common_pb2.Actor.TYPE_SYSTEM,  # NEEDS #82: no wire value yet
 }
 _DECISION_FROM_PROTO = {
     common_pb2.DECISION_ALLOW: Decision.ALLOW,

@@ -59,21 +59,21 @@ instead of new ABL fields.
     (no output text). (b) Inbound MCP calls (wire actor `system`) carried the runtime's `pid`, which the audit table rejects
     (`actor_type = 'agent'` iff `actor_pid` is set), so the kernel answered "audit unavailable" and **every inbound call was
     denied**; the gate client now sends a pid only for agent actors. The kernel accepts the combination and the database
-    rejects it: NEEDS #X7.
+    rejects it: NEEDS #111.
 11. **Policy cannot see `context.inbound`.** The policy compiler's context roots do not include `inbound`, so a pack cannot match
     on it. The e2e pack denies inbound writes with `actor.type eq system` (inbound MCP clients are the only `system` actors today).
-    The kernel does receive `context.inbound`; the e2e asserts the runtime sends it. NEEDS #X2.
+    The kernel does receive `context.inbound`; the e2e asserts the runtime sends it. NEEDS #106.
 
 ## Consequences
 
 - Memory retrieval through the NEXUS rag stage is a read of tenant data that is not a gate decision (extractive answers
-  and passages): service-side ACL and the stage's re-check are the only controls. NEEDS #X1.
-- The Temporal path builds its own executor and does none of this wiring (spawn-time MCP checks, memory, browser worker): NEEDS #X4,
+  and passages): service-side ACL and the stage's re-check are the only controls. NEEDS #105.
+- The Temporal path builds its own executor and does none of this wiring (spawn-time MCP checks, memory, browser worker): NEEDS #108,
   same family as #66.
 - Children of a run share the root's memory backend (so `agent`-scope memory belongs to the root agent's name), its browser worker
-  (one page per run) and its principal: NEEDS #X5.
+  (one page per run) and its principal: NEEDS #109.
 - The e2e is **evidence for the wiring, not for the components' production readiness**: the LLM, the embedder and the MCP server are
-  fakes, the browser talks to a local fixture site, the sandbox is process-level. NEEDS #X6.
+  fakes, the browser talks to a local fixture site, the sandbox is process-level. NEEDS #110.
 - Mutation checks: skipping the gate (forcing ALLOW) on each of `code_exec`, `browser_exec`, `mcp_call`, `memory_write` and
   `tool_call` fails 5-9 of the 17 e2e scenarios and 7-14 bypass tests each. Removing the principal from the NEXUS request fails the
   e2e; removing the spawn-time MCP manifest check fails two unit tests (the e2e still passes because `definitions_for` also resolves

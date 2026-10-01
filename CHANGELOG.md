@@ -27,12 +27,12 @@ integration (component E, ADR 0014). **No frozen contract changed.**
   pid that the audit table's CHECK rejects. (2) The sandbox `isolation` map, usage and duration never reached the event log. (3)
   `LlmStage` dropped retrieved passages whenever messages were supplied, and the run never set the NEXUS principal. (4) ABL v1
   cannot name a registered MCP server (URI-typed `mcpServer`): `mcp://<name>` is now the documented runtime convention.
-- **Gaps, stated plainly** (`docs/NEEDS.md` #[74]-#[111]): the memory service is a loopback dev surface with a hash embedder; the
+- **Gaps, stated plainly** (`docs/NEEDS.md` #74-#111): the memory service is a loopback dev surface with a hash embedder; the
   sandbox is process-level and not a security boundary; Chromium egress is enforced in-process; MCP was only exercised against
   in-repo fakes; the LLM in the e2e is scripted; rag retrieval is not a gated action; policy cannot match `context.inbound`; the
   Temporal path is not wired; children share the root's memory/browser/principal; the CI job has never run.
-- **Housekeeping.** NEEDS rows from the four component branches (100-106, 200-206, 300-308, 400-407) are renumbered #[74]-#[104]
-  (memory #[74]-#[81], MCP #[82]-#[88], sandbox #[89]-#[95], browser #[96]-#[104]) and every reference is updated.
+- **Housekeeping.** NEEDS rows from the four component branches (100-106, 200-206, 300-308, 400-407) are renumbered #74-#104
+  (memory #74-#81, MCP #82-#88, sandbox #89-#95, browser #96-#104) and every reference is updated.
 
 ## Phase 3 - Orchestration and routing (e2e integration)
 

@@ -2,7 +2,7 @@
 
 Status: **Prototype** (real Chromium, local fixture server, no live-internet run, no egress proxy).
 Code: `runtime/src/axis_runtime/browser/`. Tests: `runtime/tests/test_browser_*.py`. Threat model:
-`docs/security/browser-threat-model.md`. Gaps: `docs/NEEDS.md` #300-#308.
+`docs/security/browser-threat-model.md`. Gaps: `docs/NEEDS.md` #96-#104.
 
 ## Shape
 
@@ -105,4 +105,4 @@ request or even a TCP connection on the disallowed server.
 
 ## Limits
 
-Not pinned to the resolved IP, in-process enforcement, no sandbox, in-memory artifacts: see NEEDS #300-#305.
+Not pinned to the resolved IP, in-process enforcement, no sandbox, in-memory artifacts: see NEEDS #96-#101.

@@ -76,7 +76,7 @@ class ArtifactStore(Protocol):
 
 @dataclass
 class InMemoryArtifactStore:
-    """Dev/test store. Real object storage is NEEDS #302."""
+    """Dev/test store. Real object storage is NEEDS #98."""
 
     items: dict[str, tuple[bytes, str]] = field(default_factory=dict)
 

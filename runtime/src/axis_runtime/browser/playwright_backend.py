@@ -12,7 +12,7 @@ Network-layer enforcement (every request the page makes goes through ``UrlGuard`
 * service workers are blocked, downloads are disabled, popups are closed, dialogs are dismissed;
   WebRTC/WebTransport are removed (they bypass request interception).
 
-KNOWN LIMITS (docs/spec/browser.md, NEEDS #303-#305): the address the guard resolved is NOT the one
+KNOWN LIMITS (docs/spec/browser.md, NEEDS #99-#101): the address the guard resolved is NOT the one
 Chromium connects to (no connect-time pinning: DNS rebinding of an ALLOWLISTED name is not closed);
 Chromium-internal preconnect/DNS prefetch is disabled by flags, not intercepted; response bodies are
 buffered by the driver before the size cap applies. The strong fix is an egress proxy / network
