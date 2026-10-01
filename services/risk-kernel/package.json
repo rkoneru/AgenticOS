@@ -15,6 +15,7 @@
     "bench": "tsx bench.ts"
   },
   "dependencies": {
+    "@axis/approvals": "workspace:*",
     "@axis/audit": "workspace:*",
     "@axis/contracts": "workspace:*",
     "@grpc/grpc-js": "^1.14.5",
