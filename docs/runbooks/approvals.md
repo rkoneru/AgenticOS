@@ -16,8 +16,8 @@ const resolver = new ApprovalResolver(svc);
 ```
 
 Kernel/runtime flow: kernel answers `REQUIRE_APPROVAL` -> caller `svc.create({...approval spec, args_hash...})` -> approver
-`claim` / `approve` / `deny` via an authenticated API (not built, NEEDS #43) -> runtime `resolver.resolve()` ->
-`isApprovalValidFor()` -> re-gate and run. Not wired yet (NEEDS #46).
+`claim` / `approve` / `deny` via an authenticated API (not built, NEEDS #50) -> runtime `resolver.resolve()` ->
+`isApprovalValidFor()` -> re-gate and run. Not wired yet (NEEDS #53).
 
 ## Operations
 
@@ -26,11 +26,11 @@ Kernel/runtime flow: kernel answers `REQUIRE_APPROVAL` -> caller `svc.create({..
   expiries are still applied while audit is down, logged as `audit append failed on DENY transition`; reconcile those
   requests (empty `audit_event_id` in their decision record) once audit recovers.
 - **Notifications missing:** check logs for `notification gave up` (channel, request id, last error; webhook URLs are never
-  logged). State is unaffected; approvers can still use the API. Needs per-tenant targets (NEEDS #42).
+  logged). State is unaffected; approvers can still use the API. Needs per-tenant targets (NEEDS #49).
 - **Stuck at an unresponsive level:** nothing to do; the SLA escalates, then expires to DENY.
 - **Rotate the signing key:** deploy verifiers with the new key id first; records signed with an old `key_id` fail
   verification (fail-closed) once the old key is removed.
-- **Never** run more than one instance (NEEDS #45).
+- **Never** run more than one instance (NEEDS #52).
 
 ## Tests
 

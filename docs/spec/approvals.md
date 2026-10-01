@@ -1,7 +1,7 @@
 # Approvals service (`@axis/approvals`)
 
 Status: **Built as an in-process library** (in-memory store; no network surface). Evidence: `services/approvals` tests,
-property tests, mutation checks (below). Gaps: `docs/NEEDS.md` #41-#47.
+property tests, mutation checks (below). Gaps: `docs/NEEDS.md` #48-#54.
 
 Handles `REQUIRE_APPROVAL` decisions from the Risk Kernel (`GateResponse.approval` = roles, SLA, escalation roles,
 `on_timeout: DENY`). It is **on the decision path**; every failure resolves toward DENY.
@@ -48,7 +48,7 @@ if (!(await isApprovalValidFor(rec, {tenant_id, run_id, tool, args_hash}, signer
 the decision. `isApprovalValidFor` is true only for a verified APPROVED record for exactly that tenant, run, tool and
 argument hash (no replay for different arguments or another tenant). **Any rejection (unknown id, signing/audit failure,
 abort) must be treated as DENY.** The resolver re-checks SLA timers itself, so it resolves even if no sweeper runs.
-No gRPC: it needs proto changes after the v1 freeze (NEEDS #43).
+No gRPC: it needs proto changes after the v1 freeze (NEEDS #50).
 
 ## Notifier adapters
 
