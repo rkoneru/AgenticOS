@@ -47,6 +47,14 @@ from playwright.async_api import (
 )
 
 MAX_REDIRECTS = 10
+#: Fetch standard, "HTTP-redirect fetch": a redirect to another ORIGIN drops Authorization; a
+#: redirect that turns the request into a GET drops the request-body headers. The backend re-issues
+#: every hop itself with the original request's headers, so it must apply these rules as the
+#: browser would.
+_CROSS_ORIGIN_DROP = frozenset({"authorization", "proxy-authorization"})
+_BODY_HEADERS = frozenset(
+    {"content-encoding", "content-language", "content-location", "content-type", "content-length"}
+)
 _LAUNCH_ARGS = (
     "--disable-features=NetworkPrediction,Prerender2,PrefetchProxy,WebRtcHideLocalIpsWithMdns",
     "--dns-prefetch-disable",
@@ -62,6 +70,15 @@ for (const n of ['RTCPeerConnection','webkitRTCPeerConnection','RTCDataChannel',
   try { Object.defineProperty(window, n, {value: undefined, configurable: false}); } catch (e) {}
 }
 """
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parts = urlsplit(url)
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    return (parts.scheme.lower(), (parts.hostname or "").lower(), port)
 
 
 class PlaywrightBackend:
@@ -233,6 +250,7 @@ class PlaywrightSession:
             return
         current, method = request.url, request.method
         post = request.post_data_buffer
+        headers: dict[str, str] | None = None  # None = the request's own headers (first hop)
         main_nav = request.is_navigation_request() and request.frame.parent_frame is None
         hops = 0
         while True:
@@ -251,6 +269,7 @@ class PlaywrightSession:
             response = await route.fetch(
                 url=current,
                 method=method,
+                headers=headers,
                 post_data=post,
                 max_redirects=0,
                 timeout=self._policy.op_timeout_seconds * 1000,
@@ -263,9 +282,21 @@ class PlaywrightSession:
                 self._record(current, "", "too_many_redirects", rtype)
                 await self._abort(route)
                 return
-            current = urljoin(current, location)
+            previous, current = current, urljoin(current, location)
+            drop: set[str] = set()
+            if _origin(previous) != _origin(current):
+                drop |= _CROSS_ORIGIN_DROP
             if response.status in (301, 302, 303) and method not in ("GET", "HEAD"):
-                method, post = "GET", None
+                # None would mean "the original body" to ``route.fetch``: an explicit empty body is
+                # how a redirect-converted GET really drops the POST payload.
+                method, post = "GET", b""
+                drop |= _BODY_HEADERS
+            if drop:
+                headers = {
+                    k: v
+                    for k, v in (headers if headers is not None else request.headers).items()
+                    if k.lower() not in drop
+                }
             elif main_nav and method not in ("GET", "HEAD"):
                 self._record(current, "", "redirect_method_unsupported", rtype)
                 await self._abort(route)
