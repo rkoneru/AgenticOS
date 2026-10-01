@@ -110,6 +110,7 @@ browser = [
 [package.dev-dependencies]
 dev = [
     { name = "grpcio-tools" },
+    { name = "playwright" },
 ]
 
 [package.metadata]
@@ -124,7 +125,10 @@ requires-dist = [
 provides-extras = ["browser"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "grpcio-tools", specifier = ">=1.66" }]
+dev = [
+    { name = "grpcio-tools", specifier = ">=1.66" },
+    { name = "playwright", specifier = ">=1.56,<1.57" },
+]
 
 [[package]]
 name = "axis-sdk"

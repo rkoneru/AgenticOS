@@ -16,7 +16,7 @@ browser = [
 ]
 
 [dependency-groups]
-dev = ["grpcio-tools>=1.66"]
+dev = ["grpcio-tools>=1.66", "playwright>=1.56,<1.57"]
 
 [build-system]
 requires = ["hatchling"]
