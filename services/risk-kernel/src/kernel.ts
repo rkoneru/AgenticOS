@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { hashJson, type AuditSink, type UnsealedEvent } from "@axis/contracts";
+import {
+  MemoryConsumedApprovals,
+  type ApprovalRequester,
+  type ApprovalVerifier,
+  type ConsumedApprovals,
+} from "./approvals.js";
 import type { PolicyEngine } from "./engine.js";
 import { evaluateGate, type GateResult } from "./gates.js";
 import type { CounterStore, KillScope, KillSwitchStore } from "./stores.js";
 import {
   validatePolicyResult,
   validateRequest,
+  type ApprovalSpec,
   type GateRequest,
   type GateResponse,
   type PolicyResult,
@@ -28,6 +35,18 @@ export interface KernelDeps {
   logger?: Logger;
   /** Max rejection audit records per tenant per minute; further rejections are counted and logged, not appended. Default 60. */
   rejectionAuditPerMinute?: number;
+  /**
+   * Opens approval requests for REQUIRE_APPROVAL outcomes. Absent: the outcome carries an empty `approval_id` (clients DENY).
+   * A requester that throws, or returns no id, turns the decision into DENY.
+   */
+  approvalRequester?: ApprovalRequester;
+  /**
+   * Verifies the signed approval record a client presents (`context.approval`) when it re-submits an approved action.
+   * Absent: presented records are ignored and can never authorise anything.
+   */
+  approvalVerifier?: ApprovalVerifier;
+  /** Single-use ledger for verified approvals. Default: in-memory. */
+  consumedApprovals?: ConsumedApprovals;
 }
 
 /** Hash that cannot throw: an unhashable payload still gets an audit record (with a sentinel hash), never none. */
@@ -58,6 +77,7 @@ export class RiskKernel {
   private readonly timeoutMs: number;
   private readonly log: Logger;
   private readonly rejectionLimit: number;
+  private readonly consumed: ConsumedApprovals;
   private readonly rejections = new Map<
     string,
     { windowStart: number; count: number; dropped: number }
@@ -68,6 +88,7 @@ export class RiskKernel {
     this.timeoutMs = deps.policyTimeoutMs ?? 25;
     this.log = deps.logger ?? silent;
     this.rejectionLimit = deps.rejectionAuditPerMinute ?? 60;
+    this.consumed = deps.consumedApprovals ?? new MemoryConsumedApprovals();
   }
 
   async evaluate(raw: unknown): Promise<GateResponse> {
@@ -164,6 +185,10 @@ export class RiskKernel {
     }
     reservations.push(...results);
 
+    if (policy.decision === "REQUIRE_APPROVAL" && policy.approval !== null) {
+      return await this.approvalOutcome(req, policy, policy.approval, reservations);
+    }
+
     return {
       decision: policy.decision,
       policy_version: policy.policy_version,
@@ -175,9 +200,113 @@ export class RiskKernel {
     };
   }
 
+  /**
+   * REQUIRE_APPROVAL, after kill-switches, DENY policies and every gate have already passed. Two ways forward:
+   *  - the caller presents a decision record (`context.approval`): it must verify for exactly this tenant, run, tool and
+   *    argument hash and be unused, and then the action is ALLOWED (an approval re-gates, it never bypasses the gate);
+   *  - otherwise an approval request is opened through the approvals service and its id returned.
+   * Every failure on either path is DENY.
+   */
+  private async approvalOutcome(
+    req: GateRequest,
+    policy: PolicyResult,
+    spec: ApprovalSpec,
+    reservations: GateResult[],
+  ): Promise<Omit<GateResponse, "audit_event_id">> {
+    const summary = { policy_version: policy.policy_version, matched_rule_ids: policy.matched };
+    const deny = (reason: string): Omit<GateResponse, "audit_event_id"> => ({
+      ...this.base("DENY", reason, policy.policy_version),
+      ...summary,
+    });
+    const verifier = this.deps.approvalVerifier;
+    const requester = this.deps.approvalRequester;
+    const presented = req.context["approval"];
+
+    if (presented !== undefined && verifier !== undefined) {
+      const runId = (req.context["run"] as { id?: unknown } | undefined)?.id;
+      if (typeof runId !== "string" || runId === "") return deny("approval needs context.run.id");
+      let requestId = "";
+      try {
+        const expected = {
+          tenant_id: req.tenant_id,
+          run_id: runId,
+          tool: req.action,
+          args_hash: hashJson(req.context["args"] ?? {}),
+        };
+        if (!(await verifier.verify(presented, expected))) {
+          return deny("approval record not valid for this action");
+        }
+        const rid = (presented as { request_id?: unknown }).request_id;
+        if (typeof rid !== "string" || rid === "")
+          return deny("approval record not valid for this action");
+        requestId = rid;
+        if (!(await this.consumed.consume(req.tenant_id, requestId)))
+          return deny("approval already used");
+      } catch (err) {
+        this.log.error("approval verification failed", { error: String(err) });
+        return deny("approval verification failed");
+      }
+      // Undone if the audit append below fails, so a decision that was never recorded does not burn the approval.
+      reservations.push({
+        pass: true,
+        reason: "approval consumed",
+        rollback: () => this.consumed.release(req.tenant_id, requestId),
+      });
+      return {
+        decision: "ALLOW",
+        policy_version: policy.policy_version,
+        reason: `approved: request=${requestId}; ${policy.reason}`.slice(0, MAX_REASON),
+        matched_rule_ids: policy.matched,
+        redact_fields: [],
+        approval: null,
+        approval_id: requestId,
+      };
+    }
+
+    const pending = {
+      decision: "REQUIRE_APPROVAL" as const,
+      policy_version: policy.policy_version,
+      reason: policy.reason,
+      matched_rule_ids: policy.matched,
+      redact_fields: [],
+      approval: spec,
+      approval_id: "",
+    };
+    if (requester === undefined) return pending;
+    try {
+      const runId = (req.context["run"] as { id?: unknown } | undefined)?.id;
+      if (typeof runId !== "string" || runId === "") return deny("approval needs context.run.id");
+      const created = await requester.create({
+        tenant_id: req.tenant_id,
+        run_id: runId,
+        trace_id: req.trace_id,
+        agent: { name: req.blueprint.name, version: req.blueprint.version },
+        tool: req.action,
+        args_hash: hashJson(req.context["args"] ?? {}),
+        risk_level: "high",
+        requester: req.actor,
+        approval: spec,
+        policy_version: policy.policy_version,
+      });
+      if (typeof created?.id !== "string" || created.id === "")
+        return deny("approval request could not be created");
+      return {
+        ...pending,
+        reason: `${policy.reason}; request=${created.id}`.slice(0, MAX_REASON),
+        approval_id: created.id,
+      };
+    } catch (err) {
+      this.log.error("approval request failed", { error: String(err) });
+      return deny("approval request could not be created");
+    }
+  }
+
   private async policy(req: GateRequest): Promise<PolicyResult> {
+    // A presented approval record is evidence for the kernel's own check, never policy input.
+    const context = { ...req.context };
+    delete context["approval"];
     const input: Record<string, unknown> = {
-      ...req.context,
+      ...context,
       enforcement_point: req.enforcement_point,
       tenant: { id: req.tenant_id },
       agent: { name: req.blueprint.name, version: req.blueprint.version },
