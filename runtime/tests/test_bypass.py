@@ -650,3 +650,96 @@ def test_browser_modules_other_than_the_backend_reach_no_io() -> None:
         src = (SRC / rel).read_text()
         assert bs.scan_source(rel, src) == [], rel
         assert "playwright" not in "".join(m for m, _ in bs.imported_modules(ast.parse(src)))
+
+
+# ---- Phase 4 review: aliased IO primitives and exempt-file neighbours -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "rel", ["run.py", "tools.py", "memory.py", "mcp/server.py", "sandbox/artifacts.py"]
+)
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from asyncio import create_subprocess_exec as spawn\nasync def f():\n    await spawn('sh')",
+        "from asyncio import create_subprocess_exec\nasync def f():\n    await create_subprocess_exec('sh')",
+        "from asyncio import start_server as serve\nasync def f(h):\n    await serve(h, '0.0.0.0', 1)",
+        "from os import posix_spawn as ps\nps('/bin/sh', ['sh'], {})",
+        "import asyncio\nspawn = getattr(asyncio, 'create_subprocess_exec')",
+        "import asyncio\nopen_c = getattr(asyncio, 'open_connection')",
+    ],
+)  # fmt: skip
+def test_aliased_or_string_reached_io_primitives_are_flagged(rel: str, source: str) -> None:
+    assert bs.scan_source(rel, source) != [], source
+
+
+@pytest.mark.parametrize(
+    ("rel", "source"),
+    [
+        # exempt file, other primitive of the same rule family
+        ("sandbox/artifacts.py", "import os\nos.unlink('x')"),
+        ("sandbox/artifacts.py", "from pathlib import Path\nPath('x').write_text('y')"),
+        ("sandbox/artifacts.py", "import os\nos.rename('a', 'b')"),
+        ("sandbox/workdir.py", "from pathlib import Path\nPath('x').write_text('y')"),
+        ("sandbox/workdir.py", "import os\nos.rename('a', 'b')"),
+        ("models/secrets.py", "from pathlib import Path\nPath('x').write_text('y')"),
+        ("mcp/http_server.py", "import asyncio\nasyncio.open_connection('h', 1)"),
+        ("mcp/http_server.py", "import asyncio\nasyncio.start_unix_server(f, '/x')"),
+        ("mcp/stdio.py", "import asyncio\nasyncio.create_subprocess_shell('ls')"),
+        ("models/adapters/base.py", "loop.create_connection(f, 'h', 1)"),
+        ("models/adapters/base.py", "import socket\nsocket.create_connection(('h', 1))"),
+        ("actions.py", "x = cls.__mro__"),
+        ("sandbox/backends/local.py", "loop.to_thread(f)"),
+    ],
+)  # fmt: skip
+def test_exempt_files_do_not_cover_neighbouring_primitives(rel: str, source: str) -> None:
+    assert bs.scan_source(rel, source) != [], f"{rel}: {source!r}"
+
+
+def test_exemption_details_are_exact() -> None:
+    """Every exemption is pinned to the findings its file really has (no slack for a planted extra)."""
+    mods = dict(_modules())
+    for rule, files in bs.EXEMPTIONS.items():
+        for rel in files:
+            actual = {f.detail for f in bs.raw_findings(rel, mods[rel]) if f.rule == rule}
+            assert (rule, rel) in bs.EXEMPTION_DETAILS, f"{rel} [{rule}] is not narrowed"
+            assert actual == set(bs.EXEMPTION_DETAILS[(rule, rel)]), (rule, rel)
+
+
+@pytest.mark.parametrize(
+    "rel", ["run.py", "tki/scheduler.py", "nexus/router.py", "browser/worker.py", "memory.py"]
+)
+@pytest.mark.parametrize(
+    "source",
+    [
+        "async def f(self):\n    await self.ctx.backends.memory.write('run', {})",
+        "async def f(self):\n    await self.ctx.backends.memory.search('q', scopes=[], limit=1)",
+        "async def f(self, spec):\n    await self.ctx.backends.sandbox.run(spec)",
+        "async def f(self):\n    await self.ctx.backends.browser.run({})",
+        "async def f(self):\n    await self._backends.channels.send('c', {})",
+        "async def f(self):\n    m = self.ctx.backends.memory\n    await m.write('run', {})",
+        "async def f(self, backends):\n    return await backends.sandbox.run(None)",
+        "def f(self):\n    return self.ctx.backends.memory",
+    ],
+)  # fmt: skip
+def test_backend_handles_cannot_be_driven_from_outside_the_executor(rel: str, source: str) -> None:
+    """Phase 4 backends have generic method names (run / write / search / send) that cannot be restricted by
+    name, so the Backends handle is guarded instead: only an ``is None`` wiring test may touch it."""
+    assert any("backend-handle" in p for p in bs.scan_source(rel, source)), (rel, source)
+
+
+def test_backend_handle_wiring_checks_and_the_executor_path_stay_allowed() -> None:
+    wiring = "def f(self):\n    return self.ctx.backends.memory is not None and x"
+    assert bs.scan_source("run.py", wiring) == []
+    assert bs.scan_source("run.py", "mcp = self.ctx.backends.mcp") == []
+    assert bs.scan_source("run.py", "backends.memory = backend") == []  # a store is not a use
+    assert bs.scan_source("actions.py", "x = backends.memory.write") == []
+    # the narrow assignment grant does not cover other handles or other files
+    assert bs.scan_source("run.py", "m = self.ctx.backends.memory") != []
+    assert bs.scan_source("tki/scheduler.py", "mcp = self.ctx.backends.mcp") != []
+    assert (
+        bs.scan_source("run.py", "mcp = self.ctx.backends.mcp\nmcp.call_tool('s', 't', {})") != []
+    )
+    for rel, name in bs.BACKEND_HANDLE_USES:
+        src = (SRC / rel).read_text()
+        assert f"backends.{name}" in src, f"stale BACKEND_HANDLE_USES entry {(rel, name)}"

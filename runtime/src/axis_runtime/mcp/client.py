@@ -65,6 +65,25 @@ def _json_size(value: Any) -> int:
     return len(json.dumps(value, separators=(",", ":"), default=str))
 
 
+def _clean_schema(value: Any, limit: int) -> Any:
+    """A copy of ``value`` with every string passed through ``sanitize_text``. The model reads the
+    whole input schema (property descriptions, enums, defaults, titles), so those strings need the
+    same treatment as the tool description. Raises ``ValueError`` when an object KEY would change: a
+    name with an invisible character is a different name to the model than to the log."""
+    if isinstance(value, str):
+        return protocol.sanitize_text(value, limit)[0]
+    if isinstance(value, list):
+        return [_clean_schema(v, limit) for v in value]
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            if not isinstance(k, str) or protocol.sanitize_text(k, len(k) + 1)[0] != k:
+                raise ValueError("schema key changes under sanitising")
+            out[k] = _clean_schema(v, limit)
+        return out
+    return value
+
+
 def parse_tool(server: str, raw: Any, limits: McpLimits) -> RemoteTool | None:
     if not isinstance(raw, dict):
         return None
@@ -77,6 +96,10 @@ def parse_tool(server: str, raw: Any, limits: McpLimits) -> RemoteTool | None:
     if not isinstance(schema, dict) or _json_size(schema) > limits.max_schema_bytes:
         return None
     if not protocol.depth_ok(schema):
+        return None
+    try:
+        schema = _clean_schema(schema, limits.max_description_chars)
+    except ValueError:
         return None
     desc = raw.get("description")
     text, truncated = protocol.sanitize_text(

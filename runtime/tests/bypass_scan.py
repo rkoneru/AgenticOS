@@ -195,6 +195,42 @@ EXEMPTION_DETAILS: dict[tuple[str, str], frozenset[str]] = {
         }
     ),
     ("banned-qualified", "sandbox/workdir.py"): frozenset({"uses shutil.rmtree"}),
+    # Phase 4 review: every other exemption is narrowed to the primitives its file actually needs, so a
+    # neighbouring dangerous call planted in an exempt file (os.unlink / Path.write_text in artifacts.py,
+    # asyncio.open_connection in the inbound MCP server, create_subprocess_shell in the stdio transport)
+    # is still flagged. Pinned against the file's real findings by test_exemption_details_are_exact.
+    ("file-write", "models/secrets.py"): frozenset(
+        {
+            ".open() for writing or with an unprovable mode",
+            "uses .fdopen",
+            "uses os.fdopen",
+            "uses os.open",
+            "uses os.replace",
+        }
+    ),
+    ("file-write", "sandbox/workdir.py"): frozenset(
+        {
+            ".open() for writing or with an unprovable mode",
+            "uses .fdopen",
+            "uses .mkdir",
+            "uses .rmtree",
+            "uses .unlink",
+            "uses os.chmod",
+            "uses os.chown",
+            "uses os.fdopen",
+            "uses os.mkdir",
+            "uses os.open",
+            "uses os.unlink",
+        }
+    ),
+    ("file-write", "sandbox/artifacts.py"): frozenset(
+        {".open() for writing or with an unprovable mode", "uses os.open"}
+    ),
+    ("net", "mcp/http_server.py"): frozenset({"uses .start_server"}),
+    ("process", "mcp/stdio.py"): frozenset({"uses .create_subprocess_exec"}),
+    ("dns", "models/adapters/base.py"): frozenset({"uses .getaddrinfo"}),
+    ("thread-escape", "sandbox/backends/local.py"): frozenset({"uses .run_in_executor"}),
+    ("introspection", "actions.py"): frozenset({"uses .__subclasses__"}),
 }
 
 # Name references that are never acceptable in src.
@@ -479,6 +515,23 @@ RESTRICTED_NAMES: dict[str, dict[str, str]] = {
         "models/__init__.py": "re-export",
     },
 }
+# Phase 4 review: the executor-only names above guard ``call_tool`` / ``call`` / ``complete``, but the Phase 4
+# backends (sandbox ``run``, browser ``run``, memory ``write`` / ``search``, channels ``send``) have generic method
+# names that cannot be restricted by name. They are only reachable through ``Backends``, so the HANDLE is guarded:
+# a ``<x>.backends.<name>`` / ``<x>._backends.<name>`` load may only be used as an ``is None`` test (wiring checks)
+# or, where listed here, assigned (``mcp = ctx.backends.mcp``). Calling a method on it from anywhere but
+# ``actions.py`` (``Action._execute`` via ``Backends.need``) is a finding, as is passing the handle on.
+BACKEND_NAMES = frozenset(
+    {"tools", "mcp", "sandbox", "browser", "memory", "channels", "models", "spawn"}
+)
+BACKEND_HOLDERS = frozenset({"backends", "_backends"})
+BACKEND_HANDLE_FILES: dict[str, str] = {
+    "actions.py": "Backends itself and Action._execute",
+    "run.py": "wiring: builds the run's backends, tests them for None and reads the MCP manifest source",
+}
+BACKEND_HANDLE_USES = frozenset(
+    {("run.py", "mcp")}
+)  # `mcp = self.ctx.backends.mcp` (manifest checks only)
 # Generic words: restricted only as attribute accesses / method definitions (``x.call(...)``), because
 # ``call``/``stream`` are also ordinary local variable and parameter names in the adapters.
 MEMBER_ONLY_NAMES = frozenset({"call", "complete", "stream", "need"})
@@ -604,6 +657,13 @@ def _name_problem(name: str) -> str | None:
         return "dynamic-exec"
     if name in INTROSPECTION_ATTRS or name in DANGEROUS_MODULE_NAMES:
         return "introspection"
+    # ``getattr(asyncio, "create_subprocess_exec")`` reaches an IO primitive without an Attribute node.
+    if PROCESS_ATTR.match(name):
+        return "process"
+    if name in NET_ATTRS:
+        return "net"
+    if name in DNS_ATTRS:
+        return "dns"
     return None
 
 
@@ -658,9 +718,27 @@ def raw_findings(rel: str, source: str) -> list[Finding]:
                         add("unlisted-member", node, f"imports {problem}")
                 if a.name in LOGGING_SINKS:
                     add("logging-sink", node, f"imports {q}")
+                # Phase 4 review: widening MEMBER_ALLOW for the MCP transports made
+                # ``from asyncio import create_subprocess_exec as spawn; spawn(...)`` invisible (the call site is
+                # an aliased bare name), so the IO primitive is also checked at the import.
+                if PROCESS_ATTR.match(a.name):
+                    add("process", node, f"imports {q}")
+                if a.name in NET_ATTRS:
+                    add("net", node, f"imports {q}")
+                if a.name in DNS_ATTRS:
+                    add("dns", node, f"imports {q}")
                 if a.name in BANNED_ATTR_NAMES:
                     add("dynamic-exec", node, f"imports {q}")
         if isinstance(node, ast.Name):
+            target = aliases.get(node.id, "")
+            if "." in target:  # a name bound by ``from m import primitive [as alias]``
+                seg = target.rsplit(".", 1)[1]
+                if PROCESS_ATTR.match(seg):
+                    add("process", node, f"uses {target} (as {node.id})")
+                if seg in NET_ATTRS:
+                    add("net", node, f"uses {target} (as {node.id})")
+                if seg in DNS_ATTRS:
+                    add("dns", node, f"uses {target} (as {node.id})")
             if node.id in BANNED_NAMES:
                 add("dynamic-exec", node, f"uses {node.id}")
             if node.id in INTROSPECTION_ATTRS:
@@ -729,7 +807,59 @@ def raw_findings(rel: str, source: str) -> list[Finding]:
             ):
                 add("gateway-construction", node, "constructs ModelGateway")
     out += _restricted_uses(tree)
+    out += _backend_handles(tree, rel)
     return out
+
+
+def _backend_handles(tree: ast.AST, rel: str) -> list[Finding]:
+    """Findings for loads of a ``Backends`` member that are not plain wiring checks (see BACKEND_NAMES)."""
+    parents: dict[int, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[id(child)] = node
+    found: list[Finding] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Attribute)
+            and node.attr in BACKEND_NAMES
+            and isinstance(node.ctx, ast.Load)
+        ):
+            continue
+        holder = node.value
+        held = (
+            holder.attr
+            if isinstance(holder, ast.Attribute)
+            else holder.id
+            if isinstance(holder, ast.Name)
+            else ""
+        )
+        if held not in BACKEND_HOLDERS:
+            continue
+        parent = parents.get(id(node))
+        if rel == "actions.py":
+            continue
+        # `... backends.memory is None` / `is not None`: a wiring check, no capability used
+        if (
+            isinstance(parent, ast.Compare)
+            and parent.left is node
+            and all(isinstance(op, (ast.Is, ast.IsNot)) for op in parent.ops)
+            and all(isinstance(c, ast.Constant) and c.value is None for c in parent.comparators)
+        ):
+            continue
+        if (
+            rel in BACKEND_HANDLE_FILES
+            and (rel, node.attr) in BACKEND_HANDLE_USES
+            and isinstance(parent, ast.Assign)
+        ):
+            continue
+        found.append(
+            Finding(
+                "backend-handle",
+                node.lineno,
+                f"uses the .{node.attr} backend handle outside Action._execute",
+            )
+        )
+    return found
 
 
 def _restricted_uses(tree: ast.AST) -> list[Finding]:

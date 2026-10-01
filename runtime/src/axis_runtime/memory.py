@@ -116,15 +116,15 @@ class HttpMemoryBackend:
         self._owners = dict(owner_refs or {})
         self._kbs = list(kbs)
 
-    def _owner(self, scope: str) -> str | None:
+    def _owner(self, scope: str, agent: str | None = None) -> str | None:
         if scope == "tenant":
             return None
-        owner = self._owners.get(scope)
+        owner = (agent if scope == "agent" and agent else None) or self._owners.get(scope)
         if not owner:
             raise ValueError(f"no owner configured for {scope!r} memory")
         return owner
 
-    async def write(self, scope: str, args: Mapping[str, Any]) -> Any:
+    async def write(self, scope: str, args: Mapping[str, Any], *, agent: str | None = None) -> Any:
         svc_scope = _SCOPES.get(scope)
         if svc_scope is None:
             raise ValueError(f"unknown memory scope {scope!r}")
@@ -136,7 +136,7 @@ class HttpMemoryBackend:
             "content": content,
             "principal": self._principal,
         }
-        owner = self._owner(svc_scope)
+        owner = self._owner(svc_scope, agent)
         if owner is not None:
             body["owner_ref"] = owner
         for key in _PASSTHROUGH:
@@ -144,13 +144,22 @@ class HttpMemoryBackend:
                 body[key] = args[key]
         return await self._c.post("write", body)
 
-    async def search(self, query: str, *, scopes: Sequence[str], limit: int = 5) -> dict[str, Any]:
+    async def search(
+        self,
+        query: str,
+        *,
+        scopes: Sequence[str],
+        limit: int = 5,
+        agent: str | None = None,
+        kbs: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
         """ACL-aware similarity search over ``scopes`` (agent-facing names plus ``kb``), as THIS
         principal. One service call per scope (the owner filter is per scope); hits are merged by
         score. The service filters unreadable rows in SQL: nothing here widens access."""
         if not isinstance(query, str) or not query:
             raise ValueError("memory search needs a non-empty string 'query'")
         limit = max(1, min(int(limit), 20))
+        use_kbs = self._kbs if kbs is None else list(kbs)
         hits: list[dict[str, Any]] = []
         for scope in dict.fromkeys(scopes):
             body: dict[str, Any] = {
@@ -159,15 +168,15 @@ class HttpMemoryBackend:
                 "principal": self._principal,
             }
             if scope == "kb":
-                if not self._kbs:
+                if not use_kbs:
                     continue
-                body.update(scopes=["kb"], kbs=self._kbs)
+                body.update(scopes=["kb"], kbs=use_kbs)
             else:
                 svc_scope = _SCOPES.get(scope)
                 if svc_scope is None:
                     raise ValueError(f"unknown memory scope {scope!r}")
                 body["scopes"] = [svc_scope]
-                owner = self._owner(svc_scope)
+                owner = self._owner(svc_scope, agent)
                 if owner is not None:
                     body["owner_ref"] = owner
             out = await self._c.post("search", body)

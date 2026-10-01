@@ -42,11 +42,26 @@ export function redactPaths<T extends Json>(doc: T, paths: readonly string[]): T
 }
 
 // Conservative free-text patterns. HEURISTIC, not a PHI detector: path redaction is the contract, this is a net under it
-// (docs/NEEDS.md). Each pattern replaces the whole match.
+// (docs/NEEDS.md). Each pattern replaces the whole match. Digits are any Unicode decimal digit (fullwidth, Arabic-Indic, ...),
+// group separators may be spaces, dots, any dash or the minus sign, and invisible format characters (zero-width space / joiner,
+// soft hyphen, bidi marks) may sit anywhere between the characters: a US SSN written "123 45 6789", "１２３-４５-６７８９" or
+// "123-45-67\u200b89" is still an SSN.
+const FMT = "\\p{Cf}";
+const D = `\\p{Nd}[${FMT}]*`;
+const SEP = `[${FMT}\\s]{0,3}[\\-\\u2010-\\u2015\\u2212.\\s][${FMT}\\s]{0,3}`;
+const EDGE_BEFORE = "(?<![\\p{L}\\p{N}])";
+const EDGE_AFTER = "(?![\\p{L}\\p{N}])";
 const PATTERNS: RegExp[] = [
-  /\b\d{3}-\d{2}-\d{4}\b/g, // US SSN
+  new RegExp(`${EDGE_BEFORE}(?:${D}){3}${SEP}(?:${D}){2}${SEP}(?:${D}){4}${EDGE_AFTER}`, "gu"), // US SSN
+  new RegExp(
+    `(?:\\bSSN|\\bsocial\\s+security(?:\\s+(?:number|no\\.?|#))?)[^\\p{L}\\p{N}]{0,12}(?:${D}){9}${EDGE_AFTER}`,
+    "giu",
+  ), // labelled, unseparated SSN
   /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g, // email
-  /(?<!\d)(?:\+?1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?!\d)/g, // US phone
+  new RegExp(
+    `${EDGE_BEFORE}(?:\\+?1${SEP})?\\(?(?:${D}){3}\\)?${SEP}(?:${D}){3}${SEP}(?:${D}){4}${EDGE_AFTER}`,
+    "gu",
+  ), // US phone
   /\bMRN\s*[:#]?\s*\d{5,}\b/gi, // labelled medical record number
 ];
 

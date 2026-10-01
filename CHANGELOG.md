@@ -1,5 +1,28 @@
 # Changelog
 
+## Phase 4 - independent review (branch p4/review)
+
+Adversarial review of the Phase 4 code by a reviewer who did not write it. Every fix has a test that fails without it.
+
+- **Sandbox.** Every run shared uid `nobody`, so two simultaneous runs (two tenants) could read each other's code file and
+  output and plant forged artifacts through the host's `/tmp`; each run now gets its own uid. Artifact capture held one open
+  descriptor per pending directory (a directory flood exhausted the runtime's descriptors for every other run) and checked the
+  total byte cap against the size seen at `stat`; it is now depth-first and checks bytes read.
+- **Browser.** Redirect hops re-issued by the backend carried `Authorization` to another origin and kept a POST body after a
+  301/302/303 turned the request into a GET; the Fetch redirect rules are applied. The URL guard refuses authorities that
+  `urlsplit` and Chromium split differently.
+- **Memory.** PHI-mode documents persisted `title`/`source` verbatim; the SSN net missed separators other than `-`, non-ASCII
+  digits, zero-width characters and a labelled bare SSN; a PHI tenant's search query reached the embedder unscrubbed; a deduped
+  write overwrote the row's data subject (DSAR forget then missed it). Child agents used the ROOT's agent-scope owner and
+  knowledge bases, and a child of a PHI run could write non-PHI memory.
+- **MCP.** Only the tool description was sanitised; every string of the input schema now is.
+- **Bypass scanner (weakened by Phase 4, restored).** `from asyncio import create_subprocess_exec as spawn` and
+  `getattr(asyncio, "open_connection")` passed in every module once the MCP transports widened `MEMBER_ALLOW`; exemptions covered
+  whole rule families (e.g. `os.unlink` in `sandbox/artifacts.py`, `asyncio.open_connection` in the inbound MCP server); and the
+  Phase 4 backends could be driven ungated from `run.py`. Imports/aliases/literal `getattr` names are checked, each exemption is
+  pinned to the findings its file really has, and the `Backends` handle is guarded.
+- Open items: `docs/NEEDS.md` #112-#118 (and the narrowed #109).
+
 ## Phase 4 - Memory, tools and execution surfaces (e2e integration)
 
 Components A-D (memory service, MCP client/server, code sandbox, browser workers) were built as libraries; this entry is the

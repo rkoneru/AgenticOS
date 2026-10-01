@@ -414,3 +414,50 @@ def test_safe_relative_rejects_traversal_forms() -> None:
         assert not _safe_relative(bad), bad
     for good in ("a", "a/b.txt", "dir/.hidden", "a..b"):
         assert _safe_relative(good), good
+
+
+def test_capture_holds_a_bounded_number_of_descriptors_whatever_the_tree_looks_like(
+    tmp_path: Path,
+) -> None:
+    """Untrusted code can create thousands of directories. Capture used to open every directory it had
+    seen before reading any of them, so a directory flood exhausted the RUNTIME process's descriptors
+    (EMFILE for every other run's sockets). Depth-first traversal needs at most MAX_DEPTH + 1."""
+    import resource
+
+    out = tmp_path / "out"
+    out.mkdir()
+    for i in range(300):
+        (out / f"d{i:04d}").mkdir()
+        (out / f"d{i:04d}" / "f.txt").write_text("x")
+    in_use = len(os.listdir("/proc/self/fd"))
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (in_use + 40, hard))
+    try:
+        cap = capture_artifacts(str(out), SandboxLimits(max_artifacts=400))
+    finally:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+    assert [s for s in cap.skipped if s.reason == "unreadable_directory"] == []
+    assert len(cap.artifacts) == 300
+
+
+def test_total_artifact_cap_is_on_bytes_read_not_the_size_seen_at_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file that grows between stat() and read() must not smuggle past the TOTAL cap."""
+    import axis_runtime.sandbox.artifacts as art
+
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "a.bin").write_bytes(b"x" * 100)
+    (out / "b.bin").write_bytes(b"y" * 100)
+    real_stat = os.stat
+
+    def tiny_stat(*a: Any, **k: Any) -> Any:
+        r = real_stat(*a, **k)
+        return os.stat_result((r.st_mode, r.st_ino, r.st_dev, r.st_nlink, r.st_uid, r.st_gid, 1,
+                               r.st_atime, r.st_mtime, r.st_ctime))  # fmt: skip
+
+    monkeypatch.setattr(art.os, "stat", tiny_stat)
+    cap = capture_artifacts(str(out), SandboxLimits(max_artifacts_total_bytes=150))
+    assert sum(a.size for a in cap.artifacts) <= 150
+    assert [s.reason for s in cap.skipped] == ["total_size_exceeded"]

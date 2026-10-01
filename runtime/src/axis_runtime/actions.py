@@ -369,12 +369,17 @@ class MessageSend(_ArgsAction):
 class MemoryWrite(_ArgsAction):
     enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.MEMORY_WRITE
     scope: str = "run"
+    #: Wiring, never an agent argument: the manifest name of the agent making the write (owner of
+    #: ``agent``-scope memory). Empty = the backend's default (the run's root agent).
+    agent: str = ""
 
     def tool_descriptor(self) -> dict[str, str]:
         return {"name": self.name, "kind": f"memory:{self.scope}", "side_effects": "write"}
 
     async def _execute(self, backends: Backends) -> Any:
         memory: MemoryStore = backends.need("memory")
+        if self.agent:
+            return await memory.write(self.scope, self.args, agent=self.agent)
         return await memory.write(self.scope, self.args)
 
 
@@ -391,9 +396,14 @@ class MemoryRead(_ArgsAction):
 
     enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.TOOL_CALL
     scopes: tuple[str, ...] = ()
+    #: Wiring: the searching agent (owner of ``agent`` scope) and ITS manifest's knowledge bases. A
+    #: child agent searches its own, not the run's root's. Empty = the backend's defaults.
+    agent: str = ""
+    kbs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "scopes", tuple(self.scopes))
+        object.__setattr__(self, "kbs", tuple(self.kbs))
         self._parsed()  # validate early: a bad call is a tool error, never a gated action
 
     def _parsed(self) -> tuple[str, tuple[str, ...], int]:
@@ -448,6 +458,10 @@ class MemoryRead(_ArgsAction):
     async def _execute(self, backends: Backends) -> Any:
         memory: MemoryStore = backends.need("memory")
         query, chosen, limit = self._parsed()
+        if self.agent:
+            return await memory.search(
+                query, scopes=chosen, limit=limit, agent=self.agent, kbs=self.kbs
+            )
         return await memory.search(query, scopes=chosen, limit=limit)
 
 

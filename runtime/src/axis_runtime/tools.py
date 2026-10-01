@@ -90,9 +90,20 @@ class McpManifestSource(Protocol):
 
 
 class MemoryStore(Protocol):
-    async def write(self, scope: str, args: Mapping[str, Any]) -> Any: ...
+    async def write(self, scope: str, args: Mapping[str, Any], *, agent: str | None = None) -> Any:
+        """``agent``: the agent (manifest name) on whose behalf the write is made; it owns ``agent``
+        scope memory. A child agent is not its root."""
+        ...
 
-    async def search(self, query: str, *, scopes: Sequence[str], limit: int) -> Any: ...
+    async def search(
+        self,
+        query: str,
+        *,
+        scopes: Sequence[str],
+        limit: int,
+        agent: str | None = None,
+        kbs: Sequence[str] | None = None,
+    ) -> Any: ...
 
 
 class ChannelSender(Protocol):

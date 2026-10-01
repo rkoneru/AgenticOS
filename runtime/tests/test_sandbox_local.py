@@ -4,6 +4,7 @@ namespaces; where they are unavailable the backend must refuse, which test_sandb
 # ruff: noqa: ASYNC240, ASYNC251, ASYNC230, S103, S108
 from __future__ import annotations
 
+import asyncio
 import os
 import socket
 import tempfile
@@ -171,7 +172,8 @@ async def test_writes_outside_the_workdir_fail(backend: LocalProcessBackend) -> 
     )
     assert "WROTE" not in r.stdout and r.stdout.count("denied") == 4 and "inside ok" in r.stdout
     assert not any(os.path.exists(t) for t in targets)
-    assert r.isolation["unprivileged_uid"] == (65534 if os.geteuid() == 0 else None)
+    uid = r.isolation["unprivileged_uid"]  # a root runtime gives every run its own unprivileged uid
+    assert (uid is None) == (os.geteuid() != 0) and (uid is None or uid >= 65534)
 
 
 async def test_cannot_read_root_only_host_files(backend: LocalProcessBackend) -> None:
@@ -546,3 +548,41 @@ async def test_unusable_interpreter_fails_closed() -> None:
     b = LocalProcessBackend(python="/nonexistent/python")
     with executing(), pytest.raises(SandboxUnavailableError):
         await b.run(SandboxSpec("python", "print(1)"))
+
+
+# ---- Phase 4 review: simultaneous runs must not see or tamper with each other's working directories --------
+
+
+async def test_a_concurrent_run_cannot_read_or_tamper_with_another_runs_workdir(
+    backend: LocalProcessBackend,
+) -> None:
+    """Every run used the same uid (nobody), so the workdir's 0700 protected nothing between two
+    simultaneous runs (two tenants): B could list /tmp, read A's code file and output, and plant files
+    in A's output directory (forged artifacts). Each run now gets its own uid."""
+    victim = """
+        import os, time
+        out = os.environ['AXIS_OUTPUT_DIR']
+        open(out + '/secret.txt', 'w').write('tenant-a-secret')
+        time.sleep(3)
+        print(sorted(os.listdir(out)))
+    """
+    attacker = """
+        import glob, os, time
+        time.sleep(1)
+        seen = []
+        for d in glob.glob('/tmp/axis-sbx-*'):
+            if d == os.environ['AXIS_OUTPUT_DIR'].rsplit('/', 1)[0]:
+                continue
+            try:
+                seen.append(open(d + '/out/secret.txt').read())
+                open(d + '/out/forged.txt', 'w').write('forged')
+            except OSError as e:
+                seen.append('blocked:' + type(e).__name__)
+        print(seen)
+    """
+    a, b = await asyncio.gather(
+        run(backend, victim, wall_seconds=10.0), run(backend, attacker, wall_seconds=10.0)
+    )
+    assert "tenant-a-secret" not in b.stdout, b.stdout
+    assert "forged.txt" not in a.stdout, a.stdout
+    assert [x.path for x in a.artifacts] == ["secret.txt"]

@@ -45,6 +45,8 @@ METADATA_ADDRESSES = frozenset(
     ipaddress.ip_address(a)
     for a in ("169.254.169.254", "169.254.170.2", "100.100.100.200", "192.0.0.192", "fd00:ec2::254")
 )
+_AMBIGUOUS_URL = re.compile(r"[\\\x00-\x20\x7f]")
+_DNS_NAME = re.compile(r"^[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9_])?\Z")
 _HOST_LABEL = re.compile(r"^[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?$")
 
 
@@ -231,6 +233,11 @@ class UrlGuard:
             port = parts.port
         except ValueError:
             raise BlockedError("malformed_url") from None
+        # WHATWG parsers (Chromium) end the authority at ``\`` as at ``/``; urlsplit does not. An
+        # authority the two would split differently is refused up front rather than judged by one of
+        # them (the network layer sees Chromium's own parse, so this is the first line only).
+        if _AMBIGUOUS_URL.search(parts.netloc):
+            raise BlockedError("malformed_url")
         scheme = parts.scheme.lower()
         allowed = WS_SCHEMES if websocket else HTTP_SCHEMES
         if scheme not in allowed:
@@ -240,6 +247,8 @@ class UrlGuard:
         host = (parts.hostname or "").rstrip(".").lower()
         if not host or "%" in host:
             raise BlockedError("no_host")
+        if _ip(host) is None and not _DNS_NAME.match(host):
+            raise BlockedError("malformed_url")
         port = port if port is not None else DEFAULT_PORTS[scheme]
         if not self.policy.allows(host, port, scheme):
             raise BlockedError("host_not_allowlisted", host)
