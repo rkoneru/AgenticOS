@@ -413,6 +413,7 @@ def test_registry_lists_every_concrete_action_and_no_abstract_ones() -> None:
         "BrowserExec",
         "MessageSend",
         "MemoryWrite",
+        "MemoryRead",
         "ModelCall",
     }
     assert {t for t in all_action_types()} == set(SAMPLES)
