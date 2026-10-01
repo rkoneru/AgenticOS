@@ -75,7 +75,7 @@ export function parseTranscriptEvent(b: Record<string, unknown>): TranscriptEven
       const detail: Record<string, string | number | boolean> = {};
       for (const [k, v] of Object.entries(d as Record<string, unknown>)) {
         if (v === null) continue;
-        if (!/^[a-z_]{1,32}$/.test(k)) bad("detail key");
+        if (!/^[a-z][a-z0-9_]{0,31}$/.test(k)) bad("detail key");
         detail[k] =
           typeof v === "boolean"
             ? v

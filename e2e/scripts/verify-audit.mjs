@@ -21,6 +21,7 @@ try {
         policy_version: e.policy_version,
         trace_id: e.trace_id,
         actor: e.actor,
+        blueprint: e.blueprint,
       })),
     }),
   );
