@@ -341,3 +341,72 @@ def test_review_a_replayed_model_call_cannot_be_serialised_for_an_activity() -> 
     replay = ModelResponse("c", (), Usage(), FinishReason.STOP, "nexus-cache", "cache")
     with pytest.raises(ValueError, match="replayed"):
         _replay_call(replay).to_spec()
+
+
+async def test_review_an_agent_waiting_for_a_human_approval_does_not_hold_a_scheduler_slot() -> (
+    None
+):
+    """The approval wait (up to an hour) used to keep the TKI process `running`, so a tenant with
+    `max_running` such agents (which an agent can trigger by itself) starved all its other work."""
+    from axis_runtime import Decision
+    from axis_runtime.tki import SchedulerConfig
+
+    release = asyncio.Event()
+    waiting = asyncio.Event()
+
+    class Blocking:
+        async def resolve(self, tenant_id: str, approval_id: str) -> dict[str, str]:
+            waiting.set()
+            await release.wait()
+            return {"outcome": "DENIED"}
+
+    needs = ScriptedGate(
+        lambda r: GateDecision(
+            Decision.REQUIRE_APPROVAL, "w", policy_version="v1", approval_id="a1"
+        )
+    )
+    a_deps = deps_for(final("x"), gate=needs)
+    a_deps.approvals = Blocking()  # type: ignore[assignment]
+    b_deps = deps_for(final("done"), gate=ScriptedGate())
+    k = make_kernel(SchedulerConfig(max_running=1, default_tenant_limit=1))
+    a = k.sched.spawn(spec(run="run-a"), agent_workload(make_manifest(), "x", a_deps))
+    await asyncio.wait_for(waiting.wait(), 2)
+    b = k.sched.spawn(spec(run="run-b"), agent_workload(make_manifest(), "y", b_deps))
+    v = await asyncio.wait_for(k.sched.wait(b), 3)  # would hang behind A's slot
+    assert v.exit_reason is ExitReason.COMPLETED
+    release.set()
+    await asyncio.wait_for(k.sched.wait(a), 5)
+
+
+async def test_review_an_unresolvable_approval_leaves_the_wait_and_the_process_keeps_its_slot() -> (
+    None
+):
+    from axis_runtime import Decision
+    from axis_runtime.approvals import ApprovalUnavailable
+    from axis_runtime.process import ProcessState
+
+    class Down:
+        async def resolve(self, tenant_id: str, approval_id: str) -> dict[str, str]:
+            raise ApprovalUnavailable("transport:ConnectError")
+
+    needs = ScriptedGate(
+        lambda r: GateDecision(
+            Decision.REQUIRE_APPROVAL, "w", policy_version="v1", approval_id="a1"
+        )
+    )
+    deps = deps_for(final("x"), gate=needs)
+    deps.approvals = Down()  # type: ignore[assignment]
+    k = make_kernel()
+    states: list[ProcessState] = []
+
+    async def probe(ctx: Any) -> Any:
+        res = await agent_workload(make_manifest(), "x", deps)(ctx)
+        states.append(k.sched.get(ctx.pid).state)  # must be running again, not stuck in waiting
+        return res
+
+    pid = k.sched.spawn(spec(), probe)
+    v = await asyncio.wait_for(k.sched.wait(pid), 5)
+    assert states == [ProcessState.RUNNING] and v.exit_reason in (
+        ExitReason.COMPLETED,
+        ExitReason.POLICY_DENIED,
+    )

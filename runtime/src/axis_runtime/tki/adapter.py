@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from axis_runtime.actions import Action, Backends, ModelCall, to_jsonable
+from axis_runtime.approvals import ApprovalResolver
 from axis_runtime.executor import ActionExecutor, ActionOutcome, ActionRunner, Completed, Failed
 from axis_runtime.manifest import RuntimeManifest
 from axis_runtime.models.types import ModelResponse
@@ -103,6 +104,27 @@ class BudgetedRunner:
         return actual
 
 
+class _WaitingApprovals:
+    """Resolves approvals while the TKI process is ``waiting``: a human decision can take the whole
+    SLA and must not hold a scheduler slot (an agent can trigger such waits itself)."""
+
+    def __init__(self, inner: ApprovalResolver, ctx: ProcessContext) -> None:
+        self._inner = inner
+        self._ctx = ctx
+
+    async def resolve(self, tenant_id: str, approval_id: str) -> Mapping[str, Any]:
+        failure: Exception | None = None
+        record: Mapping[str, Any] = {}
+        async with self._ctx.waiting():
+            try:
+                record = await self._inner.resolve(tenant_id, approval_id)
+            except Exception as exc:  # leave the wait normally so the slot is re-acquired first
+                failure = exc
+        if failure is not None:
+            raise failure
+        return record
+
+
 def budgeted_deps(deps: RunDeps, ctx: ProcessContext) -> RunDeps:
     """``deps`` whose runner is the normal ``ActionExecutor`` wrapped by ``BudgetedRunner``."""
 
@@ -117,7 +139,7 @@ def budgeted_deps(deps: RunDeps, ctx: ProcessContext) -> RunDeps:
             identity=run_ctx.identity,
             backends=backends,
             gate_timeout=deps.gate_timeout,
-            approvals=deps.approvals,
+            approvals=None if deps.approvals is None else _WaitingApprovals(deps.approvals, ctx),
         )
         return BudgetedRunner(inner, ctx)
 
