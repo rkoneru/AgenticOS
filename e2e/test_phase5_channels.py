@@ -962,7 +962,14 @@ async def test_cross_tenant_routing_is_impossible(stack: Stack, world: World) ->
     ]
     assert claimed  # attributed to the tenant whose route was CLAIMED
     # (b) tenant B's own, legitimate traffic reaches B's agent and only B's agent
-    await ask(world, slack_req("my order is 9000", tenant=T2, user="UBOB2"), T2)
+    assert (
+        await post(world, slack_req("my order is 9000", tenant=T2, user="UBOB2"))
+    ).status_code == 200
+    # while B's message is QUEUED, A's runner cannot see it (the credential, not the request, fixes the tenant)
+    assert await world.runners[T1]._client.next_inbound(0) is None  # noqa: SLF001
+    assert await world.drain(T1) == [] and world.runners[T1].skipped == []
+    [reply_b] = await world.drain(T2)
+    assert reply_b.reply is not None and reply_b.reply.status == "sent"
     assert (await world.sent())["http"][-1]["headers"]["authorization"] == "Bearer xoxb-B"
     conv_b = world.items[-1].conversation_id
     assert (

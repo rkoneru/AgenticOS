@@ -1,4 +1,4 @@
-"""Mutation check for the Phase 5 wiring (run by hand: ``uv run python e2e/mutation_phase5.py``; needs PG like `make e2e-phase5`).
+"""Mutation check for the Phase 5 wiring (run by hand: ``uv run python e2e/mutation_phase5.py [name-substring ...]``; needs PG like `make e2e-phase5`).
 
 Each mutant breaks ONE safety property of the new wiring in the working tree, rebuilds the TS service if needed, runs the slice of
 ``test_phase5_channels.py`` that must notice, and requires a FAILURE of a real test (a stack that fails to start does not count).
@@ -170,8 +170,10 @@ def rebuild() -> None:
 
 
 def main() -> int:
+    only = sys.argv[1:]
+    mutants = [m for m in MUTANTS if not only or any(o in m.name for o in only)]
     survived: list[str] = []
-    for m in MUTANTS:
+    for m in mutants:
         originals: dict[str, str] = {}
         try:
             for rel, old, new in m.edits:
@@ -211,7 +213,7 @@ def main() -> int:
                 (ROOT / rel).write_text(text)
             if any(rel.startswith("services/") for rel in originals):
                 rebuild()
-    print(f"\n{len(MUTANTS) - len(survived)}/{len(MUTANTS)} mutants killed")
+    print(f"\n{len(mutants) - len(survived)}/{len(mutants)} mutants killed")
     return 1 if survived else 0
 
 

@@ -2,7 +2,7 @@
 
 Status: **Prototype**. Code: `runtime/src/axis_runtime/voice/`, speech plane `runtime/src/axis_runtime/models/speech*.py`.
 Tests: `runtime/tests/test_voice_*.py`, mutation check `runtime/tests/mutation_voice.py`. Decision record: `docs/adr/0016-voice-pipeline.md`.
-Evidence: fakes and virtual time only; no real telephony, vendor, audio or credentials (docs/NEEDS.md #134-#146).
+Evidence: fakes and virtual time in the unit tests; `make e2e-phase5` runs a loopback call on the system clock through the real kernel and the Postgres audit chain (ADR 0017). No real telephony, vendor, audio or credentials (docs/NEEDS.md #134-#155).
 
 ## Pipeline
 
@@ -65,6 +65,14 @@ counters). Transcript: one `voice_turn` per turn with timestamps, `truncated`, t
 (raw audio is never stored). PHI tenants/manifests: text is redacted before persistence (`phi.py`: digits as numbers or words,
 e-mail, dates, addresses, labelled ids, introduced names and later mentions of them) or omitted (`PhiMode.OMIT`); the live agent
 still receives the raw words (it needs them), and its model calls are gated with `data.phi`.
+
+## Transcripts in the audit chain (ADR 0017)
+
+`TranscriptWriter(..., audit=VoiceTranscriptRelay(...))` appends every call and turn event to the tenant's audit chain BEFORE it
+persists it (no audit row, no transcript: the call ends). Hashes and sizes only, over the text as persisted (redacted in PHI mode),
+on the call's trace, so one trace holds the call lifecycle, every gated STT/TTS/agent-model call and the transcript rows. The
+redacted text is in the run log's `voice_turn` event. Not mirrored: `voice_stage` latency events; voice is not linked to an end
+user's conversation (NEEDS #148).
 
 ## Outbound calls and toll fraud
 

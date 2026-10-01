@@ -42,13 +42,18 @@ const mode = { slack_ok: true };
 const fakeHttp = {
   async request(call) {
     sent.http.push({ url: call.url, body: call.body, headers: call.headers });
-    if (call.url.includes("slack.com")) return { status: 200, body: JSON.stringify({ ok: mode.slack_ok }) };
+    if (call.url.includes("slack.com"))
+      return { status: 200, body: JSON.stringify({ ok: mode.slack_ok }) };
     return { status: 201, body: "{}" };
   },
 };
 const fakeEmail = {
   async send(call) {
-    sent.email.push({ raw: call.raw, envelope_from: call.envelope_from, envelope_to: call.envelope_to });
+    sent.email.push({
+      raw: call.raw,
+      envelope_from: call.envelope_from,
+      envelope_to: call.envelope_to,
+    });
   },
 };
 

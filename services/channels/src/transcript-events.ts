@@ -28,8 +28,8 @@ export interface TranscriptEvent {
   audio_bytes?: number;
 }
 
-const TOKEN = /^[A-Za-z0-9:_.\-]{1,64}$/;
-const ID = /^[A-Za-z0-9_\-]{1,128}$/;
+const TOKEN = /^[A-Za-z0-9:_.-]{1,64}$/;
+const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 const TRACE = /^[0-9a-f]{32}$/;
 export const CALL_PHASES = ["connected", "consent", "ended"] as const;
