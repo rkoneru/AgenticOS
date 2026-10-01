@@ -122,3 +122,16 @@ class SentenceChunker:
             tail = merged.pop()
             merged[-1] = f"{merged[-1]} {tail}"
         return merged
+
+
+_MARKDOWN = re.compile(r"[*_`#>~|]+")
+_URL = re.compile(r"https?://\S+")
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f​-‏‪-‮⁠﻿]")
+
+
+def speakable(text: str) -> str:
+    """``text`` as it should be sent to TTS: no markup, links, control or invisible characters."""
+    out = _URL.sub("link", text)
+    out = _CONTROL.sub("", out)
+    out = _MARKDOWN.sub("", out)
+    return re.sub(r"\s+", " ", out).strip()

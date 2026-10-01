@@ -89,7 +89,8 @@ class LoopbackTransport:
         self._drain: asyncio.Task[None] | None = None
         self.heard: list[HeardChunk] = []
         self.hung_up: str | None = None
-        self.clears: list[int] = []
+        self.clears: list[int] = []  # ms discarded by each clear_output
+        self.clear_at: list[int] = []  # clock time of each clear_output
 
     # ---- AudioTransport ------------------------------------------------------------------
     async def events(self) -> AsyncIterator[TransportEvent]:
@@ -131,6 +132,7 @@ class LoopbackTransport:
             self._current = None
         self._out.clear()
         self.clears.append(discarded)
+        self.clear_at.append(self._clock.now_ms())
         self._space.set()
         return discarded
 

@@ -12,7 +12,7 @@ import hashlib
 from collections.abc import Mapping
 
 from axis_runtime.events import EventType, RunRecorder
-from axis_runtime.voice.phi import PhiMode, redact_transcript
+from axis_runtime.voice.phi import PhiMode, learn_names, redact_transcript
 from axis_runtime.voice.types import StageMetrics, TurnRole, VoiceTurn
 
 
@@ -37,6 +37,7 @@ class TranscriptWriter:
         self.phi_mode = phi_mode
         #: What was persisted (redacted in PHI mode), in order.  Never holds raw PHI text.
         self.turns: list[VoiceTurn] = []
+        self._names: list[str] = []  # name tokens learned from the caller (PHI mode only)
 
     def persisted_text(self, text: str) -> str:
         """The form of ``text`` that may be stored under the current PHI setting."""
@@ -44,7 +45,8 @@ class TranscriptWriter:
             return text
         if self.phi_mode is PhiMode.OMIT:
             return ""
-        return redact_transcript(text)
+        self._names.extend(n for n in learn_names(text) if n not in self._names)
+        return redact_transcript(text, self._names)
 
     async def add_turn(
         self, turn: VoiceTurn, *, audio_sha256: str | None = None, audio_bytes: int = 0

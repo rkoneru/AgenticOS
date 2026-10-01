@@ -13,6 +13,7 @@ stored.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from enum import StrEnum
 
 REDACTED = "[REDACTED]"
@@ -25,13 +26,21 @@ _MONTH = (
 )
 _STREET = r"(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|way|place|pl)"
 
+# "my name is Jane Q Public": the words after the introduction are the name.
+_NAME = re.compile(
+    r"\b(?:my name is|my name's|i am|i'm|this is|name is|speaking with)\s+"
+    r"(?P<name>[A-Za-z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*){0,3})",
+    re.IGNORECASE,
+)
+_NAME_STOP = frozenset({"a", "an", "the", "not", "calling", "trying", "looking", "here", "sorry"})
+
 _PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
         # labelled identifiers: "member id is AB12345", "MRN: 123"
         r"\b(?:mrn|medical record(?: number)?|member id|policy(?: number| no)?|account(?: number)?|"
         r"insurance id|patient id|claim(?: number)?|ssn|social(?: security(?: number)?)?)\b"
-        r"\s*(?:is|number|no\.?|:|#)?\s*[A-Za-z0-9][A-Za-z0-9\- ]{2,24}",
+        r"\s*(?:is|number|no\.?|:|#)?\s*[A-Za-z0-9][A-Za-z0-9\-]{2,24}(?:\s+\d[\d\-]*)*",
         # e-mail, written and spoken
         r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+",
         r"\b[\w.+-]+\s+at\s+[\w-]+(?:\s+dot\s+[\w-]+)*\s+dot\s+(?:com|org|net|edu|gov|io|co)\b",
@@ -42,9 +51,7 @@ _PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?{_MONTH}\b(?:,?\s+\d{{2,4}})?",
         # street addresses
         rf"\b\d{{1,6}}\s+(?:[A-Za-z0-9']+\s+){{1,4}}{_STREET}\b\.?",
-        # "my name is Jane Q Public"
-        r"\b(?:my name is|my name's|i am|i'm|this is|name is|speaking with)\s+"
-        r"[A-Za-z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*){0,3}",
+        _NAME.pattern,
         # digit runs: phone / SSN / card / MRN, with separators; also Unicode digits
         r"\+?\d(?:[\d\s().-]{4,}\d)",
         r"\b\d{5,}\b",
@@ -59,10 +66,25 @@ class PhiMode(StrEnum):
     OMIT = "omit"
 
 
-def redact_transcript(text: str) -> str:
-    """``text`` with the sensitive spans replaced by ``[REDACTED]`` (idempotent)."""
+def learn_names(text: str) -> list[str]:
+    """Name tokens the caller introduced themselves with ("my name is Jane Doe" -> Jane, Doe).  The
+    session redacts them wherever they appear LATER (the agent will say "Thanks, Jane")."""
+    found: list[str] = []
+    for m in _NAME.finditer(_INVISIBLE.sub("", text)):
+        for token in m.group("name").split():
+            word = token.strip("'-")
+            if len(word) >= 2 and word.lower() not in _NAME_STOP:
+                found.append(word)
+    return found
+
+
+def redact_transcript(text: str, extra: Iterable[str] = ()) -> str:
+    """``text`` with the sensitive spans replaced by ``[REDACTED]`` (idempotent).  ``extra`` are
+    further words to remove (names learned earlier in the call)."""
     out = _INVISIBLE.sub("", text)
     for pattern in _PATTERNS:
         out = pattern.sub(REDACTED, out)
+    for word in extra:
+        out = re.sub(rf"\b{re.escape(word)}\b", REDACTED, out, flags=re.IGNORECASE)
     out = re.sub(r"(?:\[REDACTED\][\s,.-]*){2,}", REDACTED + " ", out)
     return out.strip()
