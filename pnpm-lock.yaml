@@ -68,6 +68,9 @@ importers:
       '@axis/audit':
         specifier: workspace:*
         version: link:../services/audit
+      '@axis/channels':
+        specifier: workspace:*
+        version: link:../services/channels
       '@axis/risk-kernel':
         specifier: workspace:*
         version: link:../services/risk-kernel

@@ -1,6 +1,6 @@
 # Channels service (`services/channels`, `@axis/channels`)
 
-Status: Prototype-to-Built for the dev surface (fake transports only; no live provider). Evidence: vitest incl. real Postgres 16, property tests, 30/30 mutants killed by `scripts-mutation.mjs`; runtime `axis_runtime.channels`.
+Status: Prototype-to-Built for the dev surface (fake transports only; no live provider). Evidence: vitest incl. real Postgres 16, property tests, 30/30 mutants killed by `scripts-mutation.mjs`; runtime `axis_runtime.channels`; `make e2e-phase5` (web, Slack, SMS, email against recording fakes, real kernel and audit chain; ADR 0017).
 
 ## Model
 
@@ -44,9 +44,24 @@ Audit events (`enforcement_point` `lifecycle` inbound, `message_send` outbound):
 
 `POST /v1/channels/send` (bearer token fixes the tenant) is reached from the runtime only through `MessageSend` in `ActionExecutor` (gate, audit, perform): a DENY never sends. In the service: tenant route chosen (`from` when ambiguous), destination must be a known identity (or `allow_unsolicited`), must belong to the conversation's end user, outbound rate limit, **audit append before the provider call (fail closed)**, idempotency per `idempotency_key:part`, provider response checked (Slack `ok`), `channel.outbound.failed` audited on failure, then the log row. HTTP egress only through `HttpTransport`; `GuardedHttpTransport` enforces https, allowlisted host, default port, no IP literal, no credentials, no redirects.
 
+## Inbound to agent run (ADR 0017, dev bridge)
+
+`onMessage` is `InboxQueue.handler`: it enqueues an `InboxItem` per tenant (verified sender, conversation, message id, text, and the
+trace id of the inbound audit event, `InboundContext.trace_id`). The runtime's `ChannelAgentRunner` calls
+`POST /v1/channels/inbox/next {wait_ms}` with its tenant's token (`{item}` or `{item: null}`; a body `tenant_id` that differs from the
+credential is refused), fetches the conversation log, runs the agent named by the route with `RunDeps.channels` + `RunDeps.reply`
+and the reply goes out as a gated `MessageSend` named `channel.reply` (the kernel decides; DENY/kill-switch/gate error send nothing).
+A link command, a rejected, replayed or rate-limited message enqueues nothing. The inbox is in memory with no ack (NEEDS #147).
+
+## Voice transcript relay (ADR 0017)
+
+`POST /v1/channels/transcript-events` (service token; tenant from the token) appends one voice call/turn event to the tenant's chain:
+`voice.call.<connected|consent|ended>` and `voice.turn.<user|agent|system|dtmf>`, hashes and sizes only, on the call's trace; strict
+charset validation (`parseTranscriptEvent`); fail closed.
+
 ## Dev wire
 
-`services/channels/contract/wire-v1.json` is shared by `test/wire.test.ts` (real server) and `runtime/tests/test_channels.py` (client). Routes: `POST /v1/channels/<channel>/inbound` (+GET whatsapp), `POST /v1/channels/web/session`, `GET /v1/channels/web/events` (SSE), `POST /v1/channels/send`, `POST /v1/channels/identity/link-code`, `GET /v1/channels/conversations/<id>/messages`. Dev only (NEEDS 122-123).
+`services/channels/contract/wire-v1.json` is shared by `test/wire.test.ts` (real server) and `runtime/tests/test_channels.py` (client). Routes: `POST /v1/channels/<channel>/inbound` (+GET whatsapp), `POST /v1/channels/web/session`, `GET /v1/channels/web/events` (SSE), `POST /v1/channels/send`, `POST /v1/channels/identity/link-code`, `GET /v1/channels/conversations/<id>/messages`, `POST /v1/channels/inbox/next`, `POST /v1/channels/transcript-events`. Dev only (NEEDS 122-123).
 
 ## Quality evidence
 

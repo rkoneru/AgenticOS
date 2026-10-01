@@ -1,4 +1,4 @@
-.PHONY: e2e-core e2e-phase3 e2e-phase4 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-core e2e-phase3 e2e-phase4 e2e-phase5 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -71,6 +71,16 @@ e2e-phase4:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase4_tools.py -p no:cacheprovider --no-cov
 	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py runtime/tests/test_mcp_bypass.py -q -p no:cacheprovider --no-cov
+
+# Phase 5 exit: ONE agent (one ABL blueprint) answers on web, Slack, SMS and email and over voice; conversation continuity for a linked
+# identity and isolation for unlinked ones; forged / replayed / unrouted webhooks rejected and audited with no run; cross-tenant routing
+# impossible; every outbound message and call decided by the real Risk Kernel (DENY / kill-switch send nothing); PHI transcripts redacted
+# before persistence; transcripts (hashes + sizes) in the tenant's Postgres audit chain on one trace per turn / call; then the bypass
+# guard stays green. Same prerequisites as e2e-core. Fakes: provider transports, the LLM, STT/TTS vendors, the telephony gateway.
+e2e-phase5:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase5_channels.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
 
 # (Phase 7) Playwright console + CLI e2e
 e2e:

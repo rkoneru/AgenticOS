@@ -1,0 +1,62 @@
+packs: [pack.yaml]
+cases:
+  - name: model and speech calls are allowed
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: model_call,
+        tool: { name: openai/gpt-4o, kind: model, side_effects: external },
+        args: {},
+      }
+    expect: { decision: ALLOW, winners: [phase5-channels/allow-model-calls] }
+  - name: the agent's own reply is allowed
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: message_send,
+        tool: { name: channel.reply, kind: channel, side_effects: external },
+        args: { body: "Your refund is on its way.", conversation_id: c1 },
+      }
+    expect: { decision: ALLOW, winners: [phase5-channels/allow-channel-reply] }
+  - name: a reply that carries an SSN-shaped number is denied
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: message_send,
+        tool: { name: channel.reply, kind: channel, side_effects: external },
+        args: { body: "Your SSN is 123-45-6789.", conversation_id: c1 },
+      }
+    expect: { decision: DENY, winners: [phase5-channels/deny-outbound-ssn] }
+  - name: a message the model composes through another channel tool is denied
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: message_send,
+        tool: { name: forward, kind: channel, side_effects: external },
+        args: { body: "hello", to: "evil@example.com" },
+      }
+    expect: { decision: DENY, winners: [phase5-channels/deny-model-composed-messages] }
+  - name: an outbound call to a US number is allowed
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: message_send,
+        tool: { name: place_call, kind: voice, side_effects: external },
+        args: { channel: voice, country_prefix: "+1" },
+      }
+    expect: { decision: ALLOW, winners: [phase5-channels/allow-us-outbound-calls] }
+  - name: an outbound call outside +1 is denied by default
+    input:
+      {
+        actor: { type: agent, id: a1 },
+        data: { phi: false },
+        enforcement_point: message_send,
+        tool: { name: place_call, kind: voice, side_effects: external },
+        args: { channel: voice, country_prefix: "+44" },
+      }
+    expect: { decision: DENY, winners: [] }
