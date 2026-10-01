@@ -99,6 +99,8 @@ class RuntimeManifest:
     phi: bool = False
     routing_stages: tuple[str, ...] = ("llm",)
     memory: MemorySpec = field(default_factory=MemorySpec)
+    #: ABL ``riskClassification.transparencyNotice``: voice consent uses it (docs/spec/voice.md).
+    transparency_notice: str | None = None
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> RuntimeManifest:
@@ -152,6 +154,7 @@ class RuntimeManifest:
             phi=bool((raw.get("data") or {}).get("phi", False)),
             routing_stages=_routing_stages(raw.get("routing")),
             memory=_memory(raw.get("memory")),
+            transparency_notice=str(risk.get("transparency_notice") or "").strip() or None,
         )
 
     def validate_supported(self) -> None:

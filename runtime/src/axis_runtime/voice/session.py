@@ -948,9 +948,7 @@ class VoiceSession:
         remaining = max(0, turn.sent_ms_total - discarded_ms)
         parts: list[str] = []
         for s in turn.sentences:
-            total = (
-                s.sent_ms if s.done else max(s.sent_ms, self.config.ms_per_char * len(s.text))
-            )
+            total = s.sent_ms if s.done else max(s.sent_ms, self.config.ms_per_char * len(s.text))
             if s.done and s.sent_ms <= remaining:
                 parts.append(s.text)
                 remaining -= s.sent_ms

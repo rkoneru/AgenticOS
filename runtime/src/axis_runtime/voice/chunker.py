@@ -40,6 +40,7 @@ class SentenceChunker:
         self.min_chars = min_chars
         self.max_chars = max_chars
         self._buf = ""
+        self._carry = ""
 
     def feed(self, delta: str) -> list[str]:
         self._buf += delta
@@ -50,8 +51,8 @@ class SentenceChunker:
                 break
             sentence, self._buf = self._buf[:cut].strip(), self._buf[cut:].lstrip()
             if sentence:
-                out.append(sentence)
-        return self._merge_short(out, final=False)
+                self._emit(sentence, out)
+        return out
 
     def flush(self) -> list[str]:
         out: list[str] = []
@@ -61,9 +62,21 @@ class SentenceChunker:
                 cut = len(self._buf)
             sentence, self._buf = self._buf[:cut].strip(), self._buf[cut:].lstrip()
             if sentence:
-                out.append(sentence)
+                self._emit(sentence, out)
         self._buf = ""
-        return self._merge_short(out, final=True)
+        if self._carry:
+            out.append(self._carry)
+            self._carry = ""
+        return out
+
+    def _emit(self, sentence: str, out: list[str]) -> None:
+        """A fragment shorter than ``min_chars`` waits and joins the next sentence."""
+        joined = f"{self._carry} {sentence}".strip() if self._carry else sentence
+        if len(joined) < self.min_chars:
+            self._carry = joined
+        else:
+            self._carry = ""
+            out.append(joined)
 
     # ---- internals -----------------------------------------------------------------------
     def _find_cut(self, *, final: bool) -> int | None:
@@ -105,23 +118,6 @@ class SentenceChunker:
             if idx >= self.min_chars:
                 return idx + len(sep)
         return self.max_chars
-
-    def _merge_short(self, sentences: list[str], *, final: bool) -> list[str]:
-        merged: list[str] = []
-        carry = ""
-        for s in sentences:
-            s = f"{carry} {s}".strip() if carry else s
-            carry = ""
-            if len(s) < self.min_chars and not final:
-                carry = s
-                continue
-            merged.append(s)
-        if carry:
-            self._buf = f"{carry} {self._buf}".strip() if self._buf else carry
-        if final and len(merged) > 1 and len(merged[-1]) < self.min_chars:
-            tail = merged.pop()
-            merged[-1] = f"{merged[-1]} {tail}"
-        return merged
 
 
 _MARKDOWN = re.compile(r"[*_`#>~|]+")
