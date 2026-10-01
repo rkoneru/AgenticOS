@@ -60,7 +60,7 @@ from axis_runtime.executor import (
 )
 from axis_runtime.gate import GateClient
 from axis_runtime.manifest import ManifestError, RuntimeManifest, ToolSpec
-from axis_runtime.memory import HttpMemoryBackend, MemoryRagRetriever, MemoryWiring
+from axis_runtime.memory import MemoryRagRetriever, MemoryWiring
 from axis_runtime.models.gateway import ModelGateway
 from axis_runtime.models.types import (
     CacheHints,
@@ -840,26 +840,18 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
         if deps.session_id:
             owners["session"] = deps.session_id
         kbs = manifest.memory.knowledge_bases
-        backend = HttpMemoryBackend(
-            deps.memory.base_url,
-            token=deps.memory.token,
+        backend = deps.memory.backend(
             tenant_id=deps.tenant_id,
             principal=principal,
             groups=deps.principal_groups,
             owner_refs=owners,
             kbs=kbs,
-            timeout=deps.memory.timeout,
         )
         backends.memory = backend
         closers.append(backend.aclose)
         if kbs:
-            retriever = MemoryRagRetriever(
-                deps.memory.base_url,
-                token=deps.memory.token,
-                tenant_id=deps.tenant_id,
-                kbs=kbs,
-                groups_for=lambda _p: deps.principal_groups,
-                timeout=deps.memory.timeout,
+            retriever = deps.memory.retriever(
+                tenant_id=deps.tenant_id, kbs=kbs, groups=deps.principal_groups
             )
             closers.append(retriever.aclose)
     try:

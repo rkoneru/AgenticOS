@@ -36,15 +36,6 @@ _SCOPES = {
 _PASSTHROUGH = ("metadata", "acl", "subject", "ttl_seconds", "phi")
 
 
-@dataclass(frozen=True)
-class MemoryWiring:
-    """How a run reaches the memory service (the service derives the tenant from ``token``)."""
-
-    base_url: str
-    token: str = field(repr=False)
-    timeout: float = 30.0
-
-
 class MemoryUnavailable(RuntimeError):  # noqa: N818 - a condition, not a failure class hierarchy
     """The memory service could not answer.  Never carries response bodies (they may hold
     content)."""
@@ -290,3 +281,50 @@ class MemoryRagRetriever:
 
     async def aclose(self) -> None:
         await self._c.aclose()
+
+
+@dataclass(frozen=True)
+class MemoryWiring:
+    """How a run reaches the memory service (the service derives the tenant from ``token``).
+
+    ``transport`` is a test seam (an ``httpx`` mock transport); production leaves it ``None``."""
+
+    base_url: str
+    token: str = field(repr=False)
+    timeout: float = 30.0
+    transport: httpx.AsyncBaseTransport | None = field(default=None, repr=False)
+
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=self.timeout, transport=self.transport)
+
+    def backend(
+        self,
+        *,
+        tenant_id: str,
+        principal: str,
+        groups: Sequence[str],
+        owner_refs: Mapping[str, str],
+        kbs: Sequence[str],
+    ) -> HttpMemoryBackend:
+        return HttpMemoryBackend(
+            self.base_url,
+            token=self.token,
+            tenant_id=tenant_id,
+            principal=principal,
+            groups=groups,
+            owner_refs=owner_refs,
+            kbs=kbs,
+            client=self._client(),
+        )
+
+    def retriever(
+        self, *, tenant_id: str, kbs: Sequence[str], groups: Sequence[str]
+    ) -> MemoryRagRetriever:
+        return MemoryRagRetriever(
+            self.base_url,
+            token=self.token,
+            tenant_id=tenant_id,
+            kbs=kbs,
+            groups_for=lambda _principal: groups,
+            client=self._client(),
+        )
