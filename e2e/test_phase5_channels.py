@@ -580,7 +580,7 @@ def email_req(
     subject: str = "Question",
 ) -> Req:
     body = json.dumps({
-        "from": frm, "to": [MAILBOX], "subject": subject, "text": text, "headers": {"message-id": f"<{_n()}@example.com>"},
+        "from": frm, "sender_auth": {"dmarc": "pass"}, "to": [MAILBOX], "subject": subject, "text": text, "headers": {"message-id": f"<{_n()}@example.com>"},
         "timestamp": int(time.time()),
     }).encode()  # fmt: skip
     stamp = str(int(time.time()))

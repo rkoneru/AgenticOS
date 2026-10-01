@@ -244,11 +244,14 @@ export function emailReq(
     secret?: string;
     ts?: number;
     now?: number;
+    /** What the receiving edge attests about the sender (SPF/DKIM/DMARC). Default: DMARC pass. */
+    senderAuth?: Record<string, unknown> | null;
   } = {},
 ): RawRequest {
   const now = o.now ?? NOW;
   const body = JSON.stringify({
     from: o.from ?? "Alice <alice@example.org>",
+    ...(o.senderAuth === null ? {} : { sender_auth: o.senderAuth ?? { dmarc: "pass" } }),
     to: [o.to ?? "support@axis.example"],
     subject: o.subject ?? "Help",
     text: o.text ?? "I need help",

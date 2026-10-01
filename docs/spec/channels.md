@@ -22,6 +22,8 @@ A **channel adapter** turns provider traffic into `InboundMessage`s and `Outboun
 | sms      | `X-Twilio-Signature` = base64 HMAC-SHA1(url + sorted params), over the CONFIGURED `public_url`    | MessageSid only (no timestamp)              | `To` number                       |
 | whatsapp | `X-Hub-Signature-256: sha256=<hex HMAC>` over raw body; GET `hub.verify_token` handshake          | 24 h window + message id                    | `phone_number_id`                 |
 
+Email: the HMAC authenticates the edge, not the author. The edge must attest the sender (`sender_auth.dmarc === "pass"` in the normalised JSON) or the request is refused (`bad_signature`); a route may set `allow_unauthenticated_sender: true` for dev only. Without it `From` is spoofable and a stranger could write into, and be answered as, any other person's identity.
+
 All signature comparisons are constant time (`safeEqual` hashes both sides first).
 
 ## Tenant routing
