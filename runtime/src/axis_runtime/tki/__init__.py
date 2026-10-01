@@ -15,15 +15,19 @@ from axis_runtime.tki.budget import (
     ScopeKind,
 )
 from axis_runtime.tki.events import EventSink, ListSink, TkiEvent, TkiEventType
+from axis_runtime.tki.ipc import Envelope, Kind, MessageRouter
 
 __all__ = [
     "AccountKey",
     "BudgetExceededError",
     "BudgetLedger",
+    "Envelope",
     "EventSink",
     "InMemoryLedger",
+    "Kind",
     "Limit",
     "ListSink",
+    "MessageRouter",
     "Reservation",
     "Resource",
     "ScopeKind",

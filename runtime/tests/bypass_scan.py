@@ -98,6 +98,9 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "from any Action.",
         "pathlib": "FileSecretStore path handling.",
     },
+    "tki/ipc.py": {
+        "pathlib": "locates the frozen ipc-envelope-v1 schema (read only); patterns are not copied.",
+    },
     "process.py": {
         "os": "reads AXIS_PROCESS_MODEL_PATH (environment read only).",
         "pathlib": "locates the frozen process-model.json (read only).",
