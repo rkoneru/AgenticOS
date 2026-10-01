@@ -36,6 +36,10 @@ def _safe_relative(rel: str) -> bool:
     return bool(rel) and not rel.startswith("/") and all(p not in ("", ".", "..") for p in parts)
 
 
+class _Stop(Exception):
+    """Entry limit reached: stop the walk (what was captured so far is returned)."""
+
+
 def capture_artifacts(out_dir: str, limits: SandboxLimits) -> Captured:
     artifacts: list[Artifact] = []
     skipped: list[SkippedArtifact] = []
@@ -45,66 +49,83 @@ def capture_artifacts(out_dir: str, limits: SandboxLimits) -> Captured:
         return Captured((), ())
     total = 0
     inspected = 0
-    stack: list[tuple[int, str, int]] = [(root_fd, "", 0)]
-    try:
-        while stack:
-            dfd, prefix, depth = stack.pop()
-            try:
-                names = sorted(os.listdir(dfd))
-            except OSError:
-                skipped.append(SkippedArtifact(prefix.rstrip("/") or ".", "unreadable_directory"))
+
+    def walk(dfd: int, prefix: str, depth: int) -> None:
+        """Depth-first, so at most MAX_DEPTH + 1 directory descriptors are open at once: untrusted
+        code can create thousands of directories, and holding one descriptor per pending directory
+        would exhaust the runtime process's descriptors (for every other run too)."""
+        nonlocal total, inspected
+        try:
+            names = sorted(os.listdir(dfd))
+        except OSError:
+            skipped.append(SkippedArtifact(prefix.rstrip("/") or ".", "unreadable_directory"))
+            return
+        children: list[str] = []
+        for name in names:
+            inspected += 1
+            if inspected > MAX_ENTRIES:
+                skipped.append(SkippedArtifact(prefix + name, "entry_limit"))
+                raise _Stop
+            rel = prefix + name
+            if not _safe_relative(rel):
+                skipped.append(SkippedArtifact(rel, "unsafe_path"))
                 continue
-            for name in names:
-                inspected += 1
-                if inspected > MAX_ENTRIES:
-                    skipped.append(SkippedArtifact(prefix + name, "entry_limit"))
-                    return Captured(tuple(artifacts), tuple(skipped))
-                rel = prefix + name
-                if not _safe_relative(rel):
-                    skipped.append(SkippedArtifact(rel, "unsafe_path"))
+            try:
+                rel.encode("utf-8")
+            except UnicodeEncodeError:
+                skipped.append(SkippedArtifact(repr(rel), "bad_name"))
+                continue
+            try:
+                st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+            except OSError:
+                skipped.append(SkippedArtifact(rel, "vanished"))
+                continue
+            if stat.S_ISLNK(st.st_mode):
+                skipped.append(SkippedArtifact(rel, "symlink"))
+            elif stat.S_ISDIR(st.st_mode):
+                if depth + 1 > MAX_DEPTH:
+                    skipped.append(SkippedArtifact(rel, "too_deep"))
                     continue
-                try:
-                    rel.encode("utf-8")
-                except UnicodeEncodeError:
-                    skipped.append(SkippedArtifact(repr(rel), "bad_name"))
-                    continue
-                try:
-                    st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
-                except OSError:
-                    skipped.append(SkippedArtifact(rel, "vanished"))
-                    continue
-                if stat.S_ISLNK(st.st_mode):
-                    skipped.append(SkippedArtifact(rel, "symlink"))
-                elif stat.S_ISDIR(st.st_mode):
-                    if depth + 1 > MAX_DEPTH:
-                        skipped.append(SkippedArtifact(rel, "too_deep"))
-                        continue
-                    try:
-                        child = os.open(name, _DIR_FLAGS, dir_fd=dfd)
-                    except OSError:
-                        skipped.append(SkippedArtifact(rel, "unreadable_directory"))
-                        continue
-                    stack.append((child, rel + "/", depth + 1))
-                elif not stat.S_ISREG(st.st_mode):
-                    skipped.append(SkippedArtifact(rel, "not_regular_file"))
-                elif st.st_nlink != 1:
-                    skipped.append(SkippedArtifact(rel, "hard_link"))
-                elif len(artifacts) >= limits.max_artifacts:
-                    skipped.append(SkippedArtifact(rel, "too_many_artifacts"))
-                elif st.st_size > limits.max_artifact_bytes:
-                    skipped.append(SkippedArtifact(rel, "too_large"))
-                elif total + st.st_size > limits.max_artifacts_total_bytes:
+                children.append(name)
+            elif not stat.S_ISREG(st.st_mode):
+                skipped.append(SkippedArtifact(rel, "not_regular_file"))
+            elif st.st_nlink != 1:
+                skipped.append(SkippedArtifact(rel, "hard_link"))
+            elif len(artifacts) >= limits.max_artifacts:
+                skipped.append(SkippedArtifact(rel, "too_many_artifacts"))
+            elif st.st_size > limits.max_artifact_bytes:
+                skipped.append(SkippedArtifact(rel, "too_large"))
+            elif total + st.st_size > limits.max_artifacts_total_bytes:
+                skipped.append(SkippedArtifact(rel, "total_size_exceeded"))
+            else:
+                art = _read_one(dfd, name, rel, st, limits)
+                if (
+                    isinstance(art, Artifact)
+                    and total + art.size > limits.max_artifacts_total_bytes
+                ):
+                    # the file grew between stat() and read(): the cap is on bytes actually read
                     skipped.append(SkippedArtifact(rel, "total_size_exceeded"))
+                elif isinstance(art, Artifact):
+                    total += art.size
+                    artifacts.append(art)
                 else:
-                    art = _read_one(dfd, name, rel, st, limits)
-                    if isinstance(art, Artifact):
-                        total += art.size
-                        artifacts.append(art)
-                    else:
-                        skipped.append(art)
+                    skipped.append(art)
+        for name in reversed(children):  # same order as the previous explicit stack
+            try:
+                child = os.open(name, _DIR_FLAGS, dir_fd=dfd)
+            except OSError:
+                skipped.append(SkippedArtifact(prefix + name, "unreadable_directory"))
+                continue
+            try:
+                walk(child, prefix + name + "/", depth + 1)
+            finally:
+                os.close(child)
+
+    try:
+        walk(root_fd, "", 0)
+    except _Stop:
+        pass
     finally:
-        for fd, _, _ in stack:
-            os.close(fd)
         os.close(root_fd)
     return Captured(tuple(artifacts), tuple(skipped))
 
