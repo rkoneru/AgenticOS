@@ -39,6 +39,9 @@ class ActorType(StrEnum):
     HUMAN = "human"
     AGENT = "agent"
     SYSTEM = "system"
+    #: An external MCP client calling INTO AXIS (mcp/server.py). The frozen proto has no such
+    #: actor type, so on the wire it is SYSTEM; ``actor.type`` in the context stays "mcp_client".
+    MCP_CLIENT = "mcp_client"
 
 
 @dataclass(frozen=True)
@@ -119,6 +122,7 @@ _ACTOR_TO_PROTO = {
     ActorType.HUMAN: common_pb2.Actor.TYPE_HUMAN,
     ActorType.AGENT: common_pb2.Actor.TYPE_AGENT,
     ActorType.SYSTEM: common_pb2.Actor.TYPE_SYSTEM,
+    ActorType.MCP_CLIENT: common_pb2.Actor.TYPE_SYSTEM,  # NEEDS #100: no wire value yet
 }
 _DECISION_FROM_PROTO = {
     common_pb2.DECISION_ALLOW: Decision.ALLOW,

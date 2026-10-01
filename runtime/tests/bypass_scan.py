@@ -82,6 +82,10 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "socket": "default_resolver: getaddrinfo for the endpoint SSRF check (resolution only, "
         "never connects).",
     },
+    "mcp/http.py": {
+        "httpx": "MCP streamable-HTTP client transport: SSRF-validated, no redirects, size-capped; "
+        "reachable only via TenantMcpClient -> McpCall -> ActionExecutor.",
+    },
     "tools.py": {
         "httpx": "HttpMcpClient: MCP-over-HTTP backend; reachable only through McpCall performed "
         "by ActionExecutor.",
@@ -147,6 +151,14 @@ EXEMPTIONS: dict[str, dict[str, str]] = {
         "sandbox/workdir.py": "creates, fills and wipes the per-run sandbox working directory.",
         "sandbox/artifacts.py": "os.open is used read-only (O_RDONLY|O_NOFOLLOW) for fd-relative "
         "artifact capture; the scanner cannot prove the flags.",
+    },
+    "net": {
+        "mcp/http_server.py": "inbound MCP server socket (asyncio.start_server): authenticated, "
+        "size-capped, every tools/call runs through the executor and gate.",
+    },
+    "process": {
+        "mcp/stdio.py": "MCP stdio transport spawns ONLY operator-allowlisted commands with a "
+        "scrubbed environment; reachable only via McpCall -> ActionExecutor.",
     },
     "dns": {
         "models/adapters/base.py": "default_resolver uses loop.getaddrinfo (DNS lookup only).",
@@ -264,7 +276,9 @@ MEMBER_ALLOW: dict[str, frozenset[str]] = {
     "asyncio": frozenset(
         "CancelledError Event Lock Task create_task current_task get_running_loop sleep timeout "
         "wait_for gather Queue Semaphore Future shield wait TimeoutError iscoroutinefunction "
-        "Condition as_completed ensure_future".split()
+        "Condition as_completed ensure_future "
+        "Server StreamReader StreamWriter start_server LimitOverrunError IncompleteReadError "
+        "create_subprocess_exec".split()
     ),
     "logging": frozenset(
         "getLogger Logger LoggerAdapter NullHandler DEBUG INFO WARNING ERROR CRITICAL".split()
@@ -277,6 +291,8 @@ MEMBER_ALLOW: dict[str, frozenset[str]] = {
         "AbstractAsyncContextManager nullcontext closing aclosing AsyncExitStack ExitStack".split()
     ),
     "random": frozenset("Random SystemRandom random uniform randint choice shuffle".split()),
+    # MCP transports (mcp/stdio.py, mcp/http_server.py): stream types and the listed IO members;
+    # the "net"/"process" rules still confine start_server / create_subprocess_exec to those files.
     "typing": frozenset(),  # denylist mode below: typing has hundreds of legitimate names
 }
 TYPING_DENIED_MEMBERS = frozenset({"types", "collections", "functools", "operator", "warnings"})
@@ -436,6 +452,7 @@ RESTRICTED_NAMES: dict[str, dict[str, str]] = {
     "call_tool": {
         "tools.py": "McpClient protocol and HttpMcpClient",
         "actions.py": "McpCall._execute, the only caller",
+        "mcp/backend.py": "TenantMcpClient implements the McpClient protocol",
     },
     "call": {
         "tools.py": "ToolRegistry.call definition",
