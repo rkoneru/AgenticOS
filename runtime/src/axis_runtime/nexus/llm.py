@@ -9,7 +9,13 @@ from decimal import Decimal
 
 from axis_runtime.actions import ModelCall
 from axis_runtime.executor import ActionRunner, Completed, Denied, Failed, PendingApproval
-from axis_runtime.models.types import Message, ModelRequest, ModelResponse, ModelTarget
+from axis_runtime.models.types import (
+    CacheHints,
+    Message,
+    ModelRequest,
+    ModelResponse,
+    ModelTarget,
+)
 from axis_runtime.nexus.types import (
     Hit,
     Miss,
@@ -41,6 +47,15 @@ class LlmStage:
         self._system = system_prompt
 
     def _request(self, request: RouteRequest, state: RouteState) -> ModelRequest:
+        if request.messages:  # the agent loop's own conversation, tools included
+            return ModelRequest(
+                tenant_id=request.tenant_id,
+                messages=request.messages,
+                target=self._target,
+                tools=request.tools,
+                fallbacks=self._fallbacks,
+                cache=CacheHints(system=True),
+            )
         msgs: list[Message] = []
         system = request.system_prompt or self._system
         if system:
@@ -56,7 +71,10 @@ class LlmStage:
         )
 
     async def run(self, request: RouteRequest, state: RouteState) -> StageOutcome:
-        action = ModelCall(request=self._request(request, state))
+        action = ModelCall(
+            name=f"{self._target.provider}/{self._target.model}",
+            request=self._request(request, state),
+        )
         outcome = await self._runner.run(action, pid=request.pid)
         if isinstance(outcome, Denied):
             return Miss(f"denied:{outcome.reason}", blocked=True)
