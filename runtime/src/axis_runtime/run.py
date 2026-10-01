@@ -428,7 +428,10 @@ class AgentProcess:
         common: dict[str, Any] = {"name": spec.name, "args": dict(args)}
         if spec.kind == "mcp":
             return McpCall(
-                **common, mcp_server=spec.mcp_server or "", side_effects=spec.side_effects
+                **common,
+                mcp_server=spec.mcp_server or "",
+                side_effects=spec.side_effects,
+                ref=spec.ref,
             )
         if spec.kind == "code":
             return CodeExec(

@@ -197,13 +197,26 @@ class McpCall(_ArgsAction):
     enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.MCP_CALL
     mcp_server: str = ""
     side_effects: str = "write"
+    #: The tool's name on the MCP server when it differs from the agent-facing ``name``.
+    ref: str | None = None
+
+    @property
+    def qualified_name(self) -> str:
+        """``server/tool``: the unambiguous identity policies and audit see.  Server names cannot
+        contain ``/`` (``mcp.config.SERVER_NAME``), so no tool can impersonate another server's."""
+        return f"{self.mcp_server}/{self.ref or self.name}"
 
     def tool_descriptor(self) -> dict[str, str]:
-        return {"name": self.name, "kind": "mcp", "side_effects": self.side_effects}
+        return {
+            "name": self.qualified_name,
+            "kind": "mcp",
+            "side_effects": self.side_effects,
+            "server": self.mcp_server,
+        }
 
     async def _execute(self, backends: Backends) -> Any:
         mcp: McpClient = backends.need("mcp")
-        return await mcp.call_tool(self.mcp_server, self.name, self.args)
+        return await mcp.call_tool(self.mcp_server, self.ref or self.name, self.args)
 
 
 @dataclass(frozen=True)

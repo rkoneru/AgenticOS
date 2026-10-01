@@ -132,6 +132,10 @@ class ActionExecutor:
             "actor": {"type": ident.actor_type.value, "id": ident.actor_id or pid},
             "enforcement_point": ep.value,
         }
+        if ident.actor_type is ActorType.MCP_CLIENT:
+            # The kernel overwrites ``actor`` with the wire actor (SYSTEM, see gate.py); this
+            # extra, kernel-visible key lets policy tell inbound MCP calls apart (NEEDS #100).
+            context["inbound"] = {"transport": "mcp", "principal": ident.actor_id or pid}
         if approval is not None:
             context["approval"] = dict(approval)  # evidence for the kernel's own verification
         return EvaluateRequest(
