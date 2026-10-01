@@ -1,0 +1,50 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: phase5-channels
+  version: 1.0.0
+  description: "Phase 5 e2e fixture (not a shipped pack): model and speech calls, the agent's own reply, and US outbound calls are allowed; any other message the agent composes, replies carrying an SSN-shaped number, and calls outside +1 are denied."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+  rules:
+    - id: allow-model-calls
+      enforcementPoints: [model_call]
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-channel-reply
+      enforcementPoints: [message_send]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: channel.reply }
+          - { field: tool.kind, op: eq, value: channel }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-us-outbound-calls
+      enforcementPoints: [message_send]
+      when:
+        all:
+          - { field: tool.kind, op: eq, value: voice }
+          - { field: args.country_prefix, op: in, value: ["+1"] }
+      gates: [tenant-kill]
+      decision: ALLOW
+
+    # ---- denials (priority 400 beats every allow) ----
+    - id: deny-outbound-ssn
+      priority: 400
+      enforcementPoints: [message_send]
+      # A missing field makes a DENY rule match (fail closed), so the SSN rule is scoped to channel messages, which always have a body.
+      when:
+        all:
+          - { field: tool.kind, op: eq, value: channel }
+          - { field: args.body, op: matches, value: '\b\d{3}-\d{2}-\d{4}\b' }
+      decision: DENY
+    - id: deny-model-composed-messages
+      priority: 400
+      enforcementPoints: [message_send]
+      when:
+        all:
+          - { field: tool.kind, op: eq, value: channel }
+          - { field: tool.name, op: neq, value: channel.reply }
+      decision: DENY
