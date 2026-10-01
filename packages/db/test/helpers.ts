@@ -108,6 +108,27 @@ export async function seedTenant(
     "INSERT INTO memory_documents (tenant_id, kb_id, content_hash, acl, acl_key, created_by) VALUES ($1, $2, $3, '{}', '{}', 'seed')",
     [t, kb.rows[0].id, H("d")],
   );
+  const eu = await q("INSERT INTO end_users (tenant_id) VALUES ($1) RETURNING id", [t]);
+  await q(
+    "INSERT INTO channel_identities (tenant_id, end_user_id, channel, external_id, verified_by) VALUES ($1, $2, 'slack', 'U1', 'provider')",
+    [t, eu.rows[0].id],
+  );
+  await q(
+    "INSERT INTO link_challenges (tenant_id, end_user_id, code_hash, expires_at) VALUES ($1, $2, $3, now())",
+    [t, eu.rows[0].id, H("e")],
+  );
+  const conv = await q(
+    "INSERT INTO conversations (tenant_id, end_user_id, agent_name, agent_version, last_channel) VALUES ($1, $2, 'a', '1', 'slack') RETURNING id",
+    [t, eu.rows[0].id],
+  );
+  await q(
+    "INSERT INTO conversation_threads (tenant_id, channel, thread_key, conversation_id) VALUES ($1, 'slack', 'C1:1.1', $2)",
+    [t, conv.rows[0].id],
+  );
+  await q(
+    "INSERT INTO conversation_messages (tenant_id, conversation_id, direction, channel, idempotency_key, content_mode, content_hash, size_bytes) VALUES ($1, $2, 'in', 'slack', 'k1', 'hash_only', $3, 1)",
+    [t, conv.rows[0].id, H("f")],
+  );
   await q(
     "INSERT INTO memory_chunks (tenant_id, kb_id, scope, content, embedding) VALUES ($1, $2, 'kb', 'hello', $3::vector)",
     [t, kb.rows[0].id, `[${[1, ...Array<number>(1535).fill(0)].join(",")}]`],

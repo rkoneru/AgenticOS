@@ -103,6 +103,11 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "surface, NEEDS). The write backend is reachable only through MemoryWrite performed by "
         "ActionExecutor; the retriever is read-only, ACL-filtered server side and re-checked by RagStage.",
     },
+    "channels.py": {
+        "httpx": "HttpChannelSender: client of the channels service (loopback dev surface, NEEDS). "
+        "Reachable only through MessageSend performed by ActionExecutor: a DENY never sends; the "
+        "service audits before it delivers.",
+    },
     "browser/playwright_backend.py": {
         "playwright": "PlaywrightBackend: the single place a browser is driven. Reachable only via "
         "BrowserWorker, which only runs inside ActionExecutor (BrowserExec); every request the page "
