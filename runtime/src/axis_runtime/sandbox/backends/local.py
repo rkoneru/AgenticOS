@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import secrets
 import selectors
 import signal
 import subprocess
@@ -44,6 +45,12 @@ from axis_runtime.sandbox.types import (
 from axis_runtime.sandbox.workdir import Workdir
 
 NOBODY = 65534
+#: Runs under ``run_as="auto"`` (root runtime) each get their OWN uid from this range, so two
+#: simultaneous runs (two tenants) cannot read or tamper with each other's working directory: with
+#: one shared uid the workdir's 0700 protected nothing between them.
+_UID_MIN, _UID_MAX = 1 << 17, (1 << 31) - 1
+_uids_in_use: set[int] = set()
+_uid_lock = threading.Lock()
 _BIN_DIRS = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 _OUTPUT_KILL_FACTOR = 32  #: kill when a stream exceeds this many times ``max_output_bytes``
 _POLL = 0.05
@@ -104,6 +111,7 @@ class LocalProcessBackend:
         self._allow_network = allow_network
         self._python = python
         self._base = workdir_base
+        self._per_run_uid = run_as == "auto" and os.geteuid() == 0
         if run_as == "auto":
             self._run_as: tuple[int, int] | None = (NOBODY, NOBODY) if os.geteuid() == 0 else None
         elif isinstance(run_as, tuple):
@@ -255,14 +263,34 @@ class LocalProcessBackend:
         self._ensure_probed()
         return self._run_once(spec, cancel)
 
+    @staticmethod
+    def _lease_uid() -> int:
+        with _uid_lock:
+            while True:
+                uid = _UID_MIN + secrets.randbelow(_UID_MAX - _UID_MIN)
+                if uid not in _uids_in_use:
+                    _uids_in_use.add(uid)
+                    return uid
+
     def _run_once(self, spec: SandboxSpec, cancel: threading.Event) -> SandboxResult:
+        leased = self._lease_uid() if self._per_run_uid else None
+        try:
+            return self._run_as_uid(spec, cancel, (leased, leased) if leased else self._run_as)
+        finally:
+            if leased is not None:
+                with _uid_lock:
+                    _uids_in_use.discard(leased)
+
+    def _run_as_uid(
+        self, spec: SandboxSpec, cancel: threading.Event, run_as: tuple[int, int] | None
+    ) -> SandboxResult:
         tools = self._tools()
-        wd = Workdir.create(self._base, self._run_as)
+        wd = Workdir.create(self._base, run_as)
         try:
             entry = wd.write_code(
                 "main.py" if spec.language == "python" else "main.sh",
                 spec.code.encode(),
-                self._run_as,
+                run_as,
             )
             cmd = self._command(tools, spec, entry)
             env: dict[str, str] = {
@@ -274,8 +302,8 @@ class LocalProcessBackend:
                 **spec.env,
             }
             kwargs: dict[str, Any] = {}
-            if self._run_as is not None:
-                kwargs = {"user": self._run_as[0], "group": self._run_as[1], "extra_groups": []}
+            if run_as is not None:
+                kwargs = {"user": run_as[0], "group": run_as[1], "extra_groups": []}
             try:
                 proc = subprocess.Popen(  # noqa: S603 - fixed argv, no shell, cleared env
                     cmd,
@@ -291,7 +319,7 @@ class LocalProcessBackend:
                 )
             except OSError as exc:
                 raise SandboxUnavailableError(f"cannot start sandbox process: {exc}") from exc
-            return self._supervise(proc, spec, wd, cancel)
+            return self._supervise(proc, spec, wd, cancel, run_as)
         finally:
             wd.wipe()
 
@@ -301,6 +329,7 @@ class LocalProcessBackend:
         spec: SandboxSpec,
         wd: Workdir,
         cancel: threading.Event,
+        run_as: tuple[int, int] | None,
     ) -> SandboxResult:
         lim = spec.limits
         started = time.monotonic()
@@ -393,7 +422,8 @@ class LocalProcessBackend:
             "network": spec.network,
             "capabilities_dropped": True,
             "no_new_privs": True,
-            "unprivileged_uid": self._run_as[0] if self._run_as else None,
+            "unprivileged_uid": run_as[0] if run_as else None,
+            "uid_per_run": self._per_run_uid,
             "rlimits": True,
             "filesystem_read_isolated": False,
             "hard_security_boundary": False,
