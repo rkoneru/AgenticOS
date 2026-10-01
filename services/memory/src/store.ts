@@ -346,9 +346,17 @@ export class PgMemoryService {
     const kbs = q.kbs ?? [];
     for (const k of kbs)
       if (!NAME_RE.test(k)) throw new MemoryError("INVALID", "bad knowledge base name");
-    const [vec] = await this.embed([q.query]);
     const now = this.now();
     return this.inTenant(tenantId, async (c) => {
+      // PHI tenants: the QUERY is data too. It goes to the embedder (a model provider), so it gets the same free-text
+      // scrub the write path applies before embedding.
+      const tenant = await c.query<{ phi_mode: boolean }>(
+        "SELECT phi_mode FROM tenants WHERE id = $1",
+        [tenantId],
+      );
+      if (tenant.rowCount === 0) throw new MemoryError("NOT_FOUND", "tenant not found");
+      const queryText = tenant.rows[0]?.phi_mode === true ? scrubText(q.query) : q.query;
+      const [vec] = await this.embed([queryText]);
       await c.query(`SET LOCAL hnsw.ef_search = ${EF_SEARCH}`);
       const params: unknown[] = [
         tenantId,

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 import { scrubText } from "../src/redact.js";
-import { adminClient, newPool, newService, newTenant, who } from "./helpers.js";
+import { adminClient, newPool, newService, newTenant, SpyEmbedder, who } from "./helpers.js";
 import type { PgMemoryService } from "../src/index.js";
 
 const ALICE = who("alice", "eng");
@@ -81,5 +81,43 @@ describe("Phase 4 review: memory", () => {
     const b = await svc.write(t, base); // same content and ACL, no subject: dedupes onto row a
     expect(b).toMatchObject({ id: a.id, deduped: true });
     expect(await svc.forgetSubject(t, "subject-1")).toEqual({ chunks: 1, documents: 0 });
+  });
+});
+
+describe("Phase 4 review: PHI tenants and the read path", () => {
+  let pool: pg.Pool;
+  let admin: pg.Client;
+  beforeAll(async () => {
+    pool = newPool();
+    admin = await adminClient();
+  });
+  afterAll(async () => {
+    await pool.end();
+    await admin.end();
+  });
+
+  it("a search query never reaches the embedder with PHI in it when the tenant is in phi_mode", async () => {
+    const spy = new SpyEmbedder();
+    const svc = newService(pool, { embedder: spy });
+    const t = await newTenant(admin, true);
+    await svc.write(t, {
+      scope: "tenant",
+      content: "Prefers mornings",
+      acl: { tenant: true },
+      principal: ALICE,
+    });
+    spy.seen.length = 0;
+    await svc.search(t, ALICE, { query: "history for SSN 123-45-6789 jane.doe@example.com" });
+    expect(spy.seen).toHaveLength(1);
+    expect(spy.seen[0]).not.toContain("123-45-6789");
+    expect(spy.seen[0]).not.toContain("jane.doe@example.com");
+  });
+
+  it("a non-PHI tenant's query is embedded verbatim (control)", async () => {
+    const spy = new SpyEmbedder();
+    const svc = newService(pool, { embedder: spy });
+    const t = await newTenant(admin, false);
+    await svc.search(t, ALICE, { query: "order 123-45-6789" });
+    expect(spy.seen).toEqual(["order 123-45-6789"]);
   });
 });
