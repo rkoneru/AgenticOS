@@ -103,6 +103,11 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "surface, NEEDS). The write backend is reachable only through MemoryWrite performed by "
         "ActionExecutor; the retriever is read-only, ACL-filtered server side and re-checked by RagStage.",
     },
+    "browser/playwright_backend.py": {
+        "playwright": "PlaywrightBackend: the single place a browser is driven. Reachable only via "
+        "BrowserWorker, which only runs inside ActionExecutor (BrowserExec); every request the page "
+        "makes is gated by UrlGuard at the network layer (docs/spec/browser.md).",
+    },
     "temporal.py": {
         "temporalio": "Temporal workflow/activity wiring: talks to the Temporal server, runs "
         "ActionExecutor inside the activity.",

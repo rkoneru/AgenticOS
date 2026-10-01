@@ -623,3 +623,30 @@ def test_agent_loop_code_cannot_import_the_sandbox_internals_to_spawn() -> None:
         "from axis_runtime.sandbox.backends.local import LocalProcessBackend\nimport subprocess"
     )
     assert any("import:subprocess" in p for p in bs.scan_source("run.py", loop_like))
+
+
+# ---- browser backend allowlist (Phase 4 D) ---------------------------------------------------------------
+
+
+def test_playwright_is_allowed_in_the_browser_backend_module_only() -> None:
+    assert bs.scan_source("browser/playwright_backend.py", "import playwright.async_api") == []
+    assert (
+        bs.scan_source("browser/playwright_backend.py", "from playwright.async_api import Page")
+        == []
+    )
+    for rel in ("browser/worker.py", "browser/policy.py", "tools.py", "run.py", "actions.py"):
+        assert bs.scan_source(rel, "import playwright.async_api") != [], rel
+        assert bs.scan_source(rel, "from playwright.sync_api import sync_playwright") != [], rel
+    # the grant is per module: the backend file still may not spawn processes or open sockets
+    assert bs.scan_source("browser/playwright_backend.py", "import subprocess") != []
+    assert bs.scan_source("browser/playwright_backend.py", "import socket") != []
+    assert bs.scan_source("browser/playwright_backend.py", "import httpx") != []
+    assert bs.scan_source("browser/playwright_backend.py", "eval('1')") != []
+    assert bs.scan_source("browser/playwright_backend.py", "import os\nos.system('x')") != []
+
+
+def test_browser_modules_other_than_the_backend_reach_no_io() -> None:
+    for rel in ("browser/worker.py", "browser/policy.py", "browser/args.py", "browser/backend.py"):
+        src = (SRC / rel).read_text()
+        assert bs.scan_source(rel, src) == [], rel
+        assert "playwright" not in "".join(m for m, _ in bs.imported_modules(ast.parse(src)))

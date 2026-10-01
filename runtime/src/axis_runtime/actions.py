@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from axis_runtime.browser.args import gate_view, merge_redacted
 from axis_runtime.gate import EnforcementPoint
 from axis_runtime.guard import (
     DirectExecutionError,
@@ -301,15 +302,36 @@ def _summarise_result_dict(result: Mapping[str, Any]) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class BrowserExec(_ArgsAction):
+    """One browser operation: ``args = {"operation": navigate|click|type|extract|screenshot, ...}``.
+
+    ``target_url`` is the page a non-navigation operation acts on (``BrowserWorker.action`` fills
+    it from the worker's own state); the worker refuses to run if the live page differs. The gate
+    sees a derived view (operation, sanitised URL, host, args hash; typed text only as a hash,
+    nothing at all for sensitive fields), never the raw text. See docs/spec/browser.md.
+    """
+
     enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.BROWSER_EXEC
     side_effects: str = "external"
+    target_url: str = ""
 
     def tool_descriptor(self) -> dict[str, str]:
         return {"name": self.name, "kind": "browser", "side_effects": self.side_effects}
 
+    def gate_args(self) -> dict[str, Any]:
+        return gate_view(self.args, self.target_url)
+
+    def with_args(self, doc: Mapping[str, Any]) -> Action:
+        return dataclasses.replace(self, args=merge_redacted(self.args, doc))
+
+    def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
+        # The extracted text goes back to the agent, not into the event log: only its hash and size.
+        if isinstance(result, Mapping):
+            result = {k: v for k, v in result.items() if k != "text"}
+        return super().result_event(result)
+
     async def _execute(self, backends: Backends) -> Any:
         browser: BrowserRunner = backends.need("browser")
-        return await browser.run(self.args)
+        return await browser.run({**self.args, "target_url": self.target_url})
 
 
 @dataclass(frozen=True)

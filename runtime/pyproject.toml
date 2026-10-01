@@ -10,8 +10,13 @@ dependencies = [
   "cryptography>=43",
 ]
 
+[project.optional-dependencies]
+browser = [
+    "playwright>=1.56,<1.57",
+]
+
 [dependency-groups]
-dev = ["grpcio-tools>=1.66"]
+dev = ["grpcio-tools>=1.66", "playwright>=1.56,<1.57"]
 
 [build-system]
 requires = ["hatchling"]
