@@ -17,6 +17,10 @@
 - **Not built / not verified** (`docs/NEEDS.md` #62-#68): production approver API and runtime transport, durable consumed-approval
   store, approval request hygiene, gating of cache/rules hits, Temporal wiring, ledger/NEXUS events in the audit chain, no remote CI run.
 
+### Phase 3 review round
+
+Independent review found and fixed: ReDoS in tenant NEXUS rules, restarts resetting child budgets (hard cap exceedable), cache hits bypassing the gate (now replayed through the Risk Kernel), approval waits holding scheduler slots, unbounded approval-record age (15 min bound), silent truncation of a malformed HMAC key. Open: NEEDS #46, #63, #65, #69-#73.
+
 ## Phase 2 - 2026-10-01 - Governed kernel (core loop)
 
 - **ABL compiler + linter** (`@axis/abl`), **policy compiler** (`@axis/policy`: DSL to Rego, Wasm bundles, opa-backed golden cases),
