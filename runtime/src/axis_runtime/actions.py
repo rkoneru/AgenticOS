@@ -27,11 +27,17 @@ from axis_runtime.guard import (
 )
 from axis_runtime.models.types import ModelRequest, ModelResponse
 from axis_runtime.redaction import REDACTED, redact_paths
+from axis_runtime.sandbox.types import (
+    SandboxBackend,
+    SandboxLimits,
+    SandboxResult,
+    SandboxSpec,
+    sha256_hex,
+)
 from axis_runtime.tools import (
     BackendUnavailableError,
     BrowserRunner,
     ChannelSender,
-    CodeSandbox,
     McpClient,
     MemoryStore,
     SpawnHandler,
@@ -48,7 +54,7 @@ class Backends:
 
     tools: ToolRegistry | None = None
     mcp: McpClient | None = None
-    sandbox: CodeSandbox | None = None
+    sandbox: SandboxBackend | None = None
     browser: BrowserRunner | None = None
     memory: MemoryStore | None = None
     channels: ChannelSender | None = None
@@ -88,7 +94,7 @@ __all__ = [
     "Action",
     "Backends",
     "BrowserExec",
-    "CodeExec",
+    "CodeRunAction",
     "DirectExecutionError",
     "ExecutionToken",
     "McpCall",
@@ -207,21 +213,73 @@ class McpCall(_ArgsAction):
 
 
 @dataclass(frozen=True)
-class CodeExec(_ArgsAction):
-    """``args = {"language": str, "code": str}``."""
+class CodeRunAction(_ArgsAction):
+    """Run code in the sandbox.  ``args = {"language": str, "code": str}`` is what the agent gives.
+
+    The gate sees ``language``, ``code_sha256``, ``code_bytes``, the limits and the network flag,
+    NEVER the code text, and neither does the audit log.  ``network`` is wiring, not an agent
+    argument: it defaults to False and is only set by deployment code; the policy decides on it.
+    """
 
     enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.CODE_EXEC
     side_effects: str = "external"
     timeout_seconds: int = 60
+    network: bool = False
+    limits: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self._spec()  # validate early: unknown limits / language / env fail at construction
+
+    def _spec(self) -> SandboxSpec:
+        raw = {"wall_seconds": float(self.timeout_seconds), **dict(self.limits)}
+        return SandboxSpec(
+            language=str(self.args.get("language", "")),
+            code=str(self.args.get("code", "")),
+            limits=SandboxLimits.from_mapping(raw),
+            network=self.network,
+        )
 
     def tool_descriptor(self) -> dict[str, str]:
         return {"name": self.name, "kind": "code", "side_effects": self.side_effects}
 
+    def gate_args(self) -> dict[str, Any]:
+        return self._spec().describe()
+
+    def with_args(self, doc: Mapping[str, Any]) -> Action:
+        # The gate document holds metadata only; redacting it can never change the code that runs.
+        args = {**self.args, "language": str(doc.get("language", self.args.get("language", "")))}
+        return dataclasses.replace(self, args=args)
+
+    def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
+        summary = result.audit_summary() if isinstance(result, SandboxResult) else None
+        if summary is None and isinstance(result, Mapping):
+            summary = _summarise_result_dict(result)
+        etype, data = super().result_event(None)
+        data["result"] = {**self._spec().describe(), **(summary or {})}
+        return etype, data
+
     async def _execute(self, backends: Backends) -> Any:
-        sandbox: CodeSandbox = backends.need("sandbox")
-        return await sandbox.run(
-            str(self.args.get("language", "")), str(self.args.get("code", "")), self.timeout_seconds
-        )
+        sandbox: SandboxBackend = backends.need("sandbox")
+        result = await sandbox.run(self._spec())
+        return result.to_dict() if isinstance(result, SandboxResult) else result
+
+
+def _summarise_result_dict(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Audit form of a result that is already a dict: hashes and sizes, never output text."""
+    out = {k: result[k] for k in ("exit_code", "ok", "killed_reason", "signal") if k in result}
+    for stream in ("stdout", "stderr"):
+        text = result.get(stream)
+        if isinstance(text, str):
+            out[f"{stream}_sha256"] = sha256_hex(text.encode())
+            out[f"{stream}_bytes"] = len(text.encode())
+    arts = result.get("artifacts")
+    if isinstance(arts, list):
+        out["artifacts"] = [
+            {k: a.get(k) for k in ("path", "size", "sha256")}
+            for a in arts
+            if isinstance(a, Mapping)
+        ]
+    return out
 
 
 @dataclass(frozen=True)

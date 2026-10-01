@@ -27,7 +27,7 @@ from axis_runtime.actions import (
     Action,
     Backends,
     BrowserExec,
-    CodeExec,
+    CodeRunAction,
     McpCall,
     MessageSend,
     ModelCall,
@@ -431,7 +431,7 @@ class AgentProcess:
                 **common, mcp_server=spec.mcp_server or "", side_effects=spec.side_effects
             )
         if spec.kind == "code":
-            return CodeExec(
+            return CodeRunAction(
                 **common, side_effects=spec.side_effects, timeout_seconds=spec.timeout_seconds
             )
         if spec.kind == "browser":

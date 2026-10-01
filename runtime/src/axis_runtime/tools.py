@@ -1,8 +1,9 @@
 """Side-effect backends used by Actions.  Network/process/file-IO primitives live HERE (and in
 ``axis_runtime.models.adapters``), never in the agent loop.
 
-Only the function-tool registry and a minimal HTTP MCP client are implemented.  Code sandbox,
-browser, memory and channel backends are interfaces only (Phase 4+); see docs/NEEDS.md.
+Only the function-tool registry and a minimal HTTP MCP client live here.  The code sandbox is
+``axis_runtime.sandbox``; browser, memory and channel backends are interfaces only (Phase 4+);
+see docs/NEEDS.md.
 """
 
 from __future__ import annotations
@@ -67,10 +68,6 @@ class ToolRegistry:
 
 class McpClient(Protocol):
     async def call_tool(self, server: str, name: str, args: Mapping[str, Any]) -> Any: ...
-
-
-class CodeSandbox(Protocol):
-    async def run(self, language: str, code: str, timeout_seconds: int) -> Any: ...
 
 
 class BrowserRunner(Protocol):
