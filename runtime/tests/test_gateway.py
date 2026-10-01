@@ -458,7 +458,7 @@ async def test_platform_keys_only_when_the_tenant_policy_allows() -> None:
     await free(gw).complete(request("openai", "gpt-4o"))
     assert seen == ["Bearer platform-key"]
     with pytest.raises(ModelError):
-        await free(gw).complete(request("openai", "gpt-4o", tenant_id="other-tenant"))
+        await free(gw).complete(request("anthropic", "claude-sonnet-4-20250514"))
     # allowed but no platform store configured / no platform key for the provider
     gw, _ = gateway_for(handler, secrets=empty, tenant_policy=lambda t: TenantModelPolicy(True))
     with pytest.raises(ModelError):
@@ -755,3 +755,69 @@ async def test_system_clock_sleep_and_default_transport() -> None:
 
     gw = ModelGateway(S())  # default httpx transport is constructed lazily and never used here
     assert gw.cost_table.version == COST_TABLE_VERSION and FixedRng().uniform(1, 2) == 2
+
+
+# ---- breaker map is bounded ---------------------------------------------------------------------------------
+
+
+def _trip(gw: Any, tenant: str) -> None:
+    b = gw.breaker(tenant, "openai")
+    for _ in range(b.failure_threshold):
+        b.record_failure()
+    assert b.state is BreakerState.OPEN
+
+
+def test_breaker_map_is_a_bounded_lru_evicting_closed_breakers_first() -> None:
+    gw, _ = gateway_for(Script(err(500)), max_breakers=3, breaker_threshold=1)
+    _trip(gw, "t-open")  # oldest, but OPEN: must survive
+    closed_a = gw.breaker("t-a", "openai")
+    gw.breaker("t-b", "openai")
+    assert len(gw._breakers) == 3  # noqa: SLF001
+    gw.breaker("t-a", "openai")  # touch: t-b is now the least recently used CLOSED one
+    gw.breaker("t-c", "openai")  # full: evicts t-b, not the older OPEN t-open
+    keys = {k[0] for k in gw._breakers}  # noqa: SLF001
+    assert keys == {"t-open", "t-a", "t-c"}
+    assert gw.breaker("t-a", "openai") is closed_a
+    assert gw.breaker("t-open", "openai").state is BreakerState.OPEN  # eviction never reset it
+    for i in range(50):
+        gw.breaker(f"churn-{i}", "openai")
+    assert len(gw._breakers) == 3  # noqa: SLF001
+    assert gw.breaker("t-open", "openai").state is BreakerState.OPEN
+
+
+def test_breaker_map_refuses_new_keys_when_every_breaker_is_tripped() -> None:
+    gw, clock = gateway_for(Script(err(500)), max_breakers=2, breaker_threshold=1)
+    _trip(gw, "t1")
+    _trip(gw, "t2")
+    with pytest.raises(ModelError) as exc:
+        gw.breaker("t3", "openai")
+    assert exc.value.kind is ErrorKind.CONFIGURATION and not exc.value.retryable
+    assert {k[0] for k in gw._breakers} == {"t1", "t2"}  # noqa: SLF001
+    clock.advance(31)  # half-open is still not closed: still refused
+    with pytest.raises(ModelError):
+        gw.breaker("t3", "openai")
+    gw.breaker("t1", "openai").record_success()  # one recovers: room appears
+    assert gw.breaker("t3", "openai").state is BreakerState.CLOSED
+
+
+async def test_a_refused_breaker_is_a_non_retryable_configuration_error_end_to_end() -> None:
+    script = Script(json_response(OK_OPENAI))
+    gw, _ = gateway_for(script, max_breakers=1, breaker_threshold=1)
+    _trip(gw, TENANT)
+    with pytest.raises(ModelError) as exc:
+        await free(gw).complete(request("anthropic", "claude-sonnet-4-20250514"))
+    assert exc.value.kind is ErrorKind.CONFIGURATION and script.hosts == []
+
+
+def test_recording_an_outcome_never_raises_when_the_map_is_full_of_tripped_breakers() -> None:
+    gw, _ = gateway_for(Script(err(500)), max_breakers=1, breaker_threshold=1)
+    _trip(gw, "t1")
+    req = request("openai", "gpt-4o", tenant_id="t2")
+    breaker = gw._recording_breaker(req, req.target)  # noqa: SLF001
+    breaker.record_failure()
+    assert len(gw._breakers) == 1  # noqa: SLF001  (the throwaway was not stored)
+
+
+def test_max_breakers_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="max_breakers"):
+        gateway_for(Script(err(500)), max_breakers=0)

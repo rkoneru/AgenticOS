@@ -7,7 +7,8 @@ runtime audit-hook test (``test_audit_hook.py``) is the independent dynamic chec
 
 Three layers, applied to every module except generated stubs (``_gen/``):
 
-1. IMPORTS are allowlisted. A module may import only ``SAFE_IMPORTS`` (pure compute) unless the FILE
+1. IMPORTS are allowlisted. A module may import only ``SAFE_IMPORTS`` (modules whose OWN API is
+   believed free of process/network/file-write capability, see the caveat there) unless the FILE
    appears in ``IO_IMPORTS`` with that module and a reason. Anything unknown is a violation, so
    ``import urllib`` / ``smtplib`` / ``boto3`` / ``pickle`` / ``ctypes`` / ... need no denylist entry.
 2. CONSTRUCTS are banned by AST (eval/exec, dynamic import, dynamic getattr, introspection, process /
@@ -30,9 +31,12 @@ GENERATED_PREFIX = "_gen/"
 # (1) Import allowlists. Adding an entry is a security-review decision.
 # ---------------------------------------------------------------------------------------------------
 
-# Exact dotted module names that are pure compute (no network, process, or file-write capability).
-# NOTE: ``asyncio`` and ``logging`` are here because the runtime is async and logs; their IO-capable
-# members (create_subprocess_*, open_connection, FileHandler, SocketHandler, ...) are banned below.
+# Exact dotted module names whose *intended* API has no network, process, or file-write capability.
+# CAVEAT: "safe" does NOT mean "pure compute". Several of these modules import and therefore re-export
+# dangerous modules as attributes (``logging.os``, ``asyncio.subprocess``, ``typing.sys``,
+# ``random._os``, ``contextlib.os`` ...). Importing the module is allowed; reaching such a member is
+# not: rule "transitive-module" bans a second attribute segment naming a dangerous module, and
+# rule "unlisted-member" confines the widest re-exporters (MEMBER_ALLOW) to the members src uses.
 SAFE_IMPORTS: frozenset[str] = frozenset(
     {
         "__future__",  # compiler directives
@@ -132,6 +136,16 @@ BANNED_NAMES = frozenset(
 BANNED_DYNAMIC_ATTR_FUNCS = frozenset({"getattr", "setattr", "delattr"})
 INTROSPECTION_ATTRS = frozenset(
     {
+        "__mro__",
+        "__bases__",
+        "__base__",
+        "__reduce__",
+        "__reduce_ex__",
+        "__loader__",
+        "__spec__",
+        "gi_code",
+        "cr_code",
+        "ag_code",
         "__dict__",
         "__globals__",
         "__builtins__",
@@ -152,6 +166,64 @@ INTROSPECTION_ATTRS = frozenset(
         "import_module",
     }
 )
+# Attribute names that are banned as ATTRIBUTES too (``builtins.exec``, ``x.eval``). ``compile`` is
+# handled separately because ``re.compile`` is legitimate.
+BANNED_ATTR_NAMES = BANNED_NAMES - {"compile"}
+# Modules that "safe" modules re-export. A chain like ``logging.os.system`` / ``typing.sys.modules`` is
+# flagged when any attribute is one of these, whatever the base is. ``signal`` is also a common method
+# name (Temporal), so it is only flagged when the chain is rooted at an imported safe module.
+DANGEROUS_MODULE_NAMES = frozenset(
+    {
+        "os",
+        "sys",
+        "subprocess",
+        "socket",
+        "threading",
+        "io",
+        "builtins",
+        "_os",
+        "_socket",
+        "_io",
+        "posix",
+        "nt",
+        "ctypes",
+        "importlib",
+        "pickle",
+        "marshal",
+        "shutil",
+        "tempfile",
+        "signal",
+        "_thread",
+        "multiprocessing",
+        "concurrent",
+    }
+)
+# The widest re-exporters may only expose the members src actually uses (first segment after module).
+MEMBER_ALLOW: dict[str, frozenset[str]] = {
+    "asyncio": frozenset(
+        "CancelledError Event Lock Task create_task current_task get_running_loop sleep timeout "
+        "wait_for gather Queue Semaphore Future shield wait TimeoutError iscoroutinefunction "
+        "Condition as_completed ensure_future".split()
+    ),
+    "logging": frozenset(
+        "getLogger Logger LoggerAdapter NullHandler DEBUG INFO WARNING ERROR CRITICAL".split()
+    ),
+    "inspect": frozenset(
+        "isabstract isawaitable iscoroutinefunction isclass signature Signature Parameter".split()
+    ),
+    "contextlib": frozenset(
+        "suppress contextmanager asynccontextmanager AbstractContextManager "
+        "AbstractAsyncContextManager nullcontext closing aclosing AsyncExitStack ExitStack".split()
+    ),
+    "random": frozenset("Random SystemRandom random uniform randint choice shuffle".split()),
+    "typing": frozenset(),  # denylist mode below: typing has hundreds of legitimate names
+}
+TYPING_DENIED_MEMBERS = frozenset({"types", "collections", "functools", "operator", "warnings"})
+# Attributes carrying string attribute names that must not name introspection/dangerous members.
+ATTR_NAME_FUNCS = frozenset(
+    {"getattr", "setattr", "hasattr", "delattr", "attrgetter", "methodcaller"}
+)
+THREAD_ESCAPE_ATTRS = frozenset({"run_in_executor", "to_thread", "run_coroutine_threadsafe"})
 # Fully qualified names (after alias resolution) and prefixes that are banned.
 BANNED_QUALIFIED = frozenset(
     {
@@ -236,12 +308,25 @@ NET_ATTRS = frozenset(
         "connect_read_pipe",
         "connect_write_pipe",
         "urlopen",
+        "sock_sendall",
+        "sock_recv",
+        "sock_recv_into",
+        "sock_recvfrom",
+        "sock_recvfrom_into",
+        "sock_sendto",
+        "sock_accept",
+        "sock_sendfile",
+        "sendfile",
     }
 )
 # Name resolution (leaks a hostname, never connects): allowed only where the SSRF check lives.
 DNS_ATTRS = frozenset({"getaddrinfo", "gethostbyname", "gethostbyname_ex"})
 LOGGING_SINKS = frozenset(
     {
+        "basicConfig",
+        "fileConfig",
+        "dictConfig",
+        "FileIO",
         "FileHandler",
         "WatchedFileHandler",
         "RotatingFileHandler",
@@ -410,6 +495,57 @@ def _open_mode_violation(call: ast.Call, *, attribute: bool) -> bool:
     return False
 
 
+def _root_module(q: str | None) -> str | None:
+    return q.split(".")[0] if q else None
+
+
+def _member_problem(q: str) -> str | None:
+    """Why ``module.member`` (alias-resolved) may not be reached, or None."""
+    parts = q.split(".")
+    if len(parts) < 2 or parts[0] not in MEMBER_ALLOW:
+        return None
+    mod, member = parts[0], parts[1]
+    if mod == "typing":
+        return f"{q} (typing re-export)" if member in TYPING_DENIED_MEMBERS else None
+    return None if member in MEMBER_ALLOW[mod] else f"{q} is not a listed {mod} member"
+
+
+def _str_names(value: str) -> list[str]:
+    return [seg for seg in value.split(".") if seg]
+
+
+def _name_problem(name: str) -> str | None:
+    """Rule id if a string used as an attribute name is introspective / dangerous."""
+    if name in BANNED_ATTR_NAMES or name == "compile":
+        return "dynamic-exec"
+    if name in INTROSPECTION_ATTRS or name in DANGEROUS_MODULE_NAMES:
+        return "introspection"
+    return None
+
+
+def _string_name_findings(node: ast.AST) -> list[tuple[str, str]]:
+    """(rule, detail) for string constants used as attribute names or subscript keys."""
+    found: list[tuple[str, str]] = []
+    consts: list[ast.expr] = []
+    if isinstance(node, ast.Call):
+        fn = node.func
+        fname = (
+            fn.id if isinstance(fn, ast.Name) else fn.attr if isinstance(fn, ast.Attribute) else ""
+        )
+        if fname in ATTR_NAME_FUNCS:
+            skip = 1 if fname in BANNED_DYNAMIC_ATTR_FUNCS | {"hasattr"} else 0
+            consts = list(node.args[skip:])
+    elif isinstance(node, ast.Subscript):
+        consts = [node.slice]
+    for c in consts:
+        if isinstance(c, ast.Constant) and isinstance(c.value, str):
+            for seg in _str_names(c.value):
+                rule = _name_problem(seg)
+                if rule:
+                    found.append((rule, f"string attribute name {seg!r}"))
+    return found
+
+
 def raw_findings(rel: str, source: str) -> list[Finding]:
     """Every finding for one module BEFORE exemptions are applied."""
     tree = ast.parse(source)
@@ -430,6 +566,16 @@ def raw_findings(rel: str, source: str) -> list[Finding]:
                     add("banned-qualified", node, f"imports {q}")
                 if node.module == "os" and a.name in OS_FILE_WRITE:
                     add("file-write", node, f"imports os.{a.name}")
+                if node.module.split(".")[0] in MEMBER_ALLOW:
+                    if a.name in DANGEROUS_MODULE_NAMES:
+                        add("transitive-module", node, f"imports {q}")
+                    problem = _member_problem(q)
+                    if problem:
+                        add("unlisted-member", node, f"imports {problem}")
+                if a.name in LOGGING_SINKS:
+                    add("logging-sink", node, f"imports {q}")
+                if a.name in BANNED_ATTR_NAMES:
+                    add("dynamic-exec", node, f"imports {q}")
         if isinstance(node, ast.Name):
             if node.id in BANNED_NAMES:
                 add("dynamic-exec", node, f"uses {node.id}")
@@ -440,6 +586,16 @@ def raw_findings(rel: str, source: str) -> list[Finding]:
             q = _qualified(node, aliases)
             if attr in INTROSPECTION_ATTRS:
                 add("introspection", node, f"uses .{attr}")
+            if attr in BANNED_ATTR_NAMES or (attr == "compile" and q != "re.compile"):
+                add("dynamic-exec", node, f"uses .{attr}")
+            if attr in DANGEROUS_MODULE_NAMES and (
+                attr != "signal" or _root_module(q) in MEMBER_ALLOW
+            ):
+                add("transitive-module", node, f"reaches .{attr} through an attribute chain")
+            if q and (problem := _member_problem(q)):
+                add("unlisted-member", node, f"uses {problem}")
+            if attr in THREAD_ESCAPE_ATTRS:
+                add("thread-escape", node, f"uses .{attr}")
             if q and (q in BANNED_QUALIFIED or q.startswith(BANNED_QUALIFIED_PREFIXES)):
                 add("banned-qualified", node, f"uses {q}")
             if PROCESS_ATTR.match(attr):
@@ -454,6 +610,8 @@ def raw_findings(rel: str, source: str) -> list[Finding]:
                 add("file-write", node, f"uses .{attr}")
             if q and q.startswith("os.") and q.split(".")[1] in OS_FILE_WRITE:
                 add("file-write", node, f"uses {q}")
+        for rule, detail in _string_name_findings(node):
+            add(rule, node, detail)
         if isinstance(node, ast.Call):
             fn = node.func
             if isinstance(fn, ast.Name) and fn.id in BANNED_DYNAMIC_ATTR_FUNCS:

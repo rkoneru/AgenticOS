@@ -12,6 +12,11 @@ What is checked (unless the tenant policy sets ``allow_private_endpoints``, for 
   numeric-looking hosts that ``ipaddress`` would not parse strictly (``2130706433``, ``0x7f.1``,
   ``0177.0.0.1``, ``127.1``) are rejected outright because resolvers and HTTP stacks may still
   interpret them as IPv4;
+* malformed DNS names (empty label, label > 63, name > 253) are rejected before any lookup, and ANY
+  resolver exception (``UnicodeError`` from IDNA, ``OSError``, ...) becomes an ``EndpointError``;
+* special-purpose space is denied even where ``ipaddress.is_global`` disagrees: ``fec0::/10``,
+  ``2001:db8::/32``, ``3fff::/20``, ``100::/64``, ``64:ff9b:1::/48``, ``192.0.0.0/24``,
+  ``192.88.99.0/24``, ``198.18.0.0/15``, ``240.0.0.0/4`` and a few more (``_EXTRA_DENIED``);
 * ``localhost``, ``*.localhost``, ``*.internal``, ``*.local``, ``*.localdomain`` are rejected;
 * the hostname is resolved and ALL returned addresses must be public.
 
@@ -32,6 +37,26 @@ Resolver = Callable[[str, int], Awaitable[Iterable[str]]]
 
 _BLOCKED_SUFFIXES = (".localhost", ".internal", ".local", ".localdomain")
 _BLOCKED_NAMES = frozenset({"localhost", "localdomain", "metadata.google.internal"})
+# Blocks that Python's ``is_global`` (version dependent) may still call global, or that are special
+# purpose / deprecated / documentation space with no business being an model endpoint.
+_EXTRA_DENIED = tuple(
+    ipaddress.ip_network(n)
+    for n in (
+        "192.0.0.0/24",  # IETF protocol assignments (incl. 192.0.0.9/10 which is_global allows)
+        "192.88.99.0/24",  # deprecated 6to4 relay anycast
+        "198.18.0.0/15",  # benchmarking
+        "240.0.0.0/4",  # reserved
+        "fec0::/10",  # deprecated site-local
+        "2001:db8::/32",  # documentation
+        "3fff::/20",  # documentation (RFC 9637)
+        "100::/64",  # discard-only
+        "64:ff9b:1::/48",  # local-use NAT64
+        "2001:2::/48",  # benchmarking
+        "2001:20::/28",  # ORCHIDv2
+    )
+)
+_MAX_LABEL = 63
+_MAX_HOST = 253
 _NUMERIC_LABEL = re.compile(r"^(0x[0-9a-f]*|[0-9]+)$", re.IGNORECASE)
 
 
@@ -52,6 +77,8 @@ def is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
             embedded.append(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
         if any(not is_public_ip(v4) for v4 in embedded):
             return False
+    if any(ip.version == n.version and ip in n for n in _EXTRA_DENIED):
+        return False
     return not (
         ip.is_private
         or ip.is_loopback
@@ -102,7 +129,10 @@ def check_host_literal(host: str) -> None:
         if not is_public_ip(ip):
             raise EndpointError("endpoint address is not public")
         return
-    if all(_NUMERIC_LABEL.match(label) for label in host.split(".")):
+    labels = host.split(".")
+    if len(host) > _MAX_HOST or any(not label or len(label) > _MAX_LABEL for label in labels):
+        raise EndpointError("endpoint host is not a valid DNS name")
+    if all(_NUMERIC_LABEL.match(label) for label in labels):
         raise EndpointError("endpoint host is an ambiguous numeric address")
     if host in _BLOCKED_NAMES or host.endswith(_BLOCKED_SUFFIXES):
         raise EndpointError("endpoint host is not public")
@@ -114,7 +144,8 @@ async def check_resolved(host: str, port: int, resolver: Resolver) -> None:
         return
     try:
         addresses = [str(a).split("%", 1)[0] for a in await resolver(host, port)]
-    except OSError:
+    except Exception:  # noqa: BLE001 - ANY resolver/IDNA failure (UnicodeError, ValueError, ...) must
+        # become a configuration error, never escape as a foreign exception type.
         raise EndpointError("endpoint host could not be resolved") from None
     if not addresses:
         raise EndpointError("endpoint host could not be resolved")
