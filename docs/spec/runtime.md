@@ -88,7 +88,7 @@ Three independent layers; none of them is a sandbox.
      therefore re-export `os`, `sys`, `subprocess`, `socket`, `threading`, `io`, ... (`logging.os.system`, `typing.sys.modules`,
      `asyncio.subprocess.subprocess.Popen`, `random._os.system`). Two rules cover this: **transitive-module** flags any attribute
      segment (or `from safe import name`) naming a dangerous module (`os sys subprocess socket threading io builtins _os _socket
-     _io posix nt ctypes importlib pickle marshal shutil tempfile signal _thread multiprocessing concurrent`), whatever the base
+_io posix nt ctypes importlib pickle marshal shutil tempfile signal _thread multiprocessing concurrent`), whatever the base
      expression is (so `inspect.getmodule(x).os` is caught); **unlisted-member** confines `asyncio`, `logging`, `inspect`,
      `contextlib` and `random` to the members `src` actually uses (`MEMBER_ALLOW`), and denies a few `typing` re-exports.
      Also banned: `logging.basicConfig/fileConfig/dictConfig/FileIO` and file handlers, loop socket methods (`sock_sendall`,
