@@ -128,6 +128,17 @@ small denylist, and anything done by C extensions or by data that becomes code. 
 it runs. The real boundary is process isolation and network egress
 policy around the runtime (Phase 3+ sandboxes); this test suite is a regression net, not a security boundary.
 
+## Approvals, TKI and NEXUS in the run (Phase 3)
+
+`RunDeps` gained three optional seams, all defaulting to the Phase 2 behaviour: `approvals` (resolve a REQUIRE_APPROVAL inline and
+**re-gate** the approved action, `executor.py`), `child_spawner` (TKI-supervised children, `tki/adapter.py`) and `nexus_factory`
+(route every model step, `nexus/`). None adds a path around the gate: the re-submit goes to the kernel with the signed record and
+is allowed only if the kernel says so; children and the LLM stage act through the same `ActionExecutor`. The bypass scanner gained
+one allowlist entry (`approvals.py`: `httpx`, a control-plane read of a decision record, not an agent action); with a resolver
+configured, an approval-pending action does network IO to the approvals service while it waits, which `test_audit_hook.py`
+(no resolver) deliberately does not cover. The Temporal activity path does not use any of the three yet (NEEDS #66).
+`maxOutputTokens` from ABL is mapped to `max_tokens` in `RuntimeManifest`.
+
 ## Concurrency between the workflow and in-flight activities
 
 An activity appends events while it runs, so the workflow's recorder can be stale. `RunRecorder.record` catches a
@@ -137,15 +148,16 @@ activity may still complete its side effect (inherent to cancelling external wor
 
 ## What is tested how
 
-| Area                                                               | Evidence                                                                                                                                                                    |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Process model, event log, replay, executor, gate client, redaction | unit + property-style tests, mutation-checked (DENY performs, gate error/timeout to ALLOW, unspecified accepted)                                                            |
-| gRPC client                                                        | in-process fake gRPC server (deadline, UNAVAILABLE, UNSPECIFIED). Against the real kernel: `e2e/` (Phase 2 exit)                                                            |
-| Temporal workflow                                                  | real Temporal time-skipping test server: end to end, deny, approval parking, signals/queries, timeout, lost activity result, bad manifest, and `Replayer` determinism check |
-| Provider adapters                                                  | `httpx.MockTransport` fixtures written from provider docs. **No live provider calls have been made.**                                                                       |
-| KMS secret store, S3/cloud sinks                                   | interfaces only (`docs/NEEDS.md`)                                                                                                                                           |
-| Bypass guard                                                       | `test_bypass.py` + `bypass_scan.py` (allowlist AST scan, probe corpus), `test_audit_hook.py` (audit events), every `Action` type under a DENY gate has zero effects         |
-| Endpoint SSRF checks, per-tenant breakers                          | `runtime/tests/test_endpoints.py`: fake resolver, IP/host/port corpus, platform-key refusal, breaker isolation                                                              |
+| Area                                                                  | Evidence                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Process model, event log, replay, executor, gate client, redaction    | unit + property-style tests, mutation-checked (DENY performs, gate error/timeout to ALLOW, unspecified accepted)                                                                                                                                        |
+| gRPC client                                                           | in-process fake gRPC server (deadline, UNAVAILABLE, UNSPECIFIED). Against the real kernel: `e2e/` (Phase 2 exit)                                                                                                                                        |
+| Temporal workflow                                                     | real Temporal time-skipping test server: end to end, deny, approval parking, signals/queries, timeout, lost activity result, bad manifest, and `Replayer` determinism check                                                                             |
+| Provider adapters                                                     | `httpx.MockTransport` fixtures written from provider docs. **No live provider calls have been made.**                                                                                                                                                   |
+| KMS secret store, S3/cloud sinks                                      | interfaces only (`docs/NEEDS.md`)                                                                                                                                                                                                                       |
+| Bypass guard                                                          | `test_bypass.py` + `bypass_scan.py` (allowlist AST scan, probe corpus), `test_audit_hook.py` (audit events), every `Action` type under a DENY gate has zero effects                                                                                     |
+| Approval resume (re-gate), TKI-supervised children, NEXUS in the loop | `test_approvals.py` (resume, no loop, every action type under unapproved/denied re-gate), `test_tki_spawner.py`, `test_run_nexus.py`, mutation-checked; against the real kernel/approvals/audit: `e2e/test_phase3_orchestration.py` (`make e2e-phase3`) |
+| Endpoint SSRF checks, per-tenant breakers                             | `runtime/tests/test_endpoints.py`: fake resolver, IP/host/port corpus, platform-key refusal, breaker isolation                                                                                                                                          |
 
 The Temporal test server binary is downloaded from the Java SDK's GitHub release (the SDK's default host is blocked in some
 sandboxes); override with `AXIS_TEMPORAL_TEST_SERVER`. Tests fail, never skip, if it cannot be obtained.

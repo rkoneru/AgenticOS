@@ -1,5 +1,22 @@
 # Changelog
 
+## Phase 3 - Orchestration and routing (e2e integration)
+
+- **Approvals end to end.** The Risk Kernel opens approval requests (`ApprovalRequester`), returns the id, and re-gates a signed
+  APPROVED record presented by the runtime (`ApprovalVerifier`, single-use): kill-switches, DENY policies and caps still apply;
+  requester failure is DENY. The runtime executor resolves the decision and re-submits (denied/expired/unresolvable/unaccepted:
+  nothing runs). The approvals service shares the kernel's audit chain; a loopback dev bridge (not an approver API) connects them.
+- **TKI in the run.** `RunDeps.child_spawner` / `TkiChildSpawner`: in-run children run as supervised TKI processes with ABL-driven
+  budgets rolling up to the parent; a hard-cap trip ends only the offender with `budget_exceeded`. Fixed `Supervisor.settle` spinning.
+- **NEXUS in the run.** `RunDeps.nexus_factory` routes every model step (cache -> rules -> llm); `nexus_stage`/`nexus_route` are
+  additive run-event types (ADR 0012, no frozen contract changed); `InMemoryTracer.export()`; the cache key covers the whole
+  conversation. Fixed ABL `maxOutputTokens` being ignored.
+- **`make e2e-phase3`** (+ CI job): 11 scenarios against the real kernel, approvals service, Postgres audit chain, TKI, NEXUS and
+  runtime: granted (request, decision, gated execution, one run), denied, expired, self-approval, cross-tenant id, bound/single-use/
+  kill-switch/cap re-gate, no approvals service, multi-agent run with a capped child, stage metrics in the trace, cache hit cheaper.
+- **Not built / not verified** (`docs/NEEDS.md` #62-#68): production approver API and runtime transport, durable consumed-approval
+  store, approval request hygiene, gating of cache/rules hits, Temporal wiring, ledger/NEXUS events in the audit chain, no remote CI run.
+
 ## Phase 2 - 2026-10-01 - Governed kernel (core loop)
 
 - **ABL compiler + linter** (`@axis/abl`), **policy compiler** (`@axis/policy`: DSL to Rego, Wasm bundles, opa-backed golden cases),

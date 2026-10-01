@@ -44,7 +44,10 @@ callers of `RiskKernel.evaluate` with an invalid request get a DENY with an empt
 - Rejection audit records are rate-limited to 60 per tenant per minute (`rejectionAuditPerMinute`); the rest are counted and logged
   as `rejection audits dropped`. This only ever bounds the caller's own chain and the shared audit path's load.
 - A `REQUIRE_APPROVAL` decision releases any capacity its gates reserved (nothing executes). The approved action is evaluated
-  again when resumed (Phase 3), and reserves then.
+  again when resumed (the client re-submits it with the signed decision record in `context.approval`) and reserves then; every
+  kill-switch, DENY policy and gate applies again. With no `ApprovalRequester` the decision carries an empty `approval_id`
+  (clients DENY); a requester failure is DENY. See `docs/spec/approvals.md`. Approval single-use is per kernel instance and in
+  memory (NEEDS #63).
 - gRPC messages that fail protobuf decoding (for example pathologically nested `Struct`s) are rejected by the transport with
   INTERNAL before the kernel runs; they are not audited. Clients treat that as DENY.
 
