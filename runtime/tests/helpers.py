@@ -16,7 +16,10 @@ from axis_runtime.actions import (
     MemoryWrite,
     MessageSend,
     ModelCall,
+    SttOpen,
     ToolCall,
+    TtsSynthesize,
+    VoiceCall,
 )
 from axis_runtime.events import EventType, RunRecorder
 from axis_runtime.executor import ActionExecutor, RunIdentity
@@ -69,6 +72,10 @@ class _Rec:
             "hits": [{"id": "m1", "scope": "agent", "content": "ssn 111-22-3333", "score": 0.5}]
         }
 
+    async def place(self, args: Mapping[str, Any]) -> Any:
+        self.effects.calls.append((self.kind, dict(args)))
+        return {"call_id": "call-1", "status": "ringing"}
+
     async def send(self, channel: str, args: Mapping[str, Any]) -> Any:
         self.effects.calls.append((self.kind, (channel, dict(args))))
         return {"sent": True}
@@ -87,6 +94,18 @@ def recording_backends(effects: Effects, clock: FakeClock | None = None) -> Back
         effects.calls.append(("spawn", (ref, dict(args))))
         return {"child": "done"}
 
+    gateway = make_gateway(effects.transport, clock or FakeClock())
+
+    async def open_stt(request: Any) -> Any:
+        effects.calls.append(("stt", request))
+        return object()
+
+    async def synthesize(request: Any) -> Any:
+        effects.calls.append(("tts", request))
+        return object()
+
+    gateway.open_stt = open_stt  # type: ignore[method-assign]
+    gateway.synthesize = synthesize  # type: ignore[method-assign]
     return Backends(
         tools=tools,
         mcp=_Rec(effects, "mcp"),
@@ -94,8 +113,9 @@ def recording_backends(effects: Effects, clock: FakeClock | None = None) -> Back
         browser=_Rec(effects, "browser"),
         memory=_Rec(effects, "memory"),
         channels=_Rec(effects, "channel"),
-        models=make_gateway(effects.transport, clock or FakeClock()),
+        models=gateway,
         spawn=spawn,
+        voice=_Rec(effects, "voice"),
     )
 
 
@@ -121,6 +141,17 @@ SAMPLES: dict[type[Action], Callable[[], Action]] = {
     MemoryWrite: lambda: MemoryWrite(name="remember", scope="long_term", args={"k": "v"}),
     MemoryRead: lambda: MemoryRead(name="recall", scopes=("long_term",), args={"query": "x"}),
     ModelCall: model_call,
+    SttOpen: lambda: SttOpen(tenant_id=TENANT, provider="deepgram", model="nova-2"),
+    TtsSynthesize: lambda: TtsSynthesize(
+        tenant_id=TENANT,
+        provider="elevenlabs",
+        model="m",
+        text="patient SSN 111-22-3333",
+        voice="v",
+    ),
+    VoiceCall: lambda: VoiceCall(
+        name="place_call", args={"to": "+14155550100"}, context={"country_prefix": "+1"}
+    ),
 }
 
 

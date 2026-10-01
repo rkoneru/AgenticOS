@@ -44,6 +44,7 @@ from axis_runtime.tools import (
     MemoryStore,
     SpawnHandler,
     ToolRegistry,
+    VoiceDialer,
 )
 
 if TYPE_CHECKING:
@@ -62,6 +63,7 @@ class Backends:
     channels: ChannelSender | None = None
     models: ModelGateway | None = None
     spawn: SpawnHandler | None = None
+    voice: VoiceDialer | None = None
 
     def need(self, name: str) -> Any:
         available: dict[str, Any] = {
@@ -73,6 +75,7 @@ class Backends:
             "channels": self.channels,
             "models": self.models,
             "spawn": self.spawn,
+            "voice": self.voice,
         }
         value = available[name]  # unknown names are a programming error (KeyError)
         if value is None:
@@ -104,7 +107,10 @@ __all__ = [
     "MemoryWrite",
     "MessageSend",
     "ModelCall",
+    "SttOpen",
     "ToolCall",
+    "TtsSynthesize",
+    "VoiceCall",
     "action_from_spec",
     "all_action_types",
     "bind_executor_token",
@@ -541,6 +547,188 @@ class ModelCall(Action):
             return self.replay
         models: ModelGateway = backends.need("models")
         return await models.complete(self.request)
+
+
+@dataclass(frozen=True)
+class SttOpen(Action):
+    """Open a streaming STT session at a speech vendor.  ONE gated action covers the stream: the
+    gate sees the vendor, model, audio format and whether recording consent was established, never
+    audio.  The result is a live stream handle (in-process only: not a Temporal activity)."""
+
+    enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.MODEL_CALL
+    tenant_id: str = field(kw_only=True)
+    provider: str = field(kw_only=True)
+    model: str = field(kw_only=True)
+    language: str = "en-US"
+    sample_rate: int = 8000
+    encoding: str = "pcm_s16le"
+    key_label: str = "default"
+    endpoint: str | None = None
+    consent_established: bool = False
+    name: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            object.__setattr__(self, "name", f"stt:{self.provider}/{self.model}")
+
+    def tool_descriptor(self) -> dict[str, str]:
+        return {"name": self.name, "kind": "model", "side_effects": "external"}
+
+    def gate_args(self) -> dict[str, Any]:
+        return {
+            "modality": "stt",
+            "provider": self.provider,
+            "model": self.model,
+            "language": self.language,
+            "sample_rate": self.sample_rate,
+            "encoding": self.encoding,
+            "custom_endpoint": bool(self.endpoint),
+            "consent_established": self.consent_established,
+        }
+
+    def with_args(self, doc: Mapping[str, Any]) -> Action:
+        return self  # metadata only: there is nothing in it to redact into
+
+    def redact_result(self, result: Any, paths: list[str]) -> Any:
+        return result  # a stream handle has no fields to redact
+
+    def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
+        return super().result_event({"modality": "stt", "provider": self.provider, "opened": True})
+
+    async def _execute(self, backends: Backends) -> Any:
+        from axis_runtime.models.speech import SttRequest
+
+        models: ModelGateway = backends.need("models")
+        return await models.open_stt(
+            SttRequest(
+                self.tenant_id,
+                self.provider,
+                self.model,
+                self.language,
+                self.sample_rate,
+                self.encoding,
+                self.key_label,
+                self.endpoint,
+            )
+        )
+
+
+@dataclass(frozen=True)
+class TtsSynthesize(Action):
+    """Synthesise one piece of text.  The gate sees the text (``args.text``): it leaves for a
+    vendor, so it is data egress like a model prompt and ALLOW_WITH_REDACTION can rewrite it."""
+
+    enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.MODEL_CALL
+    tenant_id: str = field(kw_only=True)
+    provider: str = field(kw_only=True)
+    model: str = field(kw_only=True)
+    text: str = field(kw_only=True)
+    voice: str = ""
+    language: str = "en-US"
+    sample_rate: int = 8000
+    encoding: str = "pcm_s16le"
+    key_label: str = "default"
+    endpoint: str | None = None
+    name: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            object.__setattr__(self, "name", f"tts:{self.provider}/{self.model}")
+
+    def tool_descriptor(self) -> dict[str, str]:
+        return {"name": self.name, "kind": "model", "side_effects": "external"}
+
+    def gate_args(self) -> dict[str, Any]:
+        return {
+            "modality": "tts",
+            "provider": self.provider,
+            "model": self.model,
+            "voice": self.voice,
+            "language": self.language,
+            "custom_endpoint": bool(self.endpoint),
+            "text": self.text,
+            "text_chars": len(self.text),
+        }
+
+    def with_args(self, doc: Mapping[str, Any]) -> Action:
+        text = doc.get("text")
+        if not isinstance(text, str):
+            raise ValueError("redaction removed the text")
+        return dataclasses.replace(self, text=text)
+
+    def redact_result(self, result: Any, paths: list[str]) -> Any:
+        return result
+
+    def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
+        return super().result_event(
+            {
+                "modality": "tts",
+                "provider": self.provider,
+                "text_chars": len(self.text),
+                "text_sha256": sha256_hex(self.text.encode()),
+            }
+        )
+
+    async def _execute(self, backends: Backends) -> Any:
+        from axis_runtime.models.speech import TtsRequest
+
+        models: ModelGateway = backends.need("models")
+        return await models.synthesize(
+            TtsRequest(
+                self.tenant_id,
+                self.provider,
+                self.model,
+                self.text,
+                self.voice,
+                self.language,
+                self.sample_rate,
+                self.encoding,
+                self.key_label,
+                self.endpoint,
+            )
+        )
+
+
+@dataclass(frozen=True)
+class VoiceCall(_ArgsAction):
+    """Place an outbound phone call: a gated ``message_send`` of kind ``voice``.
+
+    ``args = {"to": E.164, "from"?: E.164, "purpose"?: str}``.  The gate sees a derived view: the
+    destination's country prefix, its hash and a masked form (never the full number), plus the
+    tenant's call-cap state (``context`` below), so policy can deny by country, cap or rate.  The
+    pre-gate limiter (``voice.outbound``) has already refused anything outside the tenant's caps.
+    """
+
+    enforcement_point: ClassVar[EnforcementPoint] = EnforcementPoint.MESSAGE_SEND
+    side_effects: str = "external"
+    #: wiring, never an agent argument: facts the limiter established (prefix, caps, usage)
+    context: Mapping[str, Any] = field(default_factory=dict)
+
+    def tool_descriptor(self) -> dict[str, str]:
+        return {"name": self.name, "kind": "voice", "side_effects": self.side_effects}
+
+    def gate_args(self) -> dict[str, Any]:
+        to = str(self.args.get("to", ""))
+        view: dict[str, Any] = {
+            "channel": "voice",
+            "direction": "outbound",
+            "to_masked": to[:3] + "*" * max(0, len(to) - 5) + to[-2:] if len(to) > 5 else "***",
+            "to_sha256": sha256_hex(to.encode()),
+            "purpose": str(self.args.get("purpose", ""))[:200],
+        }
+        view.update({k: v for k, v in self.context.items() if k not in view})
+        return view
+
+    def with_args(self, doc: Mapping[str, Any]) -> Action:
+        return self  # the document is a derived view: redacting it cannot change who is called
+
+    def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
+        call_id = result.get("call_id") if isinstance(result, Mapping) else None
+        return super().result_event({"channel": "voice", "call_id": call_id})
+
+    async def _execute(self, backends: Backends) -> Any:
+        voice: VoiceDialer = backends.need("voice")
+        return await voice.place(self.args)
 
 
 def action_from_spec(spec: Mapping[str, Any]) -> Action:

@@ -110,6 +110,12 @@ class ChannelSender(Protocol):
     async def send(self, channel: str, args: Mapping[str, Any]) -> Any: ...
 
 
+class VoiceDialer(Protocol):
+    """Places an outbound call (telephony gateway seam); reachable only through ``VoiceCall``."""
+
+    async def place(self, args: Mapping[str, Any]) -> Any: ...
+
+
 class SpawnHandler(Protocol):
     def __call__(self, ref: str, args: Mapping[str, Any]) -> Awaitable[Any]: ...
 

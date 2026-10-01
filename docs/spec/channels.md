@@ -46,7 +46,7 @@ Audit events (`enforcement_point` `lifecycle` inbound, `message_send` outbound):
 
 ## Dev wire
 
-`services/channels/contract/wire-v1.json` is shared by `test/wire.test.ts` (real server) and `runtime/tests/test_channels.py` (client). Routes: `POST /v1/channels/<channel>/inbound` (+GET whatsapp), `POST /v1/channels/web/session`, `GET /v1/channels/web/events` (SSE), `POST /v1/channels/send`, `POST /v1/channels/identity/link-code`, `GET /v1/channels/conversations/<id>/messages`. Dev only (NEEDS 503-504).
+`services/channels/contract/wire-v1.json` is shared by `test/wire.test.ts` (real server) and `runtime/tests/test_channels.py` (client). Routes: `POST /v1/channels/<channel>/inbound` (+GET whatsapp), `POST /v1/channels/web/session`, `GET /v1/channels/web/events` (SSE), `POST /v1/channels/send`, `POST /v1/channels/identity/link-code`, `GET /v1/channels/conversations/<id>/messages`. Dev only (NEEDS 122-123).
 
 ## Quality evidence
 

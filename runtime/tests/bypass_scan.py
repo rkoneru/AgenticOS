@@ -527,7 +527,7 @@ RESTRICTED_NAMES: dict[str, dict[str, str]] = {
 # or, where listed here, assigned (``mcp = ctx.backends.mcp``). Calling a method on it from anywhere but
 # ``actions.py`` (``Action._execute`` via ``Backends.need``) is a finding, as is passing the handle on.
 BACKEND_NAMES = frozenset(
-    {"tools", "mcp", "sandbox", "browser", "memory", "channels", "models", "spawn"}
+    {"tools", "mcp", "sandbox", "browser", "memory", "channels", "models", "spawn", "voice"}
 )
 BACKEND_HOLDERS = frozenset({"backends", "_backends"})
 BACKEND_HANDLE_FILES: dict[str, str] = {
