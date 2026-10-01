@@ -30,6 +30,7 @@ from axis_runtime.redaction import REDACTED, redact_paths
 from axis_runtime.sandbox.types import (
     SandboxBackend,
     SandboxLimits,
+    SandboxPolicyError,
     SandboxResult,
     SandboxSpec,
     sha256_hex,
@@ -248,7 +249,10 @@ class CodeRunAction(_ArgsAction):
     def with_args(self, doc: Mapping[str, Any]) -> Action:
         # The gate document holds metadata only; redacting it can never change the code that runs.
         args = {**self.args, "language": str(doc.get("language", self.args.get("language", "")))}
-        return dataclasses.replace(self, args=args)
+        try:
+            return dataclasses.replace(self, args=args)
+        except SandboxPolicyError as exc:  # the executor turns ValueError into a blocked action
+            raise ValueError("redaction made the code action invalid") from exc
 
     def result_event(self, result: Any) -> tuple[str, dict[str, Any]]:
         summary = result.audit_summary() if isinstance(result, SandboxResult) else None

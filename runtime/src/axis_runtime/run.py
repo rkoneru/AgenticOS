@@ -79,6 +79,7 @@ from axis_runtime.process import (
     new_pid,
     next_state,
 )
+from axis_runtime.sandbox.types import SandboxError
 from axis_runtime.tools import ToolRegistry
 
 ACTING_PID: ContextVar[str | None] = ContextVar("axis_acting_pid", default=None)
@@ -594,7 +595,13 @@ class AgentProcess:
         if spec is None:
             return reply(f"unknown tool {call.name!r}", error=True)
         await self._check_budgets(extra_tool_call=True)
-        outcome = await self._act(self._action_for(spec, call.arguments))
+        try:
+            action = self._action_for(spec, call.arguments)
+        except (ValueError, SandboxError) as exc:  # e.g. unsupported language: a tool error, no run
+            return reply(
+                f"invalid arguments for tool {call.name!r}: {type(exc).__name__}", error=True
+            )
+        outcome = await self._act(action)
         if isinstance(outcome, Completed):
             return reply(json.dumps(to_jsonable(outcome.result)))
         if isinstance(outcome, Denied):
