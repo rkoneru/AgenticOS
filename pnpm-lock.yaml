@@ -126,6 +126,16 @@ importers:
 
   packages/shared: {}
 
+  services/approvals:
+    dependencies:
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+    devDependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+
   services/audit:
     dependencies:
       '@axis/contracts':
