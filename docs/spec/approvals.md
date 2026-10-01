@@ -47,7 +47,7 @@ if (!(await isApprovalValidFor(rec, {tenant_id, run_id, tool, args_hash}, signer
 
 `DecisionRecord` is HMAC-SHA256 signed (key id included) over its canonical JSON and carries the audit event id and hash of
 the decision. `isApprovalValidFor` is true only for a verified APPROVED record for exactly that tenant, run, tool and
-argument hash (no replay for different arguments or another tenant). **Any rejection (unknown id, signing/audit failure,
+argument hash (through `kernelApprovalPorts`, also decided within `maxAgeMs`, default 15 minutes, and not in the future) (no replay for different arguments or another tenant). **Any rejection (unknown id, signing/audit failure,
 abort) must be treated as DENY.** The resolver re-checks SLA timers itself, so it resolves even if no sweeper runs.
 No gRPC: it needs proto changes after the v1 freeze (NEEDS #50); the Phase 3 e2e reaches it through the dev bridge below.
 
