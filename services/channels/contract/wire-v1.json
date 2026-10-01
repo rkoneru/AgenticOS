@@ -1,0 +1,69 @@
+{
+  "note": "Dev HTTP wire format of POST /v1/channels/send, shared by services/channels/test/wire.test.ts (real server) and runtime/tests/test_channels.py (Python client). Placeholders: {tenant}, {conversation}. Responses are examples: the server must return the same key structure.",
+  "send": [
+    {
+      "name": "reply on a conversation",
+      "args": { "body": "Your refund is on its way.", "conversation_id": "{conversation}" },
+      "channel": "slack",
+      "request": {
+        "tenant_id": "{tenant}",
+        "channel": "slack",
+        "text": "Your refund is on its way.",
+        "conversation_id": "{conversation}",
+        "run_id": "run_1",
+        "trace_id": "0123456789abcdef0123456789abcdef"
+      },
+      "response": {
+        "conversation_id": "{conversation}",
+        "parts": 1,
+        "message_ids": ["0b6d1c1e-0000-4000-8000-000000000001"],
+        "duplicate": false,
+        "audit_hashes": ["a3f1c2d4e5b60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"]
+      }
+    },
+    {
+      "name": "message a known identity by address, with an idempotency key",
+      "args": {
+        "text": "Reminder: appointment at 9",
+        "to": "+15557770000",
+        "idempotency_key": "remind-1"
+      },
+      "channel": "sms",
+      "request": {
+        "tenant_id": "{tenant}",
+        "channel": "sms",
+        "text": "Reminder: appointment at 9",
+        "to": "+15557770000",
+        "idempotency_key": "remind-1",
+        "run_id": "run_1",
+        "trace_id": "0123456789abcdef0123456789abcdef"
+      },
+      "response": {
+        "conversation_id": "{conversation}",
+        "parts": 1,
+        "message_ids": ["0b6d1c1e-0000-4000-8000-000000000002"],
+        "duplicate": false,
+        "audit_hashes": ["b3f1c2d4e5b60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "status": 403,
+      "error": "FORBIDDEN",
+      "when": "destination is not a known identity of the tenant (and the route does not allow unsolicited messages), or belongs to a different end user than the conversation"
+    },
+    {
+      "status": 404,
+      "error": "NOT_FOUND",
+      "when": "unknown conversation (including another tenant's)"
+    },
+    { "status": 429, "error": "RATE_LIMITED", "when": "outbound rate limit of the route" },
+    {
+      "status": 502,
+      "error": "TRANSPORT",
+      "when": "the provider refused or was unreachable; a failure event is audited"
+    },
+    { "status": 503, "error": "AUDIT_FAILED", "when": "the audit append failed; nothing was sent" }
+  ]
+}
