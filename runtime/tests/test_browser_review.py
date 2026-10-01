@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import pytest
 from axis_runtime.browser.playwright_backend import PlaywrightBackend
 from browser_fixture import Resp, page
 from test_browser_backend import (  # noqa: F401  (fixtures)
@@ -77,5 +78,23 @@ async def test_authorization_survives_a_same_origin_redirect_and_body_headers_go
         assert landed2[0].headers.get("authorization") == "Bearer P"
         assert "content-type" not in landed2[0].headers
         assert landed2[0].body == b"", "the POST payload must not travel on to the redirected GET"
+    finally:
+        await s.close()
+
+
+async def test_a_backslash_host_confusion_url_never_reaches_the_network(
+    site: Site, backend: PlaywrightBackend
+) -> None:
+    """``http://evil\\.allowed-suffix/`` parses (urlsplit) as a host under the wildcard, but Chromium reads
+    the backslash as a path separator and would connect to ``evil``. The session-level navigate (no worker
+    pre-check) must still be blocked by the network layer."""
+    from axis_runtime.browser.backend import BrowserError
+
+    policy = site.policy(allowed_hosts=(site.host, "*.example.org"))
+    s = await open_session(backend, policy)
+    try:
+        with pytest.raises(BrowserError):
+            await s.navigate(f"http://localhost:{site.main.port}\\.example.org/index")
+        assert all("localhost" not in h for h in site.main.hosts())
     finally:
         await s.close()

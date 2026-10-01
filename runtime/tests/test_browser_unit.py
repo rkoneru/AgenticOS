@@ -754,3 +754,30 @@ def test_browser_exec_serialises_for_temporal() -> None:
 
 async def test_allow_decision_helpers_are_used() -> None:
     assert allow().decision is Decision.ALLOW
+
+
+async def test_guard_refuses_authorities_that_urlsplit_and_chromium_would_split_differently() -> (
+    None
+):
+    """``http://evil.com\\.example.org/``: urlsplit sees a host under ``*.example.org``; a WHATWG parser
+    (Chromium) ends the authority at the backslash and connects to ``evil.com``."""
+    from axis_runtime.browser.policy import BlockedError, BrowserPolicy, UrlGuard
+
+    async def public(_h: str, _p: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    guard = UrlGuard(BrowserPolicy(allowed_hosts=("example.com", "*.example.org")), public)
+    for url in (
+        "http://evil.com\\.example.org/",
+        "http://example.com\\@evil.com/",
+        "http://evil.com\\@example.com/",
+        "http://example.com\x01.evil.com/",
+        "http://exa mple.com/",
+        "http://example.com:80\\@evil.com/",
+    ):
+        with pytest.raises(BlockedError) as exc:
+            await guard.check(url)
+        assert exc.value.reason in {"malformed_url", "credentials_in_url"}, url
+    # negative controls: an ordinary URL with spaces / backslashes in the path or query still passes
+    assert (await guard.check("http://example.com/a b?q=\\x")).host == "example.com"
+    assert (await guard.check("http://a.example.org/")).host == "a.example.org"
