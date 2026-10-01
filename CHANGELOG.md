@@ -1,5 +1,41 @@
 # Changelog
 
+## Phase 5 - Channels and voice (e2e integration)
+
+Components A (channels service) and B (voice pipeline) were built as libraries; this entry is the integration (component C, ADR
+0017). **No frozen contract changed** (no migration, proto, OpenAPI or audit event type).
+
+- **Inbound message to agent run.** The gateway's `onMessage` is now `InboxQueue.handler`; the runtime's `ChannelAgentRunner` takes the
+  verified messages of ITS tenant (bearer token fixes the tenant), fetches the conversation across channels and runs the agent the
+  route names. The inbound audit event's trace id becomes the run's trace id. A dev bridge (in-memory inbox, no ack).
+- **Gated reply.** `RunDeps.channels` (a `ChannelWiring`) builds a per-run sender bound to the run's tenant, run id and trace;
+  `RunDeps.reply` sends the root agent's output as a `MessageSend` named `channel.reply` through the executor, so the real Risk Kernel
+  decides it. A DENY, a gate error or a kill-switch sends nothing and shows up in `RunResult.reply`. A message the model composes
+  through a channel tool is a different tool name and a separate decision.
+- **Voice transcripts in the audit chain (NEEDS #140 closed with caveats).** `TranscriptWriter` appends each call and turn event to
+  the tenant chain before persisting it (fail closed), through `POST /v1/channels/transcript-events` on the channels service, using the
+  existing event shape (`lifecycle` / `message_send`, `voice.call.*` / `voice.turn.*`, hashes and sizes only, on the call's trace).
+- **`make e2e-phase5`** (+ CI job `e2e-phase5`, unrun remotely): 25 tests on the real kernel (gRPC, OPA Wasm), Postgres audit chain
+  and channels gateway. The same blueprint answers on web, Slack, SMS and email and over a voice call (consent notice, barge-in,
+  PHI) with one audit trace per turn or call; a linked identity continues its conversation on another channel and unlinked
+  identities share nothing; forged, stale, replayed and unrouted webhooks are rejected, audited and start no run; tenant B cannot
+  reach tenant A's agent, queue or conversation; a policy DENY and a kill-switch send nothing on any channel; PHI transcripts are
+  redacted before persistence on a channel and on voice; outbound calls are limited by country and gated; a prompt injection that the
+  scripted model obeys produces a follow-up tool call that the kernel denies. Chain verifies after every scenario.
+- **Mutation-checked** (`e2e/mutation_phase5.py`, by hand): 11/11 mutants killed (gate skipped on the reply, reply tool renamed,
+  unverified inbound, replay accepted, tenant dropped from the inbox, raw PHI transcript on a channel and on voice, voice
+  transcript not mirrored, history withheld, outbound country allowlist off, consent skipped). The first run left one survivor (a
+  shared inbox queue); the cross-tenant test now checks that A's runner cannot see B's QUEUED message.
+- **Found by the real stack.** Transcript-event detail keys with digits (`notice_sha256`) failed the service's validation, which
+  ended the call (fail closed, as designed; the validator was wrong). A policy DENY rule on a missing field matches (fail closed), so
+  an SSN rule on `args.body` also denied outbound calls until it was scoped to channel messages. The channels gateway stores a plain
+  SHA-256 of the raw inbound text in the chain, which a short PHI value can be confirmed against (NEEDS #151, not changed).
+- **Gaps, stated plainly** (`docs/NEEDS.md` #147-#155 and the open #119-#146): the inbox is in memory with no ack or ordering and there
+  is no production worker; no Temporal path for replies or voice; voice is not part of the end user's conversation (no voice route
+  or caller identity); the voice audit relay is a dev HTTP hop and the e2e run log is in memory; the LLM, STT/TTS vendors, telephony
+  and every provider transport are fakes (Teams and WhatsApp are not in the e2e); the voice e2e runs on the system clock; the CI job
+  and the mutation script have not run remotely.
+
 ## Phase 4 - independent review (branch p4/review)
 
 Adversarial review of the Phase 4 code by a reviewer who did not write it. Every fix has a test that fails without it.
