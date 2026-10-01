@@ -3,13 +3,15 @@
 ``TranscriptWriter`` is the ONLY place voice text reaches storage.  Redaction happens here, before
 an event is built (so there is no code path that persists raw PHI text), and audio is never stored:
 only its SHA-256 and length.  Events are appended with ``RunRecorder.record``, i.e. the run's own
-hash-chained, replayable log (docs/spec/voice.md; mirroring them into the audit chain is NEEDS).
+hash-chained, replayable log (docs/spec/voice.md). With an ``audit`` mirror every event is also
+appended to the tenant's audit chain first (docs/adr/0017).
 """
 
 from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
+from typing import Any, Protocol
 
 from axis_runtime.events import EventType, RunRecorder
 from axis_runtime.voice.phi import PhiMode, learn_names, redact_transcript
@@ -18,6 +20,17 @@ from axis_runtime.voice.types import StageMetrics, TurnRole, VoiceTurn
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+class TranscriptAudit(Protocol):
+    """Mirrors each voice call/turn event into the tenant's audit chain (hash, size,
+    direction; never the text).
+
+    ``record`` must raise when the event could not be appended: the writer then persists nothing
+    (fail closed), exactly as the channels service refuses to process a message it could not
+    audit."""
+
+    async def record(self, event: Mapping[str, Any]) -> None: ...
 
 
 class TranscriptWriter:
@@ -29,7 +42,9 @@ class TranscriptWriter:
         *,
         phi: bool = False,
         phi_mode: PhiMode = PhiMode.REDACT,
+        audit: TranscriptAudit | None = None,
     ) -> None:
+        self._audit = audit
         self._rec = recorder
         self._pid = pid
         self.call_id = call_id
@@ -61,6 +76,21 @@ class TranscriptWriter:
             turn.truncated,
             "",  # the intended text is never kept: only its length (below)
         )
+        if self._audit is not None:  # first: no audit row, no transcript
+            await self._audit.record(
+                {
+                    "kind": "turn",
+                    "call_id": self.call_id,
+                    "turn": turn.turn,
+                    "role": turn.role.value,
+                    "text_sha256": _sha(text),
+                    "size": len(text.encode("utf-8")),
+                    "redacted": self.phi,
+                    "truncated": turn.truncated,
+                    "audio_sha256": audio_sha256,
+                    "audio_bytes": audio_bytes,
+                }
+            )
         self.turns.append(stored)
         await self._rec.record(
             EventType.VOICE_TURN,
@@ -92,6 +122,17 @@ class TranscriptWriter:
         duration_ms: int | None = None,
         detail: Mapping[str, str | int | bool | None] | None = None,
     ) -> None:
+        if self._audit is not None:
+            await self._audit.record(
+                {
+                    "kind": "call",
+                    "call_id": self.call_id,
+                    "phase": phase,
+                    "reason": reason,
+                    "duration_ms": duration_ms,
+                    "detail": dict(detail or {}),
+                }
+            )
         await self._rec.record(
             EventType.VOICE_CALL,
             self._pid,

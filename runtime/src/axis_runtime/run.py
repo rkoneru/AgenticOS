@@ -39,6 +39,7 @@ from axis_runtime.actions import (
 )
 from axis_runtime.approvals import ApprovalResolver
 from axis_runtime.browser.worker import BrowserWorker, BrowserWorkerFactory
+from axis_runtime.channels import ChannelWiring
 from axis_runtime.events import (
     Clock,
     EventType,
@@ -99,6 +100,11 @@ log = logging.getLogger("axis_runtime.run")
 
 ACTING_PID: ContextVar[str | None] = ContextVar("axis_acting_pid", default=None)
 
+#: The tool name of the gated message that carries the agent's final answer back to the end
+#: user. Policy keys on it (``tool.name``), so a message the MODEL composes with any other tool
+#: name is a different, separately decided action.
+REPLY_TOOL = "channel.reply"
+
 
 class ChildError(RuntimeError):
     """A child process did not complete (surfaced to the parent as a failed tool call)."""
@@ -152,6 +158,39 @@ class RunDeps:
     #: One ``BrowserWorker`` (own browser context, policy from the provider) per run, closed at
     #: the end of the run. Mutually exclusive with ``backends.browser``.
     browser: BrowserWorkerFactory | None = None
+    #: Channels service connection. With it the run gets a ``ChannelSender`` bound to this run's
+    #: tenant, run id and trace id (so the service's own transcript audit row lands on the run's
+    #: trace). Mutually exclusive with ``backends.channels``.
+    channels: ChannelWiring | None = None
+    #: Send the root agent's final output through ``Backends.channels`` as a gated ``MessageSend``
+    #: (tool ``channel.reply``). Requires ``channels`` (or ``backends.channels``).
+    reply: ReplyTarget | None = None
+
+
+@dataclass(frozen=True)
+class ReplyTarget:
+    """Where the ROOT agent's final output goes: one gated ``MessageSend`` named
+    ``channel.reply`` on ``channel``.
+
+    Supplied by the trusted host (``ChannelAgentRunner``), never by the model. ``to`` is the
+    verified sender's address on the channel and ``route`` the provider identity the conversation
+    arrived on (the channels service re-checks both against the conversation's end user and the
+    tenant's routes)."""
+
+    channel: str
+    conversation_id: str
+    to: str = ""
+    route: str = ""
+    subject: str = ""
+
+
+@dataclass(frozen=True)
+class ReplyOutcome:
+    """What happened to the reply: ``sent``, ``denied`` (gate said no: nothing left the
+    process) or ``failed``."""
+
+    status: str
+    detail: str = ""
 
 
 class _Exit(Exception):
@@ -189,6 +228,7 @@ class RunContext:
     memory_retriever: MemoryRagRetriever | None = None
     browser_worker: BrowserWorker | None = None
     closers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
+    reply: ReplyOutcome | None = None
 
     async def aclose(self) -> None:
         """Release what the run built (memory HTTP clients, the run's browser context)."""
@@ -239,6 +279,7 @@ class RunResult:
     output: str | None
     approval_id: str | None
     state: RunState
+    reply: ReplyOutcome | None = None
 
 
 class AgentProcess:
@@ -342,6 +383,8 @@ class AgentProcess:
         try:
             async with timeout_cm:
                 output = await self._lifecycle(input_text)
+                if self.ppid is None:
+                    await self._deliver_reply(output)
                 reason = ExitReason.COMPLETED
         except _Exit as exc:
             reason, detail = exc.reason, exc.detail
@@ -454,6 +497,28 @@ class AgentProcess:
                 used > budget.hard or (before_model and name == "tokens" and used >= budget.hard)
             ):
                 raise _Exit(ExitReason.BUDGET_EXCEEDED, f"{name} hard cap {budget.hard} exceeded")
+
+    async def _deliver_reply(self, output: str) -> None:
+        """The root agent's answer to the end user: a gated action like any other (a DENY
+        sends nothing)."""
+        target = self.ctx.deps.reply
+        if target is None or not output.strip():
+            return
+        args: dict[str, Any] = {
+            "body": output,
+            "conversation_id": target.conversation_id,
+            "idempotency_key": f"reply:{self.ctx.recorder.run_id}",
+        }
+        for key, value in (("to", target.to), ("from", target.route), ("subject", target.subject)):
+            if value:
+                args[key] = value
+        outcome = await self._act(MessageSend(name=REPLY_TOOL, args=args, channel=target.channel))
+        if isinstance(outcome, Completed):
+            self.ctx.reply = ReplyOutcome("sent")
+        elif isinstance(outcome, Denied):
+            self.ctx.reply = ReplyOutcome("denied", outcome.reason[:200])
+        else:  # Failed (a pending approval parks the run inside _act)
+            self.ctx.reply = ReplyOutcome("failed", getattr(outcome, "error", "")[:200])
 
     # ---- actions --------------------------------------------------------------------------
     async def _act(self, action: Action) -> ActionOutcome:
@@ -822,6 +887,7 @@ class RunHandle:
             output=pr.output,
             approval_id=pr.approval_id,
             state=self.ctx.recorder.state,
+            reply=self.ctx.reply,
         )
 
 
@@ -833,12 +899,20 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
         raise ValueError("RunDeps.browser and backends.browser are mutually exclusive")
     if deps.memory is not None and manifest.memory.any and backends.memory is not None:
         raise ValueError("RunDeps.memory and backends.memory are mutually exclusive")
+    if deps.channels is not None and backends.channels is not None:
+        raise ValueError("RunDeps.channels and backends.channels are mutually exclusive")
+    if deps.reply is not None and deps.channels is None and backends.channels is None:
+        raise ValueError("RunDeps.reply needs RunDeps.channels (or backends.channels)")
     run_id = deps.run_id or f"run_{secrets.token_hex(12)}"
     trace_id = deps.trace_id or secrets.token_hex(16)
     principal = deps.principal or f"agent:{manifest.name}"
     closers: list[Callable[[], Awaitable[None]]] = []
     worker: BrowserWorker | None = None
     retriever: MemoryRagRetriever | None = None
+    if deps.channels is not None:
+        sender = deps.channels.sender(tenant_id=deps.tenant_id, run_id=run_id, trace_id=trace_id)
+        backends.channels = sender
+        closers.append(sender.aclose)
     if deps.browser is not None:
         worker = deps.browser.for_run(tenant_id=deps.tenant_id, agent=manifest.name, run_id=run_id)
         backends.browser = worker

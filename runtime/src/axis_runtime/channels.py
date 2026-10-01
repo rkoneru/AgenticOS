@@ -17,9 +17,11 @@ response body: the executor turns it into a failed action result.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -129,6 +131,121 @@ def _error_code(resp: httpx.Response) -> str:
     return code if isinstance(code, str) and code in _SERVICE_CODES else "error"
 
 
+class ChannelServiceClient:
+    """The runtime's side of the channels service dev bridge for ONE tenant (the token fixes it):
+    the inbound inbox, the conversation log and the voice transcript relay. A different tenant's id
+    in a body is refused by the service, never honoured. Any failure raises ``ChannelUnavailable``
+    (status or a fixed error code, never a body)."""
+
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        token: str,
+        client: httpx.AsyncClient | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        if not token:
+            raise ValueError("token required")
+        self._base = base_url.rstrip("/")
+        self._headers = {"authorization": f"Bearer {token}"}
+        self._client = client or httpx.AsyncClient(timeout=timeout)
+
+    async def _call(
+        self, method: str, path: str, body: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
+        try:
+            resp = await self._client.request(
+                method, self._base + path, json=body, headers=self._headers
+            )
+        except httpx.HTTPError as exc:
+            raise ChannelUnavailable(f"transport error: {type(exc).__name__}") from exc
+        if resp.status_code != 200:
+            raise ChannelUnavailable(
+                f"channels service returned {resp.status_code} ({_error_code(resp)})"
+            )
+        try:
+            out = resp.json()
+        except ValueError as exc:
+            raise ChannelUnavailable("invalid JSON from channels service") from exc
+        if not isinstance(out, dict):
+            raise ChannelUnavailable("invalid response from channels service")
+        return out
+
+    async def next_inbound(self, wait_ms: int = 0) -> dict[str, Any] | None:
+        """The next verified inbound message queued for this tenant (long poll), or ``None``."""
+        out = await self._call("POST", "/v1/channels/inbox/next", {"wait_ms": max(0, wait_ms)})
+        item = out.get("item")
+        if item is None:
+            return None
+        if not isinstance(item, dict):
+            raise ChannelUnavailable("invalid response from channels service")
+        return item
+
+    async def history(self, conversation_id: str) -> list[dict[str, Any]]:
+        """The conversation log (oldest first, across every channel the end user is linked on).
+        Content is what the tenant's transcript policy stored: a redacted preview by default,
+        nothing in ``hash_only`` mode."""
+        if not conversation_id:
+            raise ValueError("conversation_id required")
+        out = await self._call(
+            "GET", f"/v1/channels/conversations/{quote(conversation_id, safe='')}/messages"
+        )
+        msgs = out.get("messages")
+        if not isinstance(msgs, list) or not all(isinstance(m, dict) for m in msgs):
+            raise ChannelUnavailable("invalid response from channels service")
+        return msgs
+
+    async def record_transcript_event(self, event: Mapping[str, Any]) -> None:
+        """Append one voice call/turn event to the tenant's audit chain (the service fails
+        closed)."""
+        await self._call("POST", "/v1/channels/transcript-events", dict(event))
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
+_TOKEN_CHARS = re.compile(r"[^A-Za-z0-9:_.\-]")
+
+
+class VoiceTranscriptRelay:
+    """``voice.transcript.TranscriptAudit``: mirrors every voice call/turn event of ONE call into
+    the audit chain through the channels service, on the call's trace. Hashes and sizes only; the
+    (redacted) text stays in the run log."""
+
+    def __init__(
+        self,
+        client: ChannelServiceClient,
+        *,
+        trace_id: str,
+        agent_name: str,
+        agent_version: str,
+        run_id: str | None = None,
+    ) -> None:
+        self._client = client
+        self._base: dict[str, Any] = {
+            "channel": "voice",
+            "trace_id": trace_id,
+            "agent": {"name": agent_name, "version": agent_version},
+        }
+        if run_id:
+            self._base["run_id"] = run_id
+
+    async def record(self, event: Mapping[str, Any]) -> None:
+        body = {**self._base, **event}
+        for key in ("reason",):
+            if isinstance(body.get(key), str):
+                body[key] = _TOKEN_CHARS.sub("_", body[key])[:64]
+        detail = body.get("detail")
+        if isinstance(detail, Mapping):
+            body["detail"] = {
+                k: (_TOKEN_CHARS.sub("_", v)[:64] if isinstance(v, str) else v)
+                for k, v in detail.items()
+                if v is not None
+            }
+        await self._client.record_transcript_event(body)
+
+
 @dataclass(frozen=True)
 class ChannelWiring:
     """How a run reaches the channels service (the service derives the tenant from ``token``).
@@ -150,5 +267,12 @@ class ChannelWiring:
             tenant_id=tenant_id,
             run_id=run_id,
             trace_id=trace_id,
+            client=httpx.AsyncClient(timeout=self.timeout, transport=self.transport),
+        )
+
+    def client(self) -> ChannelServiceClient:
+        return ChannelServiceClient(
+            self.base_url,
+            token=self.token,
             client=httpx.AsyncClient(timeout=self.timeout, transport=self.transport),
         )
