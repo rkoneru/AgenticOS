@@ -1,0 +1,33 @@
+{
+  "name": "@axis/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AXIS TypeScript SDK: generated from the frozen OpenAPI, plus an ergonomic layer. No runtime dependencies.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage",
+    "generate": "node ../../scripts/generate-sdks.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  }
+}
