@@ -183,6 +183,8 @@ export class OpaCliPolicyTester implements PolicyTester {
           { timeout: this.o.timeoutMs ?? 10_000, maxBuffer: 1 << 20 },
           (err, out) => (err ? reject(err) : resolve(out)),
         );
+        // The child may exit before reading stdin (bad binary, timeout kill): that is the callback's failure, not an unhandled EPIPE.
+        child.stdin?.on("error", () => undefined);
         child.stdin?.end(JSON.stringify(input));
       });
       const parsed = JSON.parse(stdout) as {
