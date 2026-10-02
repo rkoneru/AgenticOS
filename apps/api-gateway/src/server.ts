@@ -2,7 +2,14 @@ import { once } from "node:events";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { randomBytes, randomUUID } from "node:crypto";
-import { isStream, type Ctx, type GatewayDeps, type GatewayOptions, type HandlerResult, type Route } from "./context.js";
+import {
+  isStream,
+  type Ctx,
+  type GatewayDeps,
+  type GatewayOptions,
+  type HandlerResult,
+  type Route,
+} from "./context.js";
 import { CursorCodec, MemoryIdempotencyStore, TokenBuckets, fingerprint } from "./limits.js";
 import {
   PortConflict,
@@ -40,7 +47,8 @@ const REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
 const TRACEPARENT = /^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$/;
 const TENANT_HEADER = /^x-(axis-)?tenant(-id)?$/i;
 const TENANT_KEY = /^tenant[_-]?id$/i;
-const ALLOW_HEADERS = "authorization, content-type, idempotency-key, x-axis-api-key, x-request-id, last-event-id, traceparent";
+const ALLOW_HEADERS =
+  "authorization, content-type, idempotency-key, x-axis-api-key, x-request-id, last-event-id, traceparent";
 const EXPOSE_HEADERS =
   "x-request-id, retry-after, ratelimit-limit, ratelimit-remaining, idempotent-replayed, www-authenticate";
 
@@ -96,11 +104,16 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     return { op, route, ...compileTemplate(op.template) };
   });
   for (const id of Object.keys(ROUTES))
-    if (!spec.operations.some((op) => op.id === id)) throw new Error(`route ${id} is not in the OpenAPI document`);
+    if (!spec.operations.some((op) => op.id === id))
+      throw new Error(`route ${id} is not in the OpenAPI document`);
 
   const streams = new Map<string, number>();
 
-  function baseHeaders(res: http.ServerResponse, requestId: string, origin: string | undefined): void {
+  function baseHeaders(
+    res: http.ServerResponse,
+    requestId: string,
+    origin: string | undefined,
+  ): void {
     res.setHeader("x-request-id", requestId);
     res.setHeader("x-content-type-options", "nosniff");
     res.setHeader("cache-control", "no-store");
@@ -108,7 +121,8 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     res.setHeader("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
     res.setHeader("cross-origin-resource-policy", "same-site");
     res.setHeader("x-frame-options", "DENY");
-    if (o.behindTls) res.setHeader("strict-transport-security", "max-age=63072000; includeSubDomains");
+    if (o.behindTls)
+      res.setHeader("strict-transport-security", "max-age=63072000; includeSubDomains");
     res.setHeader("vary", "Origin");
     if (origin !== undefined && origins.has(origin)) {
       res.setHeader("access-control-allow-origin", origin);
@@ -116,7 +130,13 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     }
   }
 
-  function send(res: http.ServerResponse, status: number, body: unknown, contentType: string, extra: Record<string, string> = {}): void {
+  function send(
+    res: http.ServerResponse,
+    status: number,
+    body: unknown,
+    contentType: string,
+    extra: Record<string, string> = {},
+  ): void {
     if (res.headersSent) return;
     const payload = body === undefined ? undefined : JSON.stringify(body);
     res.writeHead(status, {
@@ -148,7 +168,9 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         if (size > o.maxBodyBytes) over = true;
         else chunks.push(c);
       });
-      req.on("end", () => (over ? reject(tooLarge(o.maxBodyBytes)) : resolve(Buffer.concat(chunks))));
+      req.on("end", () =>
+        over ? reject(tooLarge(o.maxBodyBytes)) : resolve(Buffer.concat(chunks)),
+      );
       req.on("error", reject);
       req.on("aborted", () => reject(badRequest("request aborted")));
     });
@@ -158,8 +180,10 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     const h = req.headers;
     const auth = h.authorization;
     const key = h["x-axis-api-key"];
-    if (auth !== undefined && key !== undefined) throw badRequest("send one credential: Authorization or X-Axis-Api-Key");
-    if (Array.isArray(key)) throw badRequest("send one credential: Authorization or X-Axis-Api-Key");
+    if (auth !== undefined && key !== undefined)
+      throw badRequest("send one credential: Authorization or X-Axis-Api-Key");
+    if (Array.isArray(key))
+      throw badRequest("send one credential: Authorization or X-Axis-Api-Key");
     if (auth !== undefined) {
       const m = /^Bearer ([\x21-\x7e]{1,4096})$/.exec(auth);
       if (!m) throw unauthenticated("Authorization must be 'Bearer <token>'");
@@ -172,7 +196,10 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     throw unauthenticated();
   }
 
-  async function authenticate(req: http.IncomingMessage, remote: string): Promise<{ principal: Principal; creds: { bearer?: string; apiKey?: string } }> {
+  async function authenticate(
+    req: http.IncomingMessage,
+    remote: string,
+  ): Promise<{ principal: Principal; creds: { bearer?: string; apiKey?: string } }> {
     // A remote that keeps failing is refused before any credential lookup (brute-force and lookup-cost amplification).
     if (unauth.take(remote, 0).remaining < 1) throw rateLimited(1);
     let creds: { bearer?: string; apiKey?: string };
@@ -199,7 +226,10 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     const out: Record<string, string> = {};
     for (const k of new Set(url.searchParams.keys())) {
       const all = url.searchParams.getAll(k);
-      if (all.length > 1) throw validation(`query parameter ${k} given more than once`, [{ path: `/${k}`, message: "repeated" }]);
+      if (all.length > 1)
+        throw validation(`query parameter ${k} given more than once`, [
+          { path: `/${k}`, message: "repeated" },
+        ]);
       out[k] = all[0] as string;
     }
     return out;
@@ -218,9 +248,14 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
   async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const t0 = now();
     const hdrReqId = req.headers["x-request-id"];
-    const requestId = typeof hdrReqId === "string" && REQUEST_ID.test(hdrReqId) ? hdrReqId : randomUUID();
-    const tp = typeof req.headers.traceparent === "string" ? TRACEPARENT.exec(req.headers.traceparent) : null;
-    const traceId = tp && tp[1] !== "0".repeat(32) ? (tp[1] as string) : randomBytes(16).toString("hex");
+    const requestId =
+      typeof hdrReqId === "string" && REQUEST_ID.test(hdrReqId) ? hdrReqId : randomUUID();
+    const tp =
+      typeof req.headers.traceparent === "string"
+        ? TRACEPARENT.exec(req.headers.traceparent)
+        : null;
+    const traceId =
+      tp && tp[1] !== "0".repeat(32) ? (tp[1] as string) : randomBytes(16).toString("hex");
     const originHdr = req.headers.origin;
     const origin = typeof originHdr === "string" ? originHdr : undefined;
     baseHeaders(res, requestId, origin);
@@ -244,7 +279,10 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       if (method === "OPTIONS") {
         // Preflight: answered before authentication, only ever for an allow-listed origin.
         status = 204;
-        const ok = origin !== undefined && origins.has(origin) && req.headers["access-control-request-method"] !== undefined;
+        const ok =
+          origin !== undefined &&
+          origins.has(origin) &&
+          req.headers["access-control-request-method"] !== undefined;
         res.writeHead(204, {
           ...(ok
             ? {
@@ -257,7 +295,8 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         return void res.end();
       }
       const base = "/v1";
-      if (url.pathname !== base && !url.pathname.startsWith(`${base}/`)) throw notFound("no such resource");
+      if (url.pathname !== base && !url.pathname.startsWith(`${base}/`))
+        throw notFound("no such resource");
       const path = url.pathname.slice(base.length) || "/";
       if (path.includes("//") || path.length > 512) throw notFound("no such resource");
 
@@ -273,11 +312,18 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
           rawParams = m.slice(1);
         }
       }
-      if (!match) throw allowed.length > 0 ? methodNotAllowed([...new Set(allowed)]) : notFound("no such resource");
+      if (!match)
+        throw allowed.length > 0
+          ? methodNotAllowed([...new Set(allowed)])
+          : notFound("no such resource");
       opId = match.op.id;
 
       for (const h of Object.keys(req.headers))
-        if (TENANT_HEADER.test(h)) throw badRequest("the tenant comes from your credential; remove the tenant header", "tenant_override");
+        if (TENANT_HEADER.test(h))
+          throw badRequest(
+            "the tenant comes from your credential; remove the tenant header",
+            "tenant_override",
+          );
 
       const { principal, creds } = await authenticate(req, remote);
       tenant = principal.tenantId;
@@ -310,8 +356,12 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
               traceId,
             })
             .catch(() => undefined);
-        const failure = /^(no policy|policy evaluation|malformed policy|unknown role)/.test(decision.reason);
-        throw failure ? policyDenied() : forbidden("your role or API key does not allow this operation");
+        const failure = /^(no policy|policy evaluation|malformed policy|unknown role)/.test(
+          decision.reason,
+        );
+        throw failure
+          ? policyDenied()
+          : forbidden("your role or API key does not allow this operation");
       }
 
       // Parameters (path ids, query) against the OpenAPI schemas; unknown query parameters are refused.
@@ -326,7 +376,11 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       const pv = spec.validateParams(match.op, "path", pathVals);
       if (pv.issues.length > 0) throw validation("invalid path parameter", pv.issues);
       const qv = spec.validateParams(match.op, "query", query(url));
-      for (const k of Object.keys(qv.value)) if (TENANT_KEY.test(k) || k.toLowerCase() === "tenant") throw validation("the tenant comes from your credential", [{ path: `/${k}`, message: "not accepted" }]);
+      for (const k of Object.keys(qv.value))
+        if (TENANT_KEY.test(k) || k.toLowerCase() === "tenant")
+          throw validation("the tenant comes from your credential", [
+            { path: `/${k}`, message: "not accepted" },
+          ]);
       if (qv.issues.length > 0) throw validation("invalid query parameters", qv.issues);
 
       const idemHeader = req.headers["idempotency-key"];
@@ -346,7 +400,8 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       if (match.op.bodyPtr) {
         const raw = await readBody(req);
         if (raw.length === 0) {
-          if (match.op.bodyRequired) throw validation("a JSON body is required", [{ path: "/", message: "body required" }]);
+          if (match.op.bodyRequired)
+            throw validation("a JSON body is required", [{ path: "/", message: "body required" }]);
         } else {
           const ct = (req.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase();
           if (ct !== "application/json") throw unsupportedMedia();
@@ -356,9 +411,14 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
             throw badRequest("the body is not valid JSON", "invalid_json");
           }
           if (typeof body === "object" && body !== null && !Array.isArray(body))
-            for (const k of Object.keys(body)) if (TENANT_KEY.test(k)) throw validation("the tenant comes from your credential", [{ path: `/${k}`, message: "not accepted" }]);
+            for (const k of Object.keys(body))
+              if (TENANT_KEY.test(k))
+                throw validation("the tenant comes from your credential", [
+                  { path: `/${k}`, message: "not accepted" },
+                ]);
           const issues = spec.validateBody(match.op, body);
-          if (issues.length > 0) throw validation("the request body does not match the API schema", issues);
+          if (issues.length > 0)
+            throw validation("the request body does not match the API schema", issues);
         }
       } else {
         req.resume();
@@ -370,14 +430,24 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       if (idemKey !== undefined) {
         const fp = fingerprint(method, match.op.template, pathVals, body);
         const b = await idem.begin(idemScope, idemKey, fp, o.idempotencyTtlMs);
-        if (b.kind === "mismatch") throw validation("this Idempotency-Key was already used with a different request", [{ path: "/", message: "idempotency key reuse" }]);
-        if (b.kind === "in_progress") throw conflict("a request with this Idempotency-Key is still being processed");
+        if (b.kind === "mismatch")
+          throw validation("this Idempotency-Key was already used with a different request", [
+            { path: "/", message: "idempotency key reuse" },
+          ]);
+        if (b.kind === "in_progress")
+          throw conflict("a request with this Idempotency-Key is still being processed");
         if (b.kind === "replay") {
           status = b.response.status;
-          return send(res, b.response.status, b.response.body, b.response.status >= 400 ? "application/problem+json" : "application/json", {
-            ...b.response.headers,
-            "idempotent-replayed": "true",
-          });
+          return send(
+            res,
+            b.response.status,
+            b.response.body,
+            b.response.status >= 400 ? "application/problem+json" : "application/json",
+            {
+              ...b.response.headers,
+              "idempotent-replayed": "true",
+            },
+          );
         }
         reserved = true;
       }
@@ -416,7 +486,8 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
           opts: o,
           cursors,
           wantsStream: String(req.headers.accept ?? "").includes("text/event-stream"),
-          lastEventId: typeof lastEvt === "string" && /^\d{1,15}$/.test(lastEvt) ? Number(lastEvt) : undefined,
+          lastEventId:
+            typeof lastEvt === "string" && /^\d{1,15}$/.test(lastEvt) ? Number(lastEvt) : undefined,
           signal: ac.signal,
         };
         let timer: NodeJS.Timeout | undefined;
@@ -429,7 +500,7 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
 
         if (isStream(result)) {
           status = 200;
-          await streamEvents(res, ctx, result, creds);
+          await streamEvents(res, ctx, result, creds, ac);
           if (reserved) await idem.abort(idemScope, idemKey as string);
           return;
         }
@@ -439,15 +510,26 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
           if (result.body !== undefined) {
             const issues = spec.validateResponse(match.op, result.status, media, result.body);
             if (issues && issues.length > 0) {
-              log("error", "response violates the OpenAPI contract", { op: match.op.id, status: result.status, issues, request_id: requestId });
+              log("error", "response violates the OpenAPI contract", {
+                op: match.op.id,
+                status: result.status,
+                issues,
+                request_id: requestId,
+              });
               throw internal();
             }
           }
         }
         const extra = { ...(result.headers ?? {}) };
         if (reserved) {
-          if (result.status >= 500 || result.status === 429) await idem.abort(idemScope, idemKey as string);
-          else await idem.complete(idemScope, idemKey as string, { status: result.status, body: result.body, headers: extra });
+          if (result.status >= 500 || result.status === 429)
+            await idem.abort(idemScope, idemKey as string);
+          else
+            await idem.complete(idemScope, idemKey as string, {
+              status: result.status,
+              body: result.body,
+              headers: extra,
+            });
           reserved = false;
         }
         send(res, result.status, result.body, "application/json", extra);
@@ -456,19 +538,36 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
           const err = mapError(e);
           // Deterministic client errors are remembered (a retry gets the same answer); anything else is retryable.
           if (err.status >= 400 && err.status < 500 && err.status !== 429 && err.status !== 408)
-            await idem.complete(idemScope, idemKey as string, { status: err.status, body: toProblem(err, traceId), headers: err.headers });
+            await idem.complete(idemScope, idemKey as string, {
+              status: err.status,
+              body: toProblem(err, traceId),
+              headers: err.headers,
+            });
           else await idem.abort(idemScope, idemKey as string);
         }
         throw e;
       }
     } catch (e) {
       const err = mapError(e);
-      if (!(e instanceof ApiError)) log("error", "unhandled error", { op: opId, request_id: requestId, error: e instanceof Error ? e.message : String(e) });
+      if (!(e instanceof ApiError))
+        log("error", "unhandled error", {
+          op: opId,
+          request_id: requestId,
+          error: e instanceof Error ? e.message : String(e),
+        });
       status = err.status;
       if (err.status === 413) res.setHeader("connection", "close");
       sendProblem(res, err, traceId);
     } finally {
-      log("info", "request", { op: opId, method, status, tenant, request_id: requestId, trace_id: traceId, ms: now() - t0 });
+      log("info", "request", {
+        op: opId,
+        method,
+        status,
+        tenant,
+        request_id: requestId,
+        trace_id: traceId,
+        ms: now() - t0,
+      });
     }
   }
 
@@ -477,12 +576,12 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     ctx: Ctx,
     result: { stream: AsyncIterable<RunEventDto>; headers?: Record<string, string> },
     creds: { bearer?: string; apiKey?: string },
+    ac: AbortController,
   ): Promise<void> {
     const t = ctx.tenantId;
     const open = streams.get(t) ?? 0;
     if (open >= o.maxSseStreamsPerTenant) throw rateLimited(5);
     streams.set(t, open + 1);
-    const ac = new AbortController();
     const stop = (): void => ac.abort();
     res.on("close", stop);
     res.writeHead(200, {
@@ -506,12 +605,20 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     const max = setTimeout(stop, o.sseMaxMs);
     let reason = "completed";
     try {
-      for await (const ev of result.stream) {
-        if (ac.signal.aborted) break;
-        if (!res.write(`id: ${ev.sequence}\nevent: run_event\ndata: ${JSON.stringify(ev)}\n\n`)) {
-          await Promise.race([once(res, "drain"), once(ac.signal, "abort")]);
+      const it = result.stream[Symbol.asyncIterator]();
+      const aborted = new Promise<"abort">((r) =>
+        ac.signal.addEventListener("abort", () => r("abort"), { once: true }),
+      );
+      while (!ac.signal.aborted) {
+        const n = await Promise.race([it.next(), aborted]);
+        if (n === "abort" || n.done) {
+          if (n === "abort") void it.return?.();
+          break;
         }
-        if (ac.signal.aborted) break;
+        const ev = n.value;
+        if (!res.write(`id: ${ev.sequence}\nevent: run_event\ndata: ${JSON.stringify(ev)}\n\n`)) {
+          await Promise.race([once(res, "drain"), aborted]);
+        }
       }
       if (ac.signal.aborted) reason = "closed";
     } catch {

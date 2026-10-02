@@ -51,18 +51,28 @@ export function fromCpError(e: unknown): never {
 
 /** Bearer `axk_...` -> API key; any other bearer -> session access token; `X-Axis-Api-Key` -> API key. */
 export class ControlPlaneAuthenticator implements Authenticator {
-  constructor(private readonly o: { apiKeys: Pick<ApiKeyService, "verify">; sessions: Pick<SessionService, "authenticate"> }) {}
+  constructor(
+    private readonly o: {
+      apiKeys: Pick<ApiKeyService, "verify">;
+      sessions: Pick<SessionService, "authenticate">;
+    },
+  ) {}
 
   async authenticate(c: { bearer?: string; apiKey?: string }): Promise<Principal | undefined> {
     if (c.apiKey !== undefined) return this.o.apiKeys.verify(c.apiKey);
     if (c.bearer === undefined) return undefined;
-    return c.bearer.startsWith("axk_") ? this.o.apiKeys.verify(c.bearer) : this.o.sessions.authenticate(c.bearer);
+    return c.bearer.startsWith("axk_")
+      ? this.o.apiKeys.verify(c.bearer)
+      : this.o.sessions.authenticate(c.bearer);
   }
 }
 
 export class ControlPlaneAuthz implements Authz {
   constructor(private readonly authorizer: Pick<Authorizer, "decide">) {}
-  async decide(p: Principal, action: string): Promise<{ allowed: boolean; reason: string; policyVersion: string }> {
+  async decide(
+    p: Principal,
+    action: string,
+  ): Promise<{ allowed: boolean; reason: string; policyVersion: string }> {
     const d = await this.authorizer.decide({ principal: p, action: action as never });
     return { allowed: d.allowed, reason: d.reason, policyVersion: d.policyVersion };
   }
@@ -102,22 +112,35 @@ export class OpaCliPolicyTester implements PolicyTester {
   private running = 0;
   private waiting = 0;
   constructor(
-    private readonly o: { bin?: string; timeoutMs?: number; maxConcurrent?: number; maxQueued?: number } = {},
+    private readonly o: {
+      bin?: string;
+      timeoutMs?: number;
+      maxConcurrent?: number;
+      maxQueued?: number;
+    } = {},
   ) {}
 
   async evaluate(doc: unknown, input: Record<string, unknown>): Promise<GateDecisionDto> {
     const w = packWeight(doc);
     if (w.rules > MAX_PACK_RULES || w.values > MAX_PACK_VALUES)
-      throw new PortInvalid(`policy too large: at most ${MAX_PACK_RULES} rules and ${MAX_PACK_VALUES} values`, [{ path: "/policy", message: "too large" }]);
+      throw new PortInvalid(
+        `policy too large: at most ${MAX_PACK_RULES} rules and ${MAX_PACK_VALUES} values`,
+        [{ path: "/policy", message: "too large" }],
+      );
     const c = compilePolicySet([doc]);
     if (!c.ok)
       throw new PortInvalid(
         "the policy does not compile",
-        c.issues.slice(0, 20).map((i) => ({ path: `/policy${i.path === "/" ? "" : i.path}`, keyword: i.code, message: i.message })),
+        c.issues.slice(0, 20).map((i) => ({
+          path: `/policy${i.path === "/" ? "" : i.path}`,
+          keyword: i.code,
+          message: i.message,
+        })),
       );
     const max = this.o.maxConcurrent ?? 2;
     if (this.running >= max) {
-      if (this.waiting >= (this.o.maxQueued ?? 8)) throw new PortUnavailable("policy evaluation is busy; retry");
+      if (this.waiting >= (this.o.maxQueued ?? 8))
+        throw new PortUnavailable("policy evaluation is busy; retry");
       this.waiting++;
       while (this.running >= max) await new Promise((r) => setTimeout(r, 10));
       this.waiting--;
@@ -137,20 +160,34 @@ export class OpaCliPolicyTester implements PolicyTester {
     }
   }
 
-  private async opa(rego: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async opa(
+    rego: string,
+    input: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     const dir = await mkdtemp(join(tmpdir(), "axis-gw-opa-"));
     try {
       await writeFile(join(dir, "policy.rego"), rego);
       const stdout = await new Promise<string>((resolve, reject) => {
         const child = execFile(
           this.o.bin ?? process.env["OPA_BIN"] ?? "opa",
-          ["eval", "--v1-compatible", "-d", join(dir, "policy.rego"), "--stdin-input", "--format", "json", "data.axis.policy.result"],
+          [
+            "eval",
+            "--v1-compatible",
+            "-d",
+            join(dir, "policy.rego"),
+            "--stdin-input",
+            "--format",
+            "json",
+            "data.axis.policy.result",
+          ],
           { timeout: this.o.timeoutMs ?? 10_000, maxBuffer: 1 << 20 },
           (err, out) => (err ? reject(err) : resolve(out)),
         );
         child.stdin?.end(JSON.stringify(input));
       });
-      const parsed = JSON.parse(stdout) as { result?: { expressions: { value: Record<string, unknown> }[] }[] };
+      const parsed = JSON.parse(stdout) as {
+        result?: { expressions: { value: Record<string, unknown> }[] }[];
+      };
       const v = parsed.result?.[0]?.expressions[0]?.value;
       if (!v) throw new Error("no result");
       return v;
@@ -164,7 +201,12 @@ export class OpaCliPolicyTester implements PolicyTester {
 }
 
 export class ControlPlanePolicies implements PolicyPort {
-  constructor(private readonly o: { packs: Pick<PolicyPackService, "list" | "publish">; tester: PolicyTester }) {}
+  constructor(
+    private readonly o: {
+      packs: Pick<PolicyPackService, "list" | "publish">;
+      tester: PolicyTester;
+    },
+  ) {}
 
   async list(p: Principal, q: { limit: number; after?: string }): Promise<Page<PolicyPackDto>> {
     const all = (await this.o.packs.list(p))
@@ -178,13 +220,21 @@ export class ControlPlanePolicies implements PolicyPort {
       content_hash: v.contentHash,
       created_at: v.createdAt.toISOString(),
     }));
-    return { items, next: all.length > q.limit ? (slice[slice.length - 1] as { key: string }).key : undefined };
+    return {
+      items,
+      next: all.length > q.limit ? (slice[slice.length - 1] as { key: string }).key : undefined,
+    };
   }
 
   async publish(p: Principal, doc: unknown): Promise<PolicyPackDto> {
     try {
       const v = await this.o.packs.publish(p, doc);
-      return { name: v.pack, version: v.version, content_hash: v.contentHash, created_at: v.createdAt.toISOString() };
+      return {
+        name: v.pack,
+        version: v.version,
+        content_hash: v.contentHash,
+        created_at: v.createdAt.toISOString(),
+      };
     } catch (e) {
       return fromCpError(e);
     }
@@ -192,10 +242,17 @@ export class ControlPlanePolicies implements PolicyPort {
 
   async test(
     _p: Principal,
-    q: { policy: unknown; request: { enforcement_point: string; action?: string; context: Record<string, unknown> } },
+    q: {
+      policy: unknown;
+      request: { enforcement_point: string; action?: string; context: Record<string, unknown> };
+    },
   ): Promise<GateDecisionDto> {
     // The kernel owns these fields of the context (docs/spec/risk-kernel.md): a tested request cannot override them.
-    const input = { ...q.request.context, enforcement_point: q.request.enforcement_point, ...(q.request.action ? { action: q.request.action } : {}) };
+    const input = {
+      ...q.request.context,
+      enforcement_point: q.request.enforcement_point,
+      ...(q.request.action ? { action: q.request.action } : {}),
+    };
     return this.o.tester.evaluate(q.policy, input);
   }
 }
@@ -210,14 +267,28 @@ export class StorePolicyMetadata implements PolicyMetadataSource {
     for (const v of await this.store.listPackVersions(tenantId)) {
       const spec = (v.source as { spec?: { rules?: unknown[] } } | undefined)?.spec;
       for (const r of spec?.rules ?? []) {
-        const rule = r as { id?: string; description?: string; decision?: string; approval?: { roles?: string[]; slaSeconds?: number } };
+        const rule = r as {
+          id?: string;
+          description?: string;
+          decision?: string;
+          approval?: { roles?: string[]; slaSeconds?: number };
+        };
         const id = `${v.packName}/${rule.id}`;
         if (!want.has(id)) continue;
         out.set(id, {
           id,
           ...(rule.decision ? { decision: rule.decision } : {}),
           ...(rule.description ? { description: rule.description } : {}),
-          ...(rule.approval?.roles ? { approval: { roles: rule.approval.roles, ...(rule.approval.slaSeconds !== undefined ? { slaSeconds: rule.approval.slaSeconds } : {}) } } : {}),
+          ...(rule.approval?.roles
+            ? {
+                approval: {
+                  roles: rule.approval.roles,
+                  ...(rule.approval.slaSeconds !== undefined
+                    ? { slaSeconds: rule.approval.slaSeconds }
+                    : {}),
+                },
+              }
+            : {}),
         });
       }
     }

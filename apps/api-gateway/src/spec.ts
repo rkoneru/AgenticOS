@@ -89,7 +89,10 @@ export class ApiSpec {
   private ref(node: unknown): Json {
     let cur = node as Json;
     for (let i = 0; i < 5 && typeof cur["$ref"] === "string"; i++) {
-      const parts = (cur["$ref"] as string).replace(/^#\//, "").split("/").map((p) => p.replaceAll("~1", "/").replaceAll("~0", "~"));
+      const parts = (cur["$ref"] as string)
+        .replace(/^#\//, "")
+        .split("/")
+        .map((p) => p.replaceAll("~1", "/").replaceAll("~0", "~"));
       let n: unknown = this.doc;
       for (const p of parts) n = (n as Json)[p];
       cur = n as Json;
@@ -112,8 +115,14 @@ export class ApiSpec {
           const base = direct
             ? `#/paths/${esc(template)}/${method}/parameters/${i}`
             : `#/${(r["$ref"] as string).replace(/^#\//, "")}`;
-          if (p["in"] === "header" && String(p["name"]).toLowerCase() === "idempotency-key") idempotent = true;
-          params.push({ name: String(p["name"]), in: p["in"] as ParamSpec["in"], required: p["required"] === true, ptr: `${base}/schema` });
+          if (p["in"] === "header" && String(p["name"]).toLowerCase() === "idempotency-key")
+            idempotent = true;
+          params.push({
+            name: String(p["name"]),
+            in: p["in"] as ParamSpec["in"],
+            required: p["required"] === true,
+            ptr: `${base}/schema`,
+          });
         });
         const rb = op["requestBody"] as Json | undefined;
         const bodyPtr = rb
@@ -198,11 +207,17 @@ export class ApiSpec {
   }
 
   /** Issues for a response that does not match the contract; `undefined` when the contract declares nothing to check. */
-  validateResponse(op: OperationSpec, status: number, media: string, body: unknown): ValidationIssue[] | undefined {
+  validateResponse(
+    op: OperationSpec,
+    status: number,
+    media: string,
+    body: unknown,
+  ): ValidationIssue[] | undefined {
     const known = op.responses.get(String(status)) ?? op.responses.get("default");
     if (!known) return [{ path: "/", message: `status ${status} is not declared for ${op.id}` }];
     const ptr = known.get(media);
-    if (!ptr) return [{ path: "/", message: `media type ${media} is not declared for ${op.id} ${status}` }];
+    if (!ptr)
+      return [{ path: "/", message: `media type ${media} is not declared for ${op.id} ${status}` }];
     const v = this.validator(false, ptr);
     return v(body) ? [] : issues(v);
   }
@@ -211,10 +226,18 @@ export class ApiSpec {
 function issues(v: ValidateFunction): ValidationIssue[] {
   return (v.errors ?? []).slice(0, 20).map((e) => {
     // "must NOT have additional properties" is reported at the parent; name the property so the caller can find it.
-    const extra = e.keyword === "additionalProperties" ? String((e.params as { additionalProperty?: unknown }).additionalProperty) : undefined;
+    const extra =
+      e.keyword === "additionalProperties"
+        ? String((e.params as { additionalProperty?: unknown }).additionalProperty)
+        : undefined;
     const base = e.instancePath === "" ? "" : e.instancePath;
     return {
-      path: extra !== undefined ? `${base}/${extra.replaceAll("~", "~0").replaceAll("/", "~1")}` : base === "" ? "/" : base,
+      path:
+        extra !== undefined
+          ? `${base}/${extra.replaceAll("~", "~0").replaceAll("/", "~1")}`
+          : base === ""
+            ? "/"
+            : base,
       keyword: e.keyword,
       message: String(e.message),
     };

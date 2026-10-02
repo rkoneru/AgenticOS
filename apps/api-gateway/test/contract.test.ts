@@ -20,7 +20,12 @@ interface Fx {
   headers?: Record<string, string>;
   status: number;
 }
-const ok = (method: string, path: string | ((s: Seed) => string), status = 200, body?: (s: Seed) => unknown): Fx => ({
+const ok = (
+  method: string,
+  path: string | ((s: Seed) => string),
+  status = 200,
+  body?: (s: Seed) => unknown,
+): Fx => ({
   method,
   path: typeof path === "string" ? () => path : path,
   status,
@@ -30,30 +35,56 @@ const ok = (method: string, path: string | ((s: Seed) => string), status = 200, 
 const FIXTURES: Record<string, Fx> = {
   listBlueprints: ok("GET", "/blueprints?limit=5"),
   publishBlueprintVersion: ok("POST", "/blueprints", 201, () => ({ abl: ABL("lead", "2.0.0") })),
-  getBlueprintVersion: ok("GET", (s) => `/blueprints/${s.blueprint.name}/versions/${s.blueprint.version}`),
+  getBlueprintVersion: ok(
+    "GET",
+    (s) => `/blueprints/${s.blueprint.name}/versions/${s.blueprint.version}`,
+  ),
   listRuns: ok("GET", "/runs?state=running"),
-  startRun: ok("POST", "/runs", 202, (s) => ({ blueprint: s.blueprint, input: { prompt: "hello" } })),
+  startRun: ok("POST", "/runs", 202, (s) => ({
+    blueprint: s.blueprint,
+    input: { prompt: "hello" },
+  })),
   getRun: ok("GET", (s) => `/runs/${s.runId}`),
-  signalRun: ok("POST", (s) => `/runs/${s.runId}/signals`, 200, () => ({ signal: "PAUSE", reason: "test" })),
+  signalRun: ok(
+    "POST",
+    (s) => `/runs/${s.runId}/signals`,
+    200,
+    () => ({ signal: "PAUSE", reason: "test" }),
+  ),
   listRunEvents: ok("GET", (s) => `/runs/${s.runId}/events?after_sequence=0&limit=10`),
   listApprovals: ok("GET", "/approvals?status=pending"),
-  decideApproval: ok("POST", (s) => `/approvals/${s.approvalId}/decision`, 200, () => ({ decision: "approve", comment: "ok" })),
+  decideApproval: ok(
+    "POST",
+    (s) => `/approvals/${s.approvalId}/decision`,
+    200,
+    () => ({ decision: "approve", comment: "ok" }),
+  ),
   listPolicyPacks: ok("GET", "/policies"),
   publishPolicyPack: ok("POST", "/policies", 201, () => ({ policy: POLICY() })),
   testPolicy: ok("POST", "/policies:test", 200, () => ({
     policy: POLICY(),
-    request: { enforcement_point: "tool_call", context: { tool: { name: "lookup-claim", side_effects: "read" }, args: { amount: 5 } } },
+    request: {
+      enforcement_point: "tool_call",
+      context: { tool: { name: "lookup-claim", side_effects: "read" }, args: { amount: 5 } },
+    },
   })),
   listAuditEvents: ok("GET", "/audit/events?limit=10"),
   verifyAuditChain: ok("POST", "/audit/verify", 200, () => ({})),
   listKillSwitches: ok("GET", "/kill-switches"),
-  setKillSwitch: ok("PUT", "/kill-switches", 200, () => ({ scope: "tenant", engaged: true, reason: "drill" })),
+  setKillSwitch: ok("PUT", "/kill-switches", 200, () => ({
+    scope: "tenant",
+    engaged: true,
+    reason: "drill",
+  })),
   getUsage: ok("GET", () => {
     const from = new Date(Date.now() - 86_400_000).toISOString();
     const to = new Date(Date.now() + 86_400_000).toISOString();
     return `/usage?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&group_by=meter`;
   }),
-  startEvalRun: ok("POST", "/evals/runs", 501, () => ({ suite: "claims-regression", blueprint: { name: "claims", version: "1.0.0" } })),
+  startEvalRun: ok("POST", "/evals/runs", 501, () => ({
+    suite: "claims-regression",
+    blueprint: { name: "claims", version: "1.0.0" },
+  })),
   explainRun: ok("GET", (s) => `/runs/${s.runId}/explanation`),
   explainAuditEvent: ok("GET", (s) => `/audit/events/${s.denySeq}/explanation`),
 };
@@ -66,7 +97,10 @@ const check = (op: (typeof spec.operations)[number], r: Res): void => {
 };
 
 beforeAll(async () => {
-  w = await makeWorld({ rate: { burst: 1e6, perSecond: 1e6 }, unauthRate: { burst: 1e6, perSecond: 1e6 } });
+  w = await makeWorld({
+    rate: { burst: 1e6, perSecond: 1e6 },
+    unauthRate: { burst: 1e6, perSecond: 1e6 },
+  });
   s = await seed(w);
 });
 afterAll(() => w.close());
@@ -88,7 +122,11 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     describe(`${op.method.toUpperCase()} ${op.template} (${op.id})`, () => {
       const fx = FIXTURES[op.id] as Fx;
       const url = (): string => fx.path(s);
-      const asOwner = (extra: Record<string, string> = {}) => ({ token: s.owner.token, ...(fx.body ? { body: fx.body(s) } : {}), headers: { ...(fx.headers ?? {}), ...extra } });
+      const asOwner = (extra: Record<string, string> = {}) => ({
+        token: s.owner.token,
+        ...(fx.body ? { body: fx.body(s) } : {}),
+        headers: { ...(fx.headers ?? {}), ...extra },
+      });
 
       it("happy path: documented status, body valid against the schema", async () => {
         const r = await call(w, fx.method, url(), asOwner());
@@ -109,7 +147,10 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
       it("a role the matrix does not allow: 403 problem+json", async () => {
         const role = op.id === "getUsage" ? "viewer" : "billing";
         const m = await w.member(s.owner.tenantId, role);
-        const r = await call(w, fx.method, url(), { token: m.token, ...(fx.body ? { body: fx.body(s) } : {}) });
+        const r = await call(w, fx.method, url(), {
+          token: m.token,
+          ...(fx.body ? { body: fx.body(s) } : {}),
+        });
         expect(r.status, r.text).toBe(403);
         expect(["forbidden", "policy_denied"]).toContain(r.body.code);
         check(op, r);
@@ -117,14 +158,17 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
 
       if (op.bodyPtr && fx.body) {
         it("a body the schema rejects: 422 ValidationProblem with errors", async () => {
-          const r = await call(w, fx.method, url(), { token: s.owner.token, body: ["not", "an", "object"] });
+          const r = await call(w, fx.method, url(), {
+            token: s.owner.token,
+            body: ["not", "an", "object"],
+          });
           expect(r.status, r.text).toBe(422);
           expect(r.body.code).toBe("validation_failed");
           expect(Array.isArray(r.body.errors) && r.body.errors.length > 0).toBe(true);
           check(op, r);
         });
         it("an unknown property in the body is rejected where the schema forbids it, never silently used", async () => {
-          const body = { ...(fx.body(s) as object), unexpected_field: true };
+          const body = { ...(fx.body!(s) as object), unexpected_field: true };
           const r = await call(w, fx.method, url(), { token: s.owner.token, body });
           // additionalProperties:false operations answer 422; the open ones (policy test request, input) accept it but ignore it.
           expect([422, fx.status]).toContain(r.status);
@@ -134,15 +178,28 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
       const uuidParam = op.params.find((p) => p.in === "path" && /RunId|approvalId/.test(p.ptr));
       if (uuidParam) {
         it("an id the tenant does not own (valid UUID, nothing behind it): 404 problem", async () => {
-          const bad = fx.path(s).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, "00000000-0000-4000-8000-000000000000");
-          const r = await call(w, fx.method, bad, { token: s.owner.token, ...(fx.body ? { body: fx.body(s) } : {}) });
+          const bad = fx
+            .path(s)
+            .replace(
+              /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
+              "00000000-0000-4000-8000-000000000000",
+            );
+          const r = await call(w, fx.method, bad, {
+            token: s.owner.token,
+            ...(fx.body ? { body: fx.body(s) } : {}),
+          });
           expect(r.status, r.text).toBe(404);
           expect(r.body.code).toBe("not_found");
           check(op, r);
         });
         it("a malformed id: 422 before anything is looked up", async () => {
-          const bad = fx.path(s).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, "not-a-uuid");
-          const r = await call(w, fx.method, bad, { token: s.owner.token, ...(fx.body ? { body: fx.body(s) } : {}) });
+          const bad = fx
+            .path(s)
+            .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, "not-a-uuid");
+          const r = await call(w, fx.method, bad, {
+            token: s.owner.token,
+            ...(fx.body ? { body: fx.body(s) } : {}),
+          });
           expect(r.status, r.text).toBe(422);
           check(op, r);
         });

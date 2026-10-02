@@ -1,4 +1,9 @@
-import { ApprovalError, eligibleRoles, type ApprovalRequest, type ApprovalService } from "@axis/approvals";
+import {
+  ApprovalError,
+  eligibleRoles,
+  type ApprovalRequest,
+  type ApprovalService,
+} from "@axis/approvals";
 import {
   PortConflict,
   PortForbidden,
@@ -69,10 +74,23 @@ export class ApprovalsAdapter implements ApprovalsPort {
     return { tenant_id: p.tenantId, id: p.memberId, roles: [p.role] };
   }
 
-  async list(p: Principal, q: { status?: ApprovalDto["status"]; limit: number; after?: string }): Promise<Page<ApprovalDto>> {
+  async list(
+    p: Principal,
+    q: { status?: ApprovalDto["status"]; limit: number; after?: string },
+  ): Promise<Page<ApprovalDto>> {
     try {
-      const svcStatus = q.status === undefined ? undefined : q.status === "rejected" ? "denied" : q.status === "escalated" ? "pending" : q.status;
-      const rows = await this.svc.list(this.who(p), { limit: 200, ...(svcStatus ? { status: svcStatus } : {}) });
+      const svcStatus =
+        q.status === undefined
+          ? undefined
+          : q.status === "rejected"
+            ? "denied"
+            : q.status === "escalated"
+              ? "pending"
+              : q.status;
+      const rows = await this.svc.list(this.who(p), {
+        limit: 200,
+        ...(svcStatus ? { status: svcStatus } : {}),
+      });
       const keyed = rows
         .filter((r) => q.status === undefined || apiStatus(r) === q.status)
         .map((r) => ({ key: `${String(r.created_at_ms).padStart(15, "0")}|${r.id}`, r }))
@@ -88,9 +106,16 @@ export class ApprovalsAdapter implements ApprovalsPort {
     }
   }
 
-  async decide(p: Principal, id: string, d: { decision: "approve" | "reject"; comment?: string }): Promise<ApprovalDto> {
+  async decide(
+    p: Principal,
+    id: string,
+    d: { decision: "approve" | "reject"; comment?: string },
+  ): Promise<ApprovalDto> {
     try {
-      const r = d.decision === "approve" ? await this.svc.approve(this.who(p), id, d.comment) : await this.svc.deny(this.who(p), id, d.comment);
+      const r =
+        d.decision === "approve"
+          ? await this.svc.approve(this.who(p), id, d.comment)
+          : await this.svc.deny(this.who(p), id, d.comment);
       return toApproval(r);
     } catch (e) {
       return fromApprovalError(e);

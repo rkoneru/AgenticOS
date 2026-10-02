@@ -2,12 +2,7 @@ import { randomUUID } from "node:crypto";
 import { compileAbl, type AblIssue } from "@axis/abl";
 import type { AuditEvent } from "@axis/contracts";
 import type { Ctx, HandlerResult, Route } from "./context.js";
-import {
-  PortConflict,
-  PortNotFound,
-  type BlueprintVersionDto,
-  type RunEventDto,
-} from "./ports.js";
+import { PortConflict, PortNotFound, type BlueprintVersionDto, type RunEventDto } from "./ports.js";
 import { internal, notFound, notImplemented, validation, type ValidationIssue } from "./problem.js";
 
 const NAME = /^[a-z][a-z0-9-]{1,62}$/;
@@ -23,7 +18,10 @@ function position(c: Ctx, resource: string): string | undefined {
   const raw = c.query["cursor"];
   if (raw === undefined) return undefined;
   const p = c.cursors.decode(c.tenantId, resource, str(raw));
-  if (p === undefined) throw validation("invalid cursor", [{ path: "/cursor", message: "malformed, forged or from another resource" }]);
+  if (p === undefined)
+    throw validation("invalid cursor", [
+      { path: "/cursor", message: "malformed, forged or from another resource" },
+    ]);
   return p;
 }
 const wrap = (c: Ctx, resource: string, next: string | undefined): string | null =>
@@ -43,7 +41,10 @@ const issuesFromAbl = (issues: AblIssue[]): ValidationIssue[] =>
 
 async function listBlueprints(c: Ctx): Promise<HandlerResult> {
   const after = position(c, "blueprints");
-  const r = await c.deps.blueprints.list(c.tenantId, { limit: limit(c), ...(after ? { after } : {}) });
+  const r = await c.deps.blueprints.list(c.tenantId, {
+    limit: limit(c),
+    ...(after ? { after } : {}),
+  });
   return ok({ items: r.items, next_cursor: wrap(c, "blueprints", r.next) });
 }
 
@@ -53,7 +54,9 @@ async function publishBlueprintVersion(c: Ctx): Promise<HandlerResult> {
   if (!r.ok) {
     const errors: ValidationIssue[] = [
       ...issuesFromAbl(r.issues),
-      ...r.findings.filter((f) => f.severity === "error").map((f) => ({ path: f.path, keyword: f.code, message: f.message })),
+      ...r.findings
+        .filter((f) => f.severity === "error")
+        .map((f) => ({ path: f.path, keyword: f.code, message: f.message })),
     ];
     throw validation("the blueprint does not validate", errors);
   }
@@ -105,7 +108,10 @@ async function listRuns(c: Ctx): Promise<HandlerResult> {
 }
 
 async function startRun(c: Ctx): Promise<HandlerResult> {
-  const b = c.body as { blueprint: { name: string; version: string }; input?: Record<string, unknown> };
+  const b = c.body as {
+    blueprint: { name: string; version: string };
+    input?: Record<string, unknown>;
+  };
   const bp = await c.deps.blueprints.get(c.tenantId, b.blueprint.name, b.blueprint.version);
   if (!bp) throw notFound("blueprint version not found");
   const compiled = compileAbl(bp.abl);
@@ -152,7 +158,9 @@ async function listRunEvents(c: Ctx): Promise<HandlerResult> {
   if (c.wantsStream) {
     // Existence and tenancy are checked BEFORE the stream opens (a 404 is a normal problem response, not an SSE error event).
     if (!(await c.deps.runs.get(c.tenantId, runId))) throw notFound("run not found");
-    return { stream: c.deps.runs.stream(c.tenantId, runId, Math.max(after, c.lastEventId ?? 0), c.signal) };
+    return {
+      stream: c.deps.runs.stream(c.tenantId, runId, Math.max(after, c.lastEventId ?? 0), c.signal),
+    };
   }
   const lim = limit(c);
   const items = await c.deps.runs.events(c.tenantId, runId, { afterSequence: after, limit: lim });
@@ -186,12 +194,18 @@ async function decideApproval(c: Ctx): Promise<HandlerResult> {
 
 async function listPolicyPacks(c: Ctx): Promise<HandlerResult> {
   const after = position(c, "policies");
-  const r = await c.deps.policies.list(c.principal, { limit: limit(c), ...(after ? { after } : {}) });
+  const r = await c.deps.policies.list(c.principal, {
+    limit: limit(c),
+    ...(after ? { after } : {}),
+  });
   return ok({ items: r.items, next_cursor: wrap(c, "policies", r.next) });
 }
 
 async function publishPolicyPack(c: Ctx): Promise<HandlerResult> {
-  return ok(await c.deps.policies.publish(c.principal, (c.body as { policy: unknown }).policy), 201);
+  return ok(
+    await c.deps.policies.publish(c.principal, (c.body as { policy: unknown }).policy),
+    201,
+  );
 }
 
 async function testPolicy(c: Ctx): Promise<HandlerResult> {
@@ -211,14 +225,19 @@ async function listAuditEvents(c: Ctx): Promise<HandlerResult> {
   const lim = limit(c);
   const cursor = position(c, "audit");
   let from = Math.max(cursor !== undefined ? Number(cursor) : 1, Number(c.query["from_seq"] ?? 1));
-  if (!Number.isSafeInteger(from) || from < 1) throw validation("invalid cursor", [{ path: "/cursor", message: "malformed" }]);
+  if (!Number.isSafeInteger(from) || from < 1)
+    throw validation("invalid cursor", [{ path: "/cursor", message: "malformed" }]);
   const decision = c.query["decision"] as string | undefined;
   const traceId = c.query["trace_id"] as string | undefined;
   const items: AuditEvent[] = [];
   let scanned = 0;
   let more = false;
   while (items.length < lim && scanned < MAX_SCAN) {
-    const batch = await c.deps.auditLog.list(c.tenantId, { fromSeq: from, limit: BATCH, ...(traceId ? { traceId } : {}) });
+    const batch = await c.deps.auditLog.list(c.tenantId, {
+      fromSeq: from,
+      limit: BATCH,
+      ...(traceId ? { traceId } : {}),
+    });
     // Defence in depth: a store that returned another tenant's row would be a bug; never relay it.
     const mine = batch.filter((e) => e.tenant_id === c.tenantId);
     for (const [i, e] of mine.entries()) {
@@ -237,7 +256,13 @@ async function listAuditEvents(c: Ctx): Promise<HandlerResult> {
     more = true; // scan budget may end mid-chain: tell the caller where to resume
   }
   const exhaustedBudget = items.length < lim && scanned >= MAX_SCAN;
-  return ok({ items, next_cursor: more && (items.length === lim || exhaustedBudget) ? c.cursors.encode(c.tenantId, "audit", String(from)) : null });
+  return ok({
+    items,
+    next_cursor:
+      more && (items.length === lim || exhaustedBudget)
+        ? c.cursors.encode(c.tenantId, "audit", String(from))
+        : null,
+  });
 }
 
 async function verifyAuditChain(c: Ctx): Promise<HandlerResult> {
@@ -246,11 +271,26 @@ async function verifyAuditChain(c: Ctx): Promise<HandlerResult> {
   const from = b.from_seq ?? 1;
   const to = Math.min(b.to_seq ?? head, head);
   if (head === 0) return ok({ ok: true, verified: 0 });
-  if (from > to) throw validation("from_seq is after the end of the range", [{ path: "/from_seq", message: "must be <= to_seq and <= the chain head" }]);
+  if (from > to)
+    throw validation("from_seq is after the end of the range", [
+      { path: "/from_seq", message: "must be <= to_seq and <= the chain head" },
+    ]);
   if (to - from + 1 > c.opts.maxVerifyEvents)
-    throw validation(`range too large: verify at most ${c.opts.maxVerifyEvents} events per call (narrow with from_seq/to_seq)`, [{ path: "/to_seq", message: "range too large" }]);
+    throw validation(
+      `range too large: verify at most ${c.opts.maxVerifyEvents} events per call (narrow with from_seq/to_seq)`,
+      [{ path: "/to_seq", message: "range too large" }],
+    );
   const v = await c.deps.auditLog.verify(c.tenantId, { fromSeq: from, toSeq: to });
-  return ok(v.ok ? { ok: true, verified: v.length } : { ok: false, verified: Math.max(0, v.brokenAtSeq - from), broken_at_seq: v.brokenAtSeq, reason: v.reason });
+  return ok(
+    v.ok
+      ? { ok: true, verified: v.length }
+      : {
+          ok: false,
+          verified: Math.max(0, v.brokenAtSeq - from),
+          broken_at_seq: v.brokenAtSeq,
+          reason: v.reason,
+        },
+  );
 }
 
 // ---- kill switches, usage, evals, explanations -------------------------------------------------------------------------------------------
@@ -260,13 +300,24 @@ async function listKillSwitches(c: Ctx): Promise<HandlerResult> {
 }
 
 async function setKillSwitch(c: Ctx): Promise<HandlerResult> {
-  const b = c.body as { scope: "tenant" | "agent" | "tool"; target?: string; engaged: boolean; reason?: string };
+  const b = c.body as {
+    scope: "tenant" | "agent" | "tool";
+    target?: string;
+    engaged: boolean;
+    reason?: string;
+  };
   if (b.scope === "tenant" && b.target !== undefined && b.target !== "")
-    throw validation("a tenant kill-switch has no target", [{ path: "/target", message: "must be absent for scope tenant" }]);
+    throw validation("a tenant kill-switch has no target", [
+      { path: "/target", message: "must be absent for scope tenant" },
+    ]);
   if (b.scope === "agent" && !(typeof b.target === "string" && AGENT_TARGET.test(b.target)))
-    throw validation("an agent kill-switch needs the agent's name as target", [{ path: "/target", message: "agent name required" }]);
+    throw validation("an agent kill-switch needs the agent's name as target", [
+      { path: "/target", message: "agent name required" },
+    ]);
   if (b.scope === "tool" && !(typeof b.target === "string" && TOOL_TARGET.test(b.target)))
-    throw validation("a tool kill-switch needs the tool's name as target", [{ path: "/target", message: "tool name required" }]);
+    throw validation("a tool kill-switch needs the tool's name as target", [
+      { path: "/target", message: "tool name required" },
+    ]);
   const r = await c.deps.killSwitches.set(c.principal, {
     scope: b.scope,
     engaged: b.engaged,
@@ -280,24 +331,37 @@ async function getUsage(c: Ctx): Promise<HandlerResult> {
   const from = new Date(str(c.query["from"]));
   const to = new Date(str(c.query["to"]));
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()))
-    throw validation("from and to must be date-times", [{ path: "/from", message: "invalid date-time" }]);
-  if (to <= from) throw validation("to must be after from", [{ path: "/to", message: "must be after from" }]);
+    throw validation("from and to must be date-times", [
+      { path: "/from", message: "invalid date-time" },
+    ]);
+  if (to <= from)
+    throw validation("to must be after from", [{ path: "/to", message: "must be after from" }]);
   if (to.getTime() - from.getTime() > MAX_USAGE_RANGE_MS)
-    throw validation("the range may span at most 366 days", [{ path: "/to", message: "range too large" }]);
+    throw validation("the range may span at most 366 days", [
+      { path: "/to", message: "range too large" },
+    ]);
   const groupBy = c.query["group_by"] as "meter" | "model" | "blueprint" | "day" | undefined;
-  return ok({ items: await c.deps.usage.query(c.tenantId, { from, to, ...(groupBy ? { groupBy } : {}) }) });
+  return ok({
+    items: await c.deps.usage.query(c.tenantId, { from, to, ...(groupBy ? { groupBy } : {}) }),
+  });
 }
 
 async function startEvalRun(): Promise<HandlerResult> {
-  throw notImplemented("Eval Hub runs arrive in Phase 8; this operation is part of the v1 contract but has no implementation yet.");
+  throw notImplemented(
+    "Eval Hub runs arrive in Phase 8; this operation is part of the v1 contract but has no implementation yet.",
+  );
 }
 
 async function explainRun(c: Ctx): Promise<HandlerResult> {
   const runId = str(c.params["runId"]);
   const run = await c.deps.runs.get(c.tenantId, runId);
   if (!run) throw notFound("run not found");
-  const events = (await c.deps.runs.events(c.tenantId, runId, { afterSequence: 0, limit: 1000 })) ?? [];
-  const x = await c.deps.explain.explainRun(c.tenantId, { traceId: run.trace_id ?? "", runEvents: events });
+  const events =
+    (await c.deps.runs.events(c.tenantId, runId, { afterSequence: 0, limit: 1000 })) ?? [];
+  const x = await c.deps.explain.explainRun(c.tenantId, {
+    traceId: run.trace_id ?? "",
+    runEvents: events,
+  });
   return ok(x);
 }
 
@@ -309,8 +373,16 @@ async function explainAuditEvent(c: Ctx): Promise<HandlerResult> {
 
 export const ROUTES: Record<string, Route> = {
   listBlueprints: { action: "api.blueprints.read", handler: listBlueprints, mutation: false },
-  publishBlueprintVersion: { action: "api.blueprints.publish", handler: publishBlueprintVersion, mutation: true },
-  getBlueprintVersion: { action: "api.blueprints.read", handler: getBlueprintVersion, mutation: false },
+  publishBlueprintVersion: {
+    action: "api.blueprints.publish",
+    handler: publishBlueprintVersion,
+    mutation: true,
+  },
+  getBlueprintVersion: {
+    action: "api.blueprints.read",
+    handler: getBlueprintVersion,
+    mutation: false,
+  },
   listRuns: { action: "api.runs.read", handler: listRuns, mutation: false },
   startRun: { action: "api.runs.start", handler: startRun, mutation: true },
   getRun: { action: "api.runs.read", handler: getRun, mutation: false },

@@ -190,7 +190,10 @@ export interface PolicyPort {
   publish(p: Principal, doc: unknown): Promise<PolicyPackDto>;
   test(
     p: Principal,
-    q: { policy: unknown; request: { enforcement_point: string; action?: string; context: Record<string, unknown> } },
+    q: {
+      policy: unknown;
+      request: { enforcement_point: string; action?: string; context: Record<string, unknown> };
+    },
   ): Promise<GateDecisionDto>;
 }
 
@@ -253,5 +256,8 @@ export interface IdempotencyStore {
 
 export interface RateLimiter {
   /** Takes `cost` tokens from the bucket of `key`. */
-  take(key: string, cost: number): { ok: boolean; limit: number; remaining: number; retryAfterSec: number };
+  take(
+    key: string,
+    cost: number,
+  ): { ok: boolean; limit: number; remaining: number; retryAfterSec: number };
 }

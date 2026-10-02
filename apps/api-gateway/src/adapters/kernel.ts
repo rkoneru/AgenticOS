@@ -1,7 +1,14 @@
 import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
-import { PortConflict, PortForbidden, PortUnavailable, type KillSwitchDto, type KillSwitchPort, type Principal } from "../ports.js";
+import {
+  PortConflict,
+  PortForbidden,
+  PortUnavailable,
+  type KillSwitchDto,
+  type KillSwitchPort,
+  type Principal,
+} from "../ports.js";
 
 export interface KillRequest {
   tenantId: string;
@@ -29,7 +36,10 @@ type GateClient = grpc.Client & {
     req: Record<string, unknown>,
     md: grpc.Metadata,
     opts: { deadline: Date },
-    cb: (err: grpc.ServiceError | null, res?: { engaged?: boolean; audit_event_id?: string }) => void,
+    cb: (
+      err: grpc.ServiceError | null,
+      res?: { engaged?: boolean; audit_event_id?: string },
+    ) => void,
   ): void;
 };
 
@@ -41,8 +51,19 @@ export class GrpcKernelKillApplier implements KernelKillApplier {
     private readonly tokenFor: (tenantId: string) => string | undefined,
     private readonly timeoutMs = 5000,
   ) {
-    const def = protoLoader.loadSync("axis/runtime/v1/gate.proto", { includeDirs: [PROTO_ROOT], keepCase: true, longs: String, enums: String, defaults: false, oneofs: true });
-    const pkg = grpc.loadPackageDefinition(def) as unknown as { axis: { runtime: { v1: { GateService: new (t: string, c: grpc.ChannelCredentials) => GateClient } } } };
+    const def = protoLoader.loadSync("axis/runtime/v1/gate.proto", {
+      includeDirs: [PROTO_ROOT],
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: false,
+      oneofs: true,
+    });
+    const pkg = grpc.loadPackageDefinition(def) as unknown as {
+      axis: {
+        runtime: { v1: { GateService: new (t: string, c: grpc.ChannelCredentials) => GateClient } };
+      };
+    };
     this.client = new pkg.axis.runtime.v1.GateService(target, grpc.credentials.createInsecure());
   }
 
@@ -53,14 +74,28 @@ export class GrpcKernelKillApplier implements KernelKillApplier {
     md.set("authorization", `Bearer ${token}`);
     return new Promise((resolve, reject) => {
       this.client.SetKillSwitch(
-        { tenant_id: r.tenantId, scope: SCOPES[r.scope], target: r.target ?? "", engaged: r.engaged, reason: r.reason ?? "" },
+        {
+          tenant_id: r.tenantId,
+          scope: SCOPES[r.scope],
+          target: r.target ?? "",
+          engaged: r.engaged,
+          reason: r.reason ?? "",
+        },
         md,
         { deadline: new Date(Date.now() + this.timeoutMs) },
         (err, res) => {
           if (err) {
-            if (err.code === grpc.status.PERMISSION_DENIED) return reject(new PortForbidden("the kernel refused the kill-switch change"));
-            if (err.code === grpc.status.FAILED_PRECONDITION) return reject(new PortConflict("the kernel cannot record the release; try again later"));
-            return reject(new PortUnavailable("the Risk Kernel is unavailable; the kill-switch was not changed"));
+            if (err.code === grpc.status.PERMISSION_DENIED)
+              return reject(new PortForbidden("the kernel refused the kill-switch change"));
+            if (err.code === grpc.status.FAILED_PRECONDITION)
+              return reject(
+                new PortConflict("the kernel cannot record the release; try again later"),
+              );
+            return reject(
+              new PortUnavailable(
+                "the Risk Kernel is unavailable; the kill-switch was not changed",
+              ),
+            );
           }
           resolve({ auditEventId: res?.audit_event_id ?? "" });
         },
@@ -98,10 +133,15 @@ export class KillSwitchService implements KillSwitchPort {
   ) {}
 
   async list(tenantId: string): Promise<KillSwitchDto[]> {
-    return (await this.records.list(tenantId)).filter((r) => r.engaged).sort((a, b) => (a.scope + (a.target ?? "")).localeCompare(b.scope + (b.target ?? "")));
+    return (await this.records.list(tenantId))
+      .filter((r) => r.engaged)
+      .sort((a, b) => (a.scope + (a.target ?? "")).localeCompare(b.scope + (b.target ?? "")));
   }
 
-  async set(p: Principal, r: { scope: "tenant" | "agent" | "tool"; target?: string; engaged: boolean; reason?: string }): Promise<KillSwitchDto> {
+  async set(
+    p: Principal,
+    r: { scope: "tenant" | "agent" | "tool"; target?: string; engaged: boolean; reason?: string },
+  ): Promise<KillSwitchDto> {
     await this.kernel.apply({ tenantId: p.tenantId, ...r });
     const rec: KillSwitchDto = {
       scope: r.scope,

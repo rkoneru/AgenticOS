@@ -80,7 +80,10 @@ export interface World {
   close(): Promise<void>;
 }
 
-export async function makeWorld(opts: GatewayOptions = {}, over: Partial<GatewayDeps> = {}): Promise<World> {
+export async function makeWorld(
+  opts: GatewayOptions = {},
+  over: Partial<GatewayDeps> = {},
+): Promise<World> {
   const store = new MemoryControlPlaneStore();
   const audit = new MemoryAuditLog();
   const cp = wireControlPlane({
@@ -93,13 +96,21 @@ export async function makeWorld(opts: GatewayOptions = {}, over: Partial<Gateway
     dns: new FakeDnsResolver(),
     region: "us-east-1",
     regions: ["us-east-1"],
-    secrets: { pepper: randomBytes(32), cookieKey: randomBytes(32), signingKeys: [{ kid: "k1", key: randomBytes(32) }] },
+    secrets: {
+      pepper: randomBytes(32),
+      cookieKey: randomBytes(32),
+      signingKeys: [{ kid: "k1", key: randomBytes(32) }],
+    },
     redirectUri: "https://cp.example.test/cb",
     allowedReturnOrigins: [],
     validator: cachedValidator,
     secureCookies: true,
   });
-  const approvals = new ApprovalService({ store: new MemoryApprovalStore(), audit, signer: new HmacSigner(randomBytes(32)) });
+  const approvals = new ApprovalService({
+    store: new MemoryApprovalStore(),
+    audit,
+    signer: new HmacSigner(randomBytes(32)),
+  });
   const ledger = new MemoryUsageLedger({ signer: new HmacSealSigner(randomBytes(32)) });
   const runs = new FakeRuns();
   const kernel = new FakeKernel();
@@ -141,12 +152,24 @@ export async function makeWorld(opts: GatewayOptions = {}, over: Partial<Gateway
     deps,
     logs,
     async tenant(slug = `t-${randomUUID().slice(0, 10)}`) {
-      const r = await cp.provisioner.signup({ slug, name: `Tenant ${slug}`, ownerEmail: `owner@${slug}.test`, region: "us-east-1" });
+      const r = await cp.provisioner.signup({
+        slug,
+        name: `Tenant ${slug}`,
+        ownerEmail: `owner@${slug}.test`,
+        region: "us-east-1",
+      });
       return login(r.tenantId, r.ownerMemberId, "owner");
     },
     async member(tenantId, role) {
       const id = randomUUID();
-      await store.insertMember({ tenantId, id, userRef: `test:${id}`, email: `${role}-${id.slice(0, 6)}@x.test`, role, status: "active" });
+      await store.insertMember({
+        tenantId,
+        id,
+        userRef: `test:${id}`,
+        email: `${role}-${id.slice(0, 6)}@x.test`,
+        role,
+        status: "active",
+      });
       return login(tenantId, id, role);
     },
     async apiKey(c, scopes) {
@@ -178,14 +201,25 @@ export async function call(
   w: World,
   method: string,
   path: string,
-  o: { token?: string; key?: string; body?: unknown; raw?: string; headers?: Record<string, string>; contentType?: string } = {},
+  o: {
+    token?: string;
+    key?: string;
+    body?: unknown;
+    raw?: string;
+    headers?: Record<string, string>;
+    contentType?: string;
+  } = {},
 ): Promise<Res> {
   const headers: Record<string, string> = { ...(o.headers ?? {}) };
   if (o.token) headers["authorization"] = `Bearer ${o.token}`;
   if (o.key) headers["x-axis-api-key"] = o.key;
   const payload = o.raw ?? (o.body !== undefined ? JSON.stringify(o.body) : undefined);
   if (payload !== undefined) headers["content-type"] = o.contentType ?? "application/json";
-  const r = await fetch(w.base + path, { method, headers, ...(payload !== undefined ? { body: payload } : {}) });
+  const r = await fetch(w.base + path, {
+    method,
+    headers,
+    ...(payload !== undefined ? { body: payload } : {}),
+  });
   const text = await r.text();
   let body: unknown;
   try {
@@ -201,7 +235,11 @@ export const ABL = (name: string, version = "1.0.0"): Record<string, unknown> =>
   kind: "Agent",
   metadata: { name, version, description: "test agent" },
   spec: {
-    riskClassification: { level: "limited", rationale: "Reads claim records; nothing leaves the tenant.", transparencyNotice: "You are talking to an AI." },
+    riskClassification: {
+      level: "limited",
+      rationale: "Reads claim records; nothing leaves the tenant.",
+      transparencyNotice: "You are talking to an AI.",
+    },
     model: { primary: { provider: "openai", model: "gpt-4o", params: { maxOutputTokens: 128 } } },
     instructions: { system: "You help." },
     tools: [{ name: "lookup-claim", kind: "function", sideEffects: "read" }],
@@ -216,8 +254,19 @@ export const POLICY = (name = "tenant-acme", version = "1.0.0"): Record<string, 
   spec: {
     defaultDecision: "DENY",
     rules: [
-      { id: "allow-reads", enforcementPoints: ["tool_call"], when: { field: "tool.side_effects", op: "eq", value: "read" }, decision: "ALLOW" },
-      { id: "deny-big", priority: 500, enforcementPoints: ["tool_call"], when: { field: "args.amount", op: "gt", value: 100 }, decision: "DENY" },
+      {
+        id: "allow-reads",
+        enforcementPoints: ["tool_call"],
+        when: { field: "tool.side_effects", op: "eq", value: "read" },
+        decision: "ALLOW",
+      },
+      {
+        id: "deny-big",
+        priority: 500,
+        enforcementPoints: ["tool_call"],
+        when: { field: "args.amount", op: "gt", value: 100 },
+        decision: "DENY",
+      },
     ],
   },
 });
@@ -240,9 +289,15 @@ const h64 = (): string => randomBytes(32).toString("hex");
 export async function seed(w: World, owner?: Cred): Promise<Seed> {
   const o = owner ?? (await w.tenant());
   const blueprint = { name: "claims", version: "1.0.0" };
-  const pub = await call(w, "POST", "/blueprints", { token: o.token, body: { abl: ABL(blueprint.name, blueprint.version) } });
+  const pub = await call(w, "POST", "/blueprints", {
+    token: o.token,
+    body: { abl: ABL(blueprint.name, blueprint.version) },
+  });
   if (pub.status !== 201) throw new Error(`seed blueprint: ${pub.text}`);
-  const run = await call(w, "POST", "/runs", { token: o.token, body: { blueprint, input: { prompt: "review claim 42" } } });
+  const run = await call(w, "POST", "/runs", {
+    token: o.token,
+    body: { blueprint, input: { prompt: "review claim 42" } },
+  });
   if (run.status !== 202) throw new Error(`seed run: ${run.text}`);
   const traceId = run.body.trace_id as string;
   const mk = (over: Record<string, unknown>) =>
@@ -262,7 +317,11 @@ export async function seed(w: World, owner?: Cred): Promise<Seed> {
       ...over,
     } as never);
   await mk({});
-  const denied = await mk({ action: "lookup-restricted", decision: "DENY", reason: "tenant-acme/deny-restricted" });
+  const denied = await mk({
+    action: "lookup-restricted",
+    decision: "DENY",
+    reason: "tenant-acme/deny-restricted",
+  });
   const approval = await w.approvals.create({
     tenant_id: o.tenantId,
     run_id: run.body.id,
@@ -283,5 +342,12 @@ export async function seed(w: World, owner?: Cred): Promise<Seed> {
     dimensions: { model_class: "standard", agent: "claims" },
     source: "test",
   });
-  return { owner: o, runId: run.body.id as string, traceId, approvalId: approval.id, denySeq: denied.seq, blueprint };
+  return {
+    owner: o,
+    runId: run.body.id as string,
+    traceId,
+    approvalId: approval.id,
+    denySeq: denied.seq,
+    blueprint,
+  };
 }

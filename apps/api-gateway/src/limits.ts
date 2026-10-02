@@ -23,7 +23,10 @@ export class TokenBuckets implements RateLimiter {
     private readonly maxKeys = 50_000,
   ) {}
 
-  take(key: string, cost = 1): { ok: boolean; limit: number; remaining: number; retryAfterSec: number } {
+  take(
+    key: string,
+    cost = 1,
+  ): { ok: boolean; limit: number; remaining: number; retryAfterSec: number } {
     const t = this.now();
     let b = this.buckets.get(key);
     if (b) {
@@ -45,7 +48,12 @@ export class TokenBuckets implements RateLimiter {
       return { ok: true, limit: this.cfg.burst, remaining: Math.floor(b.tokens), retryAfterSec: 0 };
     }
     const wait = (need - b.tokens) / this.cfg.perSecond;
-    return { ok: false, limit: this.cfg.burst, remaining: Math.floor(b.tokens), retryAfterSec: wait };
+    return {
+      ok: false,
+      limit: this.cfg.burst,
+      remaining: Math.floor(b.tokens),
+      retryAfterSec: wait,
+    };
   }
 
   get size(): number {
@@ -129,7 +137,12 @@ export function canonical(v: unknown): string {
     .join(",")}}`;
 }
 
-export function fingerprint(method: string, template: string, params: Record<string, string>, body: unknown): string {
+export function fingerprint(
+  method: string,
+  template: string,
+  params: Record<string, string>,
+  body: unknown,
+): string {
   return createHash("sha256")
     .update(`${method} ${template}\n${canonical(params)}\n${canonical(body ?? null)}`)
     .digest("hex");
@@ -163,6 +176,8 @@ export class CursorCodec {
   }
 
   private mac(tenantId: string, resource: string, body: string): string {
-    return createHmac("sha256", this.key).update(`${tenantId}\u0000${resource}\u0000${body}`).digest("base64url");
+    return createHmac("sha256", this.key)
+      .update(`${tenantId}\u0000${resource}\u0000${body}`)
+      .digest("base64url");
   }
 }

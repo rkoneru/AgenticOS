@@ -45,9 +45,17 @@ export class ApiError extends Error {
 }
 
 export const unauthenticated = (detail = "authentication required"): ApiError =>
-  new ApiError(401, "unauthenticated", "Authentication required", "unauthenticated", detail, undefined, {
-    "www-authenticate": 'Bearer realm="axis"',
-  });
+  new ApiError(
+    401,
+    "unauthenticated",
+    "Authentication required",
+    "unauthenticated",
+    detail,
+    undefined,
+    {
+      "www-authenticate": 'Bearer realm="axis"',
+    },
+  );
 export const forbidden = (detail = "not permitted"): ApiError =>
   new ApiError(403, "forbidden", "Forbidden", "forbidden", detail);
 export const policyDenied = (detail = "the policy gate could not allow this request"): ApiError =>
@@ -61,21 +69,49 @@ export const validation = (detail: string, errors: ValidationIssue[] = []): ApiE
 export const badRequest = (detail: string, slug = "bad_request"): ApiError =>
   new ApiError(400, slug, "Bad request", "validation_failed", detail);
 export const tooLarge = (max: number): ApiError =>
-  new ApiError(413, "payload_too_large", "Payload too large", "validation_failed", `request body exceeds ${max} bytes`);
+  new ApiError(
+    413,
+    "payload_too_large",
+    "Payload too large",
+    "validation_failed",
+    `request body exceeds ${max} bytes`,
+  );
 export const unsupportedMedia = (): ApiError =>
-  new ApiError(415, "unsupported_media_type", "Unsupported media type", "validation_failed", "send application/json");
+  new ApiError(
+    415,
+    "unsupported_media_type",
+    "Unsupported media type",
+    "validation_failed",
+    "send application/json",
+  );
 export const methodNotAllowed = (allow: string[]): ApiError =>
   new ApiError(405, "method_not_allowed", "Method not allowed", undefined, undefined, undefined, {
     allow: allow.join(", "),
   });
 export const rateLimited = (retryAfterSec: number): ApiError =>
-  new ApiError(429, "rate_limited", "Too many requests", "rate_limited", "rate limit exceeded", undefined, {
-    "retry-after": String(Math.max(1, Math.ceil(retryAfterSec))),
-  });
+  new ApiError(
+    429,
+    "rate_limited",
+    "Too many requests",
+    "rate_limited",
+    "rate limit exceeded",
+    undefined,
+    {
+      "retry-after": String(Math.max(1, Math.ceil(retryAfterSec))),
+    },
+  );
 export const unavailable = (detail = "a dependency is unavailable; retry"): ApiError =>
-  new ApiError(503, "unavailable", "Service unavailable", "internal", detail, undefined, { "retry-after": "1" });
+  new ApiError(503, "unavailable", "Service unavailable", "internal", detail, undefined, {
+    "retry-after": "1",
+  });
 export const timeout = (): ApiError =>
-  new ApiError(504, "timeout", "Gateway timeout", "internal", "the request exceeded its time budget");
+  new ApiError(
+    504,
+    "timeout",
+    "Gateway timeout",
+    "internal",
+    "the request exceeded its time budget",
+  );
 export const notImplemented = (detail: string): ApiError =>
   new ApiError(501, "not_implemented", "Not implemented", undefined, detail);
 export const internal = (): ApiError =>

@@ -22,14 +22,23 @@ export class HttpRunsPort implements RunsPort {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  private async call(tenantId: string, method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<Response> {
+  private async call(
+    tenantId: string,
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     const token = this.tokenFor(tenantId);
     if (!token) throw new PortUnavailable("no run-service credential for this tenant");
     const ac = signal ? undefined : AbortSignal.timeout(this.timeoutMs);
     try {
       return await this.fetchImpl(this.baseUrl.replace(/\/$/, "") + path, {
         method,
-        headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         signal: signal ?? (ac as AbortSignal),
       });
@@ -41,8 +50,10 @@ export class HttpRunsPort implements RunsPort {
   private async json(res: Response): Promise<Record<string, unknown>> {
     if (res.status === 404) throw new PortNotFound();
     if (res.status === 409) throw new PortConflict((await safeDetail(res)) ?? "conflict");
-    if (res.status === 422 || res.status === 400) throw new PortInvalid((await safeDetail(res)) ?? "invalid");
-    if (res.status >= 300) throw new PortUnavailable("the run service could not complete the request; retry");
+    if (res.status === 422 || res.status === 400)
+      throw new PortInvalid((await safeDetail(res)) ?? "invalid");
+    if (res.status >= 300)
+      throw new PortUnavailable("the run service could not complete the request; retry");
     try {
       const j = (await res.json()) as unknown;
       if (typeof j !== "object" || j === null) throw new Error("shape");
@@ -70,33 +81,67 @@ export class HttpRunsPort implements RunsPort {
     return (await this.json(res)) as unknown as RunDto;
   }
 
-  async list(tenantId: string, q: { limit: number; after?: string; state?: string; blueprint?: string }): Promise<Page<RunDto>> {
+  async list(
+    tenantId: string,
+    q: { limit: number; after?: string; state?: string; blueprint?: string },
+  ): Promise<Page<RunDto>> {
     const p = new URLSearchParams({ limit: String(q.limit) });
     if (q.after) p.set("cursor", q.after);
     if (q.state) p.set("state", q.state);
     if (q.blueprint) p.set("blueprint", q.blueprint);
-    const j = (await this.json(await this.call(tenantId, "GET", `/v1/runs?${p}`))) as { items?: RunDto[]; next_cursor?: string | null };
-    if (!Array.isArray(j.items)) throw new PortUnavailable("the run service answered with an invalid response");
+    const j = (await this.json(await this.call(tenantId, "GET", `/v1/runs?${p}`))) as {
+      items?: RunDto[];
+      next_cursor?: string | null;
+    };
+    if (!Array.isArray(j.items))
+      throw new PortUnavailable("the run service answered with an invalid response");
     return { items: j.items, next: j.next_cursor ?? undefined };
   }
 
-  async signal(tenantId: string, runId: string, s: { pid?: string; signal: string; reason?: string }): Promise<{ pid: string; state: string }> {
-    const j = await this.json(await this.call(tenantId, "POST", `/v1/runs/${encodeURIComponent(runId)}/signals`, s));
+  async signal(
+    tenantId: string,
+    runId: string,
+    s: { pid?: string; signal: string; reason?: string },
+  ): Promise<{ pid: string; state: string }> {
+    const j = await this.json(
+      await this.call(tenantId, "POST", `/v1/runs/${encodeURIComponent(runId)}/signals`, s),
+    );
     return { pid: String(j["pid"]), state: String(j["state"]) };
   }
 
-  async events(tenantId: string, runId: string, q: { afterSequence: number; limit: number }): Promise<RunEventDto[] | undefined> {
-    const res = await this.call(tenantId, "GET", `/v1/runs/${encodeURIComponent(runId)}/events?after_sequence=${q.afterSequence}&limit=${q.limit}`);
+  async events(
+    tenantId: string,
+    runId: string,
+    q: { afterSequence: number; limit: number },
+  ): Promise<RunEventDto[] | undefined> {
+    const res = await this.call(
+      tenantId,
+      "GET",
+      `/v1/runs/${encodeURIComponent(runId)}/events?after_sequence=${q.afterSequence}&limit=${q.limit}`,
+    );
     if (res.status === 404) return undefined;
     const j = (await this.json(res)) as { items?: RunEventDto[] };
-    if (!Array.isArray(j.items)) throw new PortUnavailable("the run service answered with an invalid response");
+    if (!Array.isArray(j.items))
+      throw new PortUnavailable("the run service answered with an invalid response");
     return j.items;
   }
 
-  async *stream(tenantId: string, runId: string, afterSequence: number, signal: AbortSignal): AsyncIterable<RunEventDto> {
-    const res = await this.call(tenantId, "GET", `/v1/runs/${encodeURIComponent(runId)}/events/stream?after_sequence=${afterSequence}`, undefined, signal);
+  async *stream(
+    tenantId: string,
+    runId: string,
+    afterSequence: number,
+    signal: AbortSignal,
+  ): AsyncIterable<RunEventDto> {
+    const res = await this.call(
+      tenantId,
+      "GET",
+      `/v1/runs/${encodeURIComponent(runId)}/events/stream?after_sequence=${afterSequence}`,
+      undefined,
+      signal,
+    );
     if (res.status === 404) throw new PortNotFound();
-    if (res.status !== 200 || !res.body) throw new PortUnavailable("the run service could not open the stream");
+    if (res.status !== 200 || !res.body)
+      throw new PortUnavailable("the run service could not open the stream");
     const dec = new TextDecoder();
     let buf = "";
     for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
@@ -105,10 +150,18 @@ export class HttpRunsPort implements RunsPort {
       while ((i = buf.indexOf("\n\n")) >= 0) {
         const frame = buf.slice(0, i);
         buf = buf.slice(i + 2);
-        const data = frame.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6)).join("\n");
-        const evt = frame.split("\n").find((l) => l.startsWith("event: "))?.slice(7);
+        const data = frame
+          .split("\n")
+          .filter((l) => l.startsWith("data: "))
+          .map((l) => l.slice(6))
+          .join("\n");
+        const evt = frame
+          .split("\n")
+          .find((l) => l.startsWith("event: "))
+          ?.slice(7);
         if (evt === "end") return;
-        if (data && (evt === undefined || evt === "run_event")) yield JSON.parse(data) as RunEventDto;
+        if (data && (evt === undefined || evt === "run_event"))
+          yield JSON.parse(data) as RunEventDto;
       }
     }
   }

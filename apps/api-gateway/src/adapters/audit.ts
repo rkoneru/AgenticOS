@@ -13,9 +13,16 @@ export interface AuditStoreLike extends AuditReader {
 export class AuditAdapter implements AuditPort {
   constructor(private readonly store: AuditStoreLike) {}
 
-  async list(tenantId: string, q: { fromSeq?: number; traceId?: string; limit: number }): Promise<AuditEvent[]> {
+  async list(
+    tenantId: string,
+    q: { fromSeq?: number; traceId?: string; limit: number },
+  ): Promise<AuditEvent[]> {
     try {
-      return await this.store.listEvents(tenantId, { limit: q.limit, ...(q.fromSeq !== undefined ? { fromSeq: q.fromSeq } : {}), ...(q.traceId ? { traceId: q.traceId } : {}) });
+      return await this.store.listEvents(tenantId, {
+        limit: q.limit,
+        ...(q.fromSeq !== undefined ? { fromSeq: q.fromSeq } : {}),
+        ...(q.traceId ? { traceId: q.traceId } : {}),
+      });
     } catch {
       throw new PortUnavailable("the audit log is unavailable; retry");
     }
@@ -29,7 +36,10 @@ export class AuditAdapter implements AuditPort {
     }
   }
 
-  async verify(tenantId: string, range: { fromSeq?: number; toSeq?: number }): Promise<ChainVerdict> {
+  async verify(
+    tenantId: string,
+    range: { fromSeq?: number; toSeq?: number },
+  ): Promise<ChainVerdict> {
     try {
       return await this.store.verify(tenantId, range);
     } catch {
@@ -45,13 +55,22 @@ export class AuditAdapter implements AuditPort {
 export class AgilExplain implements ExplainPort {
   private readonly explainer: Explainer;
   constructor(store: AuditReader, policies?: PolicyMetadataSource) {
-    this.explainer = new Explainer({ audit: createAuditReader(store), ...(policies ? { policies } : {}) });
+    this.explainer = new Explainer({
+      audit: createAuditReader(store),
+      ...(policies ? { policies } : {}),
+    });
   }
 
   explainRun(tenantId: string, q: { traceId: string; runEvents: RunEventDto[] }): Promise<unknown> {
     return this.explainer.explainRun(tenantId, {
       traceId: q.traceId,
-      runEvents: q.runEvents.map((e) => ({ sequence: e.sequence, type: e.type, pid: e.pid, at: e.at, ...(e.data ? { data: e.data } : {}) })),
+      runEvents: q.runEvents.map((e) => ({
+        sequence: e.sequence,
+        type: e.type,
+        pid: e.pid,
+        at: e.at,
+        ...(e.data ? { data: e.data } : {}),
+      })),
     });
   }
 
