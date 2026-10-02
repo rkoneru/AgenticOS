@@ -83,9 +83,15 @@ importers:
       '@axis/control-plane':
         specifier: workspace:*
         version: link:../../services/control-plane
+      '@axis/marketplace':
+        specifier: workspace:*
+        version: link:../../services/marketplace
       '@axis/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../../services/registry
       '@grpc/grpc-js':
         specifier: ^1.14.5
         version: 1.14.5
@@ -98,6 +104,9 @@ importers:
       ajv-formats:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
       yaml:
         specifier: ^2.5.0
         version: 2.9.1
@@ -105,6 +114,9 @@ importers:
       '@axis/risk-kernel':
         specifier: workspace:*
         version: link:../../services/risk-kernel
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
 
   apps/cli:
     dependencies:

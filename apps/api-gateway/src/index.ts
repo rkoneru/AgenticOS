@@ -11,4 +11,6 @@ export * from "./adapters/audit.js";
 export * from "./adapters/kernel.js";
 export * from "./adapters/usage.js";
 export * from "./adapters/runs-http.js";
+export * from "./adapters/registry.js";
+export * from "./adapters/marketplace.js";
 export * from "./dev-wire.js";

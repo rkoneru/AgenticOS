@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AXIS Control Plane API
-  version: 1.1.0
+  version: 1.2.0
   summary: Governed agent runtime — REST API v1
   description: |
     Source of truth for the public `/v1` API. SDKs and server route schemas are generated from this file.
@@ -32,6 +32,12 @@ tags:
   - { name: Usage, description: Metered usage }
   - { name: Evals, description: Eval Hub runs }
   - { name: Explanations, description: Read-only AGIL explanations of runs and audited decisions }
+  - { name: Identity, description: Who the credential belongs to }
+  - {
+      name: Registry,
+      description: "Signed, provenance-attested blueprint registry (private namespaces per tenant)",
+    }
+  - { name: Marketplace, description: Security-reviewed listings and consented installs }
 paths:
   /blueprints:
     get:
@@ -494,6 +500,357 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/EvalRun" }
         default: { $ref: "#/components/responses/Problem" }
+  /me:
+    get:
+      tags: [Identity]
+      operationId: getMe
+      summary: Who the credential belongs to (tenant, member, role, credential kind and scopes)
+      description: Needs a valid credential only; no scope is required, so a narrowly scoped API key can still identify itself.
+      responses:
+        "200":
+          description: The caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        default: { $ref: "#/components/responses/Problem" }
+  /approvals/{approvalId}:
+    get:
+      tags: [Approvals]
+      operationId: getApproval
+      summary: Get one approval
+      parameters:
+        - { name: approvalId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The approval
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Approval" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /policies/{versionId}/activate:
+    post:
+      tags: [Policies]
+      operationId: activatePolicyPack
+      summary: Make a published policy pack version the tenant's active version of that pack (the Risk Kernel enforces it from then on)
+      parameters:
+        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Activated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PolicyPack" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /registry/namespaces:
+    get:
+      tags: [Registry]
+      operationId: listRegistryNamespaces
+      summary: List the registry namespaces your tenant owns
+      responses:
+        "200":
+          description: Namespaces
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RegistryNamespace" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Registry]
+      operationId: claimRegistryNamespace
+      summary: Claim a registry namespace for your tenant (admin)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [namespace]
+              additionalProperties: false
+              properties:
+                namespace: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+      responses:
+        "201":
+          description: Claimed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryNamespace" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /registry/namespaces/{namespace}/keys:
+    get:
+      tags: [Registry]
+      operationId: listRegistryKeys
+      summary: List a namespace's publisher keys (public halves only)
+      parameters: [{ $ref: "#/components/parameters/Namespace" }]
+      responses:
+        "200":
+          description: Keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RegistryKey" } }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Registry]
+      operationId: addRegistryKey
+      summary: Register an Ed25519 publisher public key for a namespace (admin)
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [public_key]
+              additionalProperties: false
+              properties:
+                public_key:
+                  { type: string, description: base64url of the raw 32-byte Ed25519 public key }
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryKey" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /registry/namespaces/{namespace}/blueprints:
+    post:
+      tags: [Registry]
+      operationId: publishRegistryBlueprint
+      summary: Publish a signed blueprint version with its provenance attestation (immutable; verified before it is stored)
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [abl, signature, provenance]
+              additionalProperties: false
+              properties:
+                abl: { $ref: "../../abl/schema/abl-v1.schema.json" }
+                signature: { $ref: "#/components/schemas/RegistrySignature" }
+                provenance: { $ref: "#/components/schemas/DsseEnvelope" }
+      responses:
+        "201":
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryVersion" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /registry/blueprints/{namespace}/{name}/versions:
+    get:
+      tags: [Registry]
+      operationId: listRegistryVersions
+      summary: List the versions of a registry blueprint with their status
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/RegistryVersion" } }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /registry/blueprints/{namespace}/{name}/versions/{version}/yank:
+    post:
+      tags: [Registry]
+      operationId: yankRegistryVersion
+      summary: Yank a version so it stops resolving (admin; recorded, never deleted)
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200":
+          description: Yanked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /registry/resolve:
+    get:
+      tags: [Registry]
+      operationId: resolveRegistryBlueprint
+      summary: Resolve `namespace/name@range` to the highest non-yanked version and VERIFY it (hash, signature, provenance) before returning it
+      parameters:
+        - { name: ref, in: query, required: true, schema: { type: string, maxLength: 200 } }
+      responses:
+        "200":
+          description: The verified blueprint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResolvedBlueprint" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /marketplace/listings:
+    get:
+      tags: [Marketplace]
+      operationId: listMarketplaceListings
+      summary: Browse the marketplace catalog (listed, security-reviewed blueprints only)
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, schema: { type: string, maxLength: 50 } }
+      responses:
+        "200":
+          description: Listings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MarketplaceListing" } }
+        default: { $ref: "#/components/responses/Problem" }
+  /marketplace/listings/{namespace}/{name}:
+    get:
+      tags: [Marketplace]
+      operationId: getMarketplaceListing
+      summary: Get one marketplace listing
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The listing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceListing" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /marketplace/installs/preview:
+    post:
+      tags: [Marketplace]
+      operationId: previewMarketplaceInstall
+      summary: Preview an install - findings, requested permissions, the diff against your tenant baseline and the consent digest (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [namespace, name, range]
+              additionalProperties: false
+              properties:
+                namespace: { type: string }
+                name: { type: string }
+                range: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstallPreview" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /marketplace/installs:
+    get:
+      tags: [Marketplace]
+      operationId: listMarketplaceInstalls
+      summary: List your tenant's installs
+      responses:
+        "200":
+          description: Installs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MarketplaceInstall" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Marketplace]
+      operationId: installMarketplaceListing
+      summary: Install a listing, pinned to a version and content hash, with consent to the exact permission diff you previewed (admin)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [namespace, name, version, content_hash, consent_digest]
+              additionalProperties: false
+              properties:
+                namespace: { type: string }
+                name: { type: string }
+                version: { type: string }
+                content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                consent_digest: { type: string }
+      responses:
+        "201":
+          description: Installed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceInstall" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /marketplace/installs/{namespace}/{name}/uninstall:
+    post:
+      tags: [Marketplace]
+      operationId: uninstallMarketplaceListing
+      summary: Uninstall a listing (admin)
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Uninstalled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -509,6 +866,13 @@ components:
       { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
     Cursor: { name: cursor, in: query, schema: { type: string } }
     RunId: { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+    Namespace:
+      {
+        name: namespace,
+        in: path,
+        required: true,
+        schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" },
+      }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -671,6 +1035,12 @@ components:
         version: { type: string }
         content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
         created_at: { type: string, format: date-time }
+        version_id: { type: string, format: uuid, description: Id to pass to activatePolicyPack }
+        active:
+          {
+            type: boolean,
+            description: Whether this version is the tenant's active version of the pack,
+          }
     PolicyPackPage:
       type: object
       required: [items]
@@ -795,3 +1165,203 @@ components:
         narrative:
           type: string
           description: Optional model-written prose; present only when the operator enabled the narrator
+    Identity:
+      type: object
+      required: [tenant, member, credential]
+      properties:
+        tenant:
+          type: object
+          required: [id]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            region: { type: string }
+        member:
+          type: object
+          required: [id, role]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string }
+            display_name: { type: string }
+            role: { enum: [owner, admin, builder, operator, auditor, billing, viewer] }
+        credential:
+          type: object
+          required: [kind]
+          properties:
+            kind: { enum: [session, api_key] }
+            scopes: { type: array, items: { type: string } }
+    RegistryNamespace:
+      type: object
+      required: [namespace]
+      properties:
+        namespace: { type: string }
+        public: { type: boolean }
+        created_at: { type: string, format: date-time }
+    RegistryKey:
+      type: object
+      required: [key_id, public_key, valid_from]
+      properties:
+        key_id: { type: string }
+        public_key: { type: string }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        revoke_reason: { type: [string, "null"] }
+    RegistrySignature:
+      type: object
+      required: [key_id, signed_at, sig]
+      additionalProperties: false
+      properties:
+        key_id: { type: string }
+        signed_at: { type: string, format: date-time }
+        sig:
+          {
+            type: string,
+            description: base64url Ed25519 signature over the canonical signed message,
+          }
+    DsseEnvelope:
+      type: object
+      required: [payloadType, payload, signatures]
+      properties:
+        payloadType: { type: string }
+        payload: { type: string, description: base64 of the canonical in-toto statement }
+        signatures:
+          type: array
+          items:
+            type: object
+            required: [keyid, sig]
+            properties:
+              keyid: { type: string }
+              sig: { type: string }
+    RegistryVersion:
+      type: object
+      required: [namespace, name, version, content_hash, risk_level, signature, published_at]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        version: { type: string }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        risk_level: { enum: [minimal, limited, high] }
+        signature: { $ref: "#/components/schemas/RegistrySignature" }
+        published_at: { type: string, format: date-time }
+        published_by: { type: string }
+        state: { enum: [active, deprecated, yanked] }
+        state_reason: { type: [string, "null"] }
+    ResolvedBlueprint:
+      allOf:
+        - { $ref: "#/components/schemas/RegistryVersion" }
+        - type: object
+          required: [abl, provenance, verification]
+          properties:
+            abl: { $ref: "../../abl/schema/abl-v1.schema.json" }
+            provenance: { $ref: "#/components/schemas/DsseEnvelope" }
+            verification:
+              type: object
+              description: What the registry re-verified before answering (signature key, builder, source, compiler)
+              required: [key_id]
+              properties:
+                key_id: { type: string }
+                builder: { type: string }
+                source_ref: { type: string }
+                compiler_version: { type: string }
+    MarketplaceListing:
+      type: object
+      required: [namespace, name, title, summary, categories, versions]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        categories: { type: array, items: { type: string } }
+        publisher: { type: string }
+        latest:
+          type: [object, "null"]
+          properties:
+            version: { type: string }
+            content_hash: { type: string }
+            risk_level: { type: string }
+            max_severity: { type: string }
+        versions:
+          { type: array, items: { type: string }, description: "Approved, installable versions" }
+    Capability:
+      type: object
+      required: [key, level]
+      properties:
+        key: { type: string }
+        level: { type: number }
+    InstallPreview:
+      type: object
+      required:
+        [
+          namespace,
+          name,
+          version,
+          content_hash,
+          risk_level,
+          findings,
+          capabilities,
+          diff,
+          consent_digest,
+        ]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        version: { type: string }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        risk_level: { type: string }
+        max_severity: { type: string }
+        findings:
+          type: array
+          items:
+            type: object
+            required: [id, severity, message]
+            properties:
+              id: { type: string }
+              severity: { type: string }
+              path: { type: string }
+              message: { type: string }
+        capabilities: { type: array, items: { $ref: "#/components/schemas/Capability" } }
+        diff:
+          type: object
+          description: Requested permissions versus what your tenant has granted; `widening` means consent is required
+          required: [added, removed, widening]
+          properties:
+            added:
+              type: array
+              items:
+                type: object
+                required: [key, change, level]
+                properties:
+                  key: { type: string }
+                  change: { enum: [new, raised] }
+                  level: { type: number }
+                  previous_level: { type: [number, "null"] }
+            removed:
+              type: array
+              items:
+                type: object
+                required: [key, level]
+                properties:
+                  key: { type: string }
+                  level: { type: number }
+                  new_level: { type: [number, "null"] }
+            widening: { type: boolean }
+        consent_digest:
+          {
+            type: string,
+            description: Echo it on install to prove you saw this exact diff of this exact blueprint,
+          }
+    MarketplaceInstall:
+      type: object
+      required: [id, namespace, name, version, content_hash, state, granted]
+      properties:
+        id: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        version: { type: string }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        state: { enum: [active, flagged, uninstalled] }
+        granted: { type: array, items: { $ref: "#/components/schemas/Capability" } }
+        consented_by: { type: string }
+        consented_at: { type: string, format: date-time }
+        flag_reason: { type: [string, "null"] }

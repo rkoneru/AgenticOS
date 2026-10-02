@@ -1,7 +1,20 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ApiSpec } from "../src/index.js";
 import { ROUTES } from "../src/routes.js";
-import { ABL, POLICY, call, makeWorld, seed, type Res, type Seed, type World } from "./world.js";
+import { randomBytes } from "node:crypto";
+import { generatePublisherKey } from "@axis/registry";
+import {
+  ABL,
+  LISTED_ABL,
+  POLICY,
+  call,
+  makeWorld,
+  seed,
+  signedBundle,
+  type Res,
+  type Seed,
+  type World,
+} from "./world.js";
 
 /**
  * Contract tests DERIVED FROM THE SPEC: the operation list comes from the frozen OpenAPI document. Every operation must have a happy
@@ -19,7 +32,10 @@ interface Fx {
   body?: (s: Seed) => unknown;
   headers?: Record<string, string>;
   status: number;
+  /** Identity-only operation: any authenticated credential is allowed, so there is no role the matrix refuses. */
+  anyRole?: boolean;
 }
+const rid = (): string => Array.from(randomBytes(6), (b) => "cdfghjkpquxyz"[b % 13]).join("");
 const ok = (
   method: string,
   path: string | ((s: Seed) => string),
@@ -87,6 +103,62 @@ const FIXTURES: Record<string, Fx> = {
   })),
   explainRun: ok("GET", (s) => `/runs/${s.runId}/explanation`),
   explainAuditEvent: ok("GET", (s) => `/audit/events/${s.denySeq}/explanation`),
+  getMe: { ...ok("GET", "/me"), anyRole: true },
+  getApproval: ok("GET", (s) => `/approvals/${s.approvalId}`),
+  activatePolicyPack: ok("POST", (s) => `/policies/${s.policyVersionId}/activate`),
+  listRegistryNamespaces: ok("GET", "/registry/namespaces"),
+  claimRegistryNamespace: ok("POST", "/registry/namespaces", 201, () => ({
+    namespace: `ns-${rid()}`,
+  })),
+  listRegistryKeys: ok("GET", (s) => `/registry/namespaces/${s.own.namespace}/keys`),
+  addRegistryKey: ok(
+    "POST",
+    (s) => `/registry/namespaces/${s.own.namespace}/keys`,
+    201,
+    () => ({ public_key: generatePublisherKey().publicKey }),
+  ),
+  publishRegistryBlueprint: ok(
+    "POST",
+    (s) => `/registry/namespaces/${s.own.namespace}/blueprints`,
+    201,
+    (s) => signedBundle(s.own, LISTED_ABL("own-agent", `2.${Math.floor(Math.random() * 1e9)}.0`)),
+  ),
+  listRegistryVersions: ok(
+    "GET",
+    (s) => `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions`,
+  ),
+  yankRegistryVersion: ok(
+    "POST",
+    (s) => `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions/1.1.0/yank`,
+    200,
+    () => ({ reason: "superseded" }),
+  ),
+  resolveRegistryBlueprint: ok(
+    "GET",
+    (s) => `/registry/resolve?ref=${encodeURIComponent(`${s.own.namespace}/${s.own.name}@1.0.0`)}`,
+  ),
+  listMarketplaceListings: ok("GET", "/marketplace/listings?q=helper"),
+  getMarketplaceListing: ok(
+    "GET",
+    (s) => `/marketplace/listings/${s.listing.namespace}/${s.listing.name}`,
+  ),
+  previewMarketplaceInstall: ok("POST", "/marketplace/installs/preview", 200, (s) => ({
+    namespace: s.listing.namespace,
+    name: s.listing.name,
+    range: "^1.0.0",
+  })),
+  listMarketplaceInstalls: ok("GET", "/marketplace/installs"),
+  installMarketplaceListing: ok("POST", "/marketplace/installs", 201, (s) => ({
+    namespace: s.listing.namespace,
+    name: s.listing.name,
+    version: s.listing.version,
+    content_hash: s.install.content_hash,
+    consent_digest: s.install.consent_digest,
+  })),
+  uninstallMarketplaceListing: ok(
+    "POST",
+    (s) => `/marketplace/installs/${s.listing.namespace}/${s.listing.name}/uninstall`,
+  ),
 };
 
 const check = (op: (typeof spec.operations)[number], r: Res): void => {
@@ -110,8 +182,8 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     const ids = spec.operations.map((o) => o.id).sort();
     expect(Object.keys(ROUTES).sort()).toEqual(ids);
     expect(Object.keys(FIXTURES).sort()).toEqual(ids);
-    expect(ids.length).toBe(21);
-    expect(spec.version).toBe("1.1.0");
+    expect(ids.length).toBe(38);
+    expect(spec.version).toBe("1.2.0");
   });
 
   it("every operation has a security requirement in the document (nothing is public)", () => {
@@ -144,17 +216,20 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
         check(op, r);
       });
 
-      it("a role the matrix does not allow: 403 problem+json", async () => {
-        const role = op.id === "getUsage" ? "viewer" : "billing";
-        const m = await w.member(s.owner.tenantId, role);
-        const r = await call(w, fx.method, url(), {
-          token: m.token,
-          ...(fx.body ? { body: fx.body(s) } : {}),
-        });
-        expect(r.status, r.text).toBe(403);
-        expect(["forbidden", "policy_denied"]).toContain(r.body.code);
-        check(op, r);
-      });
+      it.skipIf(fx.anyRole === true)(
+        "a role the matrix does not allow: 403 problem+json",
+        async () => {
+          const role = op.id === "getUsage" ? "viewer" : "billing";
+          const m = await w.member(s.owner.tenantId, role);
+          const r = await call(w, fx.method, url(), {
+            token: m.token,
+            ...(fx.body ? { body: fx.body(s) } : {}),
+          });
+          expect(r.status, r.text).toBe(403);
+          expect(["forbidden", "policy_denied"]).toContain(r.body.code);
+          check(op, r);
+        },
+      );
 
       if (op.bodyPtr && fx.body) {
         it("a body the schema rejects: 422 ValidationProblem with errors", async () => {

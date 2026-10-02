@@ -6,7 +6,7 @@
     "packages/contracts/schemas/ipc-envelope-v1.schema.json": "7a60b6bde6ccb89e5e47223accde3e32b53f9f9e9080173c94d9aa9cf3f0449d",
     "packages/contracts/schemas/policy-v1.schema.json": "9421d5a629fbe971d85a2a11fdca1217949dfcd05afad679795a8777d1264d22",
     "packages/contracts/process-model.json": "c963ac5787d1d34f51a65d893caeecafec83928de1dc728d3afce6fb17a58c52",
-    "packages/contracts/openapi/axis-v1.yaml": "5dc8a7fcce5e3d47ce7a9c8363beb2cfbfea80a75f93ad05b8096f86e1d2ef47",
+    "packages/contracts/openapi/axis-v1.yaml": "95b7966f1e892da7fa8ab613d98920768d0171c2edca73c3d1bb48a1247f1f85",
     "proto/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "proto/axis/runtime/v1/audit.proto": "8bb9bfb9a42304a2cc8927f3af70f5f4f175fae2fc0e98a34524a41c1349f93e",
     "proto/axis/runtime/v1/common.proto": "b0124e436e52e9f13a125f5deced4752cf51f10b0574c12ee04204d48a225566",

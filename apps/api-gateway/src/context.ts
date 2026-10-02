@@ -9,10 +9,13 @@ import type {
   BlueprintStore,
   ExplainPort,
   IdempotencyStore,
+  IdentityPort,
   KillSwitchPort,
+  MarketplacePort,
   PolicyPort,
   Principal,
   RateLimiter,
+  RegistryPort,
   RunEventDto,
   RunsPort,
   UsagePort,
@@ -30,6 +33,9 @@ export interface GatewayDeps {
   killSwitches: KillSwitchPort;
   usage: UsagePort;
   explain: ExplainPort;
+  identity: IdentityPort;
+  registry: RegistryPort;
+  marketplace: MarketplacePort;
   idempotency: IdempotencyStore;
   /** Per-tenant buckets (key = tenant id). Defaults to `TokenBuckets` from the options. */
   limiter?: RateLimiter;
@@ -97,8 +103,8 @@ export const isStream = (r: HandlerResult): r is StreamResult => "stream" in r;
 export type Handler = (c: Ctx) => Promise<HandlerResult>;
 
 export interface Route {
-  /** The `api.<resource>.<verb>` action decided by the control-plane pack. */
-  action: string;
+  /** The `api.<resource>.<verb>` action decided by the control-plane pack; `null` = any authenticated credential (identity only). */
+  action: string | null;
   handler: Handler;
   /** Mutations are audited (allow and deny) before they execute. */
   mutation: boolean;

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AdminAudit,
+  type AdminService,
   CpError,
   MAX_PACK_RULES,
   MAX_PACK_VALUES,
@@ -26,6 +27,8 @@ import {
   type Authenticator,
   type Authz,
   type GateDecisionDto,
+  type IdentityDto,
+  type IdentityPort,
   type Page,
   type PolicyPackDto,
   type PolicyPort,
@@ -64,6 +67,34 @@ export class ControlPlaneAuthenticator implements Authenticator {
     return c.bearer.startsWith("axk_")
       ? this.o.apiKeys.verify(c.bearer)
       : this.o.sessions.authenticate(c.bearer);
+  }
+}
+
+/** `GET /v1/me`: the credential's own tenant and member, read from the control-plane store by the principal's ids (never from the request). */
+export class ControlPlaneIdentity implements IdentityPort {
+  constructor(private readonly store: Pick<ControlPlaneStore, "getTenant" | "getMember">) {}
+
+  async me(p: Principal): Promise<IdentityDto> {
+    const [t, m] = await Promise.all([
+      this.store.getTenant(p.tenantId),
+      this.store.getMember(p.tenantId, p.memberId),
+    ]);
+    return {
+      tenant: {
+        id: p.tenantId,
+        ...(t ? { name: t.name, region: t.region } : {}),
+      },
+      member: {
+        id: p.memberId,
+        role: p.role,
+        ...(m?.email ? { email: m.email } : {}),
+        ...(m?.displayName ? { display_name: m.displayName } : {}),
+      },
+      credential: {
+        kind: p.credential,
+        ...(p.scopes ? { scopes: [...p.scopes] } : {}),
+      },
+    };
   }
 }
 
@@ -207,6 +238,8 @@ export class ControlPlanePolicies implements PolicyPort {
     private readonly o: {
       packs: Pick<PolicyPackService, "list" | "publish">;
       tester: PolicyTester;
+      /** Activation goes through the admin API's own guarded path (authorization, audit, kernel bundle publication). */
+      admin?: Pick<AdminService, "activatePolicy">;
     },
   ) {}
 
@@ -221,6 +254,8 @@ export class ControlPlanePolicies implements PolicyPort {
       version: v.version,
       content_hash: v.contentHash,
       created_at: v.createdAt.toISOString(),
+      version_id: v.versionId,
+      active: v.active,
     }));
     return {
       items,
@@ -236,6 +271,28 @@ export class ControlPlanePolicies implements PolicyPort {
         version: v.version,
         content_hash: v.contentHash,
         created_at: v.createdAt.toISOString(),
+        version_id: v.versionId,
+        active: v.active,
+      };
+    } catch (e) {
+      return fromCpError(e);
+    }
+  }
+
+  async activate(p: Principal, versionId: string): Promise<PolicyPackDto> {
+    if (!this.o.admin) throw new PortUnavailable("policy activation is not configured");
+    try {
+      await this.o.admin.activatePolicy(p, versionId);
+      // The tenant's own listing is the source of truth for what is active now (never a caller-supplied echo).
+      const v = (await this.o.packs.list(p)).find((x) => x.versionId === versionId);
+      if (!v) throw new PortNotFound("policy version not found");
+      return {
+        name: v.pack,
+        version: v.version,
+        content_hash: v.contentHash,
+        created_at: v.createdAt.toISOString(),
+        version_id: v.versionId,
+        active: v.active,
       };
     } catch (e) {
       return fromCpError(e);
