@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 import pytest
+from axis_mock_server import MockServer, problem
 from axis_sdk import (
     AsyncAxis,
     Axis,
@@ -16,7 +17,6 @@ from axis_sdk import (
     paginate,
     parse_blueprint_ref,
 )
-from mock_server import MockServer, problem
 
 RUN = "3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"
 PID = "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV"

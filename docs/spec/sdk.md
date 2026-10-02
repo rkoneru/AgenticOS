@@ -48,7 +48,9 @@ try {
 ```python
 from axis_sdk import Axis, PolicyDeniedError
 
-with Axis(api_key=os.environ["AXIS_API_KEY"], base_url="https://api.us-east-1.axis.example/v1") as axis:
+with Axis(
+    api_key=os.environ["AXIS_API_KEY"], base_url="https://api.us-east-1.axis.example/v1"
+) as axis:
     run = axis.runs.start("claims-triage@1.2.0", {"claim_id": "c-1"})
     for event in axis.runs.stream(run["id"]):
         print(event["sequence"], event["type"])

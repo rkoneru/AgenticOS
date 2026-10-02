@@ -6,9 +6,9 @@ from pathlib import Path
 
 import httpx
 import pytest
+from axis_mock_server import MODEL, MockServer, sample_params
 from axis_sdk import OPERATIONS, AsyncAxis, Axis
 from axis_sdk._generated.client import GeneratedApi
-from mock_server import MODEL, MockServer, sample_params
 
 KEY = "axk_test_key_123456"
 RUN = "3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"

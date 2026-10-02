@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 import pytest
+from axis_mock_server import MockServer
 from axis_sdk import (
     ApprovalRequiredError,
     AuthenticationError,
@@ -26,7 +27,6 @@ from axis_sdk import (
     redact_text,
 )
 from axis_sdk.errors import parse_retry_after
-from mock_server import MockServer
 
 KEY = "axk_live_SUPERSECRET0123456789"
 
