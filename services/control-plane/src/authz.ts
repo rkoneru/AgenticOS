@@ -47,10 +47,42 @@ export const ACTIONS = [
   "domains.manage",
   "sessions.revoke",
 ] as const;
-export type Action = (typeof ACTIONS)[number];
+export type ControlAction = (typeof ACTIONS)[number];
+
+/**
+ * The `api` namespace (ADR 0024): one action per public `/v1` operation family, decided by the SAME pack by the API gateway
+ * (`apps/api-gateway`). `api.<resource>.<verb>`; an API key needs the scope `<resource>:read|write` (see `requiredScope`).
+ */
+export const API_ACTIONS = [
+  "api.blueprints.read",
+  "api.blueprints.publish",
+  "api.runs.read",
+  "api.runs.start",
+  "api.runs.signal",
+  "api.events.read",
+  "api.approvals.read",
+  "api.approvals.decide",
+  "api.policies.read",
+  "api.policies.publish",
+  "api.policies.test",
+  "api.audit.read",
+  "api.audit.verify",
+  "api.killswitch.read",
+  "api.killswitch.write",
+  "api.usage.read",
+  "api.evals.run",
+  "api.explanations.read",
+] as const;
+export type ApiAction = (typeof API_ACTIONS)[number];
+export type Action = ControlAction | ApiAction;
 
 /** Actions that never change state. Everything else is a mutation and is always audited (allow and deny). */
-const READS = new Set<string>(ACTIONS.filter((a) => a.endsWith(".read")));
+const READS = new Set<string>([
+  ...ACTIONS.filter((a) => a.endsWith(".read")),
+  ...API_ACTIONS.filter((a) => a.endsWith(".read")),
+  "api.policies.test", // evaluates a hypothetical request; changes nothing
+  "api.audit.verify", // recomputes hashes; changes nothing
+]);
 export const isRead = (a: string): boolean => READS.has(a);
 
 export interface AuthzRequest {
@@ -91,7 +123,11 @@ export const DEFAULT_PACK = fileURLToPath(
 
 /** The scope an API key needs for an action: `<resource>:read|write`. A scope of `*` or `<resource>:*` also satisfies it. */
 export function requiredScope(action: string): string {
-  return `${action.split(".")[0] as string}:${isRead(action) ? "read" : "write"}`;
+  const parts = action.split(".");
+  // `api.<resource>.<verb>` is scoped by its resource (`runs:write`), the others by their first segment.
+  const resource =
+    parts[0] === "api" && parts.length === 3 ? (parts[1] as string) : (parts[0] as string);
+  return `${resource}:${isRead(action) ? "read" : "write"}`;
 }
 export function scopeAllows(scopes: readonly string[] | undefined, action: string): boolean {
   if (!scopes) return false;

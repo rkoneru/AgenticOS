@@ -1479,3 +1479,2624 @@ cases:
         classification: internal
     expect:
       decision: DENY
+  # ---- `api` namespace (ADR 0024): the full role x action matrix, plus credential and ABAC cases.
+  - name: owner may api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may not api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may not api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may not api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may not api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may not api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may not api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may not api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may not api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may not api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may not api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may not api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may not api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may not api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may not api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may not api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may not api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may not api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.blueprints.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: viewer may not api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.runs.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: viewer may not api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.runs.signal
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.signal
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.events.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.events.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: viewer may not api.approvals.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.approvals.decide
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.policies.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: viewer may not api.policies.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.publish
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.policies.test
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.test
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.audit.verify
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.verify
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.killswitch.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.killswitch.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.usage.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.usage.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.evals.run
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.evals.run
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.explanations.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.explanations.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: an api key of an owner may start runs (api actions are not session-only)
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: owner
+        credential: api_key
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: an api key of an operator may decide approvals
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.approvals.decide
+        side_effects: write
+      actor:
+        role: operator
+        credential: api_key
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: an api key of a viewer may not start runs
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: viewer
+        credential: api_key
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: cross-tenant api read is denied even for an owner
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: false
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: a missing within_ceiling attribute cannot be bypassed for api actions
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.killswitch.write
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: false
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
