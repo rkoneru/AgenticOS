@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@axis/abl": "workspace:*",
+    "@axis/registry": "workspace:*",
     "@axis/sdk": "workspace:*",
     "yaml": "^2.5.0"
   }

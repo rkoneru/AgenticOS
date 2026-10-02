@@ -123,6 +123,9 @@ importers:
       '@axis/abl':
         specifier: workspace:*
         version: link:../../packages/abl
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../../services/registry
       '@axis/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk-ts
