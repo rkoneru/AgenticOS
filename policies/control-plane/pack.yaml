@@ -1,0 +1,175 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: control-plane-authz
+  version: 1.0.0
+  description: "Control plane RBAC + ABAC. Request contract: docs/spec/control-plane.md section 4."
+spec:
+  defaultDecision: DENY
+  rules:
+    # ---- ABAC denials. Priority 1000 beats every ALLOW. DENY rules fire on UNKNOWN data, so a request that omits an attribute is denied.
+    - id: deny-cross-tenant
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when: { not: { field: args.same_tenant, op: eq, value: true } }
+      decision: DENY
+    - id: deny-role-ceiling
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when: { not: { field: args.within_ceiling, op: eq, value: true } }
+      decision: DENY
+    - id: deny-unknown-role
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when:
+        not:
+          field: actor.role
+          op: in
+          value: [owner, admin, builder, operator, auditor, billing, viewer]
+      decision: DENY
+    - id: deny-session-only-actions-for-api-keys
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { not: { field: actor.credential, op: eq, value: session } }
+          - field: tool.name
+            op: in
+            value:
+              [
+                members.invite,
+                members.update_role,
+                members.remove,
+                apikeys.create,
+                apikeys.rotate,
+                apikeys.revoke,
+                directories.manage,
+                sso.manage,
+                domains.manage,
+                sessions.revoke,
+                modelkeys.write,
+                modelkeys.delete,
+              ]
+      decision: DENY
+    - id: deny-restricted-data
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: data.classification, op: eq, value: restricted }
+          - { not: { field: actor.role, op: in, value: [owner, admin, auditor] } }
+      decision: DENY
+    - id: deny-prod-writes-for-builders
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: args.environment, op: eq, value: prod }
+          - { field: actor.role, op: in, value: [builder, operator] }
+          - { not: { field: tool.side_effects, op: eq, value: read } }
+      decision: DENY
+    - id: deny-others-keys-for-builders
+      priority: 1000
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: in, value: [builder, operator] }
+          - field: tool.name
+            op: in
+            value: [apikeys.rotate, apikeys.revoke, modelkeys.write, modelkeys.delete]
+          - { not: { field: args.owner_is_actor, op: eq, value: true } }
+      decision: DENY
+
+    # ---- RBAC grants (role -> actions).
+    - id: owner-all
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: owner }
+          - field: tool.name
+            op: in
+            value:
+              [
+                tenant.read, tenant.close,
+                members.read, members.invite, members.update_role, members.remove,
+                apikeys.read, apikeys.create, apikeys.rotate, apikeys.revoke,
+                modelkeys.read, modelkeys.write, modelkeys.delete,
+                policies.read, policies.publish, policies.activate,
+                budgets.read, budgets.write, settings.read, settings.write,
+                audit.read, billing.read, billing.write,
+                directories.read, directories.manage, sso.manage, domains.manage, sessions.revoke,
+              ]
+      decision: ALLOW
+    - id: admin-most
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: admin }
+          - field: tool.name
+            op: in
+            value:
+              [
+                tenant.read,
+                members.read, members.invite, members.update_role, members.remove,
+                apikeys.read, apikeys.create, apikeys.rotate, apikeys.revoke,
+                modelkeys.read, modelkeys.write, modelkeys.delete,
+                policies.read, policies.publish, policies.activate,
+                budgets.read, budgets.write, settings.read, settings.write,
+                audit.read, billing.read,
+                directories.read, directories.manage, sso.manage, domains.manage, sessions.revoke,
+              ]
+      decision: ALLOW
+    - id: builder-build
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: builder }
+          - field: tool.name
+            op: in
+            value:
+              [
+                tenant.read, members.read,
+                apikeys.read, apikeys.create, apikeys.rotate, apikeys.revoke,
+                modelkeys.read, modelkeys.write, modelkeys.delete,
+                policies.read, policies.publish,
+                budgets.read, settings.read,
+              ]
+      decision: ALLOW
+    - id: operator-operate
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: operator }
+          - field: tool.name
+            op: in
+            value: [tenant.read, members.read, apikeys.read, policies.read, budgets.read, budgets.write, settings.read]
+      decision: ALLOW
+    - id: auditor-read
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: auditor }
+          - field: tool.name
+            op: in
+            value:
+              [
+                tenant.read, members.read, apikeys.read, modelkeys.read, policies.read,
+                budgets.read, settings.read, audit.read, directories.read,
+              ]
+      decision: ALLOW
+    - id: billing-billing
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: billing }
+          - field: tool.name
+            op: in
+            value: [tenant.read, billing.read, billing.write, budgets.read, budgets.write]
+      decision: ALLOW
+    - id: viewer-read
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: viewer }
+          - { field: tool.name, op: in, value: [tenant.read, policies.read, budgets.read] }
+      decision: ALLOW

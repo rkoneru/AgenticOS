@@ -1,0 +1,1461 @@
+# Golden cases for control-plane-authz (make policy-test). Generated once, then maintained by hand.
+packs:
+- pack.yaml
+cases:
+- name: owner may tenant.close
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: tenant.close
+      side_effects: write
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: owner may members.update_role
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.update_role
+      side_effects: write
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: owner may billing.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: billing.write
+      side_effects: write
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: owner may audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: owner may apikeys.create
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: owner may policies.activate
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.activate
+      side_effects: write
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may members.update_role
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.update_role
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may members.remove
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.remove
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may policies.activate
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.activate
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may settings.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: settings.write
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may sso.manage
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: sso.manage
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder may apikeys.create
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder may modelkeys.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: modelkeys.write
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder may policies.publish
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.publish
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder may budgets.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: budgets.read
+      side_effects: read
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder may members.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: operator may budgets.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: budgets.write
+      side_effects: write
+    actor:
+      role: operator
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: operator may members.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: operator
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: operator may policies.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.read
+      side_effects: read
+    actor:
+      role: operator
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: auditor may audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: auditor may members.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: auditor may modelkeys.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: modelkeys.read
+      side_effects: read
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: billing may billing.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: billing.write
+      side_effects: write
+    actor:
+      role: billing
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: billing may billing.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: billing.read
+      side_effects: read
+    actor:
+      role: billing
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: billing may budgets.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: budgets.write
+      side_effects: write
+    actor:
+      role: billing
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: viewer may tenant.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: tenant.read
+      side_effects: read
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: viewer may policies.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.read
+      side_effects: read
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: viewer may budgets.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: budgets.read
+      side_effects: read
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may not tenant.close
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: tenant.close
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: admin may not billing.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: billing.write
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may not members.update_role
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.update_role
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may not policies.activate
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.activate
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may not settings.write
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: settings.write
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may not audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may not billing.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: billing.read
+      side_effects: read
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: operator may not apikeys.create
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: operator
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: operator may not policies.publish
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.publish
+      side_effects: write
+    actor:
+      role: operator
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: operator may not audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: operator
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: auditor may not apikeys.create
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: auditor may not policies.publish
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.publish
+      side_effects: write
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: auditor may not members.invite
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.invite
+      side_effects: write
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: auditor may not billing.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: billing.read
+      side_effects: read
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: billing may not members.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: billing
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: billing may not audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: billing
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: billing may not policies.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: policies.read
+      side_effects: read
+    actor:
+      role: billing
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: viewer may not members.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: viewer may not apikeys.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.read
+      side_effects: read
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: viewer may not audit.read
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: viewer may not members.invite
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.invite
+      side_effects: write
+    actor:
+      role: viewer
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: unknown action is denied even for owner
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: tenants.drop_everything
+      side_effects: write
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: unknown role is denied
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: tenant.read
+      side_effects: read
+    actor:
+      role: superuser
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: missing role is denied
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: tenant.read
+      side_effects: read
+    actor:
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: cross-tenant resource is denied for owner
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: false
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: missing same_tenant attribute is denied
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: same_tenant as a string is not true
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.read
+      side_effects: read
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: 'true'
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: role above the actor ceiling is denied
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.update_role
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: false
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: missing ceiling attribute is denied
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.update_role
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: api key cannot manage members
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.invite
+      side_effects: write
+    actor:
+      role: admin
+      credential: api_key
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: api key cannot create keys
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: owner
+      credential: api_key
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: api key may read audit
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: auditor
+      credential: api_key
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: missing credential kind is denied for session-only actions
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: members.invite
+      side_effects: write
+    actor:
+      role: admin
+      credential: unknown
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: restricted data denied for builder
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: modelkeys.read
+      side_effects: read
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: restricted
+  expect:
+    decision: DENY
+- name: restricted data allowed for auditor
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: auditor
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: restricted
+  expect:
+    decision: ALLOW
+- name: restricted data allowed for admin
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: audit.read
+      side_effects: read
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: restricted
+  expect:
+    decision: ALLOW
+- name: builder cannot write prod resources
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: prod
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may read prod resources
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.read
+      side_effects: read
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: prod
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: admin may write prod resources
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.create
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: prod
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder cannot rotate someone else's key
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.rotate
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: false
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: builder may rotate their own key
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.rotate
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: builder cannot revoke someone else's key
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.revoke
+      side_effects: write
+    actor:
+      role: builder
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: false
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
+- name: admin may revoke someone else's key
+  input:
+    enforcement_point: tool_call
+    tool:
+      name: apikeys.revoke
+      side_effects: write
+    actor:
+      role: admin
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: false
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: ALLOW
+- name: a non tool_call enforcement point matches nothing
+  input:
+    enforcement_point: mcp_call
+    tool:
+      name: tenant.read
+      side_effects: read
+    actor:
+      role: owner
+      credential: session
+    tenant:
+      id: t1
+    args:
+      same_tenant: true
+      within_ceiling: true
+      owner_is_actor: true
+      environment: dev
+    data:
+      classification: internal
+  expect:
+    decision: DENY
