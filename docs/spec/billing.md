@@ -54,7 +54,7 @@ tiers `{upTo, price: {amountMicro per perUnits}}`. A `Plan` binds one price book
 `meter` or `meter:dimension`), and a committed minimum. `rate(...)` is pure and deterministic:
 
 1. Base fee, prorated by the seconds the plan was active in the period (adjacent windows sum exactly to the whole month).
-2. Per rate key: included allowance first, then graduated tiers; one line per tier used. A net-negative quantity (adjustments)
+2. Per rate key: included allowance first (a `meter:dimension` allowance belongs to that row; a meter-wide allowance is ONE pool consumed in row order across the meter's dimensions), then graduated tiers; one line per tier used. A net-negative quantity (adjustments)
    becomes a credit line priced at tier 1. Usage with no rate is NOT charged: it is listed in `warnings` (`unpriced usage`).
 3. Committed use: if the usage charges are below the commitment, the shortfall is a `commit_true_up` line.
 4. Credits are consumed first-in-first-out up to the positive subtotal and spread over the positive lines.

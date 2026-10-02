@@ -272,3 +272,46 @@ describe("review: budget limits are bounded", () => {
     }
   });
 });
+
+describe.each(KINDS)(
+  "review: an admin cannot reach the owner through an IdP it controls (%s store)",
+  (kind) => {
+    let w: World;
+    beforeAll(async () => {
+      w = await makeWorld(kind);
+    });
+    afterAll(() => w.close());
+
+    it("sso.manage and the IdP admin portal are the owner's alone; the escalation path is closed at its first step", async () => {
+      const t = await w.tenant();
+      const adm = await w.member(t.tenantId, "admin");
+      expect(
+        await code(
+          w.cp.admin.setSsoConnection(adm.principal, {
+            idpOrgId: "org_admin_idp",
+            connectionType: "oidc",
+          }),
+        ),
+      ).toBe("forbidden");
+      expect(
+        await code(
+          w.cp.admin.adminPortalLink(adm.principal, "sso", "https://console.example.test/"),
+        ),
+      ).toBe("forbidden");
+      // the owner links the organization; an admin still cannot re-point it
+      await w.cp.admin.setSsoConnection(t.owner, {
+        idpOrgId: "org_owner_idp",
+        connectionType: "oidc",
+      });
+      expect(
+        await code(
+          w.cp.admin.setSsoConnection(adm.principal, {
+            idpOrgId: "org_owner_idp",
+            connectionType: "saml",
+            jitEnabled: true,
+          }),
+        ),
+      ).toBe("forbidden");
+    });
+  },
+);

@@ -120,6 +120,7 @@ spec:
                 sessions.revoke,
               ]
       decision: ALLOW
+    # sso.manage is the owner's alone (ADR 0023): whoever controls the tenant's IdP link can sign in as any member it names, owner included.
     - id: admin-most
       enforcementPoints: [tool_call]
       when:
@@ -152,7 +153,6 @@ spec:
                 billing.read,
                 directories.read,
                 directories.manage,
-                sso.manage,
                 domains.manage,
                 sessions.revoke,
               ]

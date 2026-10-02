@@ -222,7 +222,7 @@ cases:
         classification: internal
     expect:
       decision: ALLOW
-  - name: admin may sso.manage
+  - name: admin may not sso.manage (an IdP the admin controls signs in as the owner)
     input:
       enforcement_point: tool_call
       tool:
@@ -230,6 +230,26 @@ cases:
         side_effects: write
       actor:
         role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: owner may sso.manage
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: sso.manage
+        side_effects: write
+      actor:
+        role: owner
         credential: session
       tenant:
         id: t1

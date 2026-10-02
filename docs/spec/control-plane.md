@@ -59,7 +59,7 @@ the member before the call returns. Deprovisioning the last owner is refused (40
 Roles (rank): owner 100, admin 80, builder 50, operator 50, auditor 40, billing 40, viewer 10. Actions are `<resource>.<verb>` (see `ACTIONS` in `src/authz.ts`).
 Policy request (DSL context): `enforcement_point: tool_call`, `tool.name = action`, `tool.side_effects = read|write`, `actor.{id, role, credential: session|api_key}`, `tenant.id`,
 `args.{same_tenant, within_ceiling, owner_is_actor, environment}`, `data.classification`. ABAC in the pack: cross-tenant, role ceiling, unknown role, API keys on session-only actions,
-`restricted` data only for owner/admin/auditor, builders/operators cannot write `prod` resources, builders/operators can rotate/revoke/write only keys they own.
+`restricted` data only for owner/admin/auditor, builders/operators cannot write `prod` resources, builders/operators can rotate/revoke/write only keys they own (API keys and BYO model keys; a BYO key's owner is its last writer). `sso.manage` (IdP organization link, admin portal, JIT defaults) is the owner's alone (ADR 0023). Policy packs are bounded before validation: at most 100 rules and 2000 JSON values per pack, 4000 values per active set.
 API-key credentials additionally need a scope `<resource>:read|write` (or `*`, `<resource>:*`); the effective permission is role AND scope. Fail-closed: no policy, evaluation error,
 over-budget evaluation, malformed result or anything but an exact `ALLOW` is DENY. Hard invariants (tenant, ceiling, scope) are also checked in code before the engine.
 

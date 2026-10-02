@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase 6 - Independent review fixes (ADR 0023)
+
+- Fixed: admin to owner via an admin-controlled IdP link (`sso.manage` now owner-only) and e-mail linking that never bound an identity;
+  unbounded synchronous `opa` work on policy publish; stale kernel bundle after concurrent activations; builders could overwrite or delete
+  other members' BYO model keys; budget limits that overflowed the runtime.
+- Fixed (billing): tenant id spelling in lock keys and hashes, lost webhook retries after a failed handler, usage pushed from open periods,
+  audit events for refused adjustments, a meter-wide allowance granted per model class. Open items: `docs/NEEDS.md` #206-#213.
+
 ## Phase 6 - SaaS platform integration (component C, `make e2e-phase6`)
 
 Wires the control plane (A) and billing (B) into one path with the Risk Kernel and the runtime (ADR 0022). **No frozen contract changed**
