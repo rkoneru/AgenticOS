@@ -439,7 +439,9 @@ describe("credential safety", () => {
     const { ax, server } = setup();
     for (const bad of ["..", "."]) {
       await expect(ax.runs.get(bad)).rejects.toThrow(/dot segment|path parameter/);
-      await expect(ax.blueprints.get("agent-one", bad)).rejects.toThrow(/dot segment|path parameter/);
+      await expect(ax.blueprints.get("agent-one", bad)).rejects.toThrow(
+        /dot segment|path parameter/,
+      );
     }
     // never sent: not even to a route the caller did not name
     expect(server.calls).toHaveLength(0);
