@@ -126,7 +126,11 @@ describe("client", () => {
   });
 
   it("exercises every operation against the expected method and path", async () => {
-    const f = mockFetch(() => ok({ items: [] }));
+    const f = mockFetch((url) =>
+      url.endsWith("/v1/me")
+        ? ok({ tenant: { id: "t" }, member: { id: "m", role: "owner" } })
+        : ok({ items: [] }),
+    );
     const api = createApi({ fetchImpl: f, csrf: () => "t", idempotencyKey: () => "idem-12345" });
     const pol = { a: 1 };
     const bp = { name: "a", version: "1" };
@@ -156,7 +160,7 @@ describe("client", () => {
       api.startEvalRun("s", bp),
       api.explainRun("r"),
       api.explainApproval("a"),
-      api.explainAuditEvent("e"),
+      api.explainAuditEvent("7"),
       api.tenant(),
       api.listMembers(),
       api.inviteMember("e@x", "viewer"),
@@ -174,24 +178,31 @@ describe("client", () => {
       api.putSso({}),
       api.listDirectories(),
       api.listListings({ q: "x" }),
-      api.getListing("l"),
-      api.installListing("l", {
-        tools: [],
-        data_classes: [],
-        egress_hosts: [],
-        max_risk_level: "minimal",
-      }),
+      api.getListing("ns", "l"),
+      api.previewInstall("ns", "l", "^1"),
+      api.installListing({
+        namespace: "ns",
+        name: "l",
+        version: "1.0.0",
+        content_hash: "a".repeat(64),
+        consent_digest: "d",
+      } as never),
+      api.listInstalls(),
+      api.listRegistryNamespaces(),
+      api.listRegistryVersions("ns", "l"),
+      api.resolveRegistry("ns/l@^1"),
+      api.getApproval("a"),
     ]);
     const calls = f.mock.calls.map(
       (c) => `${(c[1] as RequestInit).method} ${String(c[0]).split("?")[0]}`,
     );
     expect(calls).toContain("POST /api/axis/v1/policies:test");
-    expect(calls).toContain("POST /api/axis/admin/v1/policies/v1/activate");
+    expect(calls).toContain("POST /api/axis/v1/policies/v1/activate");
     expect(calls).toContain("PUT /api/axis/admin/v1/model-keys/p/l");
-    expect(calls).toContain("GET /api/axis/auth/me");
+    expect(calls).toContain("GET /api/axis/v1/me");
     expect(calls).toContain("POST /api/axis/v1/approvals/a/decision");
-    expect(calls).toContain("POST /api/axis/v1/marketplace/listings/l/install");
-    expect(calls.length).toBe(45);
+    expect(calls).toContain("POST /api/axis/v1/marketplace/installs");
+    expect(calls.length).toBe(52);
   });
 
   it("opens an event stream with the SSE accept header", async () => {

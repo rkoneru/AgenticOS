@@ -97,7 +97,7 @@ test("approvals: detail shows evidence, confirm dialog, approve", async ({ page 
   await expect(page.getByTestId("args-hash")).toHaveText("e".repeat(64));
   await expect(page.getByTestId("policy-reason")).toHaveText("external write needs approval");
   await expect(page.getByTestId("sla")).toContainText("left");
-  await expect(page.getByTestId("agil-panel")).toContainText("human decision");
+  await expect(page.getByTestId("agil-panel")).toContainText("paused for approval");
   await page.getByRole("button", { name: "Approve..." }).click();
   const dlg = page.getByRole("dialog", { name: "Approve this action?" });
   await expect(dlg).toBeVisible();
@@ -278,17 +278,16 @@ test("marketplace: install requires consent to the permission diff", async ({ pa
   const dlg = page.getByRole("dialog", { name: "Install CRM Agent?" });
   const diff = dlg.getByTestId("permission-diff");
   await expect(diff).toContainText("crm.update");
-  await expect(diff).toContainText("api.crm.example");
-  await expect(diff).toContainText("pii");
+  await expect(diff).toContainText("tool:function:crm.read");
   const go = dlg.getByRole("button", { name: "Grant and install" });
   await expect(go).toBeDisabled();
   await dlg.getByRole("checkbox").check();
   await go.click();
-  await expect(page.getByText("installed, no new permissions")).toBeVisible();
+  await expect(page.getByText("installed", { exact: true })).toBeVisible();
 });
 
 test("marketplace: a builder cannot install", async ({ page }) => {
-  await login(page, "builder", "/marketplace/crm-agent");
+  await login(page, "builder", "/marketplace/acme-labs/crm-agent");
   await expect(page.getByText("Your role cannot install listings")).toBeVisible();
 });
 
@@ -395,8 +394,10 @@ const PAGES: Array<[string, string, string]> = [
   ["audit", "/audit", "admin"],
   ["usage", "/usage", "admin"],
   ["admin", "/admin", "admin"],
+  ["registry", "/registry", "admin"],
+  ["kill-switch", "/kill-switch", "admin"],
   ["marketplace", "/marketplace", "admin"],
-  ["listing", "/marketplace/crm-agent", "admin"],
+  ["listing", "/marketplace/acme-labs/crm-agent", "admin"],
 ];
 
 for (const theme of ["light", "dark"] as const) {

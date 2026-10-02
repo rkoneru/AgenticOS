@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { barLayout, niceMax, scaleLinear, ticks, totalsByMeter } from "@/lib/charts";
-import { diffPermissions } from "@/lib/permissions";
 import { parseCases, runCases, SAMPLE_CASES } from "@/lib/policy-tests";
 import { formatNumber, formatTime, formatUsd, shortId } from "@/lib/format";
-import type { PermissionSet } from "@/lib/api";
 
 describe("charts", () => {
   it("picks nice maxima and ticks", () => {
@@ -52,34 +50,6 @@ describe("charts", () => {
       { meter: "a", unit: "u", total: 1 },
       { meter: "tokens", unit: "tok", total: 7 },
     ]);
-  });
-});
-
-const P = (
-  tools: string[],
-  risk: PermissionSet["max_risk_level"] = "minimal",
-  egress: string[] = [],
-  data: string[] = [],
-): PermissionSet => ({ tools, data_classes: data, egress_hosts: egress, max_risk_level: risk });
-
-describe("permission diff", () => {
-  it("requires consent for a first install", () => {
-    const d = diffPermissions(P(["a"], "limited", ["x.com"], ["pii"]));
-    expect(d.added).toHaveLength(3);
-    expect(d.needsConsent).toBe(true);
-    expect(d.riskRaised).toBe(true);
-  });
-  it("shows only additions on update and flags raised risk", () => {
-    const d = diffPermissions(P(["a", "b"], "high"), P(["a", "c"], "limited"));
-    expect(d.added).toEqual([{ kind: "Tool", value: "b" }]);
-    expect(d.removed).toEqual([{ kind: "Tool", value: "c" }]);
-    expect(d.unchanged).toEqual([{ kind: "Tool", value: "a" }]);
-    expect(d.riskRaised).toBe(true);
-  });
-  it("needs no consent when nothing is added", () => {
-    const d = diffPermissions(P(["a"]), P(["a", "b"]));
-    expect(d.needsConsent).toBe(false);
-    expect(d.removed).toHaveLength(1);
   });
 });
 

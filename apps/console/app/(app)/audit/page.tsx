@@ -240,7 +240,9 @@ export default function AuditPage() {
               </div>
             ))}
           </dl>
-          {selected.decision !== "ALLOW" ? <Explanation kind="audit" id={selected.id} /> : null}
+          {selected.decision !== "ALLOW" ? (
+            <Explanation kind="audit" id={String(selected.seq)} />
+          ) : null}
         </section>
       ) : null}
     </>

@@ -1,8 +1,9 @@
 "use client";
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Timeline, useToast, type TimelineItem } from "@axis/ui";
 import { api, type Budget, type RunEvent } from "@/lib/api";
 import { consumeRunEvents } from "@/lib/sse";
+import { followRun, type FollowStatus } from "@/lib/follow";
 import { describeEvent, eventTone, gauge, mergeEvents, replayTo } from "@/lib/replay";
 import { useResource } from "@/lib/hooks";
 import { formatTime, formatUsd } from "@/lib/format";
@@ -20,51 +21,39 @@ const TERMINAL = "terminated";
 
 function useRunEvents(runId: string, live: boolean) {
   const [events, setEvents] = useState<RunEvent[]>([]);
-  const [status, setStatus] = useState<"connecting" | "live" | "ended" | "error">("connecting");
+  const [status, setStatus] = useState<FollowStatus>("connecting");
   const [error, setError] = useState<Error | undefined>();
-  const last = useRef(0);
   useEffect(() => {
-    let stop = false;
     const ac = new AbortController();
-    async function backfill() {
-      // Backfill first (also the only path once the run has ended), then follow the stream.
-      let after = last.current;
-      for (;;) {
-        const page = await api.listRunEvents(runId, { after_sequence: after, limit: 200 });
-        if (stop) return;
-        if (page.items.length === 0) break;
-        setEvents((cur) => mergeEvents(cur, page.items));
-        after = Math.max(after, ...page.items.map((e) => e.sequence));
-        last.current = after;
-        if (page.items.length < 200) break;
-      }
-    }
-    async function run() {
-      try {
-        await backfill();
-        if (stop) return;
-        if (!live) {
-          setStatus("ended");
-          return;
-        }
-        const stream = await api.streamRunEvents(runId, last.current, ac.signal);
-        setStatus("live");
-        await consumeRunEvents(stream, (e) => {
-          last.current = Math.max(last.current, e.sequence);
-          setEvents((cur) => mergeEvents(cur, [e]));
-        });
-        if (!stop) setStatus("ended");
-      } catch (e) {
-        if (stop || ac.signal.aborted) return;
-        setError(e instanceof Error ? e : new Error(String(e)));
-        setStatus("error");
-      }
-    }
-    void run();
-    return () => {
-      stop = true;
-      ac.abort();
-    };
+    void followRun({
+      signal: ac.signal,
+      listEvents: async (after) =>
+        (await api.listRunEvents(runId, { after_sequence: after, limit: 200 })).items,
+      // An ended run is only backfilled; a live one is followed over SSE and reconnected (from the last sequence) when the stream drops.
+      isTerminal: async () => (await api.getRun(runId)).state === TERMINAL,
+      stream: async (after, onEvent, signal) => {
+        if (!live) return;
+        await consumeRunEvents(await api.streamRunEvents(runId, after, signal), onEvent);
+      },
+      onEvent: (e) => setEvents((cur) => mergeEvents(cur, [e])),
+      onStatus: (s, e) => {
+        setStatus(s);
+        setError(e);
+      },
+      sleep: (ms, signal) =>
+        new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, ms);
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(t);
+              resolve();
+            },
+            { once: true },
+          );
+        }),
+    });
+    return () => ac.abort();
   }, [runId, live]);
   return { events, status, error };
 }
@@ -285,7 +274,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
 
             <Explanation kind="run" id={id} />
             {denial?.audit_event_id ? (
-              <Explanation kind="audit" id={denial.audit_event_id} />
+              <Explanation kind="audit" id={denial.audit_event_id} traceId={r.trace_id} />
             ) : null}
           </div>
         )}

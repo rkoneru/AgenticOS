@@ -22,6 +22,15 @@ export default function MarketplacePage() {
         : Promise.reject(Object.assign(new Error("disabled"), { notAvailable: true })),
     [q],
   );
+  const installs = useResource(
+    () => (features.marketplace ? api.listInstalls() : Promise.resolve({ items: [] })),
+    [],
+  );
+  const installed = new Set(
+    (installs.data?.items ?? [])
+      .filter((i) => i.state !== "uninstalled")
+      .map((i) => `${i.namespace}/${i.name}`),
+  );
   if (!features.marketplace) {
     return (
       <>
@@ -48,17 +57,22 @@ export default function MarketplacePage() {
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Listings">
               {p.items.map((l) => (
                 <li
-                  key={l.id}
+                  key={`${l.namespace}/${l.name}`}
                   className="rounded-md border border-[var(--axis-border)] bg-[var(--axis-surface)] p-4"
                 >
                   <h2 className="font-semibold">
-                    <Link href={`/marketplace/${encodeURIComponent(l.id)}`}>{l.name}</Link>
+                    <Link
+                      href={`/marketplace/${encodeURIComponent(l.namespace)}/${encodeURIComponent(l.name)}`}
+                    >
+                      {l.title}
+                    </Link>
                   </h2>
                   <p className="text-xs text-[var(--axis-muted)]">
-                    {l.publisher} - v{l.version}
+                    {l.namespace}/{l.name}
+                    {l.latest ? ` - v${l.latest.version} - risk ${l.latest.risk_level}` : ""}
                   </p>
                   <p className="mt-2 text-sm">{l.summary}</p>
-                  {l.installed ? (
+                  {installed.has(`${l.namespace}/${l.name}`) ? (
                     <div className="mt-2">
                       <Badge tone="good">installed</Badge>
                     </div>
