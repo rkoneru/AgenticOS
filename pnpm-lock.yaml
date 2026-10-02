@@ -242,6 +242,40 @@ importers:
         specifier: ^4.0.0
         version: 4.10.2
 
+  services/marketplace:
+    dependencies:
+      '@axis/abl':
+        specifier: workspace:*
+        version: link:../../packages/abl
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../registry
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      fast-check:
+        specifier: ^4.0.0
+        version: 4.10.2
+
   services/memory:
     dependencies:
       '@axis/db':
@@ -257,6 +291,40 @@ importers:
       fast-check:
         specifier: ^4.0.0
         version: 4.10.2
+
+  services/registry:
+    dependencies:
+      '@axis/abl':
+        specifier: workspace:*
+        version: link:../../packages/abl
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      '@types/semver':
+        specifier: ^7.5.0
+        version: 7.8.0
+      fast-check:
+        specifier: ^4.0.0
+        version: 4.10.2
+      semver:
+        specifier: ^7.6.0
+        version: 7.8.5
 
   services/risk-kernel:
     dependencies:
@@ -844,6 +912,9 @@ packages:
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@typescript-eslint/eslint-plugin@8.71.0':
     resolution: {integrity: sha512-pqcS9c1HxZTHt7End4nXqd0s5lJrrFzrgCkKFJrsbUnaL6M3+6oBFZaslg6Gjsl3argl2DDRFROnXARaZ2e4Nw==}
@@ -2118,6 +2189,8 @@ snapshots:
       '@types/node': 22.20.4
       pg-protocol: 1.16.1
       pg-types: 2.2.0
+
+  '@types/semver@7.8.0': {}
 
   '@typescript-eslint/eslint-plugin@8.71.0(@typescript-eslint/parser@8.71.0(eslint@9.39.5)(typescript@5.9.3))(eslint@9.39.5)(typescript@5.9.3)':
     dependencies:
