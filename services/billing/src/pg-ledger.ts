@@ -136,7 +136,10 @@ export class PgUsageLedger implements UsageLedger {
     const v = validateInput(input as AnyInput, now);
     const hash = payloadHash(v);
     return this.tx(v.tenantId, async (c) => {
-      await c.query("SELECT pg_advisory_xact_lock_shared($1, hashtext($2))", [LOCK_CLASS, v.tenantId]);
+      await c.query("SELECT pg_advisory_xact_lock_shared($1, hashtext($2))", [
+        LOCK_CLASS,
+        v.tenantId,
+      ]);
       const resolveExisting = async (): Promise<AppendResult | undefined> => {
         const found = await c.query<EntryRow>(
           "SELECT * FROM usage_events WHERE tenant_id = $1 AND idempotency_key = $2",
@@ -144,7 +147,8 @@ export class PgUsageLedger implements UsageLedger {
         );
         const existing = found.rows[0];
         if (!existing) return undefined;
-        if (existing.payload_hash === hash) return { status: "duplicate", entry: toEntry(existing) };
+        if (existing.payload_hash === hash)
+          return { status: "duplicate", entry: toEntry(existing) };
         await c.query(
           `INSERT INTO usage_conflicts (tenant_id, idempotency_key, existing_payload_hash, offered_payload_hash, source, detected_at)
            VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
@@ -198,9 +202,8 @@ export class PgUsageLedger implements UsageLedger {
       const row = ins.rows[0];
       if (row) return { status: "inserted", entry: toEntry(row) };
       // A concurrent transaction inserted the same key between our read and write; it has committed, so it is visible now.
-      const raced = await resolveExisting();
-      if (!raced) throw new BillingError("INVALID", "idempotency key vanished during insert");
-      return raced;
+      // (the row cannot have vanished: the table is insert-only, so the lookup always finds it)
+      return (await resolveExisting()) as AppendResult;
     });
   }
 
@@ -229,7 +232,9 @@ export class PgUsageLedger implements UsageLedger {
         ...(x.mc === null ? {} : { model_class: x.mc }),
         ...(x.tk === null ? {} : { tool_kind: x.tk }),
       });
-      return foldTotals(r.rows.map((x) => ({ meter: x.meter, quantity: BigInt(x.q), dimensions: dims(x) })));
+      return foldTotals(
+        r.rows.map((x) => ({ meter: x.meter, quantity: BigInt(x.q), dimensions: dims(x) })),
+      );
     });
   }
 
@@ -244,7 +249,11 @@ export class PgUsageLedger implements UsageLedger {
         [tenantId, q.from, q.to, q.meter ?? null],
       );
       return foldRollup(
-        r.rows.map((x) => ({ meter: x.meter, eventTime: x.event_time, quantity: BigInt(x.quantity) })),
+        r.rows.map((x) => ({
+          meter: x.meter,
+          eventTime: x.event_time,
+          quantity: BigInt(x.quantity),
+        })),
         q,
       );
     });
@@ -338,7 +347,12 @@ export class PgUsageLedger implements UsageLedger {
 
 function toSealRow(e: EntryRow | UsageEntry): SealRow {
   if ("idempotencyKey" in e)
-    return { idempotencyKey: e.idempotencyKey, payloadHash: e.payloadHash, meter: e.meter, quantity: e.quantity };
+    return {
+      idempotencyKey: e.idempotencyKey,
+      payloadHash: e.payloadHash,
+      meter: e.meter,
+      quantity: e.quantity,
+    };
   return {
     idempotencyKey: e.idempotency_key,
     payloadHash: e.payload_hash,

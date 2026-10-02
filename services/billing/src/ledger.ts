@@ -13,7 +13,9 @@ import {
 
 /** Where producers write. Implementations: PgUsageLedger, MemoryUsageLedger, FanoutSink (+ analytics sinks). */
 export interface UsageSink {
-  append(input: UsageInput | (AdjustmentInput & { entryType: "adjustment" })): Promise<AppendResult>;
+  append(
+    input: UsageInput | (AdjustmentInput & { entryType: "adjustment" }),
+  ): Promise<AppendResult>;
 }
 
 /** One rated total: a meter, split by the dimension it is rated by (model class, tool kind), or "" when none. */
@@ -46,7 +48,11 @@ export interface UsageLedger extends UsageSink {
 
 /** Folds entries into rated totals; shared by every implementation so they cannot drift. */
 export function foldTotals(
-  entries: Iterable<{ meter: Meter; quantity: bigint; dimensions: Readonly<Record<string, string>> }>,
+  entries: Iterable<{
+    meter: Meter;
+    quantity: bigint;
+    dimensions: Readonly<Record<string, string>>;
+  }>,
 ): TotalRow[] {
   const acc = new Map<string, TotalRow>();
   for (const e of entries) {
@@ -82,5 +88,6 @@ export function foldRollup(
 }
 
 export function assertClosable(periodId: string, now: Date): void {
-  if (now < periodBounds(periodId).end) throw new BillingError("PERIOD_NOT_CLOSABLE", "period has not ended yet");
+  if (now < periodBounds(periodId).end)
+    throw new BillingError("PERIOD_NOT_CLOSABLE", "period has not ended yet");
 }

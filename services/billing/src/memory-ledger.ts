@@ -55,12 +55,10 @@ export class MemoryUsageLedger implements UsageLedger {
     return s;
   }
 
-  append(input: UsageInput | (AdjustmentInput & { entryType: "adjustment" })): Promise<AppendResult> {
-    try {
-      return Promise.resolve(this.appendSync(input as AnyInput));
-    } catch (e) {
-      return Promise.reject(e instanceof Error ? e : new Error(String(e)));
-    }
+  async append(
+    input: UsageInput | (AdjustmentInput & { entryType: "adjustment" }),
+  ): Promise<AppendResult> {
+    return this.appendSync(input as AnyInput);
   }
 
   private appendSync(input: AnyInput): AppendResult {
@@ -108,7 +106,10 @@ export class MemoryUsageLedger implements UsageLedger {
     return { status: "inserted", entry };
   }
 
-  entries(tenantId: string, filter: { periodId?: string; meter?: Meter } = {}): Promise<UsageEntry[]> {
+  entries(
+    tenantId: string,
+    filter: { periodId?: string; meter?: Meter } = {},
+  ): Promise<UsageEntry[]> {
     return Promise.resolve(
       [...this.st(tenantId).byKey.values()].filter(
         (e) =>

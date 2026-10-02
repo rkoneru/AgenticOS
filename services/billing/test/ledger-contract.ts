@@ -89,7 +89,8 @@ export function ledgerContract(name: string, make: () => Promise<Rig>): void {
         { dimensions: { "Bad Key": "x" } },
         { tenantId: "not-a-uuid" },
       ];
-      for (const b of bad) await expect(ledger.append(usage(t1, b))).rejects.toBeInstanceOf(BillingError);
+      for (const b of bad)
+        await expect(ledger.append(usage(t1, b))).rejects.toBeInstanceOf(BillingError);
       expect(await ledger.entries(t1)).toHaveLength(0);
     });
 
@@ -97,7 +98,9 @@ export function ledgerContract(name: string, make: () => Promise<Rig>): void {
       const { ledger, t1 } = await setup();
       await ledger.append(usage(t1, { quantity: 100n }));
       await ledger.append(usage(t1, { quantity: 50n, dimensions: { model_class: "frontier" } }));
-      await ledger.append(usage(t1, { meter: "tool_executions", quantity: 3n, dimensions: { tool_kind: "code" } }));
+      await ledger.append(
+        usage(t1, { meter: "tool_executions", quantity: 3n, dimensions: { tool_kind: "code" } }),
+      );
       await ledger.append(usage(t1, { meter: "voice_minutes", quantity: 60_000n, dimensions: {} }));
       const ad = await ledger.append(adj(t1));
       expect(ad.status).toBe("inserted");
@@ -133,44 +136,66 @@ export function ledgerContract(name: string, make: () => Promise<Rig>): void {
       const day = await ledger.rollup(t1, { ...q, granularity: "day", meter: "tokens_in" });
       expect(day.map((r) => r.quantity)).toEqual([7n, 8n]);
       const month = await ledger.rollup(t1, { ...q, granularity: "month" });
-      expect(month).toEqual([{ bucket: "2026-09-01T00:00:00.000Z", meter: "tokens_in", quantity: 15n }]);
-      expect(await ledger.rollup(t1, { ...q, granularity: "day", meter: "tokens_out" })).toEqual([]);
+      expect(month).toEqual([
+        { bucket: "2026-09-01T00:00:00.000Z", meter: "tokens_in", quantity: 15n },
+      ]);
+      expect(await ledger.rollup(t1, { ...q, granularity: "day", meter: "tokens_out" })).toEqual(
+        [],
+      );
     });
 
     it("cannot close a period that has not ended; closes once; chains seals", async () => {
       const { ledger, clock, t1 } = await setup();
       await ledger.append(usage(t1, { quantity: 10n }));
-      await expect(ledger.closePeriod(t1, "2026-10")).rejects.toMatchObject({ code: "PERIOD_NOT_CLOSABLE" });
+      await expect(ledger.closePeriod(t1, "2026-10")).rejects.toMatchObject({
+        code: "PERIOD_NOT_CLOSABLE",
+      });
       const s1 = await ledger.closePeriod(t1, "2026-09");
       expect(s1.seq).toBe(1);
       expect(s1.eventCount).toBe(1);
       expect(s1.totals).toEqual({ tokens_in: "10" });
-      await expect(ledger.closePeriod(t1, "2026-09")).rejects.toMatchObject({ code: "PERIOD_ALREADY_CLOSED" });
+      await expect(ledger.closePeriod(t1, "2026-09")).rejects.toMatchObject({
+        code: "PERIOD_ALREADY_CLOSED",
+      });
       clock.set("2026-11-02T00:00:00Z");
       const s2 = await ledger.closePeriod(t1, "2026-10");
       expect(s2.seq).toBe(2);
       expect(s2.prevSealHash).toBe(s1.sealHash);
       expect(await ledger.verifySeal(t1, "2026-09")).toEqual({ ok: true });
       expect((await ledger.seals(t1)).map((s) => s.periodId)).toEqual(["2026-09", "2026-10"]);
-      await expect(ledger.verifySeal(t1, "2026-08")).rejects.toMatchObject({ code: "PERIOD_NOT_SEALED" });
+      await expect(ledger.verifySeal(t1, "2026-08")).rejects.toMatchObject({
+        code: "PERIOD_NOT_SEALED",
+      });
     });
 
     it("lands a late event for a closed period in the next period and never changes the closed one", async () => {
       const { ledger, t1 } = await setup();
       await ledger.append(usage(t1, { quantity: 10n }));
       const seal = await ledger.closePeriod(t1, "2026-09");
-      const late = await ledger.append(usage(t1, { quantity: 99n, eventTime: new Date("2026-09-15T00:00:00Z") }));
+      const late = await ledger.append(
+        usage(t1, { quantity: 99n, eventTime: new Date("2026-09-15T00:00:00Z") }),
+      );
       expect(late.status).toBe("inserted");
       if (late.status === "inserted") {
         expect(late.entry.periodId).toBe("2026-10");
         expect(late.entry.originalPeriodId).toBe("2026-09");
       }
-      expect(await ledger.totals(t1, "2026-09")).toEqual([{ meter: "tokens_in", dimension: "standard", quantity: 10n }]);
-      expect(await ledger.totals(t1, "2026-10")).toEqual([{ meter: "tokens_in", dimension: "standard", quantity: 99n }]);
+      expect(await ledger.totals(t1, "2026-09")).toEqual([
+        { meter: "tokens_in", dimension: "standard", quantity: 10n },
+      ]);
+      expect(await ledger.totals(t1, "2026-10")).toEqual([
+        { meter: "tokens_in", dimension: "standard", quantity: 99n },
+      ]);
       expect(await ledger.verifySeal(t1, "2026-09")).toEqual({ ok: true });
       expect((await ledger.seals(t1))[0]?.sealHash).toBe(seal.sealHash);
       // a replay of the late event stays a duplicate and does not move
-      const again = await ledger.append(usage(t1, { quantity: 99n, eventTime: new Date("2026-09-15T00:00:00Z"), idempotencyKey: late.status === "inserted" ? late.entry.idempotencyKey : "" }));
+      const again = await ledger.append(
+        usage(t1, {
+          quantity: 99n,
+          eventTime: new Date("2026-09-15T00:00:00Z"),
+          idempotencyKey: late.status === "inserted" ? late.entry.idempotencyKey : "",
+        }),
+      );
       expect(again.status).toBe("duplicate");
     });
 
@@ -188,11 +213,17 @@ export function ledgerContract(name: string, make: () => Promise<Rig>): void {
       const a = await setup();
       const b = await setup();
       const items = [1n, 2n, 3n, 4n, 5n].map((q, i) =>
-        usage("", { idempotencyKey: `k${i}`, quantity: q, eventTime: new Date(Date.UTC(2026, 8, 10 - i)) }),
+        usage("", {
+          idempotencyKey: `k${i}`,
+          quantity: q,
+          eventTime: new Date(Date.UTC(2026, 8, 10 - i)),
+        }),
       );
       for (const i of items) await a.ledger.append({ ...i, tenantId: a.t1 });
       for (const i of [...items].reverse()) await b.ledger.append({ ...i, tenantId: b.t1 });
-      expect(await a.ledger.totals(a.t1, "2026-09")).toEqual(await b.ledger.totals(b.t1, "2026-09"));
+      expect(await a.ledger.totals(a.t1, "2026-09")).toEqual(
+        await b.ledger.totals(b.t1, "2026-09"),
+      );
     });
 
     it("handles concurrent identical appends as one insert", async () => {

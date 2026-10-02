@@ -136,7 +136,8 @@ export function normalizeDimensions(d: unknown): Dimensions {
   return out;
 }
 
-export type AnyInput = (UsageInput & { entryType?: "usage" }) | (AdjustmentInput & { entryType: "adjustment" });
+export type AnyInput =
+  (UsageInput & { entryType?: "usage" }) | (AdjustmentInput & { entryType: "adjustment" });
 
 export interface ValidInput {
   tenantId: string;

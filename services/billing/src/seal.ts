@@ -121,9 +121,15 @@ export function buildSeal(args: {
 }
 
 /** Recomputes a seal from the rows currently stored for its period and checks hash, signature and totals. */
-export function verifySeal(seal: PeriodSeal, rows: readonly SealRow[], signer: SealSigner): SealVerdict {
-  if (rows.length !== seal.eventCount) return { ok: false, reason: "event count differs from the seal" };
-  if (rowsDigest(rows) !== seal.rowsDigest) return { ok: false, reason: "rows differ from the seal" };
+export function verifySeal(
+  seal: PeriodSeal,
+  rows: readonly SealRow[],
+  signer: SealSigner,
+): SealVerdict {
+  if (rows.length !== seal.eventCount)
+    return { ok: false, reason: "event count differs from the seal" };
+  if (rowsDigest(rows) !== seal.rowsDigest)
+    return { ok: false, reason: "rows differ from the seal" };
   if (canonicalize(sealTotals(rows)) !== canonicalize(seal.totals))
     return { ok: false, reason: "totals differ from the seal" };
   if (sealHashOf(seal) !== seal.sealHash) return { ok: false, reason: "seal hash mismatch" };

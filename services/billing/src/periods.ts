@@ -37,7 +37,8 @@ export function bucketStart(t: Date, g: Granularity): string {
   const m = t.getUTCMonth();
   const d = t.getUTCDate();
   const h = t.getUTCHours();
-  const ms = g === "hour" ? Date.UTC(y, m, d, h) : g === "day" ? Date.UTC(y, m, d) : Date.UTC(y, m, 1);
+  const ms =
+    g === "hour" ? Date.UTC(y, m, d, h) : g === "day" ? Date.UTC(y, m, d) : Date.UTC(y, m, 1);
   return new Date(ms).toISOString();
 }
 
