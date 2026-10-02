@@ -195,6 +195,24 @@ export class InstallService {
       );
   }
 
+  /** The diff an UPDATE would be consented against: the new version vs what this install was granted (not vs the baseline). */
+  async updatePreview(
+    p: TenantPrincipal,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<Preview> {
+    requireRole(p, "admin");
+    const cur = await this.c.docs.get<InstallRecord>(
+      tenantScope(p.tenantId),
+      p.tenantId,
+      "installs",
+      installKey(ns, name),
+    );
+    if (!cur || cur.data.state === "uninstalled") throw notFound("not installed");
+    return this.evaluate(p, ns, name, version, cur.data.granted);
+  }
+
   /** Update to another approved version. WIDENING permissions requires fresh consent; downgrades are refused (rollback defence). */
   async update(
     p: TenantPrincipal,
