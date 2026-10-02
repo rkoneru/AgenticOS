@@ -11,3 +11,4 @@ export * from "./adapters/audit.js";
 export * from "./adapters/kernel.js";
 export * from "./adapters/usage.js";
 export * from "./adapters/runs-http.js";
+export * from "./dev-wire.js";

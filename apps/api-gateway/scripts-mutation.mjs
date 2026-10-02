@@ -2,6 +2,8 @@
 // Equivalent (not mutated): the explicit tenant_id body/query refusals duplicate additionalProperties:false in the schemas (defence in depth).
 // usage: node scripts-mutation.mjs     (exit 1 if any mutant survives)
 import { execFileSync } from "node:child_process";
+import { console } from "node:console";
+import process from "node:process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const M = [
