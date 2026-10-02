@@ -31,6 +31,7 @@ export interface DirectoryOptions {
 
 const TOKEN_RE = /^axs_([0-9a-f]{16})_([A-Za-z0-9_-]{43})$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Directory provisioning core shared by the SCIM 2.0 endpoints and IdP directory-sync events.
@@ -123,6 +124,7 @@ export class DirectoryService {
   }
 
   async getUser(ctx: DirectoryContext, id: string): Promise<Member | undefined> {
+    if (!UUID.test(id)) return undefined;
     return this.owned(ctx, await this.o.store.getMember(ctx.tenantId, id));
   }
 
@@ -253,6 +255,7 @@ export class DirectoryService {
   }
 
   getGroup(ctx: DirectoryContext, id: string): Promise<ScimGroup | undefined> {
+    if (!UUID.test(id)) return Promise.resolve(undefined);
     return this.o.store.getGroup(ctx.tenantId, ctx.directory.id, id);
   }
   listGroups(ctx: DirectoryContext): Promise<ScimGroup[]> {
