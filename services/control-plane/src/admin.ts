@@ -448,23 +448,41 @@ export class AdminService {
       result: await this.d.modelKeys.list(p),
     }));
   }
+  /** The ABAC owner of an existing BYO key is whoever last wrote it; a key that does not exist yet has no owner to protect. */
+  private async modelKeyResource(p: Principal, provider: string, label: string): Promise<Resource> {
+    const existing = await this.d.store.getModelCredential(p.tenantId, provider, label);
+    return existing ? { tenantId: existing.tenantId, ownerMemberId: existing.createdBy } : {};
+  }
+
   /** `value` is never logged, audited or returned. */
-  putModelKey(
+  async putModelKey(
     p: Principal,
     provider: string,
     label: string,
     value: string,
   ): Promise<PublicModelKey> {
-    return this.guarded(p, "modelkeys.write", { detail: { provider, label } }, async () => {
-      const r = await this.d.modelKeys.put(p, provider, label, value);
-      return { result: r, outputs: { provider, label } };
-    });
+    const resource = await this.modelKeyResource(p, provider, label);
+    return this.guarded(
+      p,
+      "modelkeys.write",
+      { resource, detail: { provider, label } },
+      async () => {
+        const r = await this.d.modelKeys.put(p, provider, label, value);
+        return { result: r, outputs: { provider, label } };
+      },
+    );
   }
-  deleteModelKey(p: Principal, provider: string, label: string): Promise<void> {
-    return this.guarded(p, "modelkeys.delete", { detail: { provider, label } }, async () => {
-      await this.d.modelKeys.delete(p, provider, label);
-      return { result: undefined };
-    });
+  async deleteModelKey(p: Principal, provider: string, label: string): Promise<void> {
+    const resource = await this.modelKeyResource(p, provider, label);
+    return this.guarded(
+      p,
+      "modelkeys.delete",
+      { resource, detail: { provider, label } },
+      async () => {
+        await this.d.modelKeys.delete(p, provider, label);
+        return { result: undefined };
+      },
+    );
   }
 
   // ------------------------------------------------------------------ policy packs

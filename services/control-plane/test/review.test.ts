@@ -51,16 +51,63 @@ describe.each(KINDS)("review: policy publish resource limits (%s store)", (kind)
     const before = calls;
     expect(await code(w.cp.admin.publishPolicy(t.owner, pack("huge", 1400)))).toBe("invalid");
     expect(await code(w.cp.admin.publishPolicy(t.owner, pack("deep", 101)))).toBe("invalid");
+    const longList = pack("longlist", 1);
+    longList.spec.rules[0]!.when.all[1]!.value = Array.from({ length: 20_000 }, (_, i) => `v${i}`); // one rule, ~40 s in opa
+    expect(await code(w.cp.admin.publishPolicy(t.owner, longList))).toBe("invalid");
     expect(calls).toBe(before);
   });
 
   it("a pack within the limits still publishes and activates; a set above the total limit cannot be activated", async () => {
     const t = await w.tenant();
-    const a = await w.cp.admin.publishPolicy(t.owner, pack("set-a", 60)); // 60*3+60 = 240 nodes
-    const b = await w.cp.admin.publishPolicy(t.owner, pack("set-b", 60));
-    const c = await w.cp.admin.publishPolicy(t.owner, pack("set-c", 60));
+    const a = await w.cp.admin.publishPolicy(t.owner, pack("set-a", 90));
+    const b = await w.cp.admin.publishPolicy(t.owner, pack("set-b", 90));
+    const c = await w.cp.admin.publishPolicy(t.owner, pack("set-c", 90));
     await w.cp.admin.activatePolicy(t.owner, a.versionId);
     await w.cp.admin.activatePolicy(t.owner, b.versionId);
     expect(await code(w.cp.admin.activatePolicy(t.owner, c.versionId))).toBe("invalid");
   });
 });
+
+describe.each(KINDS)(
+  "review: BYO model keys honour 'builders touch only keys they own' (%s store)",
+  (kind) => {
+    let w: World;
+    beforeAll(async () => {
+      w = await makeWorld(kind);
+    });
+    afterAll(() => w.close());
+
+    it("a builder can neither overwrite nor delete a key written by someone else, but manages its own", async () => {
+      const t = await w.tenant();
+      const b1 = await w.member(t.tenantId, "builder");
+      const b2 = await w.member(t.tenantId, "builder");
+      const adm = await w.member(t.tenantId, "admin");
+      await w.cp.admin.putModelKey(adm.principal, "anthropic", "prod", "admin-secret");
+      // another builder cannot replace the admin's production key with its own (traffic redirection) nor destroy it
+      expect(await code(w.cp.admin.putModelKey(b1.principal, "anthropic", "prod", "evil"))).toBe(
+        "forbidden",
+      );
+      expect(await code(w.cp.admin.deleteModelKey(b1.principal, "anthropic", "prod"))).toBe(
+        "forbidden",
+      );
+      expect(await w.cp.modelKeys.revealForRuntime(t.tenantId, "anthropic", "prod")).toBe(
+        "admin-secret",
+      );
+      // own key: create, rotate, delete are fine; a peer builder is refused
+      await w.cp.admin.putModelKey(b1.principal, "openai", "dev", "one");
+      await w.cp.admin.putModelKey(b1.principal, "openai", "dev", "two");
+      expect(await code(w.cp.admin.putModelKey(b2.principal, "openai", "dev", "x"))).toBe(
+        "forbidden",
+      );
+      expect(await code(w.cp.admin.deleteModelKey(b2.principal, "openai", "dev"))).toBe(
+        "forbidden",
+      );
+      // an admin may manage anyone's key
+      await w.cp.admin.putModelKey(adm.principal, "openai", "dev", "admin-took-over");
+      expect(await code(w.cp.admin.deleteModelKey(b1.principal, "openai", "dev"))).toBe(
+        "forbidden",
+      );
+      await w.cp.admin.deleteModelKey(adm.principal, "openai", "dev");
+    });
+  },
+);
