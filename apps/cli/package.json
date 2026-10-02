@@ -1,0 +1,30 @@
+{
+  "name": "@axis/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The `axis` command line, implemented on @axis/sdk.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "axis": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@axis/abl": "workspace:*",
+    "@axis/sdk": "workspace:*",
+    "yaml": "^2.5.0"
+  }
+}

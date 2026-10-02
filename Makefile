@@ -1,4 +1,4 @@
-.PHONY: e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -111,3 +111,11 @@ k3s-up:
 
 tf-plan:
 	@echo "(planned) Phase 10: plan only, never apply"; exit 1
+
+# Regenerate the TS/Python SDK layers from the OpenAPI (ADR 0040); drift tests run --check.
+sdk-generate:
+	node scripts/generate-sdks.mjs
+
+# Mutation check of SDK/CLI safety logic (ADR 0043).
+sdk-mutation:
+	node scripts/mutation-sdk.mjs
