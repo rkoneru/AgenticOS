@@ -1,4 +1,4 @@
-.PHONY: console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -94,9 +94,19 @@ e2e-phase6:
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase6_saas.py -p no:cacheprovider --no-cov
 	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
 
-# (Phase 7) Playwright console + CLI e2e
-e2e:
-	@echo "(planned) Phase 7: Playwright + CLI e2e"; exit 1
+# Phase 7 exit (interfaces): every core workflow through the TypeScript SDK, the Python SDK and the `axis` CLI against the REAL stack
+# (Postgres 16, the real Risk Kernel over gRPC, control plane, billing, registry/marketplace, AGIL, the Python run service with a scripted
+# model, and the API gateway as a standalone process): signup, policy activate, blueprint, signed registry publish + verified resolve,
+# marketplace install with consent, run + SSE + replay, approve / deny, audit verify + tamper detection, AGIL explanations, usage ==
+# ledger, kill-switch, then cross-tenant and API-key-scope checks; then the bypass guard stays green. The console is covered by
+# `make console-e2e` on the same stack. Same prerequisites as e2e-core.
+e2e-phase7:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase7_interfaces.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
+
+# Everything Phase 7 adds on top of the core loops: the three non-browser clients, then the console (Playwright) on the real stack.
+e2e: e2e-phase7 console-e2e
 
 evals:
 	@echo "(planned) Phase 8: Eval Hub suites"; exit 1
