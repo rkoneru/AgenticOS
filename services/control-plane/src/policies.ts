@@ -31,32 +31,28 @@ export const compileValidator: PackValidator = (docs) => {
 export const BASELINE_PACK = "baseline-deny";
 
 /**
- * Resource limits applied BEFORE the (synchronous, superlinear) `opa check --strict` + Wasm build. The compiler turns each rule and
- * condition into several Rego rules and `opa` needs seconds for a few hundred of them (300 two-condition rules: ~4.5 s; 1400:
- * minutes), and the call blocks this process's event loop: without a limit one tenant's publish stalls every tenant.
+ * Resource limits applied BEFORE the (synchronous, superlinear) `opa check --strict` + Wasm build. The compiler turns each rule,
+ * condition and list element into Rego, and `opa` needs seconds for a few hundred rules (300 two-condition rules: ~4.5 s; 1400:
+ * minutes; ONE rule with a 20 000-element `in` list: ~40 s) while blocking this process's event loop: without a limit one tenant's
+ * publish stalls every tenant.
  */
 export const MAX_PACK_RULES = 100;
-export const MAX_PACK_NODES = 300;
-export const MAX_SET_NODES = 600;
+export const MAX_PACK_VALUES = 2000;
+export const MAX_SET_VALUES = 4000;
 
-/** Number of rules and condition nodes (leaves, all/any/not) of an UNVALIDATED pack document. Never throws. */
-export function packWeight(doc: unknown): { rules: number; nodes: number } {
-  const spec = (doc as { spec?: { rules?: unknown } } | null)?.spec;
-  const rules = Array.isArray(spec?.rules) ? (spec?.rules as unknown[]) : [];
-  let nodes = 0;
-  const walk = (c: unknown, depth: number): void => {
-    if (typeof c !== "object" || c === null || Array.isArray(c)) return;
-    nodes++;
-    if (depth > 24) {
-      nodes += MAX_PACK_NODES; // absurd nesting: weigh it out of range
-      return;
-    }
-    const o = c as { all?: unknown; any?: unknown; not?: unknown };
-    for (const k of [o.all, o.any]) if (Array.isArray(k)) for (const x of k) walk(x, depth + 1);
-    if (o.not !== undefined) walk(o.not, depth + 1);
-  };
-  for (const r of rules) walk((r as { when?: unknown } | null)?.when, 0);
-  return { rules: rules.length, nodes: nodes + rules.length };
+/** Number of rules and of JSON values (objects, arrays, scalars) in the `spec` of an UNVALIDATED pack document. Never throws. */
+export function packWeight(doc: unknown): { rules: number; values: number } {
+  const spec = (doc as { spec?: unknown } | null)?.spec;
+  const rules = (spec as { rules?: unknown } | null | undefined)?.rules;
+  let values = 0;
+  const stack: unknown[] = [spec];
+  while (stack.length > 0 && values <= MAX_SET_VALUES * 4) {
+    const v = stack.pop();
+    values++;
+    if (Array.isArray(v)) stack.push(...v);
+    else if (typeof v === "object" && v !== null) stack.push(...Object.values(v));
+  }
+  return { rules: Array.isArray(rules) ? rules.length : 0, values };
 }
 
 export interface PublicPackVersion {
@@ -99,9 +95,9 @@ export class PolicyPackService {
 
   async publish(p: Principal, doc: unknown): Promise<PublicPackVersion> {
     const w = packWeight(doc);
-    if (w.rules > MAX_PACK_RULES || w.nodes > MAX_PACK_NODES)
+    if (w.rules > MAX_PACK_RULES || w.values > MAX_PACK_VALUES)
       throw invalid(
-        `policy pack too large: at most ${MAX_PACK_RULES} rules and ${MAX_PACK_NODES} condition nodes per pack`,
+        `policy pack too large: at most ${MAX_PACK_RULES} rules and ${MAX_PACK_VALUES} values per pack`,
       );
     const v = this.validate([doc]);
     if (!v.ok) throw issuesToError(v.issues);
@@ -211,11 +207,9 @@ export class PolicyPackService {
   }
 
   private assertSetSize(docs: unknown[]): void {
-    const total = docs.reduce<number>((n, d) => n + packWeight(d).nodes, 0);
-    if (total > MAX_SET_NODES)
-      throw invalid(
-        `active policy set too large: at most ${MAX_SET_NODES} condition nodes in total`,
-      );
+    const total = docs.reduce<number>((n, d) => n + packWeight(d).values, 0);
+    if (total > MAX_SET_VALUES)
+      throw invalid(`active policy set too large: at most ${MAX_SET_VALUES} values in total`);
   }
 
   /** What the Risk Kernel should load for this tenant. */
