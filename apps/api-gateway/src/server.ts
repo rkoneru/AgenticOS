@@ -336,10 +336,15 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
 
       // Authorization: fail-closed, before anything about the target is looked at.
       let decision;
-      try {
-        decision = await deps.authz.decide(principal, match.route.action);
-      } catch {
-        decision = { allowed: false, reason: "policy evaluation error", policyVersion: "none" };
+      if (match.route.action === null) {
+        // Identity-only operations (GET /me): a valid credential is all they need, and they never change state.
+        decision = { allowed: true, reason: "identity", policyVersion: "n/a" };
+      } else {
+        try {
+          decision = await deps.authz.decide(principal, match.route.action);
+        } catch {
+          decision = { allowed: false, reason: "policy evaluation error", policyVersion: "none" };
+        }
       }
       if (!decision.allowed) {
         if (match.route.mutation)
@@ -462,7 +467,12 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
               decision: "ALLOW",
               policyVersion: decision.policyVersion,
               reason: `op=${match.op.id} credential=${principal.credential}`,
-              inputs: { op: match.op.id, params: pathVals, request_id: requestId, body },
+              inputs: {
+                op: match.op.id,
+                params: pathVals,
+                request_id: requestId,
+                ...(body !== undefined ? { body } : {}),
+              },
               outputs: { phase: "authorized" },
               traceId,
             });

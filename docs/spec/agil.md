@@ -35,3 +35,7 @@ enforcement_point, rule_ids}` and remediation kinds (never reason text, ids, act
 ## HTTP
 
 `GET /v1/runs/{runId}/explanation` (`api.explanations.read`), `GET /v1/audit/events/{seq}/explanation` (`api.audit.read`).
+
+## Through the real stack
+
+The Phase 7 e2e asserts, from each client, that every `decision_ref` of a run or denial explanation matches an audit row (id, seq, decision, action, policy version) fetched through the audit API, and that the explanation of a denied tool names it. AGIL is constructed with a frozen `listEvents`-only reader inside the gateway process and is not on the decision path.

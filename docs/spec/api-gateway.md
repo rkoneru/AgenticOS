@@ -1,7 +1,7 @@
 # API gateway (`apps/api-gateway`, `@axis/api-gateway`)
 
 Status: Prototype (built and tested in-process; dev run service; see NEEDS #215-#234). Contract: `packages/contracts/openapi/axis-v1.yaml`
-(frozen v1, additive 1.1.0 by ADR 0025). Architecture: ADR 0024.
+(frozen v1, additive 1.1.0 by ADR 0025, additive 1.2.0 by ADR 0053). Architecture: ADR 0024.
 
 ## 1. What it is
 
@@ -34,23 +34,30 @@ The tenant is `principal.tenantId` and nothing else; no handler can read one fro
 
 ## 3. Operations
 
-| Operation (`operationId`)                                     | Action                           | Backing                                                          |
-| ------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
-| listBlueprints, getBlueprintVersion                           | `api.blueprints.read`            | `BlueprintStore` (memory; registry later)                        |
-| publishBlueprintVersion                                       | `api.blueprints.publish`         | `@axis/abl` `compileAbl` (schema + lint) then the store; 409 dup |
-| listRuns, getRun                                              | `api.runs.read`                  | run service                                                      |
-| startRun                                                      | `api.runs.start`                 | compiles the stored ABL to a manifest, calls the run service     |
-| signalRun                                                     | `api.runs.signal`                | run service (TKI scheduler signal)                               |
-| listRunEvents (JSON, or SSE with `Accept: text/event-stream`) | `api.events.read`                | run service event log / feed                                     |
-| listApprovals, decideApproval                                 | `api.approvals.read` / `.decide` | `ApprovalService` (principal built from the credential only)     |
-| listPolicyPacks, publishPolicyPack                            | `api.policies.read` / `.publish` | control-plane `PolicyPackService`                                |
-| testPolicy (`/policies:test`)                                 | `api.policies.test`              | real `opa eval`, bounded; gates not evaluated                    |
-| listAuditEvents, verifyAuditChain                             | `api.audit.read` / `.verify`     | audit store; verify range <= 50 000 events                       |
-| listKillSwitches, setKillSwitch                               | `api.killswitch.read` / `.write` | kernel gRPC first, then the record store                         |
-| getUsage                                                      | `api.usage.read`                 | billing ledger entries                                           |
-| startEvalRun                                                  | `api.evals.run`                  | 501 until Phase 8                                                |
-| explainRun                                                    | `api.explanations.read`          | AGIL over the audit trail of the run's trace                     |
-| explainAuditEvent (`/audit/events/{seq}/explanation`)         | `api.audit.read`                 | AGIL                                                             |
+| Operation (`operationId`)                                     | Action                           | Backing                                                             |
+| ------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| listBlueprints, getBlueprintVersion                           | `api.blueprints.read`            | `BlueprintStore` (memory; registry later)                           |
+| publishBlueprintVersion                                       | `api.blueprints.publish`         | `@axis/abl` `compileAbl` (schema + lint) then the store; 409 dup    |
+| listRuns, getRun                                              | `api.runs.read`                  | run service                                                         |
+| startRun                                                      | `api.runs.start`                 | compiles the stored ABL to a manifest, calls the run service        |
+| signalRun                                                     | `api.runs.signal`                | run service (TKI scheduler signal)                                  |
+| listRunEvents (JSON, or SSE with `Accept: text/event-stream`) | `api.events.read`                | run service event log / feed                                        |
+| listApprovals, decideApproval                                 | `api.approvals.read` / `.decide` | `ApprovalService` (principal built from the credential only)        |
+| listPolicyPacks, publishPolicyPack                            | `api.policies.read` / `.publish` | control-plane `PolicyPackService`                                   |
+| testPolicy (`/policies:test`)                                 | `api.policies.test`              | real `opa eval`, bounded; gates not evaluated                       |
+| listAuditEvents, verifyAuditChain                             | `api.audit.read` / `.verify`     | audit store; verify range <= 50 000 events                          |
+| listKillSwitches, setKillSwitch                               | `api.killswitch.read` / `.write` | kernel gRPC first, then the record store                            |
+| getUsage                                                      | `api.usage.read`                 | billing ledger entries                                              |
+| startEvalRun                                                  | `api.evals.run`                  | 501 until Phase 8                                                   |
+| explainRun                                                    | `api.explanations.read`          | AGIL over the audit trail of the run's trace                        |
+| explainAuditEvent (`/audit/events/{seq}/explanation`)         | `api.audit.read`                 | AGIL                                                                |
+| getMe (`/me`)                                                 | none (any valid credential)      | the principal + control-plane store (tenant, member, scopes)        |
+| getApproval                                                   | `api.approvals.read`             | approvals service (same visibility as the list, else 404)           |
+| activatePolicyPack (`/policies/{versionId}/activate`)         | `api.policies.activate`          | control-plane admin activation (audit + kernel bundle publish)      |
+| list/claim namespace, list/add key, publish, versions, yank   | `api.registry.read` / `.write`   | `@axis/registry` in process; tenant + role from the credential      |
+| resolveRegistryBlueprint (`/registry/resolve`)                | `api.registry.read`              | re-verifies hash, signature, provenance on every read (422 + codes) |
+| marketplace listings, listing, installs                       | `api.marketplace.read`           | `@axis/marketplace` catalog and the tenant's installs               |
+| previewMarketplaceInstall, install, uninstall                 | `api.marketplace.install`        | permission diff + consent digest; install pinned to version+hash    |
 
 Role matrix: `policies/control-plane/authz.cases.yaml` (`make policy-test`) and `services/control-plane/test/api-authz.test.ts`.
 
@@ -82,6 +89,15 @@ Internal errors never include exception text.
 `allowedOrigins`, `maxBodyBytes`, `requestTimeoutMs`, `rate`, `unauthRate`, `costs`, `maxSseStreamsPerTenant`, `sseHeartbeatMs`,
 `sseRecheckMs`, `sseMaxMs`, `idempotencyTtlMs`, `validateResponses`, `behindTls`, `maxVerifyEvents`, `log`. Wiring: `wireGateway`
 (`dev-wire.ts`).
+
+## 7a. Standalone process (DEV composition, ADR 0054)
+
+`node apps/api-gateway/dist/main.js`; configuration only from the environment, validated by `configFromEnv` (exit 2 with the missing/invalid name, never a secret):
+`GW_DATABASE_URL`, `GW_DB_ROLE`, `GW_REGION` (default `us-east-1`), `GW_PORT` (0), `GW_HOST` (loopback only), `GW_ALLOWED_ORIGINS`, `GW_PEPPER` / `GW_COOKIE_KEY` / `GW_SIGNING_KEY`
+(64 hex each, shared with the control plane so its sessions and API keys verify), `GW_SEAL_KEY`, `GW_RUN_SERVICE_URL` + `GW_RUN_TOKENS_FILE`, `GW_KERNEL_TARGET` +
+`GW_KERNEL_TOKENS_FILE`, `GW_APPROVALS_URL` + `GW_APPROVALS_TOKENS_FILE`, `GW_BUNDLE_DIR`, `GW_RATE_BURST` / `GW_RATE_PER_SEC`. Token files are `{ "<tenant uuid>": "<token>" }`,
+re-read when they change. It refuses `NODE_ENV=production` (dev adapters: static tokens, fake provers, in-memory blueprint store, NEEDS #275) and prints
+`{"event":"listening","port":N}`.
 
 ## 8. Run service protocol (gateway <-> `runtime/src/axis_runtime/runserver.py`)
 

@@ -236,3 +236,12 @@ describe("gateway vs control-plane routing and the bearer conversion", () => {
     expect(bearerFromCookie("evil__Host-axis_at=zzz", "__Host-axis_at")).toBeUndefined();
   });
 });
+
+describe("CSP form-action and the IdP redirect", () => {
+  it("is 'self' only unless an IdP origin is configured", () => {
+    expect(buildCsp("n")).toContain("form-action 'self';");
+    expect(buildCsp("n", { formActionOrigins: ["https://idp.example"] })).toContain(
+      "form-action 'self' https://idp.example;",
+    );
+  });
+});

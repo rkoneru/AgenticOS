@@ -32,6 +32,16 @@ import type {
   ListAuditEventsParams,
   AblDocument,
   AuditEvent,
+  DsseEnvelope,
+  Identity,
+  InstallPreview,
+  MarketplaceInstall,
+  MarketplaceListing,
+  RegistryKey,
+  RegistryNamespace,
+  RegistrySignature,
+  RegistryVersion,
+  ResolvedBlueprint,
 } from "./generated/types.js";
 import { paginate, type Page } from "./pagination.js";
 import { HttpTransport, type RequestOptions, type TransportConfig } from "./transport.js";
@@ -319,6 +329,9 @@ export class Approvals {
     const { maxItems, ...rest } = args;
     return paginate((cursor) => this.list(pick({ ...rest, cursor }), options), maxItems);
   }
+  get(approvalId: string, options?: Opts): Promise<Approval> {
+    return this.ax.api.getApproval({ approvalId }, options);
+  }
   decide(
     approvalId: string,
     decision: "approve" | "reject",
@@ -356,6 +369,10 @@ export class Policies {
   }
   publish(policy: PolicyDocument, options?: Opts): Promise<PolicyPack> {
     return this.ax.api.publishPolicyPack({ body: { policy } }, options);
+  }
+  /** Make a published version (its `version_id`) the tenant's active version of its pack; the Risk Kernel enforces it from then on. */
+  activate(versionId: string, options?: Opts): Promise<PolicyPack> {
+    return this.ax.api.activatePolicyPack({ versionId }, options);
   }
   /** Evaluate a hypothetical request against a policy without executing anything. */
   test(
@@ -466,6 +483,142 @@ export class Evals {
   }
 }
 
+export interface SignedBundle {
+  abl: AblDocument;
+  signature: RegistrySignature;
+  provenance: DsseEnvelope;
+}
+
+/**
+ * Signed blueprint registry. Publishing needs a signed bundle (detached Ed25519 signature + DSSE provenance) produced by publisher
+ * tooling that holds the private key and runs the ABL compiler (`axis registry sign`); the SDK transports it and never sees a key.
+ */
+export class Registry {
+  constructor(private readonly ax: Axis) {}
+  namespaces(options?: Opts) {
+    return this.ax.api.listRegistryNamespaces(options);
+  }
+  claim(
+    namespace: string,
+    args: { idempotencyKey?: string | undefined } = {},
+    options?: Opts,
+  ): Promise<RegistryNamespace> {
+    return this.ax.api.claimRegistryNamespace(
+      pick({ body: { namespace }, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  keys(namespace: string, options?: Opts) {
+    return this.ax.api.listRegistryKeys({ namespace }, options);
+  }
+  addKey(
+    namespace: string,
+    publicKey: string,
+    args: { idempotencyKey?: string | undefined } = {},
+    options?: Opts,
+  ): Promise<RegistryKey> {
+    return this.ax.api.addRegistryKey(
+      pick({ namespace, body: { public_key: publicKey }, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  publish(
+    namespace: string,
+    bundle: SignedBundle,
+    args: { idempotencyKey?: string | undefined } = {},
+    options?: Opts,
+  ): Promise<RegistryVersion> {
+    return this.ax.api.publishRegistryBlueprint(
+      pick({ namespace, body: bundle, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  versions(namespace: string, name: string, options?: Opts) {
+    return this.ax.api.listRegistryVersions({ namespace, name }, options);
+  }
+  yank(namespace: string, name: string, version: string, reason: string, options?: Opts) {
+    return this.ax.api.yankRegistryVersion({ namespace, name, version, body: { reason } }, options);
+  }
+  /** `namespace/name@range` -> the highest non-yanked version, verified by the server on every call (hash, signature, provenance). */
+  resolve(ref: string, options?: Opts): Promise<ResolvedBlueprint> {
+    return this.ax.api.resolveRegistryBlueprint({ ref }, options);
+  }
+}
+
+export interface InstallConsent {
+  /** Called with the permission diff. Return true to consent; the install is sent only then and echoes the digest of THIS diff. */
+  consent: (preview: InstallPreview) => boolean | Promise<boolean>;
+  idempotencyKey?: string | undefined;
+}
+
+export class Marketplace {
+  constructor(private readonly ax: Axis) {}
+  listings(args: { q?: string | undefined; category?: string | undefined } = {}, options?: Opts) {
+    return this.ax.api.listMarketplaceListings(pick(args), options);
+  }
+  listing(namespace: string, name: string, options?: Opts): Promise<MarketplaceListing> {
+    return this.ax.api.getMarketplaceListing({ namespace, name }, options);
+  }
+  /** The permission diff against the tenant baseline, the findings and the consent digest (admin). */
+  preview(namespace: string, name: string, range = "*", options?: Opts): Promise<InstallPreview> {
+    return this.ax.api.previewMarketplaceInstall({ body: { namespace, name, range } }, options);
+  }
+  install(
+    args: {
+      namespace: string;
+      name: string;
+      version: string;
+      contentHash: string;
+      consentDigest: string;
+      idempotencyKey?: string | undefined;
+    },
+    options?: Opts,
+  ): Promise<MarketplaceInstall> {
+    return this.ax.api.installMarketplaceListing(
+      pick({
+        body: {
+          namespace: args.namespace,
+          name: args.name,
+          version: args.version,
+          content_hash: args.contentHash,
+          consent_digest: args.consentDigest,
+        },
+        idempotencyKey: args.idempotencyKey,
+      }),
+      options,
+    );
+  }
+  /** Preview, ask `consent`, then install exactly what was previewed (version, hash and digest come from the preview, never the caller). */
+  async installWithConsent(
+    namespace: string,
+    name: string,
+    range: string,
+    c: InstallConsent,
+    options?: Opts,
+  ): Promise<MarketplaceInstall> {
+    const p = await this.preview(namespace, name, range, options);
+    if (!(await c.consent(p)))
+      throw new AxisError("install cancelled: the permission diff was not consented to");
+    return this.install(
+      pick({
+        namespace: p.namespace,
+        name: p.name,
+        version: p.version,
+        contentHash: p.content_hash,
+        consentDigest: p.consent_digest,
+        idempotencyKey: c.idempotencyKey,
+      }),
+      options,
+    );
+  }
+  installs(options?: Opts) {
+    return this.ax.api.listMarketplaceInstalls(options);
+  }
+  uninstall(namespace: string, name: string, options?: Opts) {
+    return this.ax.api.uninstallMarketplaceListing({ namespace, name }, options);
+  }
+}
+
 /**
  * The AXIS client. The tenant is always derived from the credential by the server: there is deliberately no
  * tenant option, and passing one is an error.
@@ -482,6 +635,8 @@ export class Axis {
   readonly killSwitches: KillSwitches;
   readonly usage: Usage;
   readonly evals: Evals;
+  readonly registry: Registry;
+  readonly marketplace: Marketplace;
   readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(options: AxisOptions = {}) {
@@ -521,6 +676,13 @@ export class Axis {
     this.killSwitches = new KillSwitches(this);
     this.usage = new Usage(this);
     this.evals = new Evals(this);
+    this.registry = new Registry(this);
+    this.marketplace = new Marketplace(this);
+  }
+
+  /** Who this credential belongs to: tenant, member, role, credential kind and (for API keys) scopes. */
+  me(options?: Opts): Promise<Identity> {
+    return this.api.getMe(options);
   }
 
   get baseUrl(): string {

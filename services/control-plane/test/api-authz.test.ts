@@ -37,6 +37,9 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.usage.read",
     "api.evals.run",
     "api.explanations.read",
+    "api.registry.read",
+    "api.registry.write",
+    "api.marketplace.read",
   ],
   operator: [
     "api.blueprints.read",
@@ -51,6 +54,8 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.killswitch.write",
     "api.usage.read",
     "api.explanations.read",
+    "api.registry.read",
+    "api.marketplace.read",
   ],
   auditor: [
     "api.blueprints.read",
@@ -63,6 +68,8 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.killswitch.read",
     "api.usage.read",
     "api.explanations.read",
+    "api.registry.read",
+    "api.marketplace.read",
   ],
   billing: ["api.usage.read"],
   viewer: [
@@ -71,6 +78,8 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.events.read",
     "api.policies.read",
     "api.explanations.read",
+    "api.registry.read",
+    "api.marketplace.read",
   ],
 };
 

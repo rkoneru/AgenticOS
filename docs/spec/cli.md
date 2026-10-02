@@ -1,6 +1,6 @@
 # `axis` CLI
 
-Status: **Prototype** (built and tested against a mock server generated from the OpenAPI; not yet run against the real gateway, which the Phase 7 e2e does). Package `@axis/cli` (`apps/cli`), binary `axis`, implemented on `@axis/sdk`. See ADR 0042.
+Status: **Prototype** (unit-tested against a mock server generated from the OpenAPI; the Phase 7 e2e (`make e2e-phase7`) drives the real gateway through the spawned `axis` binary). Package `@axis/cli` (`apps/cli`), binary `axis`, implemented on `@axis/sdk`. See ADR 0042.
 
 ## Install and sign in
 
@@ -38,7 +38,7 @@ Credentials:
 
 - `blueprints validate` is offline: the same ABL compiler and linter as the platform, no network and no credentials. `blueprints publish` validates locally first and refuses to publish an invalid file.
 - `run tail` streams SSE with automatic reconnect (`Last-Event-ID`); with `--json` it prints one event per line. `run replay` prints the full append-only event log with relative timestamps; nothing is executed.
-- `policies activate`, `registry *` and `marketplace *` have no endpoint in API v1 and exit 1 with a "not yet available" message. If a regenerated spec gains a matching operation (operation id, tag or path containing `registry` / `marketplace` / `policy`+`activate`), the command calls it. `axis api <operationId>` calls any operation directly.
+- `policies activate`, `registry *` and `marketplace *` call the OpenAPI 1.2.0 operations (ADR 0053). `registry sign` / `keygen` are OFFLINE: the Ed25519 key is a local 0600 PEM file that is never sent anywhere, and the provenance carries the platform compiler's own lint results. `marketplace install` never installs without consent: no `--yes` / `--consent-digest` prints the permission diff and exits 2; the install echoes the version, hash and digest of the PREVIEW, never caller-typed values. `whoami` calls `GET /v1/me` (tenant, role, credential kind, scopes). `axis api <operationId>` calls any operation directly.
 - Shell completions: `axis completion bash|zsh|fish`.
 
 ## Command reference
@@ -160,6 +160,14 @@ Show a run
 axis run get <run-id> [options]
 ```
 
+### `axis run explain`
+
+Explain a run from its audit trail (AGIL; read-only)
+
+```
+axis run explain <run-id> [options]
+```
+
 ### `axis run list`
 
 List runs
@@ -226,6 +234,14 @@ axis approvals list [options]
 | `--all` | Follow every page |
 | `--status <status>` | Filter by status |
 
+### `axis approvals get`
+
+Show one approval
+
+```
+axis approvals get <approval-id> [options]
+```
+
 ### `axis approvals approve`
 
 Approve a pending approval
@@ -289,11 +305,13 @@ axis policies publish <policy-file> [options]
 
 ### `axis policies activate`
 
-Activate a published policy pack version **(not yet available: the API has no endpoint for it)**
+Activate a published policy pack version
 
 ```
-axis policies activate <name>@<version> [options]
+axis policies activate <name>@<version | version-id> [options]
 ```
+
+Makes the published version the tenant's active version of that pack; the Risk Kernel enforces it from then on.
 
 ### `axis audit events`
 
@@ -310,6 +328,14 @@ axis audit events [options]
 | `--trace-id <32 hex>` | Only events of this trace |
 | `--decision <decision>` | Only this decision |
 | `--from-seq <seq>` | Start at this sequence number |
+
+### `axis audit explain`
+
+Explain one audited decision (AGIL; read-only)
+
+```
+axis audit explain <seq> [options]
+```
 
 ### `axis audit verify`
 
@@ -394,48 +420,123 @@ Run an eval suite against a blueprint version
 axis evals start <suite> <name>@<version> [options]
 ```
 
+### `axis registry keygen`
+
+Create an Ed25519 publisher key pair (offline)
+
+```
+axis registry keygen [options]
+```
+
+The private key is written to a local file and never sent anywhere. Register the printed public key with `axis registry add-key`.
+
+| Option | Description |
+| --- | --- |
+| `--out <file>` | Private key file to create (PEM, mode 0600; must not exist) |
+
+### `axis registry namespaces`
+
+List the namespaces your tenant owns
+
+```
+axis registry namespaces [options]
+```
+
+### `axis registry claim`
+
+Claim a namespace for your tenant (admin)
+
+```
+axis registry claim <namespace> [options]
+```
+
+### `axis registry keys`
+
+List a namespace's publisher keys
+
+```
+axis registry keys <namespace> [options]
+```
+
+### `axis registry add-key`
+
+Register a publisher public key for a namespace (admin)
+
+```
+axis registry add-key <namespace> (--public-key <b64url> | --key <pem>) [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--public-key <b64url>` | Raw Ed25519 public key, base64url |
+| `--key <pem>` | Derive the public key from this private key file |
+
+### `axis registry sign`
+
+Sign an ABL file offline: detached signature plus provenance attestation
+
+```
+axis registry sign <abl-file> [options]
+```
+
+Validates and lints the file with the platform compiler, then signs with the local key. Output is the bundle `registry publish` accepts.
+
+| Option | Description |
+| --- | --- |
+| `--namespace <ns>` | Registry namespace (yours) |
+| `--key <pem>` | Ed25519 private key file (PKCS#8 PEM) |
+| `--builder <id>` | Builder id recorded in the provenance |
+| `--source-ref <ref>` | Source reference recorded in the provenance |
+| `--out <file>` | Write the signed bundle here instead of stdout |
+
 ### `axis registry publish`
 
-Publish a blueprint to the registry **(not yet available: the API has no endpoint for it)**
+Publish a signed blueprint version (immutable; verified before it is stored)
 
 ```
-axis registry publish <name>@<version> [options]
-```
-
-| Option | Description |
-| --- | --- |
-| `--param <name=value>` | Query parameter (repeatable) |
-| `--body <json|file>` | Request body (inline JSON, a file path, or - for stdin) |
-
-### `axis registry list`
-
-List registry blueprints **(not yet available: the API has no endpoint for it)**
-
-```
-axis registry list [options]
+axis registry publish <bundle.json | abl-file> [options]
 ```
 
 | Option | Description |
 | --- | --- |
-| `--param <name=value>` | Query parameter (repeatable) |
-| `--body <json|file>` | Request body (inline JSON, a file path, or - for stdin) |
+| `--namespace <ns>` | Registry namespace (yours) |
+| `--key <pem>` | Ed25519 private key file (PKCS#8 PEM) |
+| `--builder <id>` | Builder id recorded in the provenance |
+| `--source-ref <ref>` | Source reference recorded in the provenance |
 
-### `axis registry get`
+### `axis registry versions`
 
-Show a registry blueprint **(not yet available: the API has no endpoint for it)**
+List the versions of a blueprint with their state
 
 ```
-axis registry get <name> [options]
+axis registry versions <namespace>/<name> [options]
+```
+
+### `axis registry yank`
+
+Yank a version so it stops resolving (admin)
+
+```
+axis registry yank <namespace>/<name>@<version> [options]
 ```
 
 | Option | Description |
 | --- | --- |
-| `--param <name=value>` | Query parameter (repeatable) |
-| `--body <json|file>` | Request body (inline JSON, a file path, or - for stdin) |
+| `--reason <text>` | Why (recorded) |
+
+### `axis registry resolve`
+
+Resolve namespace/name@range and verify it (hash, signature, provenance)
+
+```
+axis registry resolve <namespace>/<name>@<range> [options]
+```
+
+Exit 1 with the failed check codes when the best version does not verify; it never falls back to an older one.
 
 ### `axis marketplace search`
 
-Search marketplace listings **(not yet available: the API has no endpoint for it)**
+Search the catalog
 
 ```
 axis marketplace search [query] [options]
@@ -443,21 +544,54 @@ axis marketplace search [query] [options]
 
 | Option | Description |
 | --- | --- |
-| `--param <name=value>` | Query parameter (repeatable) |
-| `--body <json|file>` | Request body (inline JSON, a file path, or - for stdin) |
+| `--category <name>` | Only this category |
+
+### `axis marketplace show`
+
+Show one listing
+
+```
+axis marketplace show <namespace>/<name> [options]
+```
+
+### `axis marketplace preview`
+
+Show what installing would grant: permission diff, findings, consent digest (admin)
+
+```
+axis marketplace preview <namespace>/<name>[@range] [options]
+```
 
 ### `axis marketplace install`
 
-Install a marketplace listing **(not yet available: the API has no endpoint for it)**
+Install a listing with explicit consent to the permission diff (admin)
 
 ```
-axis marketplace install <listing-id> [options]
+axis marketplace install <namespace>/<name>[@range] [options]
 ```
+
+Without --yes or --consent-digest the preview is printed and nothing is installed (exit 2).
 
 | Option | Description |
 | --- | --- |
-| `--param <name=value>` | Query parameter (repeatable) |
-| `--body <json|file>` | Request body (inline JSON, a file path, or - for stdin) |
+| `--yes` | Consent to the permissions listed by the preview |
+| `--consent-digest <digest>` | Consent to exactly the diff with this digest |
+
+### `axis marketplace installs`
+
+List your tenant's installs
+
+```
+axis marketplace installs [options]
+```
+
+### `axis marketplace uninstall`
+
+Uninstall a listing (admin)
+
+```
+axis marketplace uninstall <namespace>/<name> [options]
+```
 
 ### `axis api`
 

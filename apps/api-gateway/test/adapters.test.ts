@@ -84,6 +84,7 @@ describe("control-plane adapters", () => {
     const mk = (code: ConstructorParameters<typeof ApprovalError>[0]) =>
       new ApprovalsAdapter({
         list: async () => [],
+        get: async () => Promise.reject(new ApprovalError(code, "m")),
         approve: async () => Promise.reject(new ApprovalError(code, "m")),
         deny: async () => Promise.reject(new ApprovalError(code, "m")),
       });
@@ -101,6 +102,7 @@ describe("control-plane adapters", () => {
     await expect(
       new ApprovalsAdapter({
         list: async () => Promise.reject(new ApprovalError("NOT_FOUND", "x")),
+        get: async () => ({}) as never,
         approve: async () => ({}) as never,
         deny: async () => ({}) as never,
       }).list(P, { limit: 1 }),

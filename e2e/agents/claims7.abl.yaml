@@ -1,0 +1,26 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: claims-agent
+  version: 1.0.0
+  description: "Phase 7 e2e. Reads claims, files payouts (a human approves them), may not read restricted claims."
+spec:
+  riskClassification:
+    level: limited
+    rationale: Reads claim records and files an internal payout; nothing leaves the tenant.
+    transparencyNotice: You are interacting with an AI system.
+  model:
+    primary: { provider: openai, model: gpt-4o, params: { maxOutputTokens: 128 } }
+  instructions:
+    system: You review claims for the tenant. Use the tools you are given.
+  routing:
+    stages: [cache, rules, llm]
+  tools:
+    - { name: lookup-claim, kind: function, sideEffects: read }
+    - { name: lookup-restricted, kind: function, sideEffects: read }
+    - { name: file-payout, kind: function, sideEffects: write }
+  budgets:
+    tokens: { soft: 40000, hard: 60000 }
+    toolCalls: { hard: 20 }
+  policy:
+    packs: ["tenant-claims@^1.0.0"]

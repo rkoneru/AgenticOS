@@ -1,4 +1,4 @@
-.PHONY: console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -94,9 +94,19 @@ e2e-phase6:
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase6_saas.py -p no:cacheprovider --no-cov
 	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
 
-# (Phase 7) Playwright console + CLI e2e
-e2e:
-	@echo "(planned) Phase 7: Playwright + CLI e2e"; exit 1
+# Phase 7 exit (interfaces): every core workflow through the TypeScript SDK, the Python SDK and the `axis` CLI against the REAL stack
+# (Postgres 16, the real Risk Kernel over gRPC, control plane, billing, registry/marketplace, AGIL, the Python run service with a scripted
+# model, and the API gateway as a standalone process): signup, policy activate, blueprint, signed registry publish + verified resolve,
+# marketplace install with consent, run + SSE + replay, approve / deny, audit verify + tamper detection, AGIL explanations, usage ==
+# ledger, kill-switch, then cross-tenant and API-key-scope checks; then the bypass guard stays green. The console is covered by
+# `make console-e2e` on the same stack. Same prerequisites as e2e-core.
+e2e-phase7:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase7_interfaces.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
+
+# Everything Phase 7 adds on top of the core loops: the three non-browser clients, then the console (Playwright) on the real stack.
+e2e: e2e-phase7 console-e2e
 
 evals:
 	@echo "(planned) Phase 8: Eval Hub suites"; exit 1
@@ -120,13 +130,16 @@ sdk-generate:
 sdk-mutation:
 	node scripts/mutation-sdk.mjs
 
-# Phase 7 / D: console build (with a dev-login flag), client-bundle secret scan, then the Playwright suite against
-# the mock control-plane API. Needs Playwright's Chromium (PLAYWRIGHT_BROWSERS_PATH) and nothing else.
+# Phase 7 console e2e: build the console (with the dev-login flag), scan the CLIENT bundle for secrets, run the 60 mock-API Playwright flows
+# (axe on every page, light and dark), then the REAL-STACK suite: SSO through the control plane, the real gateway, Risk Kernel, run service,
+# AGIL, registry and marketplace (no mock), plus XSS, CSRF and cross-tenant checks from the browser. Needs Playwright's Chromium
+# (PLAYWRIGHT_BROWSERS_PATH) and, for the real-stack part, the same prerequisites as e2e-core (Postgres 16, opa, node, uv).
 console-e2e:
-	pnpm --filter @axis/abl --filter @axis/contracts build
-	cd apps/console && NEXT_PUBLIC_DEV_LOGIN=1 AXIS_API_URL=http://127.0.0.1:4010 NEXT_TELEMETRY_DISABLED=1 pnpm exec next build
+	pnpm build
+	cd apps/console && NEXT_PUBLIC_DEV_LOGIN=1 NEXT_TELEMETRY_DISABLED=1 pnpm exec next build
 	cd apps/console && AXIS_SCAN_SENTINELS=127.0.0.1:4010 node scripts/scan-bundle.mjs .next/static
 	cd apps/console && AXIS_API_URL=http://127.0.0.1:4010 pnpm exec playwright test
+	bash infra/scripts/with-pg.sh uv run python e2e/interfaces_stack.py --out /tmp/axis-console-stack.json -- bash -c 'cd apps/console && pnpm exec playwright test -c playwright.real.config.ts'
 
 docs-build:
 	pnpm --filter @axis/docs-site build

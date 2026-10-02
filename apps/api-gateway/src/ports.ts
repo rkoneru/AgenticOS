@@ -49,6 +49,105 @@ export interface PolicyPackDto {
   version: string;
   content_hash?: string;
   created_at: string;
+  version_id?: string;
+  active?: boolean;
+}
+export interface IdentityDto {
+  tenant: { id: string; name?: string; region?: string };
+  member: {
+    id: string;
+    email?: string;
+    display_name?: string;
+    role: "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer";
+  };
+  credential: { kind: "session" | "api_key"; scopes?: string[] };
+}
+export interface RegistryNamespaceDto {
+  namespace: string;
+  public?: boolean;
+  created_at?: string;
+}
+export interface RegistryKeyDto {
+  key_id: string;
+  public_key: string;
+  valid_from: string;
+  valid_until?: string | null;
+  revoked_at?: string | null;
+  revoke_reason?: string | null;
+}
+export interface RegistryVersionDto {
+  namespace: string;
+  name: string;
+  version: string;
+  content_hash: string;
+  risk_level: "minimal" | "limited" | "high";
+  signature: { key_id: string; signed_at: string; sig: string };
+  published_at: string;
+  published_by?: string;
+  state?: "active" | "deprecated" | "yanked";
+  state_reason?: string | null;
+}
+export interface ResolvedBlueprintDto extends RegistryVersionDto {
+  abl: unknown;
+  provenance: unknown;
+  verification: {
+    key_id: string;
+    builder?: string;
+    source_ref?: string;
+    compiler_version?: string;
+  };
+}
+export interface CapabilityDto {
+  key: string;
+  level: number;
+}
+export interface MarketplaceListingDto {
+  namespace: string;
+  name: string;
+  title: string;
+  summary: string;
+  categories: string[];
+  publisher?: string;
+  latest: {
+    version: string;
+    content_hash: string;
+    risk_level: string;
+    max_severity: string;
+  } | null;
+  versions: string[];
+}
+export interface InstallPreviewDto {
+  namespace: string;
+  name: string;
+  version: string;
+  content_hash: string;
+  risk_level: string;
+  max_severity: string;
+  findings: { id: string; severity: string; path: string; message: string }[];
+  capabilities: CapabilityDto[];
+  diff: {
+    added: {
+      key: string;
+      change: "new" | "raised";
+      level: number;
+      previous_level: number | null;
+    }[];
+    removed: { key: string; level: number; new_level: number | null }[];
+    widening: boolean;
+  };
+  consent_digest: string;
+}
+export interface MarketplaceInstallDto {
+  id: string;
+  namespace: string;
+  name: string;
+  version: string;
+  content_hash: string;
+  state: "active" | "flagged" | "uninstalled";
+  granted: CapabilityDto[];
+  consented_by?: string;
+  consented_at?: string;
+  flag_reason?: string | null;
 }
 export interface KillSwitchDto {
   scope: "global" | "tenant" | "agent" | "tool";
@@ -174,6 +273,7 @@ export interface RunsPort {
 }
 
 export interface ApprovalsPort {
+  get(p: Principal, id: string): Promise<ApprovalDto>;
   list(
     p: Principal,
     q: { status?: ApprovalDto["status"]; limit: number; after?: string },
@@ -188,6 +288,8 @@ export interface ApprovalsPort {
 export interface PolicyPort {
   list(p: Principal, q: { limit: number; after?: string }): Promise<Page<PolicyPackDto>>;
   publish(p: Principal, doc: unknown): Promise<PolicyPackDto>;
+  /** Makes a published version the tenant's active version of its pack (the kernel enforces it from then on). */
+  activate(p: Principal, versionId: string): Promise<PolicyPackDto>;
   test(
     p: Principal,
     q: {
@@ -220,6 +322,57 @@ export interface UsagePort {
     tenantId: string,
     q: { from: Date; to: Date; groupBy?: "meter" | "model" | "blueprint" | "day" },
   ): Promise<UsageRowDto[]>;
+}
+
+export interface IdentityPort {
+  me(p: Principal): Promise<IdentityDto>;
+}
+
+export interface RegistryPort {
+  listNamespaces(p: Principal): Promise<RegistryNamespaceDto[]>;
+  claim(p: Principal, namespace: string): Promise<RegistryNamespaceDto>;
+  listKeys(p: Principal, namespace: string): Promise<RegistryKeyDto[]>;
+  addKey(p: Principal, namespace: string, publicKey: string): Promise<RegistryKeyDto>;
+  publish(
+    p: Principal,
+    namespace: string,
+    input: {
+      abl: unknown;
+      signature: { key_id: string; signed_at: string; sig: string };
+      provenance: unknown;
+    },
+  ): Promise<RegistryVersionDto>;
+  listVersions(p: Principal, namespace: string, name: string): Promise<RegistryVersionDto[]>;
+  yank(
+    p: Principal,
+    namespace: string,
+    name: string,
+    version: string,
+    reason: string,
+  ): Promise<void>;
+  /** Resolves AND verifies (hash, signature, provenance); a failure is a PortInvalid carrying the failed check codes. */
+  resolve(p: Principal, ref: string): Promise<ResolvedBlueprintDto>;
+}
+
+export interface MarketplacePort {
+  listings(q: { text?: string; category?: string }): Promise<MarketplaceListingDto[]>;
+  listing(namespace: string, name: string): Promise<MarketplaceListingDto>;
+  preview(
+    p: Principal,
+    q: { namespace: string; name: string; range: string },
+  ): Promise<InstallPreviewDto>;
+  install(
+    p: Principal,
+    q: {
+      namespace: string;
+      name: string;
+      version: string;
+      content_hash: string;
+      consent_digest: string;
+    },
+  ): Promise<MarketplaceInstallDto>;
+  installs(p: Principal): Promise<MarketplaceInstallDto[]>;
+  uninstall(p: Principal, namespace: string, name: string): Promise<void>;
 }
 
 export interface ExplainPort {

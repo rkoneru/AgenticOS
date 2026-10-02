@@ -68,10 +68,23 @@ function fromApprovalError(e: unknown): never {
  * indistinguishable from a missing one (the service scopes every read by tenant and answers NOT_FOUND).
  */
 export class ApprovalsAdapter implements ApprovalsPort {
-  constructor(private readonly svc: Pick<ApprovalService, "list" | "approve" | "deny">) {}
+  constructor(private readonly svc: Pick<ApprovalService, "list" | "approve" | "deny" | "get">) {}
 
   private who(p: Principal): { tenant_id: string; id: string; roles: string[] } {
     return { tenant_id: p.tenantId, id: p.memberId, roles: [p.role] };
+  }
+
+  /** Same visibility as the list: a request the caller filed or may act on; any other id (including another tenant's) is a 404. */
+  async get(p: Principal, id: string): Promise<ApprovalDto> {
+    try {
+      const w = this.who(p);
+      const r = await this.svc.get(w, id);
+      if (r.requester.id !== w.id && !eligibleRoles(r).some((x) => w.roles.includes(x)))
+        throw new PortNotFound("approval not found");
+      return toApproval(r);
+    } catch (e) {
+      return fromApprovalError(e);
+    }
   }
 
   async list(

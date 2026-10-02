@@ -45,6 +45,7 @@ const PATTERN_SAMPLES: Record<string, string> = {
   "^axp_[0-9A-HJKMNP-TV-Z]{26}$": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "^[0-9a-f]{64}$": "a".repeat(64),
   "^[0-9a-f]{32}$": "b".repeat(32),
+  "^[a-z][a-z0-9-]{1,62}$": "sample-name",
 };
 
 export function synthesize(schema: Record<string, unknown>): unknown {

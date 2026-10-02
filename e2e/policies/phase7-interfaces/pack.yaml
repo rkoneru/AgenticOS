@@ -1,0 +1,32 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: tenant-claims
+  version: 1.0.0
+  description: "Phase 7 e2e fixture (not a shipped pack): the pack each interface client publishes and activates. Model calls and claim reads are allowed, a payout needs a human (admin, owner or operator), one read tool is forbidden."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+  rules:
+    - id: allow-model-calls
+      enforcementPoints: [model_call]
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-claim-lookup
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: lookup-claim }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: approve-payouts
+      priority: 200
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: file-payout }
+      gates: [tenant-kill]
+      decision: REQUIRE_APPROVAL
+      approval: { roles: [admin, owner, operator], slaSeconds: 120, escalateTo: [] }
+    - id: deny-restricted-lookup
+      priority: 400
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: lookup-restricted }
+      decision: DENY

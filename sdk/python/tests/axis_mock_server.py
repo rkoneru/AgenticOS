@@ -25,6 +25,7 @@ _PATTERN_SAMPLES = {
     "^axp_[0-9A-HJKMNP-TV-Z]{26}$": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     "^[0-9a-f]{64}$": "a" * 64,
     "^[0-9a-f]{32}$": "b" * 32,
+    "^[a-z][a-z0-9-]{1,62}$": "sample-name",
 }
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 

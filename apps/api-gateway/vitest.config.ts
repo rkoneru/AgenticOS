@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**"],
-      exclude: ["src/main.ts", "src/index.ts", "src/dev-wire.ts"],
+      exclude: ["src/main.ts", "src/index.ts", "src/dev-wire.ts", "src/standalone-wire.ts"],
       thresholds: {
         lines: 85,
         branches: 85,

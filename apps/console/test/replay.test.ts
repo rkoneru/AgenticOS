@@ -94,3 +94,47 @@ describe("replay", () => {
     expect(gauge("t", 5, undefined, 0).ratio).toBeUndefined();
   });
 });
+
+describe("the runtime's own event vocabulary (what the real gateway streams)", () => {
+  const ev = (sequence: number, type: string, data: Record<string, unknown> = {}) => ({
+    sequence,
+    type,
+    pid: "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    at: "2026-01-01T00:00:00Z",
+    data,
+  });
+  it("folds process_transition, runtime token/cost fields and tool_call_result", () => {
+    const s = replayTo(
+      [
+        ev(1, "process_transition", { from: "spawn", to: "running" }),
+        ev(2, "model_call", { input_tokens: 40, output_tokens: 12, cost_micro_usd: 220 }),
+        ev(3, "tool_call_result", { action: "lookup-claim" }),
+        ev(4, "gate_decision", { decision: "REQUIRE_APPROVAL", action: "file-payout" }),
+        ev(5, "process_transition", { from: "running", to: "terminated" }),
+      ],
+      5,
+    );
+    expect(s).toMatchObject({
+      state: "terminated",
+      tokens: 52,
+      toolCalls: 1,
+      modelCalls: 1,
+      approvalsRequested: 1,
+    });
+    expect(s.costUsd).toBeCloseTo(0.00022);
+  });
+  it("describes output and gate decisions with their action", async () => {
+    const { describeEvent } = await import("@/lib/replay");
+    expect(describeEvent(ev(1, "process_output", { output: "x".repeat(300) }))).toHaveLength(
+      8 + 200,
+    );
+    expect(
+      describeEvent(
+        ev(2, "gate_decision", { decision: "DENY", action: "lookup-restricted", reason: "r" }),
+      ),
+    ).toBe("DENY lookup-restricted: r");
+    expect(describeEvent(ev(3, "tool_call_result", { action: "lookup-claim" }))).toBe(
+      "tool lookup-claim",
+    );
+  });
+});

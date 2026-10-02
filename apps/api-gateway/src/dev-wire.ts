@@ -6,6 +6,8 @@ import {
   type ControlPlane,
   type ControlPlaneStore,
 } from "@axis/control-plane";
+import type { Marketplace } from "@axis/marketplace";
+import type { RegistryService } from "@axis/registry";
 import type { GatewayDeps, GatewayOptions } from "./context.js";
 import { MemoryIdempotencyStore } from "./limits.js";
 import { MemoryBlueprintStore } from "./memory.js";
@@ -15,6 +17,7 @@ import {
   ControlPlaneApiAudit,
   ControlPlaneAuthenticator,
   ControlPlaneAuthz,
+  ControlPlaneIdentity,
   ControlPlanePolicies,
   OpaCliPolicyTester,
   StorePolicyMetadata,
@@ -25,18 +28,22 @@ import {
   MemoryKillSwitchRecords,
   type KernelKillApplier,
 } from "./adapters/kernel.js";
+import { MarketplaceAdapter } from "./adapters/marketplace.js";
+import { RegistryAdapter } from "./adapters/registry.js";
 import { HttpRunsPort } from "./adapters/runs-http.js";
 import { LedgerUsage } from "./adapters/usage.js";
 import type { BlueprintStore, RunsPort } from "./ports.js";
 import { createGateway, type Gateway } from "./server.js";
 
 export interface DevWiring {
-  controlPlane: ControlPlane;
+  controlPlane: Pick<ControlPlane, "apiKeys" | "sessions" | "policies" | "admin">;
   authorizer: Pick<Authorizer, "decide">;
-  store: Pick<ControlPlaneStore, "listPackVersions">;
+  store: Pick<ControlPlaneStore, "listPackVersions" | "getTenant" | "getMember">;
+  registry: RegistryService;
+  marketplace: Marketplace;
   /** The tenant's audit store (gateway events are appended here, AGIL reads it through a frozen reader). */
   audit: AuditStoreLike & { append(e: never): Promise<unknown> };
-  approvals: Pick<ApprovalService, "list" | "approve" | "deny">;
+  approvals: Pick<ApprovalService, "list" | "approve" | "deny" | "get">;
   ledger: Pick<UsageLedger, "entries">;
   /** Run service base URL and the per-tenant bearer table (tenant id -> token). */
   runs: { url: string; tokens: Readonly<Record<string, string>> } | RunsPort;
@@ -76,11 +83,15 @@ export function wireGateway(
     policies: new ControlPlanePolicies({
       packs: w.controlPlane.policies,
       tester: new OpaCliPolicyTester(),
+      admin: w.controlPlane.admin,
     }),
     auditLog: new AuditAdapter(w.audit),
     killSwitches: new KillSwitchService(kernel, new MemoryKillSwitchRecords()),
     usage: new LedgerUsage(w.ledger),
     explain: new AgilExplain(w.audit, new StorePolicyMetadata(w.store)),
+    identity: new ControlPlaneIdentity(w.store),
+    registry: new RegistryAdapter(w.registry),
+    marketplace: new MarketplaceAdapter(w.marketplace),
     idempotency: new MemoryIdempotencyStore(),
   };
   return { gateway: createGateway(deps, { validateResponses: true, ...options }), deps };

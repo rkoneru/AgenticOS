@@ -112,7 +112,16 @@ if (approvals && process.env["AXIS_APPROVALS_DEV_BRIDGE"] === "1") {
     createDevBridge({
       service: approvals.service,
       resolver: new ApprovalResolver(approvals.service),
-      authenticate: staticTenantAuthenticator(tenants),
+      // With the reloading token table (per-tenant bundles, Phase 6/7) tenants created after start get their bridge access from the same
+      // token file the gate uses; the static table is read once.
+      authenticate: reloading
+        ? (authorization) => {
+            const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined;
+            return Promise.resolve(
+              token === undefined ? undefined : (reloading.get(token)?.tenantId ?? undefined),
+            );
+          }
+        : staticTenantAuthenticator(tenants),
     }),
     Number(process.env["AXIS_APPROVALS_PORT"] ?? "0"),
   );

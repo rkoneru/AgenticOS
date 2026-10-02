@@ -19,6 +19,7 @@ import { markdownReference, type Command, type Ctx, type FlagSpec } from "./cli.
 import { configPath, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { CliError, EXIT, UsageError } from "./exit.js";
 import { keyValues, structured, table, asJson, type Column } from "./render.js";
+import { REGISTRY_COMMANDS } from "./registry.js";
 
 // ------------------------------------------------------------------------------------------- helpers
 
@@ -229,18 +230,27 @@ async function whoami(ctx: Ctx): Promise<number> {
     baseUrl: ctx.str("base-url"),
   });
   const ax = ctx.client(); // throws exit 3 when there are no credentials
-  await ax.runs.list({ limit: 1 }); // the v1 API has no identity endpoint; a cheap authenticated read proves the key works
+  const me = await ax.me(); // GET /v1/me: tenant, member, role as the SERVER derived them from the credential
   const data = {
     profile: creds?.profile,
     credential_source: creds?.source === "env" ? "AXIS_API_KEY" : "profile",
     base_url: ax.baseUrl,
     key_fingerprint: fingerprint(creds?.apiKey ?? ""),
     authenticated: true,
-    tenant: "derived from the credential by the server (the v1 API exposes no identity endpoint)",
+    tenant_id: me.tenant.id,
+    tenant_name: me.tenant.name,
+    region: me.tenant.region,
+    member_id: me.member.id,
+    email: me.member.email,
+    role: me.member.role,
+    credential_kind: me.credential.kind,
+    scopes: me.credential.scopes,
   };
   emit(ctx, data, () =>
     keyValues(
-      Object.entries(data).map(([k, v]) => [k.replace(/_/g, " "), v] as const),
+      Object.entries(data)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k.replace(/_/g, " "), Array.isArray(v) ? v.join(", ") : v] as const),
       ctx.style,
     ),
   );
@@ -506,6 +516,29 @@ async function approvalsList(ctx: Ctx): Promise<number> {
   return EXIT.OK;
 }
 
+async function approvalsGet(ctx: Ctx): Promise<number> {
+  const [id] = need(ctx, 1, "approvals get <approval-id>");
+  const a = await ctx.client().approvals.get(id as string);
+  emit(ctx, a, () =>
+    keyValues(
+      [
+        ["id", a.id],
+        ["status", a.status],
+        ["run", a.run_id],
+        ["action", a.action],
+        ["roles", a.roles?.join(", ")],
+        ["requested", a.requested_at],
+        ["sla deadline", a.sla_deadline],
+        ["decided by", a.decided_by],
+        ["decided at", a.decided_at],
+        ["comment", a.comment],
+      ],
+      ctx.style,
+    ),
+  );
+  return EXIT.OK;
+}
+
 function decide(decision: "approve" | "reject"): (ctx: Ctx) => Promise<number> {
   return async (ctx) => {
     const [id] = need(
@@ -599,6 +632,70 @@ async function policiesPublish(ctx: Ctx): Promise<number> {
       ctx.style,
     ),
   );
+  return EXIT.OK;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function policiesActivate(ctx: Ctx): Promise<number> {
+  const [ref] = need(ctx, 1, "policies activate <name>@<version | version-id>");
+  const ax = ctx.client();
+  let versionId = ref as string;
+  if (!UUID.test(versionId)) {
+    const at = versionId.lastIndexOf("@");
+    if (at <= 0 || at === versionId.length - 1)
+      throw new UsageError(
+        `expected <name>@<version> or a version id; usage: axis policies activate <name>@<version>`,
+      );
+    const name = versionId.slice(0, at);
+    const version = versionId.slice(at + 1);
+    let found: string | undefined;
+    for await (const p of ax.policies.iterate({}))
+      if (p.name === name && p.version === version) found = p.version_id;
+    if (!found)
+      throw new CliError(`no published policy pack ${name}@${version} in this tenant`, EXIT.ERROR, [
+        "axis policies list",
+      ]);
+    versionId = found;
+  }
+  const p = await ax.policies.activate(versionId);
+  emit(ctx, p, () => `activated ${p.name}@${p.version} (the Risk Kernel enforces it from now on)`);
+  return EXIT.OK;
+}
+
+// ------------------------------------------------------------------------------------------- explanations (AGIL)
+
+function explanationText(x: {
+  summary: string;
+  steps: Array<{ n: number; kind: string; text: string; seq?: number | undefined }>;
+  decision_refs: Array<{ seq: number; decision: string; action: string }>;
+  remediation: Array<{ kind: string; text: string }>;
+  narrative?: string | undefined;
+}): string {
+  const lines = [x.summary, ""];
+  for (const s of x.steps)
+    lines.push(`${String(s.n).padStart(2)}. ${s.text}${s.seq ? `  [audit #${s.seq}]` : ""}`);
+  if (x.remediation.length > 0) {
+    lines.push("", "What would change this:");
+    for (const r of x.remediation) lines.push(`  - ${r.text}`);
+  }
+  if (x.narrative) lines.push("", x.narrative);
+  return lines.join("\n");
+}
+
+async function runExplain(ctx: Ctx): Promise<number> {
+  const [id] = need(ctx, 1, "run explain <run-id>");
+  const x = await ctx.client().runs.explain(id as string);
+  emit(ctx, x, () => explanationText(x as never));
+  return EXIT.OK;
+}
+
+async function auditExplain(ctx: Ctx): Promise<number> {
+  const [seq] = need(ctx, 1, "audit explain <seq>");
+  const n = Number(seq);
+  if (!Number.isInteger(n) || n < 1) throw new UsageError("seq must be a positive integer");
+  const x = await ctx.client().audit.explainEvent(n);
+  emit(ctx, x, () => explanationText(x as never));
   return EXIT.OK;
 }
 
@@ -842,26 +939,6 @@ const API_FLAGS: readonly FlagSpec[] = [
   },
 ];
 
-function placeholder(
-  domain: string,
-  verb: RegExp,
-  name: string,
-  hint: string,
-): (ctx: Ctx) => Promise<number> {
-  return async (ctx) => {
-    const op = findOperation(OPERATIONS as Record<string, OperationSpec>, domain, verb);
-    if (op) return callOperation(ctx, ctx.client(), op, ctx.args);
-    throw new CliError(
-      `\`axis ${name}\` is not available yet: the control-plane API v1 has no ${domain} endpoint`,
-      EXIT.ERROR,
-      [
-        hint,
-        "when the endpoint ships, regenerate the SDKs (node scripts/generate-sdks.mjs); this command will then call it",
-      ],
-    );
-  };
-}
-
 async function completion(ctx: Ctx): Promise<number> {
   const [shell] = need(ctx, 1, "completion <bash|zsh|fish>");
   if (shell !== "bash" && shell !== "zsh" && shell !== "fish")
@@ -887,8 +964,6 @@ const WAIT_FLAGS: readonly FlagSpec[] = [
     desc: "Give up waiting after this long (default 300)",
   },
 ];
-
-const NYI = "the registry and marketplace are being built (docs/NEEDS.md)";
 
 export const COMMANDS: Command[] = [
   {
@@ -990,6 +1065,12 @@ export const COMMANDS: Command[] = [
   },
   { path: ["run", "get"], summary: "Show a run", usage: "<run-id>", run: runGet },
   {
+    path: ["run", "explain"],
+    summary: "Explain a run from its audit trail (AGIL; read-only)",
+    usage: "<run-id>",
+    run: runExplain,
+  },
+  {
     path: ["run", "list"],
     summary: "List runs",
     flags: [
@@ -1072,6 +1153,12 @@ export const COMMANDS: Command[] = [
     run: approvalsList,
   },
   {
+    path: ["approvals", "get"],
+    summary: "Show one approval",
+    usage: "<approval-id>",
+    run: approvalsGet,
+  },
+  {
     path: ["approvals", "approve"],
     summary: "Approve a pending approval",
     usage: "<approval-id>",
@@ -1144,14 +1231,10 @@ export const COMMANDS: Command[] = [
   {
     path: ["policies", "activate"],
     summary: "Activate a published policy pack version",
-    usage: "<name>@<version>",
-    placeholder: true,
-    run: placeholder(
-      "policy",
-      /^activate/i,
-      "policies activate",
-      "published packs are not selectable per tenant through the API yet",
-    ),
+    usage: "<name>@<version | version-id>",
+    description:
+      "Makes the published version the tenant's active version of that pack; the Risk Kernel enforces it from then on.",
+    run: policiesActivate,
   },
 
   { path: ["audit"], summary: "The tamper-evident audit log" },
@@ -1181,6 +1264,12 @@ export const COMMANDS: Command[] = [
       },
     ],
     run: auditEvents,
+  },
+  {
+    path: ["audit", "explain"],
+    summary: "Explain one audited decision (AGIL; read-only)",
+    usage: "<seq>",
+    run: auditExplain,
   },
   {
     path: ["audit", "verify"],
@@ -1289,47 +1378,7 @@ export const COMMANDS: Command[] = [
     run: evalsStart,
   },
 
-  { path: ["registry"], summary: "Blueprint registry (not yet available)" },
-  {
-    path: ["registry", "publish"],
-    summary: "Publish a blueprint to the registry",
-    usage: "<name>@<version>",
-    placeholder: true,
-    flags: API_FLAGS,
-    run: placeholder("registry", /^(publish|create|put)/i, "registry publish", NYI),
-  },
-  {
-    path: ["registry", "list"],
-    summary: "List registry blueprints",
-    placeholder: true,
-    flags: API_FLAGS,
-    run: placeholder("registry", /^list/i, "registry list", NYI),
-  },
-  {
-    path: ["registry", "get"],
-    summary: "Show a registry blueprint",
-    usage: "<name>",
-    placeholder: true,
-    flags: API_FLAGS,
-    run: placeholder("registry", /^get/i, "registry get", NYI),
-  },
-  { path: ["marketplace"], summary: "Marketplace (not yet available)" },
-  {
-    path: ["marketplace", "search"],
-    summary: "Search marketplace listings",
-    usage: "[query]",
-    placeholder: true,
-    flags: API_FLAGS,
-    run: placeholder("marketplace", /^(search|list)/i, "marketplace search", NYI),
-  },
-  {
-    path: ["marketplace", "install"],
-    summary: "Install a marketplace listing",
-    usage: "<listing-id>",
-    placeholder: true,
-    flags: API_FLAGS,
-    run: placeholder("marketplace", /^install/i, "marketplace install", NYI),
-  },
+  ...REGISTRY_COMMANDS,
 
   {
     path: ["api"],

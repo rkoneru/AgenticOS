@@ -4100,3 +4100,384 @@ cases:
         classification: internal
     expect:
       decision: DENY
+  # ---- Phase 7 e2e additions (ADR 0053): policy activation, registry, marketplace
+  - name: owner may api.policies.activate
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.activate
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.policies.activate
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.activate
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may not api.policies.activate
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.activate
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.policies.activate
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.policies.activate
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: owner may api.registry.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.write
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.registry.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.write
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may not api.registry.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.write
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.registry.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.write
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.registry.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may api.registry.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.registry.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.registry.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: owner may api.marketplace.install
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.install
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.marketplace.install
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.install
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may not api.marketplace.install
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.install
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.marketplace.install
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.install
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.marketplace.install
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.install
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may api.marketplace.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: viewer may api.marketplace.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.marketplace.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.marketplace.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY

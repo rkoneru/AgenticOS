@@ -265,6 +265,11 @@ spec:
                 api.usage.read,
                 api.evals.run,
                 api.explanations.read,
+                api.policies.activate,
+                api.registry.read,
+                api.registry.write,
+                api.marketplace.read,
+                api.marketplace.install,
               ]
       decision: ALLOW
     - id: api-builder
@@ -288,6 +293,9 @@ spec:
                 api.usage.read,
                 api.evals.run,
                 api.explanations.read,
+                api.registry.read,
+                api.registry.write,
+                api.marketplace.read,
               ]
       decision: ALLOW
     - id: api-operator
@@ -311,6 +319,8 @@ spec:
                 api.killswitch.write,
                 api.usage.read,
                 api.explanations.read,
+                api.registry.read,
+                api.marketplace.read,
               ]
       decision: ALLOW
     - id: api-auditor
@@ -332,6 +342,8 @@ spec:
                 api.killswitch.read,
                 api.usage.read,
                 api.explanations.read,
+                api.registry.read,
+                api.marketplace.read,
               ]
       decision: ALLOW
     - id: api-billing
@@ -355,5 +367,7 @@ spec:
                 api.events.read,
                 api.policies.read,
                 api.explanations.read,
+                api.registry.read,
+                api.marketplace.read,
               ]
       decision: ALLOW

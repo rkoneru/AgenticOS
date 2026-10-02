@@ -2,7 +2,8 @@
 
 export function buildCsp(
   nonce: string,
-  opts: { dev?: boolean; insecureHttp?: boolean } = {},
+  /** `formActionOrigins`: the IdP origin(s) the sign-in form may be redirected to (Chromium applies form-action to the redirect chain). */
+  opts: { dev?: boolean; insecureHttp?: boolean; formActionOrigins?: readonly string[] } = {},
 ): string {
   const dev = opts.dev ?? false;
   const directives: Array<[string, string[]]> = [
@@ -17,7 +18,7 @@ export function buildCsp(
     ["connect-src", ["'self'"]],
     ["object-src", ["'none'"]],
     ["base-uri", ["'self'"]],
-    ["form-action", ["'self'"]],
+    ["form-action", ["'self'", ...(opts.formActionOrigins ?? [])]],
     ["frame-ancestors", ["'none'"]],
     ["frame-src", ["'none'"]],
     ["worker-src", ["'self'"]],

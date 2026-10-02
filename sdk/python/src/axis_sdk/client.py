@@ -353,6 +353,9 @@ class Approvals:
             max_items,
         )
 
+    def get(self, approval_id: str, *, options: RequestOptions | None = None) -> Approval:
+        return self._ax.api.get_approval(approval_id=approval_id, options=options)
+
     def decide(
         self,
         approval_id: str,
@@ -406,6 +409,10 @@ class Policies:
 
     def publish(self, policy: dict[str, Any], *, options: RequestOptions | None = None) -> Any:
         return self._ax.api.publish_policy_pack(body={"policy": policy}, options=options)
+
+    def activate(self, version_id: str, *, options: RequestOptions | None = None) -> Any:
+        """Make a published version (its ``version_id``) the tenant's active version of its pack."""
+        return self._ax.api.activate_policy_pack(version_id=version_id, options=options)
 
     def test(
         self,
@@ -560,6 +567,171 @@ class Evals:
         )
 
 
+class Registry:
+    """Signed blueprint registry.
+
+    Publishing takes an already signed bundle (detached Ed25519 signature + DSSE provenance) made
+    by publisher tooling that holds the private key and runs the ABL compiler
+    (``axis registry sign``); the SDK never sees a key."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def namespaces(self, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_registry_namespaces(options=options)
+
+    def claim(
+        self,
+        namespace: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.claim_registry_namespace(
+            body={"namespace": namespace}, idempotency_key=idempotency_key, options=options
+        )
+
+    def keys(self, namespace: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_registry_keys(namespace=namespace, options=options)
+
+    def add_key(
+        self,
+        namespace: str,
+        public_key: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.add_registry_key(
+            namespace=namespace,
+            body={"public_key": public_key},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def publish(
+        self,
+        namespace: str,
+        bundle: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """``bundle`` = ``{abl, signature: {key_id, signed_at, sig}, provenance: <DSSE>}``."""
+        return self._ax.api.publish_registry_blueprint(
+            namespace=namespace,
+            body=cast("Any", {k: bundle[k] for k in ("abl", "signature", "provenance")}),
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def versions(self, namespace: str, name: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_registry_versions(namespace=namespace, name=name, options=options)
+
+    def yank(
+        self,
+        namespace: str,
+        name: str,
+        version: str,
+        reason: str,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.yank_registry_version(
+            namespace=namespace,
+            name=name,
+            version=version,
+            body={"reason": reason},
+            options=options,
+        )
+
+    def resolve(self, ref: str, *, options: RequestOptions | None = None) -> Any:
+        """``ns/name@range`` to the highest non-yanked version, verified by the server each call."""
+        return self._ax.api.resolve_registry_blueprint(ref=ref, options=options)
+
+
+class Marketplace:
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def listings(
+        self,
+        *,
+        q: str | None = None,
+        category: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_marketplace_listings(q=q, category=category, options=options)
+
+    def listing(self, namespace: str, name: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.get_marketplace_listing(namespace=namespace, name=name, options=options)
+
+    def preview(
+        self, namespace: str, name: str, range: str = "*", *, options: RequestOptions | None = None
+    ) -> Any:
+        """Permission diff against the tenant baseline, findings and the consent digest (admin)."""
+        return self._ax.api.preview_marketplace_install(
+            body={"namespace": namespace, "name": name, "range": range}, options=options
+        )
+
+    def install(
+        self,
+        namespace: str,
+        name: str,
+        version: str,
+        content_hash: str,
+        consent_digest: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.install_marketplace_listing(
+            body={
+                "namespace": namespace,
+                "name": name,
+                "version": version,
+                "content_hash": content_hash,
+                "consent_digest": consent_digest,
+            },
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def install_with_consent(
+        self,
+        namespace: str,
+        name: str,
+        range: str,
+        consent: Callable[[Any], bool],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Preview, ask ``consent(preview)``, then install exactly what was previewed.
+
+        Version, hash and digest come from the preview, never from the caller."""
+        p = self.preview(namespace, name, range, options=options)
+        if not consent(p):
+            raise AxisError("install cancelled: the permission diff was not consented to")
+        return self.install(
+            p["namespace"],
+            p["name"],
+            p["version"],
+            p["content_hash"],
+            p["consent_digest"],
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def installs(self, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_marketplace_installs(options=options)
+
+    def uninstall(self, namespace: str, name: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.uninstall_marketplace_listing(
+            namespace=namespace, name=name, options=options
+        )
+
+
 class Axis:
     """Synchronous AXIS client."""
 
@@ -602,10 +774,16 @@ class Axis:
         self.kill_switches = KillSwitches(self)
         self.usage = Usage(self)
         self.evals = Evals(self)
+        self.registry = Registry(self)
+        self.marketplace = Marketplace(self)
 
     @property
     def base_url(self) -> str:
         return self._transport.base_url
+
+    def me(self, *, options: RequestOptions | None = None) -> Any:
+        """Who this credential belongs to: tenant, member, role, credential kind, API-key scopes."""
+        return self.api.get_me(options=options)
 
     def close(self) -> None:
         self._transport.close()
@@ -877,6 +1055,9 @@ class AsyncApprovals:
 
         return apaginate(page, max_items)
 
+    async def get(self, approval_id: str, *, options: RequestOptions | None = None) -> Approval:
+        return await self._ax.api.get_approval(approval_id=approval_id, options=options)
+
     async def decide(
         self,
         approval_id: str,
@@ -933,6 +1114,9 @@ class AsyncPolicies:
         self, policy: dict[str, Any], *, options: RequestOptions | None = None
     ) -> Any:
         return await self._ax.api.publish_policy_pack(body={"policy": policy}, options=options)
+
+    async def activate(self, version_id: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.activate_policy_pack(version_id=version_id, options=options)
 
     async def test(
         self,
@@ -1086,6 +1270,181 @@ class AsyncEvals:
         )
 
 
+class AsyncRegistry:
+    """Signed blueprint registry.
+
+    Publishing takes an already signed bundle (detached Ed25519 signature + DSSE provenance) made
+    by publisher tooling that holds the private key and runs the ABL compiler
+    (``axis registry sign``); the SDK never sees a key."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def namespaces(self, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_registry_namespaces(options=options)
+
+    async def claim(
+        self,
+        namespace: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.claim_registry_namespace(
+            body={"namespace": namespace}, idempotency_key=idempotency_key, options=options
+        )
+
+    async def keys(self, namespace: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_registry_keys(namespace=namespace, options=options)
+
+    async def add_key(
+        self,
+        namespace: str,
+        public_key: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.add_registry_key(
+            namespace=namespace,
+            body={"public_key": public_key},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def publish(
+        self,
+        namespace: str,
+        bundle: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """``bundle`` = ``{abl, signature: {key_id, signed_at, sig}, provenance: <DSSE>}``."""
+        return await self._ax.api.publish_registry_blueprint(
+            namespace=namespace,
+            body=cast("Any", {k: bundle[k] for k in ("abl", "signature", "provenance")}),
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def versions(
+        self, namespace: str, name: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.list_registry_versions(
+            namespace=namespace, name=name, options=options
+        )
+
+    async def yank(
+        self,
+        namespace: str,
+        name: str,
+        version: str,
+        reason: str,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.yank_registry_version(
+            namespace=namespace,
+            name=name,
+            version=version,
+            body={"reason": reason},
+            options=options,
+        )
+
+    async def resolve(self, ref: str, *, options: RequestOptions | None = None) -> Any:
+        """``ns/name@range`` to the highest non-yanked version, verified by the server each call."""
+        return await self._ax.api.resolve_registry_blueprint(ref=ref, options=options)
+
+
+class AsyncMarketplace:
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def listings(
+        self,
+        *,
+        q: str | None = None,
+        category: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_marketplace_listings(q=q, category=category, options=options)
+
+    async def listing(
+        self, namespace: str, name: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.get_marketplace_listing(
+            namespace=namespace, name=name, options=options
+        )
+
+    async def preview(
+        self, namespace: str, name: str, range: str = "*", *, options: RequestOptions | None = None
+    ) -> Any:
+        """Permission diff against the tenant baseline, findings and the consent digest (admin)."""
+        return await self._ax.api.preview_marketplace_install(
+            body={"namespace": namespace, "name": name, "range": range}, options=options
+        )
+
+    async def install(
+        self,
+        namespace: str,
+        name: str,
+        version: str,
+        content_hash: str,
+        consent_digest: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.install_marketplace_listing(
+            body={
+                "namespace": namespace,
+                "name": name,
+                "version": version,
+                "content_hash": content_hash,
+                "consent_digest": consent_digest,
+            },
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def install_with_consent(
+        self,
+        namespace: str,
+        name: str,
+        range: str,
+        consent: Callable[[Any], bool],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Preview, ask ``consent(preview)``, then install exactly what was previewed.
+
+        Version, hash and digest come from the preview, never from the caller."""
+        p = await self.preview(namespace, name, range, options=options)
+        if not consent(p):
+            raise AxisError("install cancelled: the permission diff was not consented to")
+        return await self.install(
+            p["namespace"],
+            p["name"],
+            p["version"],
+            p["content_hash"],
+            p["consent_digest"],
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def installs(self, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_marketplace_installs(options=options)
+
+    async def uninstall(
+        self, namespace: str, name: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.uninstall_marketplace_listing(
+            namespace=namespace, name=name, options=options
+        )
+
+
 class AsyncAxis:
     """Asynchronous AXIS client (same surface as :class:`Axis`, every call is awaitable)."""
 
@@ -1128,10 +1487,15 @@ class AsyncAxis:
         self.kill_switches = AsyncKillSwitches(self)
         self.usage = AsyncUsage(self)
         self.evals = AsyncEvals(self)
+        self.registry = AsyncRegistry(self)
+        self.marketplace = AsyncMarketplace(self)
 
     @property
     def base_url(self) -> str:
         return self._transport.base_url
+
+    async def me(self, *, options: RequestOptions | None = None) -> Any:
+        return await self.api.get_me(options=options)
 
     async def aclose(self) -> None:
         await self._transport.aclose()

@@ -390,9 +390,37 @@ describe("commands", () => {
       2,
     );
     expect((await axis(["policies", "publish", join(dir, "p.yaml")])).code).toBe(0);
-    const act = await axis(["policies", "activate", "p@1"]);
-    expect(act.code).toBe(1);
-    expect(act.err).toContain("not available yet");
+    // activate by name@version: the pack is found in the listing, then POST /policies/{versionId}/activate
+    const listed = {
+      overrides: {
+        listPolicyPacks: () =>
+          json({
+            items: [
+              {
+                name: "p",
+                version: "1",
+                created_at: "2026-01-01T00:00:00Z",
+                version_id: RUN,
+                active: false,
+              },
+            ],
+            next_cursor: null,
+          }),
+      },
+    };
+    const act = await axis(["policies", "activate", "p@1"], { mock: listed });
+    expect(act.code).toBe(0);
+    expect(act.server.calls.map((c) => c.operationId)).toEqual([
+      "listPolicyPacks",
+      "activatePolicyPack",
+    ]);
+    expect(act.server.calls[1]?.url.pathname).toContain(`/policies/${RUN}/activate`);
+    const byId = await axis(["policies", "activate", RUN]);
+    expect(byId.server.calls.map((c) => c.operationId)).toEqual(["activatePolicyPack"]);
+    const none = await axis(["policies", "activate", "nope@9"], { mock: listed });
+    expect(none.code).toBe(1);
+    expect(none.err).toContain("no published policy pack nope@9");
+    expect((await axis(["policies", "activate", "bad"])).code).toBe(2);
   });
   it("audit events, verify, export", async () => {
     const e = await axis([
@@ -471,19 +499,151 @@ describe("commands", () => {
       blueprint: { name: "agent-one", version: "1.0.0" },
     });
   });
-  it("registry and marketplace say they are not yet available (exit 1); api calls any operation", async () => {
-    for (const argv of [
-      ["registry", "list"],
-      ["registry", "publish", "a@1"],
-      ["registry", "get", "a"],
-      ["marketplace", "search"],
-      ["marketplace", "install", "x"],
-    ]) {
-      const r = await axis(argv);
-      expect(r.code).toBe(1);
-      expect(r.err).toContain("not available yet");
-      expect(r.server.calls).toHaveLength(0);
-    }
+  it("registry and marketplace commands call their operations (OpenAPI 1.2.0); api calls any operation", async () => {
+    const calls = async (argv: string[]) =>
+      (await axis(argv)).server.calls.map((c) => c.operationId);
+    expect(await calls(["registry", "namespaces"])).toEqual(["listRegistryNamespaces"]);
+    expect(await calls(["registry", "claim", "acme"])).toEqual(["claimRegistryNamespace"]);
+    expect(await calls(["registry", "keys", "acme"])).toEqual(["listRegistryKeys"]);
+    expect(await calls(["registry", "add-key", "acme", "--public-key", "k".repeat(43)])).toEqual([
+      "addRegistryKey",
+    ]);
+    expect(await calls(["registry", "versions", "acme/agent-one"])).toEqual([
+      "listRegistryVersions",
+    ]);
+    expect(await calls(["registry", "yank", "acme/agent-one@1.0.0", "--reason", "bad"])).toEqual([
+      "yankRegistryVersion",
+    ]);
+    expect(await calls(["registry", "resolve", "acme/agent-one@^1"])).toEqual([
+      "resolveRegistryBlueprint",
+    ]);
+    expect(await calls(["marketplace", "search", "helper"])).toEqual(["listMarketplaceListings"]);
+    expect(await calls(["marketplace", "show", "acme/agent-one"])).toEqual([
+      "getMarketplaceListing",
+    ]);
+    expect(await calls(["marketplace", "preview", "acme/agent-one@^1"])).toEqual([
+      "previewMarketplaceInstall",
+    ]);
+    expect(await calls(["marketplace", "installs"])).toEqual(["listMarketplaceInstalls"]);
+    expect(await calls(["marketplace", "uninstall", "acme/agent-one"])).toEqual([
+      "uninstallMarketplaceListing",
+    ]);
+    expect(await calls(["approvals", "get", RUN])).toEqual(["getApproval"]);
+    expect(await calls(["run", "explain", RUN])).toEqual(["explainRun"]);
+    expect(await calls(["audit", "explain", "7"])).toEqual(["explainAuditEvent"]);
+    for (const bad of [
+      ["registry", "claim"],
+      ["registry", "versions", "no-slash"],
+      ["registry", "yank", "acme/a@1.0.0"],
+      ["registry", "yank", "acme/a", "--reason", "x"],
+      ["registry", "add-key", "acme"],
+      ["marketplace", "show", "a/b/c"],
+      ["audit", "explain", "x"],
+    ])
+      expect((await axis(bad)).code, bad.join(" ")).toBe(2);
+  });
+  it("marketplace install needs explicit consent: no flag prints the preview and installs nothing", async () => {
+    const none = await axis(["marketplace", "install", "acme/agent-one@^1"]);
+    expect(none.code).toBe(2);
+    expect(none.out).toContain("consent digest");
+    expect(none.err).toContain("consent required: nothing was installed");
+    expect(none.server.calls.map((c) => c.operationId)).toEqual(["previewMarketplaceInstall"]);
+    const yes = await axis(["marketplace", "install", "acme/agent-one@^1", "--yes", "--json"]);
+    expect(yes.code).toBe(0);
+    expect(yes.server.calls.map((c) => c.operationId)).toEqual([
+      "previewMarketplaceInstall",
+      "installMarketplaceListing",
+    ]);
+    // the install echoes what the PREVIEW returned (version, hash, digest), nothing the caller typed
+    const preview = JSON.parse(yes.out).preview;
+    expect(yes.server.calls[1]?.body).toMatchObject({
+      namespace: preview.namespace,
+      version: preview.version,
+      content_hash: preview.content_hash,
+      consent_digest: preview.consent_digest,
+    });
+    const wrong = await axis([
+      "marketplace",
+      "install",
+      "acme/agent-one",
+      "--consent-digest",
+      "0".repeat(64),
+    ]);
+    expect(wrong.code).toBe(1);
+    expect(wrong.err).toContain("does not match");
+    expect(wrong.server.calls.map((c) => c.operationId)).toEqual(["previewMarketplaceInstall"]);
+  });
+  it("registry keygen/sign/publish: the private key stays in its 0600 file, never in output", async () => {
+    const dir = tmp();
+    const keyFile = join(dir, "pub.pem");
+    const kg = await axis(["registry", "keygen", "--out", keyFile, "--json"]);
+    expect(kg.code).toBe(0);
+    const k = JSON.parse(kg.out);
+    expect(k.key_id).toMatch(/^k1-[0-9a-f]{32}$/);
+    expect(statSync(keyFile).mode & 0o777).toBe(0o600);
+    const pem = readFileSync(keyFile, "utf8");
+    expect(kg.out + kg.err).not.toContain(pem.split("\n")[1] as string);
+    expect((await axis(["registry", "keygen", "--out", keyFile])).code).toBe(1); // never overwrites a key
+    const abl = join(dir, "agent.yaml");
+    writeFileSync(
+      abl,
+      [
+        "apiVersion: abl.axis.dev/v1",
+        "kind: Agent",
+        "metadata: { name: demo-agent, version: 1.0.0 }",
+        "spec:",
+        "  riskClassification: { level: minimal, rationale: Answers general product questions; no decisions about people. }",
+        "  model: { primary: { provider: anthropic, model: claude-sonnet-5-5 } }",
+        "  instructions: { system: You are a helpful assistant. }",
+        "  budgets: { costUsd: { hard: 5 }, toolCalls: { hard: 20 } }",
+        "  policy: { packs: ['baseline-deny@^1.0.0'] }",
+      ].join("\n"),
+    );
+    const signed = await axis(["registry", "sign", abl, "--namespace", "acme", "--key", keyFile]);
+    expect(signed.code, signed.err).toBe(0);
+    const bundle = JSON.parse(signed.out);
+    expect(bundle.signature.key_id).toBe(k.key_id);
+    expect(bundle.provenance.payloadType).toBe("application/vnd.in-toto+json");
+    expect(signed.out).not.toContain(pem.split("\n")[1] as string);
+    const bundleFile = join(dir, "bundle.json");
+    writeFileSync(bundleFile, signed.out);
+    const pub = await axis(["registry", "publish", bundleFile]);
+    expect(pub.server.calls.map((c) => c.operationId)).toEqual(["publishRegistryBlueprint"]);
+    expect(pub.server.calls[0]?.url.pathname).toContain("/registry/namespaces/acme/blueprints");
+    expect(pub.server.violations).toEqual([]);
+    const direct = await axis([
+      "registry",
+      "publish",
+      abl,
+      "--namespace",
+      "acme",
+      "--key",
+      keyFile,
+    ]);
+    expect(direct.server.calls.map((c) => c.operationId)).toEqual(["publishRegistryBlueprint"]);
+    // bad inputs
+    expect((await axis(["registry", "sign", abl, "--namespace", "acme"])).code).toBe(2);
+    expect((await axis(["registry", "sign", abl, "--namespace", "acme", "--key", abl])).code).toBe(
+      1,
+    );
+    expect((await axis(["registry", "publish", abl])).code).toBe(2);
+    writeFileSync(join(dir, "bad.yaml"), "apiVersion: nope\n");
+    expect(
+      (
+        await axis([
+          "registry",
+          "sign",
+          join(dir, "bad.yaml"),
+          "--namespace",
+          "acme",
+          "--key",
+          keyFile,
+        ])
+      ).code,
+    ).toBe(1);
+    expect((await axis(["registry", "keygen"])).code).toBe(2);
+  });
+  it("api calls any operation by operationId", async () => {
     const a = await axis(["api", "getRun", RUN]);
     expect(a.server.calls[0]?.operationId).toBe("getRun");
     const b = await axis(["api", "listRuns", "--param", "limit=3"]);
@@ -496,7 +656,7 @@ describe("commands", () => {
     expect((await axis(["api", "listRuns", "--param", "bad"])).code).toBe(2);
     expect((await axis(["api", "listRuns", "-o", "yaml"])).out).toContain("items");
   });
-  it("findOperation routes placeholders to an endpoint when one exists", () => {
+  it("findOperation maps a verb and domain onto an operation when one exists", () => {
     const ops = {
       listRegistryBlueprints: {
         id: "listRegistryBlueprints",
@@ -636,7 +796,7 @@ describe("completions and docs", () => {
   it("bash, zsh and fish scripts are generated and bash parses", () => {
     const bash = completionScript("bash", COMMANDS, "axis");
     expect(bash).toContain("complete -F _axis_complete axis");
-    expect(bash).toContain('"run") words="start tail get list signal cancel replay"');
+    expect(bash).toContain('"run") words="start tail get explain list signal cancel replay"');
     const r = spawnSync("bash", ["-n"], { input: bash, encoding: "utf8" });
     expect(r.status).toBe(0);
     expect(completionScript("zsh", COMMANDS, "axis")).toContain("compdef _axis axis");

@@ -40,17 +40,25 @@ export function applyEvent(s: ReplayState, e: RunEvent): ReplayState {
   const next: ReplayState = { ...s, sequence: Math.max(s.sequence, e.sequence) };
   const d = e.data ?? {};
   switch (e.type) {
-    case "state_transition": {
+    // `state_transition` is the console's/mocks' name; `process_transition` is what the runtime's event log (and so the gateway) emits.
+    case "state_transition":
+    case "process_transition": {
       const to = d["to"];
       if (typeof to === "string" && STATES.has(to)) next.state = to as ProcessState;
       break;
     }
     case "model_call":
       next.modelCalls += 1;
-      next.tokens += num(d["tokens"]);
-      next.costUsd += num(d["cost_usd"]);
+      // runtime events carry input/output tokens and cost in micro-USD; older shapes carry `tokens` and `cost_usd`
+      next.tokens +=
+        d["tokens"] !== undefined
+          ? num(d["tokens"])
+          : num(d["input_tokens"]) + num(d["output_tokens"]);
+      next.costUsd +=
+        d["cost_usd"] !== undefined ? num(d["cost_usd"]) : num(d["cost_micro_usd"]) / 1e6;
       break;
     case "tool_call":
+    case "tool_call_result":
       next.toolCalls += 1;
       break;
     case "gate_decision": {
@@ -91,13 +99,27 @@ export function describeEvent(e: RunEvent): string {
   const str = (k: string): string => (typeof d[k] === "string" ? (d[k] as string) : "");
   switch (e.type) {
     case "state_transition":
+    case "process_transition":
       return `${str("from") || "?"} -> ${str("to") || "?"}`;
-    case "model_call":
-      return `model ${str("model") || "?"}, ${num(d["tokens"])} tokens`;
+    case "model_call": {
+      const t =
+        d["tokens"] !== undefined
+          ? num(d["tokens"])
+          : num(d["input_tokens"]) + num(d["output_tokens"]);
+      return `model ${str("model") || "?"}, ${t} tokens`;
+    }
     case "tool_call":
-      return `tool ${str("tool") || "?"}`;
+    case "tool_call_result":
+      return `tool ${str("tool") || str("name") || str("action") || "?"}`;
     case "gate_decision":
-      return `${str("decision") || "?"}${str("reason") ? `: ${str("reason")}` : ""}`;
+      return `${str("decision") || "?"}${str("action") ? ` ${str("action")}` : ""}${str("reason") ? `: ${str("reason")}` : ""}`;
+    case "action_blocked":
+      return `blocked${str("reason") ? `: ${str("reason")}` : ""}`;
+    case "process_output": {
+      // Rendered as TEXT by the timeline (React escapes it): model output is untrusted input.
+      const o = str("output");
+      return `output: ${o.length > 200 ? `${o.slice(0, 197)}...` : o}`;
+    }
     default:
       return e.type;
   }

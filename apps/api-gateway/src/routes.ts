@@ -190,6 +190,14 @@ async function decideApproval(c: Ctx): Promise<HandlerResult> {
   return ok(r);
 }
 
+async function getApproval(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.approvals.get(c.principal, str(c.params["approvalId"])));
+}
+
+async function getMe(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.identity.me(c.principal));
+}
+
 // ---- policies ---------------------------------------------------------------------------------------------------------------------------
 
 async function listPolicyPacks(c: Ctx): Promise<HandlerResult> {
@@ -206,6 +214,10 @@ async function publishPolicyPack(c: Ctx): Promise<HandlerResult> {
     await c.deps.policies.publish(c.principal, (c.body as { policy: unknown }).policy),
     201,
   );
+}
+
+async function activatePolicyPack(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.policies.activate(c.principal, str(c.params["versionId"])));
 }
 
 async function testPolicy(c: Ctx): Promise<HandlerResult> {
@@ -356,8 +368,15 @@ async function explainRun(c: Ctx): Promise<HandlerResult> {
   const runId = str(c.params["runId"]);
   const run = await c.deps.runs.get(c.tenantId, runId);
   if (!run) throw notFound("run not found");
-  const events =
-    (await c.deps.runs.events(c.tenantId, runId, { afterSequence: 0, limit: 1000 })) ?? [];
+  // The run service serves at most 200 events per call: page through the log (bounded) instead of asking for more.
+  const events: RunEventDto[] = [];
+  for (let after = 0, pages = 0; pages < 25; pages++) {
+    const batch =
+      (await c.deps.runs.events(c.tenantId, runId, { afterSequence: after, limit: 200 })) ?? [];
+    events.push(...batch);
+    if (batch.length < 200) break;
+    after = (batch[batch.length - 1] as RunEventDto).sequence;
+  }
   const x = await c.deps.explain.explainRun(c.tenantId, {
     traceId: run.trace_id ?? "",
     runEvents: events,
@@ -369,6 +388,98 @@ async function explainAuditEvent(c: Ctx): Promise<HandlerResult> {
   const x = await c.deps.explain.explainEvent(c.tenantId, Number(c.params["seq"]));
   if (x === undefined) throw notFound("audit event not found");
   return ok(x);
+}
+
+// ---- registry -----------------------------------------------------------------------------------------------------------------------
+
+/** A registry name segment that cannot be a name is a 404 before any lookup (like a blueprint name). */
+const regName = (c: Ctx, key = "name"): string => {
+  const v = str(c.params[key]);
+  if (!NAME.test(v)) throw notFound("not found");
+  return v;
+};
+
+async function listRegistryNamespaces(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.registry.listNamespaces(c.principal) });
+}
+async function claimRegistryNamespace(c: Ctx): Promise<HandlerResult> {
+  const ns = (c.body as { namespace: string }).namespace;
+  return ok(await c.deps.registry.claim(c.principal, ns), 201);
+}
+async function listRegistryKeys(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.registry.listKeys(c.principal, str(c.params["namespace"])) });
+}
+async function addRegistryKey(c: Ctx): Promise<HandlerResult> {
+  const k = await c.deps.registry.addKey(
+    c.principal,
+    str(c.params["namespace"]),
+    (c.body as { public_key: string }).public_key,
+  );
+  return ok(k, 201);
+}
+async function publishRegistryBlueprint(c: Ctx): Promise<HandlerResult> {
+  const b = c.body as Parameters<Ctx["deps"]["registry"]["publish"]>[2];
+  return ok(await c.deps.registry.publish(c.principal, str(c.params["namespace"]), b), 201);
+}
+async function listRegistryVersions(c: Ctx): Promise<HandlerResult> {
+  return ok({
+    items: await c.deps.registry.listVersions(c.principal, str(c.params["namespace"]), regName(c)),
+  });
+}
+async function yankRegistryVersion(c: Ctx): Promise<HandlerResult> {
+  const version = str(c.params["version"]);
+  if (!SEMVER.test(version)) throw notFound("not found");
+  await c.deps.registry.yank(
+    c.principal,
+    str(c.params["namespace"]),
+    regName(c),
+    version,
+    (c.body as { reason: string }).reason,
+  );
+  return ok({ ok: true });
+}
+async function resolveRegistryBlueprint(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.registry.resolve(c.principal, str(c.query["ref"])));
+}
+
+// ---- marketplace -----------------------------------------------------------------------------------------------------------------------
+
+async function listMarketplaceListings(c: Ctx): Promise<HandlerResult> {
+  const text = c.query["q"] === undefined ? undefined : str(c.query["q"]);
+  const category = c.query["category"] === undefined ? undefined : str(c.query["category"]);
+  return ok({
+    items: await c.deps.marketplace.listings({
+      ...(text ? { text } : {}),
+      ...(category ? { category } : {}),
+    }),
+  });
+}
+async function getMarketplaceListing(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.marketplace.listing(str(c.params["namespace"]), regName(c)));
+}
+async function previewMarketplaceInstall(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.marketplace.preview(
+      c.principal,
+      c.body as { namespace: string; name: string; range: string },
+    ),
+  );
+}
+async function listMarketplaceInstalls(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.marketplace.installs(c.principal) });
+}
+async function installMarketplaceListing(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.marketplace.install(
+      c.principal,
+      c.body as Parameters<Ctx["deps"]["marketplace"]["install"]>[1],
+    ),
+    201,
+  );
+}
+async function uninstallMarketplaceListing(c: Ctx): Promise<HandlerResult> {
+  await c.deps.marketplace.uninstall(c.principal, str(c.params["namespace"]), regName(c));
+  return ok({ ok: true });
 }
 
 export const ROUTES: Record<string, Route> = {
@@ -401,6 +512,75 @@ export const ROUTES: Record<string, Route> = {
   startEvalRun: { action: "api.evals.run", handler: startEvalRun, mutation: false },
   explainRun: { action: "api.explanations.read", handler: explainRun, mutation: false },
   explainAuditEvent: { action: "api.audit.read", handler: explainAuditEvent, mutation: false },
+  getMe: { action: null, handler: getMe, mutation: false },
+  getApproval: { action: "api.approvals.read", handler: getApproval, mutation: false },
+  activatePolicyPack: {
+    action: "api.policies.activate",
+    handler: activatePolicyPack,
+    mutation: true,
+  },
+  listRegistryNamespaces: {
+    action: "api.registry.read",
+    handler: listRegistryNamespaces,
+    mutation: false,
+  },
+  claimRegistryNamespace: {
+    action: "api.registry.write",
+    handler: claimRegistryNamespace,
+    mutation: true,
+  },
+  listRegistryKeys: { action: "api.registry.read", handler: listRegistryKeys, mutation: false },
+  addRegistryKey: { action: "api.registry.write", handler: addRegistryKey, mutation: true },
+  publishRegistryBlueprint: {
+    action: "api.registry.write",
+    handler: publishRegistryBlueprint,
+    mutation: true,
+  },
+  listRegistryVersions: {
+    action: "api.registry.read",
+    handler: listRegistryVersions,
+    mutation: false,
+  },
+  yankRegistryVersion: {
+    action: "api.registry.write",
+    handler: yankRegistryVersion,
+    mutation: true,
+  },
+  resolveRegistryBlueprint: {
+    action: "api.registry.read",
+    handler: resolveRegistryBlueprint,
+    mutation: false,
+  },
+  listMarketplaceListings: {
+    action: "api.marketplace.read",
+    handler: listMarketplaceListings,
+    mutation: false,
+  },
+  getMarketplaceListing: {
+    action: "api.marketplace.read",
+    handler: getMarketplaceListing,
+    mutation: false,
+  },
+  previewMarketplaceInstall: {
+    action: "api.marketplace.install",
+    handler: previewMarketplaceInstall,
+    mutation: false,
+  },
+  listMarketplaceInstalls: {
+    action: "api.marketplace.read",
+    handler: listMarketplaceInstalls,
+    mutation: false,
+  },
+  installMarketplaceListing: {
+    action: "api.marketplace.install",
+    handler: installMarketplaceListing,
+    mutation: true,
+  },
+  uninstallMarketplaceListing: {
+    action: "api.marketplace.install",
+    handler: uninstallMarketplaceListing,
+    mutation: true,
+  },
 };
 
 export { PortConflict };
