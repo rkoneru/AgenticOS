@@ -40,6 +40,12 @@ export async function run(argv: readonly string[], deps: Deps): Promise<number> 
 }
 
 async function dispatch(argv: readonly string[], deps: Deps): Promise<number> {
+  if (argv[0] === "help") {
+    const words = argv.slice(1).filter((a) => !a.startsWith("-"));
+    const target = COMMANDS.find((c) => c.path.join(" ") === words.join(" "));
+    deps.stdout(`${helpFor(target, target ? target.path : words, COMMANDS, CLI_VERSION)}\n`);
+    return EXIT.OK;
+  }
   const parsed = parseArgv(argv, COMMANDS);
   const { flags } = parsed;
   const out = (line: string) => deps.stdout(`${line}\n`);
@@ -51,11 +57,6 @@ async function dispatch(argv: readonly string[], deps: Deps): Promise<number> {
   if (argv.length === 0 || (parsed.path.length === 0 && flags["help"])) {
     out(helpFor(undefined, [], COMMANDS, CLI_VERSION));
     return argv.length === 0 ? EXIT.USAGE : EXIT.OK;
-  }
-  if (parsed.path[0] === "help") {
-    const target = COMMANDS.find((c) => c.path.join(" ") === parsed.args.join(" "));
-    out(helpFor(target, target ? target.path : [], COMMANDS, CLI_VERSION));
-    return EXIT.OK;
   }
   if (!command && parsed.path.length === 0) {
     const word = (argv.find((a) => !a.startsWith("-")) ?? "") as string;

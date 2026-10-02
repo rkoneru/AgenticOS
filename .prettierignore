@@ -12,3 +12,4 @@ infra/compose/grafana
 packages/sdk-ts/src/generated
 **/fixtures/mock-model.json
 sdk/python/src/axis_sdk/_generated
+docs/spec/cli.md

@@ -60,7 +60,7 @@ async function readDoc(ctx: Ctx, path: string): Promise<unknown> {
 
 /** A JSON object given inline (`{...}`) or as a path ("-" is stdin). */
 async function jsonArg(ctx: Ctx, value: string, what: string): Promise<Record<string, unknown>> {
-  const text = value.trimStart().startsWith("{") ? value : await readText(value, ctx.deps);
+  const text = /^\s*[{[]/.test(value) ? value : await readText(value, ctx.deps);
   try {
     const v: unknown = JSON.parse(text);
     if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
@@ -462,13 +462,11 @@ async function runCancel(ctx: Ctx): Promise<number> {
   const [id] = need(ctx, 1, "run cancel <run-id>");
   const pid = ctx.str("pid");
   const reason = ctx.str("reason");
-  const r = await ctx
-    .client()
-    .runs.cancel(id as string, {
-      force: ctx.bool("force"),
-      ...(pid ? { pid } : {}),
-      ...(reason ? { reason } : {}),
-    });
+  const r = await ctx.client().runs.cancel(id as string, {
+    force: ctx.bool("force"),
+    ...(pid ? { pid } : {}),
+    ...(reason ? { reason } : {}),
+  });
   emit(
     ctx,
     r,
@@ -517,12 +515,10 @@ function decide(decision: "approve" | "reject"): (ctx: Ctx) => Promise<number> {
     );
     const comment = ctx.str("comment");
     const key = ctx.str("idempotency-key");
-    const a = await ctx
-      .client()
-      .approvals.decide(id as string, decision, {
-        ...(comment ? { comment } : {}),
-        ...(key ? { idempotencyKey: key } : {}),
-      });
+    const a = await ctx.client().approvals.decide(id as string, decision, {
+      ...(comment ? { comment } : {}),
+      ...(key ? { idempotencyKey: key } : {}),
+    });
     emit(
       ctx,
       a,
@@ -693,14 +689,12 @@ function killSwitch(engaged: boolean): (ctx: Ctx) => Promise<number> {
     if (scope !== "tenant" && scope !== "agent" && scope !== "tool")
       throw new UsageError(`scope must be tenant, agent or tool (got "${scope}")`);
     const reason = ctx.str("reason");
-    const ks = await ctx
-      .client()
-      .killSwitches.set({
-        scope,
-        engaged,
-        ...(target ? { target } : {}),
-        ...(reason ? { reason } : {}),
-      });
+    const ks = await ctx.client().killSwitches.set({
+      scope,
+      engaged,
+      ...(target ? { target } : {}),
+      ...(reason ? { reason } : {}),
+    });
     emit(
       ctx,
       ks,
