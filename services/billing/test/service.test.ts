@@ -476,6 +476,18 @@ describe("adjustments", () => {
 
   it("requires a reason and an actor, and applies nothing when the audit append fails", async () => {
     const { ledger, api } = setup();
+    const audited: string[] = [];
+    const counting = new AdjustmentApi({
+      ledger,
+      audit: {
+        append: (e) => {
+          audited.push(e.action);
+          return Promise.resolve(e as never);
+        },
+      },
+    });
+    await expect(counting.adjust({ ...req, reason: "ab" })).rejects.toBeInstanceOf(BillingError);
+    expect(audited).toEqual([]); // refused BEFORE any audit event or ledger write
     await expect(api.adjust({ ...req, reason: " " })).rejects.toBeInstanceOf(BillingError);
     await expect(api.adjust({ ...req, actor: "" })).rejects.toBeInstanceOf(BillingError);
     const failing = new AdjustmentApi({

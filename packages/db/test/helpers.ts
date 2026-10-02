@@ -130,6 +130,26 @@ export async function seedTenant(
     [t, conv.rows[0].id, H("f")],
   );
   await q(
+    "INSERT INTO usage_events (tenant_id, idempotency_key, payload_hash, entry_type, meter, quantity, event_time, period_id, source) VALUES ($1, 'k1', $2, 'usage', 'tokens_in', 5, now(), '2026-09', 'seed')",
+    [t, H("1")],
+  );
+  await q(
+    "INSERT INTO billing_period_seals (tenant_id, period_id, seq, prev_seal_hash, seal_hash, signature, key_id, event_count, rows_digest, totals, closed_at) VALUES ($1, '2026-08', 1, $2, $3, 'sig', 'k', 0, $4, '{}', now())",
+    [t, "0".repeat(64), H("2"), H("3")],
+  );
+  await q(
+    "INSERT INTO usage_conflicts (tenant_id, idempotency_key, existing_payload_hash, offered_payload_hash, source) VALUES ($1, 'k1', $2, $3, 'seed')",
+    [t, H("1"), H("4")],
+  );
+  const inv = await q(
+    "INSERT INTO invoices (tenant_id, period_id, revision, plan_id, price_book, currency, lines, total_micro, invoice_hash) VALUES ($1, '2026-08', 1, 'p', 'pb@1', 'USD', '{}', 0, $2) RETURNING id",
+    [t, H("5")],
+  );
+  await q(
+    "INSERT INTO invoice_provider_links (tenant_id, invoice_id, provider, provider_invoice_id) VALUES ($1, $2, 'fake', 'in_1')",
+    [t, inv.rows[0].id],
+  );
+  await q(
     "INSERT INTO memory_chunks (tenant_id, kb_id, scope, content, embedding) VALUES ($1, $2, 'kb', 'hello', $3::vector)",
     [t, kb.rows[0].id, `[${[1, ...Array<number>(1535).fill(0)].join(",")}]`],
   );

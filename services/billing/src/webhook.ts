@@ -46,7 +46,8 @@ export function verifyStripeSignature(args: {
   let ok = false;
   for (const candidate of v1) {
     const got = Buffer.from(candidate, "hex");
-    if (got.length === expected.length && timingSafeEqual(got, expected)) ok = true; // no early exit: constant time per candidate
+    // parseHeader only admits 64-hex candidates, so the lengths always match (timingSafeEqual would throw otherwise)
+    if (timingSafeEqual(got, expected)) ok = true; // no early exit: constant time per candidate
   }
   if (!ok) throw new BillingError("SIGNATURE_INVALID", "signature mismatch");
 }

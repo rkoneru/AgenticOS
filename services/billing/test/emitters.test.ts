@@ -303,6 +303,19 @@ describe("analytics fanout", () => {
     expect((await sink.append(usage(T))).status).toBe("inserted");
     expect(errs).toHaveLength(1);
     expect(ch.rows.size).toBe(1);
+    // a duplicate must not reach analytics at all (a map-backed fake would hide a re-send)
+    const writes: number[] = [];
+    const spy = {
+      write: (e: readonly unknown[]) => {
+        writes.push(e.length);
+        return Promise.resolve();
+      },
+    };
+    const counted = new FanoutSink(memLedger(clock), [spy]);
+    const u2 = usage(T);
+    await counted.append(u2);
+    await counted.append({ ...u2 });
+    expect(writes).toEqual([1]);
     const quiet = new FanoutSink(memLedger(clock), [ch]);
     ch.failNext = 1;
     expect((await quiet.append(usage(T))).status).toBe("inserted");

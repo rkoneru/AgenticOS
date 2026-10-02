@@ -1,5 +1,28 @@
 # Changelog
 
+## Phase 6 - Billing and usage ledger (component B, `services/billing`)
+
+Additive migration `0008_billing.sql` (ADR 0040; contracts otherwise frozen; the integrating branch renumbers on collision) and an
+ADR for Stripe test mode only (0041). Status: Prototype (library + loopback dev server; no live Stripe, ClickHouse, KMS or tax).
+
+- **Usage ledger** (`@axis/billing`): append-only, idempotent per (tenant, source event), conflicting replays rejected and reported,
+  integer micro-units (bigint, +-(2^53-1)), seven meters with dimensions, late/out-of-order events, UTC hourly/daily/monthly
+  rollups, monthly period close with a hash-chained, signed seal; a late event for a closed month lands in the next period. Postgres
+  (forced RLS, insert-only for everyone, DB trigger refusing inserts into a sealed period) and in-memory implementations share one
+  contract suite; ClickHouse sink interface + fake.
+- **Emitters.** Pure mapping from run events to usage (`model_call` tokens with cached tokens free, `tool_call_result`, `voice_call`,
+  `process_transition`); a result is billed only if the same run log holds an ALLOW decision for its `action_id`, so denied,
+  blocked and failed actions are never billed. Python `HttpUsageEmitter` (`runtime/.../usage.py`) forwards a whitelisted
+  projection (no content); a golden fixture is checked from both languages.
+- **Rating.** Versioned price books, graduated tiers, included quantities, commit true-up, proration, credits; integer rounding rules
+  R1-R4 (`docs/spec/billing.md`); line items always sum to the invoice total (property-tested).
+- **Stripe, test mode only.** `PaymentProvider` + fake; `StripePaymentProvider` over an injected transport refuses live keys and
+  live-mode responses, sends an idempotency key on every mutation; webhook signature verification (HMAC, constant-time, tolerance).
+- **Reconciliation** (ledger vs provider usage vs invoice lines; read-only) and an audited adjustment API; tenant-scoped read-only
+  statement/usage endpoints on a dev server.
+- **Verified:** 125 TypeScript tests on real Postgres 16 (see the report for coverage), `scripts-mutation.mjs` safety mutants,
+  Python emitter tests, bypass scanner entry for `usage.py` only. NEEDS 800-815.
+
 ## Phase 5 - Channels and voice (e2e integration)
 
 Components A (channels service) and B (voice pipeline) were built as libraries; this entry is the integration (component C, ADR
