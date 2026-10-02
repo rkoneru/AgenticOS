@@ -57,6 +57,8 @@ export interface ProvisionerOptions {
   defaultPacks?: unknown[];
   validator?: PackValidator;
   newId?: () => string;
+  /** Runs after the tenant exists and is audited (dev: publishes the tenant's baseline-deny bundle for the kernel). */
+  afterProvision?: (tenantId: string) => Promise<void>;
 }
 
 export function loadDefaultPacks(path: string = DEFAULT_BASELINE_PACK): unknown[] {
@@ -145,6 +147,7 @@ export class Provisioner {
       inputs: { slug: i.slug, region: i.region },
       outputs: { tenant: tenantId, owner: ownerId },
     });
+    await this.o.afterProvision?.(tenantId);
     return { tenantId, ownerMemberId: ownerId, policyVersion: v.policyVersion };
   }
 }
