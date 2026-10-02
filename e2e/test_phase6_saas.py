@@ -57,6 +57,7 @@ from axis_runtime.tki import (
     SchedulerConfig,
     SpawnSpec,
 )
+from axis_runtime.tki import TkiEventType
 from axis_runtime.tki.adapter import agent_workload
 from axis_runtime.tki.supervisor import limits_from_manifest
 from axis_runtime.tools import ToolRegistry
@@ -414,7 +415,7 @@ def claims_handler(body: dict[str, Any]) -> dict[str, Any]:
                 completion=30,
             )
         return openai_turn("report filed: " + " | ".join(m["content"][:30] for m in tool_results(body)), prompt=80, completion=20)
-    if ask == "heavy":
+    if ask.startswith("heavy"):
         return openai_turn("done", prompt=4000, completion=1000)
     return openai_turn("the policy is: be careful", prompt=50, completion=10)
 
@@ -467,6 +468,7 @@ class Outcome:
     provider: Provider
     effects: Effects
     emitted: list[dict[str, Any]]
+    tki: ListSink
 
 
 EMITTED: dict[str, list[dict[str, Any]]] = {}
@@ -553,7 +555,7 @@ async def run_claims(
             agent_workload(manifest, prompt, deps),
         )
         view = await asyncio.wait_for(sched.wait(pid), 90)
-        return Outcome(run_id, view.exit_reason, log, provider, fx, emitted)
+        return Outcome(run_id, view.exit_reason, log, provider, fx, emitted, sink)
     finally:
         await bridge.aclose()
         await emitter.aclose()
@@ -670,3 +672,165 @@ async def test_03_admin_configures_the_byo_key_and_a_budget_and_the_runtime_read
     # the plaintext is not in the database, in the tenant's chain or in any response
     assert psql(stack.db_url, f"SELECT count(*) FROM model_credentials WHERE ciphertext::text LIKE '%{BYO_KEY}%'").strip() == "0"  # fmt: skip
     assert BYO_KEY not in json.dumps(audit_dump(stack.db_url, a.id)["events"])
+
+
+def tenant_pack() -> dict[str, Any]:
+    return json.loads(  # type: ignore[no-any-return]
+        sh(["node", "scripts/yaml-to-json.mjs", "policies/phase6-saas/pack.yaml"], cwd=ROOT / "e2e")
+    )
+
+
+def shape(rows: list[dict[str, Any]]) -> list[tuple[str, str, str]]:
+    return [
+        (e["enforcement_point"], e["action"], e["decision"])
+        for e in rows
+        if e["enforcement_point"] != "admin"
+    ]
+
+
+def current_period() -> str:
+    return datetime.now(UTC).strftime("%Y-%m")
+
+
+async def usage_entries(stack: Stack, t: Tenant, period: str) -> list[dict[str, Any]]:
+    return (await stack.ops("billing/entries", tenant_id=t.id, period=period))["entries"]  # type: ignore[no-any-return]
+
+
+# ==== (2) the run: baseline-deny alone, then the tenant's own activated pack =============================================
+
+
+async def test_04_before_a_pack_is_activated_the_baseline_denies_the_agent_and_nothing_is_billed(
+    stack: Stack,
+) -> None:
+    a = tenant_a()
+    o = await run_claims(stack, a, "review claim 42")
+    S.runs.append(o)
+    assert o.exit_reason is ExitReason.POLICY_DENIED
+    assert o.provider.calls == []  # the model was never called, so the BYO key was never used
+    assert shape(events(stack.db_url, a.id)) == [("model_call", "openai/gpt-4o", "DENY")]
+    # what billing took: the process ran (runtime time) but there is nothing else to bill for a denied action
+    metered = await usage_entries(stack, a, current_period())
+    assert {e["meter"] for e in metered} <= {"runtime_seconds"}
+    chain_ok(stack.db_url, a.id)
+
+
+async def test_05_the_tenant_publishes_validates_and_activates_a_pack_which_reaches_the_kernel(
+    stack: Stack,
+) -> None:
+    a = tenant_a()
+    # a pack that does not compile is refused by the policy toolchain and never becomes active
+    broken = {
+        "apiVersion": "policy.axis.dev/v1", "kind": "PolicyPack",
+        "metadata": {"name": "broken", "version": "1.0.0"},
+        "spec": {"defaultDecision": "ALLOW", "rules": [{"id": "x", "enforcementPoints": ["nope"], "decision": "ALLOW"}]},
+    }  # fmt: skip
+    bad = await admin_call(stack, "POST", "/policies", a.owner, {"policy": broken})
+    assert bad.status_code == 422, bad.text
+    pub = await admin_call(stack, "POST", "/policies", a.owner, {"policy": tenant_pack()})
+    assert pub.status_code == 201, pub.text
+    version_id = pub.json()["versionId"]
+    before = (stack.bundle_dir / f"{a.id}.tar.gz").read_bytes()
+    act = await admin_call(stack, "POST", f"/policies/{version_id}/activate", a.owner)
+    assert act.status_code == 200, act.text
+    a.policy_version = act.json()["policyVersion"]
+    assert (stack.bundle_dir / f"{a.id}.tar.gz").read_bytes() != before  # the kernel's bundle for THIS tenant changed
+    items = (await admin_call(stack, "GET", "/policies", a.owner)).json()["items"]
+    assert {(p["pack"], p["active"]) for p in items} >= {("baseline-deny", True), ("tenant-acme", True)}
+    # baseline-deny can never be switched off
+    off = await admin_call(stack, "DELETE", "/policies/baseline-deny", a.owner)
+    assert off.status_code == 409
+    # another tenant's policy is untouched: tenant B still has only the floor
+    packs_b = (await admin_call(stack, "GET", "/policies", tenant_b().owner)).json()["items"]
+    assert [p["pack"] for p in packs_b] == ["baseline-deny"]
+
+
+async def test_06_the_agent_runs_with_the_tenants_policy_and_byo_key_and_the_tenants_deny_is_enforced(
+    stack: Stack,
+) -> None:
+    a = tenant_a()
+    n_before = len(events(stack.db_url, a.id))
+    o = await run_claims(stack, a, "review claim 42")
+    S.runs.append(o)
+    S.providers.append(o.provider)
+    assert o.exit_reason is ExitReason.COMPLETED
+    # the provider was called with the BYO key the admin configured (read from the control plane), twice (tool turn + final)
+    assert [c["auth"] for c in o.provider.calls] == [f"Bearer {BYO_KEY}"] * 2
+    # the tenant's DENY (priority rule of ITS pack) is enforced: the tool never ran; baseline-allowed and pack-allowed ones did
+    assert o.effects.restricted == []
+    assert o.effects.looked_up == [{"claim_id": "42"}]
+    assert o.effects.reports == [{"claim_id": "42", "summary": "ok"}]
+    rows = events(stack.db_url, a.id)[n_before:]
+    assert shape(rows) == [
+        ("model_call", "openai/gpt-4o", "ALLOW"),  # allowed only because the tenant's pack allows model calls
+        ("tool_call", "lookup-claim", "ALLOW"),
+        ("tool_call", "lookup-restricted", "DENY"),
+        ("tool_call", "send-report", "ALLOW"),
+        ("model_call", "openai/gpt-4o", "ALLOW"),
+    ]
+    # the kernel decided with the policy version the control plane reported at activation
+    assert {r["policy_version"] for r in rows if r["enforcement_point"] != "admin"} == {a.policy_version}
+    chain_ok(stack.db_url, a.id)
+    # the same agent under tenant B (still baseline-deny only) is denied: policy is per tenant
+    ob = await run_claims(stack, tenant_b(), "review claim 42")
+    assert ob.exit_reason is ExitReason.POLICY_DENIED and ob.provider.calls == []
+
+
+async def test_07_a_cache_hit_is_gated_but_reaches_no_provider_and_bills_zero_tokens(stack: Stack) -> None:
+    a = tenant_a()
+    first = await run_claims(stack, a, "summarize policy")
+    second = await run_claims(stack, a, "summarize policy")
+    S.runs += [first, second]
+    S.providers.append(first.provider)
+    assert first.exit_reason is ExitReason.COMPLETED and second.exit_reason is ExitReason.COMPLETED
+    assert len(first.provider.calls) == 1 and second.provider.calls == []  # the second answer came from the NEXUS cache
+    calls = [e for e in await second.log.read(second.run_id) if e.type == EventType.MODEL_CALL]
+    assert [c.data["provider"] for c in calls] == ["nexus-cache"] and calls[0].data["input_tokens"] == 0
+    # the cache hit is still a gated model_call: the run log has the event, with zero tokens ...
+    assert [e.type for e in await second.log.read(second.run_id)].count(EventType.GATE_DECISION) == 1
+    # ... and billing took no model tokens for that run (the service saw the event and billed nothing for it)
+    assert second.emitted
+    metered = await usage_entries(stack, a, current_period())
+    by_run = {r: {e["meter"] for e in metered if e["dimensions"].get("run") == r} for r in (first.run_id, second.run_id)}
+    assert {"tokens_in", "tokens_out"} <= by_run[first.run_id]
+    assert not ({"tokens_in", "tokens_out", "tool_executions"} & by_run[second.run_id])
+
+
+async def set_budget(stack: Stack, t: Tenant, metric: str, soft: float, hard: float) -> None:
+    r = await admin_call(stack, "PUT", "/budgets", t.owner, {"scope": "tenant", "metric": metric, "period": "day", "soft": soft, "hard": hard})  # fmt: skip
+    assert r.status_code == 200, r.text
+
+
+async def test_08_the_tenants_token_hard_cap_from_the_control_plane_stops_the_run(stack: Stack) -> None:
+    a = tenant_a()
+    await set_budget(stack, a, "tokens", 2_000, 3_000)  # the admin lowers the cap over HTTP
+    o = await run_claims(stack, a, "heavy-tokens")  # the provider bills 5000 tokens for the one call
+    S.runs.append(o)
+    S.providers.append(o.provider)
+    assert o.exit_reason is ExitReason.BUDGET_EXCEEDED
+    # the process' own ABL cap is 60000 and the run cap 250000: only the TENANT's 3000 (set over HTTP) can have clamped 5000 to 3000
+    caps = list(o.tki.of(TkiEventType.BUDGET_HARD_CAP))
+    assert [(e.data["resource"], e.data["overrun"]) for e in caps] == [("tokens", 5_000 - 3_000)], [e.data for e in caps]
+    committed = sum(e.data["granted"].get("tokens", 0) for e in o.tki.of(TkiEventType.BUDGET_COMMITTED))
+    assert committed <= 3_000  # the cap held: never more than the tenant's hard cap was committed
+    # metering is independent of the cap: the provider DID bill 5000 tokens, and the ledger says so
+    assert o.provider.calls and (o.provider.calls[0]["prompt"], o.provider.calls[0]["completion"]) == (4000, 1000)
+    await set_budget(stack, a, "tokens", 80_000, 100_000)
+
+
+async def test_09_the_tenants_cost_hard_cap_from_the_control_plane_stops_the_run(stack: Stack) -> None:
+    a = tenant_a()
+    await set_budget(stack, a, "cost_usd", 0.0005, 0.001)
+    o = await run_claims(stack, a, "heavy-cost")
+    S.runs.append(o)
+    S.providers.append(o.provider)
+    assert o.exit_reason is ExitReason.BUDGET_EXCEEDED
+    caps = list(o.tki.of(TkiEventType.BUDGET_HARD_CAP))
+    assert [e.data["resource"] for e in caps] == ["cost_micro_usd"] and caps[0].data["overrun"] > 0
+    spent = sum(e.data["granted"].get("cost_micro_usd", 0) for e in o.tki.of(TkiEventType.BUDGET_COMMITTED))
+    assert spent <= 1_000  # $0.001: the cap held
+    await set_budget(stack, a, "cost_usd", 80, 100)
+    # with the caps restored the same agent completes again (the caps, not the agent, stopped the runs)
+    ok = await run_claims(stack, a, "heavy-after")
+    S.runs.append(ok)
+    S.providers.append(ok.provider)
+    assert ok.exit_reason is ExitReason.COMPLETED

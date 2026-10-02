@@ -12,6 +12,7 @@
     "@axis/contracts": "workspace:*",
     "@axis/control-plane": "workspace:*",
     "@axis/risk-kernel": "workspace:*",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "yaml": "^2.5.0"
   }
 }

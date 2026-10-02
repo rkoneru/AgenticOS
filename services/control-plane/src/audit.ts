@@ -1,4 +1,4 @@
-import { canonicalize, sha256Hex, type AuditEvent, type AuditSink } from "@axis/contracts";
+import { hashJson, type AuditEvent, type AuditSink } from "@axis/contracts";
 import { randomUUID } from "node:crypto";
 import { CpError } from "./errors.js";
 
@@ -44,8 +44,8 @@ export class AdminAudit {
         action: e.action,
         decision: e.decision,
         reason: e.reason.slice(0, 1000),
-        inputs_hash: sha256Hex(canonicalize(e.inputs ?? {})),
-        outputs_hash: sha256Hex(canonicalize(e.outputs ?? {})),
+        inputs_hash: hashJson(e.inputs ?? {}), // arbitrary payload: fractional budgets (cost_usd 0.001) are legitimate
+        outputs_hash: hashJson(e.outputs ?? {}),
       });
     } catch {
       throw new CpError("unavailable", "audit log unavailable");
