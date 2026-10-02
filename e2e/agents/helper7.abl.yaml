@@ -1,0 +1,19 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: helper-agent
+  version: 1.0.0
+  description: "Phase 7 e2e. The blueprint a publisher signs, registers and lists in the marketplace."
+spec:
+  riskClassification:
+    level: minimal
+    rationale: Answers general product questions; no decisions about people.
+  model:
+    primary: { provider: anthropic, model: claude-sonnet-5-5 }
+  instructions:
+    system: You are a helpful assistant.
+  budgets:
+    costUsd: { hard: 5 }
+    toolCalls: { hard: 20 }
+  policy:
+    packs: ["baseline-deny@^1.0.0"]

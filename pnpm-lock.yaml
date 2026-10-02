@@ -238,6 +238,9 @@ importers:
       '@axis/risk-kernel':
         specifier: workspace:*
         version: link:../services/risk-kernel
+      '@axis/sdk':
+        specifier: workspace:*
+        version: link:../packages/sdk-ts
       pg:
         specifier: ^8.13.0
         version: 8.23.1

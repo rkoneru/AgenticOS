@@ -1,0 +1,17 @@
+packs: [../../../policies/baseline-deny/pack.yaml, pack.yaml]
+cases:
+  - name: model calls are allowed by the tenant pack
+    input: { enforcement_point: model_call, data: { phi: false } }
+    expect: { decision: ALLOW, winners: [tenant-claims/allow-model-calls] }
+  - name: a payout needs a human
+    input:
+      { enforcement_point: tool_call, tool: { name: file-payout, side_effects: write }, args: {} }
+    expect: { decision: REQUIRE_APPROVAL, winners: [tenant-claims/approve-payouts] }
+  - name: the restricted lookup is denied even though reads are allowed by the baseline
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: lookup-restricted, side_effects: read },
+        args: {},
+      }
+    expect: { decision: DENY, winners: [tenant-claims/deny-restricted-lookup] }

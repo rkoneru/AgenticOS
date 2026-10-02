@@ -7,6 +7,8 @@ export interface StandaloneConfig {
   databaseUrl: string;
   /** Postgres role to assume per transaction (the unprivileged `axis_app`). */
   dbRole: string | undefined;
+  /** The region this process serves (the control plane refuses to act for tenants homed elsewhere). */
+  region: string;
   port: number;
   host: string;
   allowedOrigins: string[];
@@ -75,6 +77,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
   return {
     databaseUrl: need("GW_DATABASE_URL"),
     dbRole: env["GW_DB_ROLE"] || undefined,
+    region: env["GW_REGION"] || "us-east-1",
     port: int("GW_PORT", 0, 0, 65535),
     host,
     allowedOrigins: (env["GW_ALLOWED_ORIGINS"] ?? "")

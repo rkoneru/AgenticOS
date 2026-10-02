@@ -15,6 +15,7 @@
     "@axis/marketplace": "workspace:*",
     "@axis/registry": "workspace:*",
     "@axis/risk-kernel": "workspace:*",
+    "@axis/sdk": "workspace:*",
     "pg": "^8.13.0",
     "yaml": "^2.5.0"
   }

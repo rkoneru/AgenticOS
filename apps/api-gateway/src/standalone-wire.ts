@@ -48,8 +48,8 @@ export async function startStandalone(
     idp: new FakeIdentityProvider(),
     kms: new LocalKms({ "gw-unused": Buffer.alloc(32, 1) }, "gw-unused"),
     dns: new FakeDnsResolver(),
-    region: "gateway",
-    regions: ["gateway"],
+    region: c.region,
+    regions: [c.region],
     secrets: {
       pepper: c.secrets.pepper,
       cookieKey: c.secrets.cookieKey,

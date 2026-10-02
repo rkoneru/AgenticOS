@@ -368,8 +368,15 @@ async function explainRun(c: Ctx): Promise<HandlerResult> {
   const runId = str(c.params["runId"]);
   const run = await c.deps.runs.get(c.tenantId, runId);
   if (!run) throw notFound("run not found");
-  const events =
-    (await c.deps.runs.events(c.tenantId, runId, { afterSequence: 0, limit: 1000 })) ?? [];
+  // The run service serves at most 200 events per call: page through the log (bounded) instead of asking for more.
+  const events: RunEventDto[] = [];
+  for (let after = 0, pages = 0; pages < 25; pages++) {
+    const batch =
+      (await c.deps.runs.events(c.tenantId, runId, { afterSequence: after, limit: 200 })) ?? [];
+    events.push(...batch);
+    if (batch.length < 200) break;
+    after = (batch[batch.length - 1] as RunEventDto).sequence;
+  }
   const x = await c.deps.explain.explainRun(c.tenantId, {
     traceId: run.trace_id ?? "",
     runEvents: events,
