@@ -162,6 +162,9 @@ def test_a_tenant_can_lower_but_never_raise_what_the_blueprint_declares() -> Non
         {"tenant": [{"metric": "tokens", "period": "day", "hard": -1}]},
         {"tenant": [{"metric": "tokens", "period": "day", "hard": True}]},
         {"tenant": [{"metric": "tokens", "period": "day", "soft": "5"}]},
+        {"tenant": [{"metric": "tokens", "period": "day", "hard": float("nan")}]},
+        {"tenant": [{"metric": "tokens", "period": "day", "hard": float("inf")}]},
+        {"tenant": [{"metric": "cost_usd", "period": "day", "hard": 1e308}]},
     ],
 )
 def test_an_unintelligible_budget_stops_the_run_instead_of_being_dropped(bad: Any) -> None:

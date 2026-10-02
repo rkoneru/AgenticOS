@@ -190,3 +190,86 @@ describe("review: concurrent policy activations never leave the kernel on a stal
     }
   });
 });
+
+describe("review: pre-tenant lookup policies cannot be used to enumerate (real RLS, axis_app)", () => {
+  let w: World;
+  beforeAll(async () => {
+    w = await makeWorld("pg");
+  });
+  afterAll(() => w.close());
+
+  const asApp = async <T>(
+    settings: Record<string, string>,
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<T[]> => {
+    const c = await w.pool!.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SET LOCAL ROLE axis_app");
+      for (const [k, v] of Object.entries(settings))
+        await c.query("SELECT set_config($1,$2,true)", [k, v]);
+      const r = await c.query(sql, params);
+      await c.query("ROLLBACK");
+      return r.rows as T[];
+    } finally {
+      c.release();
+    }
+  };
+
+  it("no setting, a wrong hash, an empty hash or SQL-looking values release no row of api_keys, directories or identity_connections", async () => {
+    const a = await w.tenant();
+    const key = await w.cp.admin.createApiKey(a.owner, { name: "k", scopes: ["*"] });
+    const dir = await w.cp.admin.createDirectory(a.owner, "d", "viewer");
+    await w.cp.admin.setSsoConnection(a.owner, { idpOrgId: "org_probe", connectionType: "oidc" });
+    const none = { "axis.lookup_prefix": "", "axis.lookup_hash": "" };
+    expect(await asApp({}, "SELECT * FROM api_keys")).toHaveLength(0);
+    expect(await asApp({}, "SELECT * FROM directories")).toHaveLength(0);
+    expect(await asApp({}, "SELECT * FROM identity_connections")).toHaveLength(0);
+    expect(await asApp(none, "SELECT * FROM api_keys")).toHaveLength(0);
+    // the right prefix with a wrong hash, and with a hash of another row
+    expect(
+      await asApp(
+        { "axis.lookup_prefix": key.key.prefix, "axis.lookup_hash": "00".repeat(32) },
+        "SELECT * FROM api_keys",
+      ),
+    ).toHaveLength(0);
+    expect(
+      await asApp(
+        { "axis.lookup_prefix": key.key.prefix, "axis.lookup_hash": "" },
+        "SELECT * FROM api_keys",
+      ),
+    ).toHaveLength(0);
+    expect(
+      await asApp(
+        { "axis.lookup_prefix": "%", "axis.lookup_hash": "00" },
+        "SELECT * FROM directories",
+      ),
+    ).toHaveLength(0);
+    expect(
+      await asApp({ "axis.lookup_idp_org": "org_%" }, "SELECT * FROM identity_connections"),
+    ).toHaveLength(0);
+    expect(dir.token).toBeTruthy();
+  });
+});
+
+describe("review: budget limits are bounded", () => {
+  it("rejects limits the runtime could not represent (1e308 overflows once cost is scaled to micro-USD)", async () => {
+    const w = await makeWorld("memory");
+    try {
+      const t = await w.tenant();
+      const put = (hard: number) =>
+        w.cp.admin.putBudget(t.owner, {
+          scope: "tenant",
+          metric: "cost_usd",
+          period: "month",
+          hard,
+        });
+      expect(await code(put(1e308))).toBe("invalid");
+      expect(await code(put(1e12 + 1))).toBe("invalid");
+      expect(await code(put(1e12))).toBe("ok");
+    } finally {
+      await w.close();
+    }
+  });
+});

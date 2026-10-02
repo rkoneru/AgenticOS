@@ -568,8 +568,11 @@ export class AdminService {
         if (b.scope === "agent" ? !/^[a-z][a-z0-9-]{1,62}$/.test(target) : target !== "")
           throw invalid("target must be an agent name for agent budgets and empty otherwise");
         for (const v of [b.soft, b.hard])
-          if (v !== undefined && (typeof v !== "number" || !Number.isFinite(v) || v < 0))
-            throw invalid("limits must be finite numbers >= 0");
+          if (
+            v !== undefined &&
+            (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1e12)
+          )
+            throw invalid("limits must be finite numbers in [0, 1e12]");
         if (b.soft === undefined && b.hard === undefined)
           throw invalid("soft or hard limit required");
         if (b.soft !== undefined && b.hard !== undefined && b.soft > b.hard)

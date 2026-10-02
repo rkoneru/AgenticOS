@@ -24,6 +24,7 @@ a cap that cannot be understood must stop the run, not be dropped."""
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -36,6 +37,12 @@ _RESOURCE: Mapping[str, tuple[Resource, int]] = {
     "tool_calls": (Resource.TOOL_CALLS, 1),
     "runtime_seconds": (Resource.RUNTIME_MS, 1000),
 }
+
+
+#: Largest limit the control plane accepts (and the runtime will read): finite and far below float
+#: overflow once scaled (cost_usd is scaled by 1e6). ``json`` also parses NaN/Infinity, which
+#: ``int()`` turns into a crash instead of a clear refusal.
+MAX_LIMIT = 1e12
 
 
 class BudgetConfigError(ValueError):
@@ -61,6 +68,8 @@ def _entry(raw: Any) -> BudgetEntry:
         v = raw.get(k)
         if v is not None and (isinstance(v, bool) or not isinstance(v, int | float) or v < 0):
             raise BudgetConfigError(f"budget {k} must be a non-negative number")
+        if v is not None and (not math.isfinite(v) or v > MAX_LIMIT):
+            raise BudgetConfigError(f"budget {k} must be a finite number <= {MAX_LIMIT:g}")
         vals[k] = v
     return BudgetEntry(str(metric), str(raw.get("period", "")), vals["soft"], vals["hard"])
 
