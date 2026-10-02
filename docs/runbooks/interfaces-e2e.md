@@ -17,13 +17,13 @@ bash infra/scripts/with-pg.sh uv run python e2e/interfaces_stack.py --out /tmp/s
 
 ## The stack (one OS process each)
 
-| Process                            | Entry                                      | Notes                                                                                       |
-| ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Risk Kernel (gRPC) + approvals     | `services/risk-kernel/src/main.ts`         | per-tenant bundles from a directory, reloading token file, approvals dev bridge             |
-| Control plane, billing, ops, IdP   | `e2e/scripts/interfaces-stack.mjs`         | fake IdP page, fake KMS/DNS, marketplace publisher/staff side, token files                  |
-| Run service                        | `e2e/scripts/interfaces_run_server.py`     | scripted model + deterministic tools; kernel gate, BYO key, usage emitter, approvals        |
-| API gateway                        | `apps/api-gateway/dist/main.js`            | the standalone DEV process; env contract in `docs/spec/api-gateway.md` section 7a           |
-| Console (console suite only)       | `next start -p 3100`                       | BFF to gateway and control plane; `AXIS_IDP_ORIGINS` for the sign-in redirect               |
+| Process                          | Entry                                  | Notes                                                                                |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------ |
+| Risk Kernel (gRPC) + approvals   | `services/risk-kernel/src/main.ts`     | per-tenant bundles from a directory, reloading token file, approvals dev bridge      |
+| Control plane, billing, ops, IdP | `e2e/scripts/interfaces-stack.mjs`     | fake IdP page, fake KMS/DNS, marketplace publisher/staff side, token files           |
+| Run service                      | `e2e/scripts/interfaces_run_server.py` | scripted model + deterministic tools; kernel gate, BYO key, usage emitter, approvals |
+| API gateway                      | `apps/api-gateway/dist/main.js`        | the standalone DEV process; env contract in `docs/spec/api-gateway.md` section 7a    |
+| Console (console suite only)     | `next start -p 3100`                   | BFF to gateway and control plane; `AXIS_IDP_ORIGINS` for the sign-in redirect        |
 
 Logs: pytest keeps them in its temp dir (`kernel.err`, `stack.err`, `runserver.err`, `gateway.err`). A stack that does not start fails the run (never skips).
 

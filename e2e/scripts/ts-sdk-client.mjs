@@ -5,7 +5,9 @@ import { Axis, AxisApiError, AxisError } from "@axis/sdk";
 const [op, raw] = process.argv.slice(2);
 const a = JSON.parse(raw ?? "{}");
 const ax = new Axis({
-  ...(process.env.AXIS_TOKEN ? { token: process.env.AXIS_TOKEN } : { apiKey: process.env.AXIS_API_KEY }),
+  ...(process.env.AXIS_TOKEN
+    ? { token: process.env.AXIS_TOKEN }
+    : { apiKey: process.env.AXIS_API_KEY }),
   baseUrl: process.env.AXIS_BASE_URL,
   allowInsecure: true,
   maxRetries: 0,
@@ -39,7 +41,8 @@ const ops = {
         }),
   marketInstalls: () => ax.marketplace.installs(),
   marketUninstall: () => ax.marketplace.uninstall(a.namespace, a.name),
-  runStart: () => ax.runs.start({ blueprint: { name: a.name, version: a.version }, input: a.input }),
+  runStart: () =>
+    ax.runs.start({ blueprint: { name: a.name, version: a.version }, input: a.input }),
   runGet: () => ax.runs.get(a.id),
   runWait: () => ax.runs.wait(a.id, { timeoutMs: 120000, pollIntervalMs: 300 }),
   runEvents: async () => {
@@ -75,7 +78,12 @@ try {
   const status = e instanceof AxisApiError ? e.status : undefined;
   console.log(
     JSON.stringify({
-      error: { status: status ?? null, code: e?.code ?? null, name: e?.name, message: String(e?.message ?? e) },
+      error: {
+        status: status ?? null,
+        code: e?.code ?? null,
+        name: e?.name,
+        message: String(e?.message ?? e),
+      },
     }),
   );
   process.exit(1);

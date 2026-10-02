@@ -7,4 +7,6 @@ const events = readFileSync(process.argv[2], "utf8")
   .filter(Boolean)
   .map((l) => JSON.parse(l));
 // the export may start mid-chain: anchor on the first event's own prev_hash
-console.log(JSON.stringify({ count: events.length, verdict: verifyChain(events.slice(1), events[0]) }));
+console.log(
+  JSON.stringify({ count: events.length, verdict: verifyChain(events.slice(1), events[0]) }),
+);

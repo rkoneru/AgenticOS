@@ -174,13 +174,39 @@ function flushTokenFiles() {
   const all = [...tenants.values()];
   const byTenant = (pick) => Object.fromEntries(all.map((t) => [t.id, pick(t)]));
   const byToken = (pick) => Object.fromEntries(all.map((t) => [pick(t), t.id]));
-  writeJson(f.kernel_principals, Object.fromEntries(all.map((t) => [t.kernelToken, { tenantId: t.id, subject: `svc-${t.slug}`, platformOperator: false }])));
-  writeJson(f.gw_run, byTenant((t) => t.runToken));
-  writeJson(f.run_tokens, byToken((t) => t.runToken));
-  writeJson(f.gw_kernel, byTenant((t) => t.kernelToken));
-  writeJson(f.run_kernel, byTenant((t) => t.kernelToken));
-  writeJson(f.run_runtime, byTenant((t) => t.runtimeToken));
-  writeJson(f.run_ingest, byTenant((t) => t.ingestToken));
+  writeJson(
+    f.kernel_principals,
+    Object.fromEntries(
+      all.map((t) => [
+        t.kernelToken,
+        { tenantId: t.id, subject: `svc-${t.slug}`, platformOperator: false },
+      ]),
+    ),
+  );
+  writeJson(
+    f.gw_run,
+    byTenant((t) => t.runToken),
+  );
+  writeJson(
+    f.run_tokens,
+    byToken((t) => t.runToken),
+  );
+  writeJson(
+    f.gw_kernel,
+    byTenant((t) => t.kernelToken),
+  );
+  writeJson(
+    f.run_kernel,
+    byTenant((t) => t.kernelToken),
+  );
+  writeJson(
+    f.run_runtime,
+    byTenant((t) => t.runtimeToken),
+  );
+  writeJson(
+    f.run_ingest,
+    byTenant((t) => t.ingestToken),
+  );
 }
 
 const token = (p) => `${p}-${randomBytes(12).toString("hex")}`;
@@ -260,7 +286,8 @@ const ops = {
   "provision-tenant": provision,
   member: async (b) => {
     const id = randomUUID();
-    const email = b.email ?? `${b.role}-${id.slice(0, 6)}@${tenants.get(b.tenant_id)?.slug ?? "x"}.example`;
+    const email =
+      b.email ?? `${b.role}-${id.slice(0, 6)}@${tenants.get(b.tenant_id)?.slug ?? "x"}.example`;
     await store.insertMember({
       tenantId: b.tenant_id,
       id,
@@ -287,21 +314,36 @@ const ops = {
     const t = tenants.get(b.tenant_id);
     const admin = tenantAdmin(b.tenant_id);
     const domain = `${t.slug}.example.com`;
-    const rec = await mp.publishers.start(admin, { legalName: `${t.slug} Inc`, domain, contactEmail: `ops@${domain}` });
+    const rec = await mp.publishers.start(admin, {
+      legalName: `${t.slug} Inc`,
+      domain,
+      contactEmail: `ops@${domain}`,
+    });
     mpDomain.records.set(domain, [`axis-verify=${rec.challenge}`]);
     await mp.publishers.submitEvidence(admin);
-    await mp.publishers.decide(reviewer("rev-verify"), b.tenant_id, { decision: "approve", reason: "evidence checked" });
+    await mp.publishers.decide(reviewer("rev-verify"), b.tenant_id, {
+      decision: "approve",
+      reason: "evidence checked",
+    });
     return { ok: true };
   },
   "mp/review-and-list": async (b) => {
     const builder = tenantAdmin(b.tenant_id, "builder");
-    const rv = await mp.reviews.submit(builder, { namespace: b.namespace, name: b.name, version: b.version });
+    const rv = await mp.reviews.submit(builder, {
+      namespace: b.namespace,
+      name: b.name,
+      version: b.version,
+    });
     if (rv.state === "in_review")
-      await mp.reviews.decide(reviewer("rev-approve"), `${b.tenant_id}|${b.namespace}/${b.name}@${b.version}`, {
-        decision: "approve",
-        note: "reviewed by the e2e harness, fine to list",
-        acknowledged: rv.findings.filter((f) => f.severity === "high").map((f) => f.id),
-      });
+      await mp.reviews.decide(
+        reviewer("rev-approve"),
+        `${b.tenant_id}|${b.namespace}/${b.name}@${b.version}`,
+        {
+          decision: "approve",
+          note: "reviewed by the e2e harness, fine to list",
+          acknowledged: rv.findings.filter((f) => f.severity === "high").map((f) => f.id),
+        },
+      );
     await mp.listings
       .create(builder, {
         namespace: b.namespace,
@@ -316,12 +358,15 @@ const ops = {
     return { state: rv.state, findings: rv.findings.map((f) => f.id) };
   },
   "mp/takedown": async (b) => {
-    await mp.listings.takedown({ kind: "moderator", subject: "mod-1" }, {
-      namespace: b.namespace,
-      name: b.name,
-      ...(b.version ? { version: b.version } : {}),
-      reason: b.reason ?? "e2e takedown",
-    });
+    await mp.listings.takedown(
+      { kind: "moderator", subject: "mod-1" },
+      {
+        namespace: b.namespace,
+        name: b.name,
+        ...(b.version ? { version: b.version } : {}),
+        reason: b.reason ?? "e2e takedown",
+      },
+    );
     return { ok: true };
   },
   "billing/totals": async (b) => ({
@@ -347,7 +392,8 @@ const opsServer = http.createServer((req, res) => {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(json(body));
     };
-    if (req.headers.authorization !== `Bearer ${cfg.ops_token}`) return send(401, { error: "unauthorized" });
+    if (req.headers.authorization !== `Bearer ${cfg.ops_token}`)
+      return send(401, { error: "unauthorized" });
     const name = (req.url ?? "").replace(/^\/ops\//, "");
     const op = ops[name];
     if (!op || req.method !== "POST") return send(404, { error: "no such op" });
@@ -360,7 +406,9 @@ const opsServer = http.createServer((req, res) => {
 });
 const opsPort = await cpListen(opsServer, 0);
 
-console.log(JSON.stringify({ event: "stack", cp: cpPort, billing: billingPort, ops: opsPort, idp: idpPort }));
+console.log(
+  JSON.stringify({ event: "stack", cp: cpPort, billing: billingPort, ops: opsPort, idp: idpPort }),
+);
 process.on("SIGTERM", () => {
   cpServer.close();
   billingServer.close();

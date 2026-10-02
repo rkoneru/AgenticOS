@@ -34,30 +34,30 @@ The tenant is `principal.tenantId` and nothing else; no handler can read one fro
 
 ## 3. Operations
 
-| Operation (`operationId`)                                     | Action                           | Backing                                                          |
-| ------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
-| listBlueprints, getBlueprintVersion                           | `api.blueprints.read`            | `BlueprintStore` (memory; registry later)                        |
-| publishBlueprintVersion                                       | `api.blueprints.publish`         | `@axis/abl` `compileAbl` (schema + lint) then the store; 409 dup |
-| listRuns, getRun                                              | `api.runs.read`                  | run service                                                      |
-| startRun                                                      | `api.runs.start`                 | compiles the stored ABL to a manifest, calls the run service     |
-| signalRun                                                     | `api.runs.signal`                | run service (TKI scheduler signal)                               |
-| listRunEvents (JSON, or SSE with `Accept: text/event-stream`) | `api.events.read`                | run service event log / feed                                     |
-| listApprovals, decideApproval                                 | `api.approvals.read` / `.decide` | `ApprovalService` (principal built from the credential only)     |
-| listPolicyPacks, publishPolicyPack                            | `api.policies.read` / `.publish` | control-plane `PolicyPackService`                                |
-| testPolicy (`/policies:test`)                                 | `api.policies.test`              | real `opa eval`, bounded; gates not evaluated                    |
-| listAuditEvents, verifyAuditChain                             | `api.audit.read` / `.verify`     | audit store; verify range <= 50 000 events                       |
-| listKillSwitches, setKillSwitch                               | `api.killswitch.read` / `.write` | kernel gRPC first, then the record store                         |
-| getUsage                                                      | `api.usage.read`                 | billing ledger entries                                           |
-| startEvalRun                                                  | `api.evals.run`                  | 501 until Phase 8                                                |
-| explainRun                                                    | `api.explanations.read`          | AGIL over the audit trail of the run's trace                     |
-| explainAuditEvent (`/audit/events/{seq}/explanation`)         | `api.audit.read`                 | AGIL                                                             |
-| getMe (`/me`)                                                 | none (any valid credential)      | the principal + control-plane store (tenant, member, scopes)     |
-| getApproval                                                   | `api.approvals.read`             | approvals service (same visibility as the list, else 404)        |
-| activatePolicyPack (`/policies/{versionId}/activate`)         | `api.policies.activate`          | control-plane admin activation (audit + kernel bundle publish)   |
-| list/claim namespace, list/add key, publish, versions, yank   | `api.registry.read` / `.write`   | `@axis/registry` in process; tenant + role from the credential   |
+| Operation (`operationId`)                                     | Action                           | Backing                                                             |
+| ------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| listBlueprints, getBlueprintVersion                           | `api.blueprints.read`            | `BlueprintStore` (memory; registry later)                           |
+| publishBlueprintVersion                                       | `api.blueprints.publish`         | `@axis/abl` `compileAbl` (schema + lint) then the store; 409 dup    |
+| listRuns, getRun                                              | `api.runs.read`                  | run service                                                         |
+| startRun                                                      | `api.runs.start`                 | compiles the stored ABL to a manifest, calls the run service        |
+| signalRun                                                     | `api.runs.signal`                | run service (TKI scheduler signal)                                  |
+| listRunEvents (JSON, or SSE with `Accept: text/event-stream`) | `api.events.read`                | run service event log / feed                                        |
+| listApprovals, decideApproval                                 | `api.approvals.read` / `.decide` | `ApprovalService` (principal built from the credential only)        |
+| listPolicyPacks, publishPolicyPack                            | `api.policies.read` / `.publish` | control-plane `PolicyPackService`                                   |
+| testPolicy (`/policies:test`)                                 | `api.policies.test`              | real `opa eval`, bounded; gates not evaluated                       |
+| listAuditEvents, verifyAuditChain                             | `api.audit.read` / `.verify`     | audit store; verify range <= 50 000 events                          |
+| listKillSwitches, setKillSwitch                               | `api.killswitch.read` / `.write` | kernel gRPC first, then the record store                            |
+| getUsage                                                      | `api.usage.read`                 | billing ledger entries                                              |
+| startEvalRun                                                  | `api.evals.run`                  | 501 until Phase 8                                                   |
+| explainRun                                                    | `api.explanations.read`          | AGIL over the audit trail of the run's trace                        |
+| explainAuditEvent (`/audit/events/{seq}/explanation`)         | `api.audit.read`                 | AGIL                                                                |
+| getMe (`/me`)                                                 | none (any valid credential)      | the principal + control-plane store (tenant, member, scopes)        |
+| getApproval                                                   | `api.approvals.read`             | approvals service (same visibility as the list, else 404)           |
+| activatePolicyPack (`/policies/{versionId}/activate`)         | `api.policies.activate`          | control-plane admin activation (audit + kernel bundle publish)      |
+| list/claim namespace, list/add key, publish, versions, yank   | `api.registry.read` / `.write`   | `@axis/registry` in process; tenant + role from the credential      |
 | resolveRegistryBlueprint (`/registry/resolve`)                | `api.registry.read`              | re-verifies hash, signature, provenance on every read (422 + codes) |
-| marketplace listings, listing, installs                       | `api.marketplace.read`           | `@axis/marketplace` catalog and the tenant's installs            |
-| previewMarketplaceInstall, install, uninstall                 | `api.marketplace.install`        | permission diff + consent digest; install pinned to version+hash |
+| marketplace listings, listing, installs                       | `api.marketplace.read`           | `@axis/marketplace` catalog and the tenant's installs               |
+| previewMarketplaceInstall, install, uninstall                 | `api.marketplace.install`        | permission diff + consent digest; install pinned to version+hash    |
 
 Role matrix: `policies/control-plane/authz.cases.yaml` (`make policy-test`) and `services/control-plane/test/api-authz.test.ts`.
 
