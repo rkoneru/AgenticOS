@@ -155,6 +155,28 @@ importers:
         specifier: ^8.11.0
         version: 8.23.1
 
+  services/billing:
+    dependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      fast-check:
+        specifier: ^4.0.0
+        version: 4.10.2
+
   services/channels:
     dependencies:
       '@axis/audit':

@@ -103,6 +103,12 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "surface, NEEDS). The write backend is reachable only through MemoryWrite performed by "
         "ActionExecutor; the retriever is read-only, ACL-filtered server side and re-checked by RagStage.",
     },
+    "usage.py": {
+        "httpx": "HttpUsageEmitter: client of the billing service (loopback dev surface, NEEDS). "
+        "Sends a whitelisted projection of the run log for metering; it is not an agent action, "
+        "carries no content, and the service bills only ALLOWed actions. A failure never denies "
+        "or stops anything (metering is off the decision path).",
+    },
     "channels.py": {
         "httpx": "HttpChannelSender: client of the channels service (loopback dev surface, NEEDS). "
         "Reachable only through MessageSend performed by ActionExecutor: a DENY never sends; the "

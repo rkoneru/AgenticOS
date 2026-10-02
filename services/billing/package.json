@@ -1,0 +1,29 @@
+{
+  "name": "@axis/billing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bash ../../infra/scripts/with-pg.sh vitest run",
+    "cov": "bash ../../infra/scripts/with-pg.sh vitest run --coverage",
+    "dev-server": "node dist/main.js"
+  },
+  "dependencies": {
+    "@axis/contracts": "workspace:*",
+    "@axis/db": "workspace:*",
+    "pg": "^8.13.0",
+    "@axis/audit": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "fast-check": "^4.0.0"
+  }
+}
