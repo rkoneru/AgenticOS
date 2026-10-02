@@ -104,14 +104,14 @@ class Stack:
     platform_token: str
     procs: list[subprocess.Popen[str]] = field(default_factory=list)
 
-    def ops(self, name: str, **body: Any) -> dict[str, Any]:
+    def ops(self, op: str, /, **body: Any) -> dict[str, Any]:
         r = httpx.post(
-            f"{self.ops_url}/ops/{name}",
+            f"{self.ops_url}/ops/{op}",
             json=body,
             headers={"authorization": f"Bearer {self.ops_token}"},
             timeout=120,
         )
-        assert r.status_code == 200, (name, r.status_code, r.text)
+        assert r.status_code == 200, (op, r.status_code, r.text)
         return r.json()  # type: ignore[no-any-return]
 
     def provision(
