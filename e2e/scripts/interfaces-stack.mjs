@@ -89,7 +89,8 @@ const idpServer = http.createServer((req, res) => {
   }
 });
 const idpPort = await cpListen(idpServer, 0);
-idp = new FakeIdentityProvider(`http://127.0.0.1:${idpPort}`);
+// "localhost", like the console origin: SameSite=Strict session cookies set after a CROSS-SITE redirect chain are dropped by Chromium (NEEDS)
+idp = new FakeIdentityProvider(`http://localhost:${idpPort}`);
 
 const runtimeTokens = new Map(); // CP runtime-bridge token -> tenant
 const cp = wireControlPlane({

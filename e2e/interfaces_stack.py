@@ -284,7 +284,7 @@ def boot(
         yield Stack(
             admin_url=admin_url, db_url=db_url, work=work,
             gateway=f"http://127.0.0.1:{ginfo['port']}/v1", gateway_origin=f"http://127.0.0.1:{ginfo['port']}",
-            cp=cp, billing=billing, ops_url=f"http://127.0.0.1:{sinfo['ops']}", idp=f"http://127.0.0.1:{sinfo['idp']}",
+            cp=cp, billing=billing, ops_url=f"http://127.0.0.1:{sinfo['ops']}", idp=f"http://localhost:{sinfo['idp']}",
             run_service=run_service, kernel_target=kernel_target,
             approvals_bridge=f"http://127.0.0.1:{approvals_port}", console_origin=console_origin,
             ops_token=ops_token, platform_token=platform_token, procs=procs,

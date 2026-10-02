@@ -31,9 +31,9 @@ export default function KillSwitchPage() {
             <div className="flex max-w-xl flex-col gap-4">
               <p className="text-sm">
                 Tenant kill switch:{" "}
-                <Badge tone={engaged ? "bad" : "good"} data-testid="ks-state">
-                  {engaged ? "ENGAGED" : "released"}
-                </Badge>
+                <span data-testid="ks-state">
+                  <Badge tone={engaged ? "bad" : "good"}>{engaged ? "ENGAGED" : "released"}</Badge>
+                </span>
                 {tenant ? ` (updated ${formatTime(tenant.updated_at)})` : ""}
               </p>
               {r.items.length === 0 ? <EmptyState title="No kill switches have been set" /> : null}

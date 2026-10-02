@@ -130,13 +130,16 @@ sdk-generate:
 sdk-mutation:
 	node scripts/mutation-sdk.mjs
 
-# Phase 7 / D: console build (with a dev-login flag), client-bundle secret scan, then the Playwright suite against
-# the mock control-plane API. Needs Playwright's Chromium (PLAYWRIGHT_BROWSERS_PATH) and nothing else.
+# Phase 7 console e2e: build the console (with the dev-login flag), scan the CLIENT bundle for secrets, run the 59 mock-API Playwright flows
+# (axe on every page, light and dark), then the REAL-STACK suite: SSO through the control plane, the real gateway, Risk Kernel, run service,
+# AGIL, registry and marketplace (no mock), plus XSS, CSRF and cross-tenant checks from the browser. Needs Playwright's Chromium
+# (PLAYWRIGHT_BROWSERS_PATH) and, for the real-stack part, the same prerequisites as e2e-core (Postgres 16, opa, node, uv).
 console-e2e:
-	pnpm --filter @axis/abl --filter @axis/contracts build
-	cd apps/console && NEXT_PUBLIC_DEV_LOGIN=1 AXIS_API_URL=http://127.0.0.1:4010 NEXT_TELEMETRY_DISABLED=1 pnpm exec next build
+	pnpm build
+	cd apps/console && NEXT_PUBLIC_DEV_LOGIN=1 NEXT_TELEMETRY_DISABLED=1 pnpm exec next build
 	cd apps/console && AXIS_SCAN_SENTINELS=127.0.0.1:4010 node scripts/scan-bundle.mjs .next/static
 	cd apps/console && AXIS_API_URL=http://127.0.0.1:4010 pnpm exec playwright test
+	bash infra/scripts/with-pg.sh uv run python e2e/interfaces_stack.py --out /tmp/axis-console-stack.json -- bash -c 'cd apps/console && pnpm exec playwright test -c playwright.real.config.ts'
 
 docs-build:
 	pnpm --filter @axis/docs-site build
