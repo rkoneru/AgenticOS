@@ -179,6 +179,7 @@ test("policies: invalid documents are rejected with server detail and a builder 
   await page.getByRole("button", { name: "Run tests" }).click();
   await expect(page.getByTestId("policy-results")).toContainText("Policy failed validation");
   await page.getByRole("button", { name: "Sign out" }).click();
+  await page.waitForURL("**/login**");
   await login(page, "builder", "/policies");
   await expect(page.getByRole("button", { name: "Publish pack version" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Review and activate" })).toHaveCount(0);
@@ -264,6 +265,7 @@ test("admin: budgets validate soft <= hard and members are managed; builder sees
   await expect(page.getByText("us-east-1", { exact: true })).toBeVisible();
   await expect(page.getByText("Only the tenant owner can change SSO settings.")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
+  await page.waitForURL("**/login**");
   await login(page, "builder", "/admin");
   await expect(page.getByRole("tab", { name: "Members" })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "API keys" })).toBeVisible();

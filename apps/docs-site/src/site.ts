@@ -44,7 +44,7 @@ export function relativeHref(from: string, to: string): string {
   const t = to.split("/");
   let i = 0;
   while (i < f.length && i < t.length - 1 && f[i] === t[i]) i++;
-  return [...f.slice(i).map(() => ".."), ...t.slice(i)].join("/") || t;
+  return [...f.slice(i).map(() => ".."), ...t.slice(i)].join("/") || to;
 }
 
 export function layout(
