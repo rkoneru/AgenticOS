@@ -38,6 +38,12 @@ _RESOURCE: Mapping[str, tuple[Resource, int]] = {
 }
 
 
+#: Largest limit the control plane accepts (and the runtime will read): finite and far below float
+#: overflow once scaled (cost_usd is scaled by 1e6). ``json`` also parses NaN/Infinity, which
+#: ``int()`` turns into a crash instead of a clear refusal.
+MAX_LIMIT = 1e12
+
+
 class BudgetConfigError(ValueError):
     """The control plane's budget document is not understood. Fail closed."""
 
@@ -61,6 +67,9 @@ def _entry(raw: Any) -> BudgetEntry:
         v = raw.get(k)
         if v is not None and (isinstance(v, bool) or not isinstance(v, int | float) or v < 0):
             raise BudgetConfigError(f"budget {k} must be a non-negative number")
+        # (``v != v`` is the NaN test; the bypass guard's allowlist does not admit ``math``.)
+        if v is not None and (v != v or v > MAX_LIMIT):
+            raise BudgetConfigError(f"budget {k} must be a finite number <= {MAX_LIMIT:g}")
         vals[k] = v
     return BudgetEntry(str(metric), str(raw.get("period", "")), vals["soft"], vals["hard"])
 

@@ -1533,9 +1533,8 @@ async def test_17_scim_deprovisioning_revokes_sessions_and_api_keys_immediately(
     )  # fmt: skip
     assert created.status_code == 201, created.text
     scim_id = created.json()["id"]
-    token = access_token(
-        await sso_login(stack, a.org, idp_profile(a.org, f"idp-scim-{short()}", email))
-    )
+    idp_user = f"idp-scim-{short()}"  # one IdP identity: the first login binds the member to it
+    token = access_token(await sso_login(stack, a.org, idp_profile(a.org, idp_user, email)))
     assert (await admin_call(stack, "GET", "/tenant", token)).status_code == 200
     made = await admin_call(
         stack, "POST", "/api-keys", token, {"name": "ci", "scopes": ["budgets:read"]}
@@ -1555,8 +1554,12 @@ async def test_17_scim_deprovisioning_revokes_sessions_and_api_keys_immediately(
     assert (
         await admin_call(stack, "GET", "/budgets", key)
     ).status_code == 401  # the member's API key (the run's credential)
-    again = await sso_login(stack, a.org, idp_profile(a.org, f"idp-scim-{short()}", email))
-    assert again.status_code == 401  # and they cannot sign in again
+    again = await sso_login(stack, a.org, idp_profile(a.org, idp_user, email))
+    assert again.status_code == 401  # and they cannot sign in again (same identity: deprovisioned)
+    other = await sso_login(stack, a.org, idp_profile(a.org, f"idp-scim-{short()}", email))
+    assert (
+        other.status_code == 401
+    )  # nor can another identity carrying the address take the account over
     rows = [(e["action"], e["decision"]) for e in events(stack.db_url, a.id, "admin")]
     assert any(act.startswith("auth.sso_login") and dec == "DENY" for act, dec in rows)
     # a directory sees only its own members: the owner is not addressable through SCIM

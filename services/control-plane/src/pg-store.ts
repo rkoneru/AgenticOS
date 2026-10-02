@@ -410,7 +410,7 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   updateMember(
     t: string,
     id: string,
-    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email">>,
+    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email" | "userRef">>,
     now: Date,
   ): Promise<Member | undefined> {
     return this.tx(t, async (c) => {
@@ -438,10 +438,19 @@ export class PgControlPlaneStore implements ControlPlaneStore {
         if ((o.rows[0] as { n: number }).n === 0) throw new LastOwnerError();
       }
       const r = await c.query(
-        `UPDATE members SET role = $3, status = $4, display_name = COALESCE($5, display_name), email = COALESCE($6, email),
+        `UPDATE members SET role = $3, status = $4, display_name = COALESCE($5, display_name), email = COALESCE($6, email), user_ref = COALESCE($8, user_ref),
            deprovisioned_at = CASE WHEN $4 = 'deprovisioned' AND status <> 'deprovisioned' THEN $7 ELSE deprovisioned_at END,
            updated_at = $7 WHERE tenant_id = $1 AND id = $2 RETURNING *`,
-        [t, id, next.role, next.status, patch.displayName ?? null, patch.email ?? null, now],
+        [
+          t,
+          id,
+          next.role,
+          next.status,
+          patch.displayName ?? null,
+          patch.email ?? null,
+          now,
+          patch.userRef ?? null,
+        ],
       );
       return memberOf(r.rows[0] as Row);
     });

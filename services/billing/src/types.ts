@@ -116,6 +116,13 @@ export function assertTenant(id: unknown): asserts id is string {
     throw new BillingError("INVALID", "tenantId must be a UUID");
 }
 
+/** Canonical (lower-case) spelling of a tenant UUID. Lock keys, payload hashes and map keys are all derived from text, so every
+ *  entry point must use this spelling: `hashtext('ABC...')` and `hashtext('abc...')` are different advisory locks. */
+export function canonicalTenant(id: unknown): string {
+  assertTenant(id);
+  return id.toLowerCase();
+}
+
 function assertText(v: unknown, what: string, min: number, max: number): asserts v is string {
   if (typeof v !== "string" || v.length < min || v.length > max || v.includes("\u0000"))
     throw new BillingError("INVALID", `${what} must be a string of ${min}..${max} characters`);
@@ -155,7 +162,7 @@ export interface ValidInput {
 
 /** Validates one ledger input. Throws BillingError("INVALID"). `now` bounds the event time from above. */
 export function validateInput(input: AnyInput, now: Date): ValidInput {
-  assertTenant(input.tenantId);
+  const tenantId = canonicalTenant(input.tenantId);
   assertText(input.idempotencyKey, "idempotencyKey", 1, 512);
   assertText(input.source, "source", 1, 64);
   if (!isMeter(input.meter)) throw new BillingError("INVALID", "unknown meter");
@@ -174,7 +181,7 @@ export function validateInput(input: AnyInput, now: Date): ValidInput {
     assertText(input.actor, "actor", 1, 256);
     if (input.correctsKey !== undefined) assertText(input.correctsKey, "correctsKey", 1, 512);
     return {
-      tenantId: input.tenantId,
+      tenantId,
       idempotencyKey: input.idempotencyKey,
       entryType: "adjustment",
       meter: input.meter,
@@ -190,7 +197,7 @@ export function validateInput(input: AnyInput, now: Date): ValidInput {
   if (input.quantity < 0n)
     throw new BillingError("INVALID", "usage quantity must not be negative; use an adjustment");
   return {
-    tenantId: input.tenantId,
+    tenantId,
     idempotencyKey: input.idempotencyKey,
     entryType: "usage",
     meter: input.meter,

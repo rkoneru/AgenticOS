@@ -61,6 +61,8 @@ export interface WebhookEvent {
 export interface EventDedupe {
   /** True the first time an id is claimed. */
   claim(id: string): Promise<boolean>;
+  /** Gives a claimed id back (the handler failed). Without it a provider retry of a failed event would be dropped as a duplicate. */
+  release(id: string): Promise<void>;
 }
 
 export class MemoryEventDedupe implements EventDedupe {
@@ -69,6 +71,10 @@ export class MemoryEventDedupe implements EventDedupe {
     const fresh = !this.seen.has(id);
     this.seen.add(id);
     return Promise.resolve(fresh);
+  }
+  release(id: string): Promise<void> {
+    this.seen.delete(id);
+    return Promise.resolve();
   }
 }
 
@@ -117,9 +123,16 @@ export class StripeWebhookProcessor {
       throw new BillingError("LIVE_KEY_REFUSED", "live-mode events are refused");
     const handler = this.o.handlers[o.type];
     if (!handler) return "ignored";
-    if (!(await (this.o.dedupe ?? (this.o.dedupe = new MemoryEventDedupe())).claim(o.id)))
-      return "duplicate";
-    await handler({ id: o.id, type: o.type, data: o.data?.object });
+    const dedupe = this.o.dedupe ?? (this.o.dedupe = new MemoryEventDedupe());
+    if (!(await dedupe.claim(o.id))) return "duplicate";
+    try {
+      await handler({ id: o.id, type: o.type, data: o.data?.object });
+    } catch (err) {
+      // The id was claimed before the handler ran (so concurrent deliveries do not both run it). A failure must give it back:
+      // the provider answers a non-2xx by retrying, and that retry has to be processed, not acknowledged as a duplicate.
+      await dedupe.release(o.id);
+      throw err;
+    }
     return "processed";
   }
 }

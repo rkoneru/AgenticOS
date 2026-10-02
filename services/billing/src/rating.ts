@@ -205,6 +205,7 @@ export function rate(input: RateInput): Invoice {
 
   // Usage. Included allowance first (per rate key), then graduated tiers.
   let usageCharges = 0n;
+  const meterPool = new Map<Meter, bigint>(); // remaining meter-wide allowance per meter
   for (const row of totals) {
     const key = rateKey(row.meter, row.dimension);
     const card = findRate(pb, row.meter, row.dimension);
@@ -212,9 +213,17 @@ export function rate(input: RateInput): Invoice {
       if (row.quantity !== 0n) warnings.push(`unpriced usage: ${key} quantity ${row.quantity}`);
       continue;
     }
-    const allowance = plan.included[key] ?? plan.included[row.meter] ?? 0n;
-    const billable =
-      row.quantity > 0n ? (row.quantity > allowance ? row.quantity - allowance : 0n) : row.quantity;
+    // A key-specific allowance belongs to that row. A meter-wide one is ONE pool shared by every row of the meter (consumed in row
+    // order): applied per row it would be granted again for each model class / tool kind.
+    const own = plan.included[key];
+    const pooled = own === undefined ? (plan.included[row.meter] ?? 0n) : 0n;
+    const allowance = own ?? meterPool.get(row.meter) ?? pooled;
+    let billable = row.quantity;
+    if (row.quantity > 0n) {
+      const used = row.quantity > allowance ? allowance : row.quantity;
+      billable = row.quantity - used;
+      if (own === undefined) meterPool.set(row.meter, allowance - used);
+    }
     for (const c of tierCharges(card, billable)) {
       mk({
         kind: "usage",

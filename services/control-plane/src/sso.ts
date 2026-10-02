@@ -184,8 +184,22 @@ export class SsoService {
       tenantId,
       `idp:${profile.id}`,
     );
-    if (!member && profile.emailVerified)
-      member = await this.o.store.findMemberByEmail(tenantId, email);
+    if (!member && profile.emailVerified) {
+      const byEmail = await this.o.store.findMemberByEmail(tenantId, email);
+      if (byEmail) {
+        // Linking by e-mail binds the member to ONE IdP identity, once. A member already bound to another identity is not handed
+        // to a second one that merely carries the same address (a reassigned mailbox, a second connection): that is a takeover.
+        if (byEmail.userRef.startsWith("idp:"))
+          return this.deny(tenantId, "identity_mismatch", profile.id);
+        member =
+          (await this.o.store.updateMember(
+            tenantId,
+            byEmail.id,
+            { userRef: `idp:${profile.id}` },
+            this.now(),
+          )) ?? byEmail;
+      }
+    }
     if (member) {
       if (member.status !== "active") return this.deny(tenantId, "member_deprovisioned", member.id);
     } else {

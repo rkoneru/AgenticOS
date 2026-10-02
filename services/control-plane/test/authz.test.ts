@@ -31,7 +31,7 @@ describe("Authorizer (OPA Wasm, fail-closed)", () => {
     const a = await sharedAuthorizer();
     const allowed: Record<Role, Action[]> = {
       owner: [...ACTIONS],
-      admin: ACTIONS.filter((x) => !["tenant.close", "billing.write"].includes(x)),
+      admin: ACTIONS.filter((x) => !["tenant.close", "billing.write", "sso.manage"].includes(x)), // sso.manage: owner only (ADR 0023)
       builder: [
         "tenant.read",
         "members.read",

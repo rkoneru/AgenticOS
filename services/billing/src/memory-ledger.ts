@@ -18,6 +18,7 @@ import {
   type SealVerdict,
 } from "./seal.js";
 import {
+  canonicalTenant,
   payloadHash,
   validateInput,
   type AdjustmentInput,
@@ -46,7 +47,8 @@ export class MemoryUsageLedger implements UsageLedger {
     this.now = opts.now ?? (() => new Date());
   }
 
-  private st(tenantId: string): TenantState {
+  private st(tenantIdIn: string): TenantState {
+    const tenantId = canonicalTenant(tenantIdIn);
     let s = this.tenants.get(tenantId);
     if (!s) {
       s = { byKey: new Map(), seals: [], conflicts: new Map() };
@@ -130,7 +132,8 @@ export class MemoryUsageLedger implements UsageLedger {
     return foldRollup(await this.entries(tenantId), q);
   }
 
-  async closePeriod(tenantId: string, periodId: string): Promise<PeriodSeal> {
+  async closePeriod(tenantIdIn: string, periodId: string): Promise<PeriodSeal> {
+    const tenantId = canonicalTenant(tenantIdIn);
     const s = this.st(tenantId);
     if (s.seals.some((x) => x.periodId === periodId))
       throw new BillingError("PERIOD_ALREADY_CLOSED", `period ${periodId} is already closed`);

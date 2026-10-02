@@ -66,6 +66,11 @@ export class BillingService {
 
   /** One meter event per meter for the period (identifier = tenant:period:meter), so a retry is harmless on both sides. */
   async pushUsage(tenantId: string, periodId: string, customerId: string): Promise<number> {
+    // Only a sealed (final) period: the provider deduplicates by identifier, so a figure pushed from an open period could never
+    // be corrected and would under-bill whatever arrives afterwards.
+    const verdict = await this.o.ledger.verifySeal(tenantId, periodId); // throws PERIOD_NOT_SEALED if open
+    if (!verdict.ok)
+      throw new BillingError("INVALID", `period seal does not verify: ${verdict.reason}`);
     const { start } = periodBounds(periodId);
     let n = 0;
     for (const [meter, quantity] of reportableTotals(
