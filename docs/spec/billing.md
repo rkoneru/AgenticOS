@@ -1,7 +1,7 @@
 # Billing and usage metering (Phase 6 B)
 
 Status: Prototype (library + loopback dev server; no live Stripe, no real ClickHouse, no tax). Code: `services/billing`,
-runtime emitter `runtime/src/axis_runtime/usage.py`. Decisions: ADR 0040 (schema), ADR 0041 (Stripe test mode).
+runtime emitter `runtime/src/axis_runtime/usage.py`. Decisions: ADR 0018 (schema), ADR 0019 (Stripe test mode).
 
 ## 1. Meters
 
@@ -75,7 +75,7 @@ subtotal and never exceed a line; allocation and minor-unit conversion never cre
 
 `PaymentProvider`: `createCustomer`, `reportUsage` (one meter event per tenant, period and meter, identifier
 `axis:<tenant>:<period>:<meter>`, net total clamped at zero), `usageSummary`, `createInvoice` (invoice items then a draft invoice),
-`getInvoice`, `listInvoices`. See ADR 0041 for the live-key refusal, idempotency keys and webhook verification.
+`getInvoice`, `listInvoices`. See ADR 0019 for the live-key refusal, idempotency keys and webhook verification.
 
 ## 5. Reconciliation
 

@@ -1,4 +1,4 @@
-# 0041. Payment provider interface and Stripe test mode only
+# 0019. Payment provider interface and Stripe test mode only
 
 Status: Accepted · Date: 2026-10-02
 

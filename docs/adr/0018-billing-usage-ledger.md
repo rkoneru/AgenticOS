@@ -1,4 +1,4 @@
-# 0040. Billing usage ledger schema (migration 0008)
+# 0018. Billing usage ledger schema (migration 0008)
 
 Status: Accepted · Date: 2026-10-02 · Amends: 0007 (post-freeze addition, same procedure as 0008, 0010, 0013 and 0015)
 (Number and migration version chosen on branch p6/billing; the integrating branch renumbers on collision, together with the

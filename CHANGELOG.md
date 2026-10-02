@@ -2,7 +2,7 @@
 
 ## Phase 6 - Billing and usage ledger (component B, `services/billing`)
 
-Additive migration `0008_billing.sql` (ADR 0040; contracts otherwise frozen; the integrating branch renumbers on collision) and an
+Additive migration `0008_billing.sql` (ADR 0018; contracts otherwise frozen; the integrating branch renumbers on collision) and an
 ADR for Stripe test mode only (0041). Status: Prototype (library + loopback dev server; no live Stripe, ClickHouse, KMS or tax).
 
 - **Usage ledger** (`@axis/billing`): append-only, idempotent per (tenant, source event), conflicting replays rejected and reported,
@@ -21,7 +21,7 @@ ADR for Stripe test mode only (0041). Status: Prototype (library + loopback dev 
 - **Reconciliation** (ledger vs provider usage vs invoice lines; read-only) and an audited adjustment API; tenant-scoped read-only
   statement/usage endpoints on a dev server.
 - **Verified:** 125 TypeScript tests on real Postgres 16 (see the report for coverage), `scripts-mutation.mjs` safety mutants,
-  Python emitter tests, bypass scanner entry for `usage.py` only. NEEDS 800-815.
+  Python emitter tests, bypass scanner entry for `usage.py` only. NEEDS 163-178.
 
 ## Phase 5 - Channels and voice (e2e integration)
 

@@ -20,6 +20,6 @@
     "packages/db/migrations/0005_audit_checkpoints.sql": "f47ef658bf3c9377a9015f50d2b72b9ebbfb466a616ed8fd08cfe9bae777c2e7",
     "packages/db/migrations/0006_memory_service.sql": "3bc5f2641e07d3097f8d2b8e00d39ef0dc5d2b50c87d7c83cbd8e68d71f46f19",
     "packages/db/migrations/0007_channels.sql": "6a6dfd12c0791e01583f4292e686f5a3ae146d8f5bf40b47f3ede7890435fde1",
-    "packages/db/migrations/0008_billing.sql": "a782f119a923008c910dadfd69692b2a86216b46e601149796b11262a9929f02"
+    "packages/db/migrations/0008_billing.sql": "b3fa9da76158033ed2d3761786599431d1eab35d9a8b881c8f86a2d3d0aa9608"
   }
 }

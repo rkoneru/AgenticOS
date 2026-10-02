@@ -1,4 +1,4 @@
--- 0008: usage ledger, period seals, conflict reports, invoices for services/billing (docs/adr/0040). ADDITIVE: new tables only.
+-- 0008: usage ledger, period seals, conflict reports, invoices for services/billing (docs/adr/0018). ADDITIVE: new tables only.
 -- Every table carries tenant_id and FORCED RLS, and is INSERT-ONLY for the app role AND for everyone else (forbid_mutation triggers):
 -- corrections are compensating entries, a closed period is a sealed row, an invoice is never edited.
 
