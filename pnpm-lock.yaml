@@ -141,6 +141,15 @@ importers:
 
   packages/shared: {}
 
+  services/agil:
+    dependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+
   services/approvals:
     dependencies:
       '@axis/contracts':
