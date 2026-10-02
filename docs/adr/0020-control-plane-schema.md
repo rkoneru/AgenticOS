@@ -1,4 +1,4 @@
-# 0018. Control plane schema (migration 0008) and authentication lookups
+# 0020. Control plane schema (migration 0009) and authentication lookups
 
 Status: Accepted · Date: 2026-10-02 · Amends: 0007 (post-freeze addition, same procedure as 0008, 0010, 0013, 0015)
 (Number chosen on branch p6/controlplane; the integrating branch renumbers on collision, together with the migration version.)
@@ -8,11 +8,11 @@ Status: Accepted · Date: 2026-10-02 · Amends: 0007 (post-freeze addition, same
 Phase 6 component A (`services/control-plane`) needs sessions, SCIM directories, SSO connections, verified domains, envelope-encrypted
 BYO keys, policy pack assignment, settings and placement. Migrations 0001-0007 have `members`, `api_keys`, `model_credentials`,
 `policy_packs(+versions)` and `budgets`, but no session, directory, key-envelope, assignment, settings or placement tables.
-Contracts stay frozen (the OpenAPI `/v1` file has no admin paths; see ADR 0019).
+Contracts stay frozen (the OpenAPI `/v1` file has no admin paths; see ADR 0021).
 
 ## Decision
 
-Additive migration `0008_control_plane.sql`. New tenant tables with FORCED RLS and composite `(tenant_id, id)` references:
+Additive migration `0009_control_plane.sql`. New tenant tables with FORCED RLS and composite `(tenant_id, id)` references:
 `sessions`, `directories`, `scim_groups`, `scim_group_members`, `directory_role_mappings`, `identity_connections`, `verified_domains`,
 `tenant_keys`, `policy_assignments`, `tenant_settings`, `tenant_placements`. Added columns: `members` (status, display_name,
 external_id, directory_id, deprovisioned_at, updated_at; role CHECK limited to the seven RBAC roles; unique case-insensitive e-mail),
