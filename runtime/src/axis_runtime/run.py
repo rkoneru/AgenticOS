@@ -95,6 +95,7 @@ from axis_runtime.tooldefs import (
     memory_definitions,
 )
 from axis_runtime.tools import McpManifestSource, ToolRegistry
+from axis_runtime.usage import UsageEmitter
 
 log = logging.getLogger("axis_runtime.run")
 
@@ -165,6 +166,13 @@ class RunDeps:
     #: Send the root agent's final output through ``Backends.channels`` as a gated ``MessageSend``
     #: (tool ``channel.reply``). Requires ``channels`` (or ``backends.channels``).
     reply: ReplyTarget | None = None
+    #: Metering. When set, the run's billing projection (``usage.BILLING_FIELDS``: counts, ids,
+    #: decisions; no content)
+    #: is forwarded to the billing service when the run ends, whatever its exit reason. Best effort
+    #: and OFF the decision
+    #: path: a failure is logged and never changes the run's result (the durable run log can be re-
+    #: sent; keys are idempotent).
+    usage: UsageEmitter | None = None
 
 
 @dataclass(frozen=True)
@@ -999,6 +1007,11 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
             return await root.run(input_text)
         finally:
             await ctx.aclose()
+            if deps.usage is not None:
+                try:
+                    await deps.usage.emit_run(deps.log, run_id)
+                except Exception:  # noqa: BLE001 - metering never decides or fails a run
+                    log.warning("usage emission failed for run %s", run_id, exc_info=True)
 
     task = asyncio.create_task(drive())
     return RunHandle(ctx, root, task)

@@ -17,7 +17,7 @@ This is a dev bridge, not a production surface (docs/NEEDS.md)."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 
@@ -59,6 +59,14 @@ def project_event(event: RunEvent) -> dict[str, Any] | None:
         "pid": event.pid,
         "data": {k: event.data[k] for k in keys if k in event.data},
     }
+
+
+class UsageEmitter(Protocol):
+    """What ``RunDeps.usage`` needs: forward one finished run's log. Raises ``UsageUnavailable`` (or
+    anything) on failure;
+    the run never depends on it."""
+
+    async def emit_run(self, log: RunEventLog, run_id: str) -> dict[str, Any]: ...
 
 
 class HttpUsageEmitter:
