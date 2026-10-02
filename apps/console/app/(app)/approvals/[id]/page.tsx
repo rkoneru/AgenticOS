@@ -91,17 +91,7 @@ function Decision({ a, onDone }: { a: Approval; onDone: () => void }) {
 
 export default function ApprovalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  // There is no GET-by-id in the frozen spec: the detail comes from the list (all statuses).
-  const res = useResource(async () => {
-    for (let cursor: string | undefined, i = 0; i < 20; i++) {
-      const page = await api.listApprovals({ limit: 200, ...(cursor ? { cursor } : {}) });
-      const hit = page.items.find((x) => x.id === id);
-      if (hit) return hit;
-      if (!page.next_cursor) break;
-      cursor = page.next_cursor;
-    }
-    throw new Error("Approval not found");
-  }, [id]);
+  const res = useResource(() => api.getApproval(id), [id]);
   const now = useNow(1000);
   return (
     <>

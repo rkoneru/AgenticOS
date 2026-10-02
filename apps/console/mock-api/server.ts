@@ -672,6 +672,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         });
       }
     }
+    if (p === "/me" && method === "GET")
+      return send(res, 200, {
+        member: { id: me, email: `${role}@acme.test`, role },
+        tenant: { id: TENANT, name: "Acme", region: "us-east-1" },
+        credential: { kind: "session" },
+      });
+    m = /^\/approvals\/([^/]+)$/.exec(p);
+    if (m && method === "GET") {
+      const a = S.approvals.find((x) => x["id"] === m![1]);
+      return a ? send(res, 200, a) : problem(res, 404, "not_found", "Approval not found");
+    }
     if (p === "/approvals" && method === "GET") {
       const st = url.searchParams.get("status");
       return send(res, 200, page(S.approvals.filter((a) => !st || a["status"] === st)));
@@ -764,7 +775,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
     m = /^\/audit\/events\/([^/]+)\/explanation$/.exec(p);
     if (m && method === "GET") {
-      const e = S.audit.find((x) => x.id === m![1]);
+      const e = S.audit.find((x) => x.id === m![1] || String(x.seq) === m![1]);
       return e
         ? send(res, 200, {
             summary: `${e.action} was ${e.decision.toLowerCase()} by policy ${e.policy_version}.`,
@@ -809,48 +820,122 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       ];
       return send(res, 200, ks);
     }
+    m = /^\/policies\/([^/]+)\/activate$/.exec(p);
+    if (m && method === "POST") {
+      if (deny(80)) return;
+      const target = S.policies.find((x) => x["version_id"] === m![1]);
+      if (!target) return problem(res, 404, "not_found", "Version not found");
+      for (const x of S.policies) if (x["name"] === target["name"]) x["active"] = x === target;
+      return send(res, 200, target);
+    }
     if (p === "/usage" && method === "GET") {
       if (deny(40)) return;
       return send(res, 200, { items: usageRows(url.searchParams.get("group_by") ?? "meter") });
     }
     if (p === "/evals/runs") return problem(res, 501, "internal", "Eval Hub is not implemented");
+    const listingOut = (l: J): J => ({
+      namespace: "acme-labs",
+      name: l["id"],
+      title: l["name"],
+      summary: l["summary"],
+      categories: [],
+      latest: {
+        version: l["version"],
+        content_hash: "a".repeat(64),
+        risk_level: (l["permissions"] as J)["max_risk_level"],
+        max_severity: "info",
+      },
+      versions: [l["version"]],
+    });
     if (p === "/marketplace/listings" && method === "GET") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
-      return send(
-        res,
-        200,
-        page(
-          S.listings
-            .filter((l) => String(l["name"]).toLowerCase().includes(q))
-            .map((l) => ({
-              ...l,
-              installed: S.installed.has(l["id"] as string),
-            })),
-        ),
-      );
+      return send(res, 200, {
+        items: S.listings
+          .filter((l) => String(l["name"]).toLowerCase().includes(q))
+          .map(listingOut),
+      });
     }
-    m = /^\/marketplace\/listings\/([^/]+)(\/install)?$/.exec(p);
-    if (m) {
-      const l = S.listings.find((x) => x["id"] === m![1]);
+    m = /^\/marketplace\/listings\/([^/]+)\/([^/]+)$/.exec(p);
+    if (m && method === "GET") {
+      const l = S.listings.find((x) => x["id"] === m![2]);
+      return l
+        ? send(res, 200, listingOut(l))
+        : problem(res, 404, "not_found", "Listing not found");
+    }
+    const previewOf = (l: J): J => {
+      const perms = l["permissions"] as J;
+      const tools = perms["tools"] as string[];
+      return {
+        namespace: "acme-labs",
+        name: l["id"],
+        version: l["version"],
+        content_hash: "a".repeat(64),
+        risk_level: perms["max_risk_level"],
+        findings: [],
+        capabilities: tools.map((t) => ({ key: `tool:function:${t}`, level: 2 })),
+        diff: {
+          added: tools.map((t) => ({ key: `tool:function:${t}`, change: "new", level: 2 })),
+          removed: [],
+          widening: tools.length > 0,
+        },
+        consent_digest: `digest-${l["id"]}`,
+      };
+    };
+    if (p === "/marketplace/installs/preview" && method === "POST") {
+      if (deny(80)) return;
+      const l = S.listings.find((x) => x["id"] === body["name"]);
+      return l ? send(res, 200, previewOf(l)) : problem(res, 404, "not_found", "Listing not found");
+    }
+    if (p === "/marketplace/installs" && method === "GET")
+      return send(res, 200, {
+        items: [...S.installed.keys()].map((id) => ({
+          id: `inst-${id}`,
+          namespace: "acme-labs",
+          name: id,
+          version: "1.0.0",
+          content_hash: "a".repeat(64),
+          state: "active",
+          granted: [],
+        })),
+      });
+    if (p === "/marketplace/installs" && method === "POST") {
+      if (deny(80)) return;
+      const l = S.listings.find((x) => x["id"] === body["name"]);
       if (!l) return problem(res, 404, "not_found", "Listing not found");
-      if (!m[2] && method === "GET")
-        return send(res, 200, {
-          ...l,
-          installed: S.installed.has(l["id"] as string),
-          installed_permissions: S.installed.get(l["id"] as string) ?? null,
-        });
-      if (m[2] && method === "POST") {
-        if (deny(80)) return;
-        if (JSON.stringify(body["accepted_permissions"]) !== JSON.stringify(l["permissions"]))
-          return problem(
-            res,
-            409,
-            "conflict",
-            "Accepted permissions do not match the listing's current permissions",
-          );
-        S.installed.set(l["id"] as string, l["permissions"] as J);
-        return reply(200, { installed: true });
-      }
+      if (body["consent_digest"] !== previewOf(l)["consent_digest"])
+        return problem(res, 409, "conflict", "consent does not match the current permission diff");
+      S.installed.set(l["id"] as string, l["permissions"] as J);
+      return reply(201, {
+        id: `inst-${String(l["id"])}`,
+        namespace: "acme-labs",
+        name: l["id"],
+        version: l["version"],
+        content_hash: "a".repeat(64),
+        state: "active",
+        granted: [],
+      });
+    }
+    if (p === "/registry/namespaces" && method === "GET")
+      return send(res, 200, { items: [{ namespace: "acme-labs", public: true }] });
+    m = /^\/registry\/blueprints\/([^/]+)\/([^/]+)\/versions$/.exec(p);
+    if (m && method === "GET") return send(res, 200, { items: [] });
+    if (p === "/registry/resolve" && method === "GET") {
+      const ref = url.searchParams.get("ref") ?? "";
+      const mm = /^([a-z][a-z0-9-]+)\/([a-z][a-z0-9-]+)@(.+)$/.exec(ref);
+      if (!mm) return problem(res, 422, "validation_failed", "bad reference");
+      return send(res, 200, {
+        namespace: mm[1],
+        name: mm[2],
+        version: "1.0.0",
+        content_hash: "a".repeat(64),
+        risk_level: "minimal",
+        signature: { key_id: "k1-mock", signed_at: iso(), sig: "s" },
+        published_at: iso(),
+        state: "active",
+        abl: ablDoc(mm[2] as string, "1.0.0"),
+        provenance: { payloadType: "t", payload: "p", signatures: [] },
+        verification: { key_id: "k1-mock", builder: "mock-builder" },
+      });
     }
     return problem(res, 404, "not_found", "Not found");
   }

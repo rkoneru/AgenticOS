@@ -254,27 +254,85 @@ export interface Directory {
   token_prefix: string;
 }
 
+/** A listing as `GET /v1/marketplace/listings` serves it (OpenAPI 1.2.0). */
 export interface Listing {
-  id: string;
+  namespace: string;
   name: string;
-  publisher: string;
-  version: string;
+  title: string;
   summary: string;
-  installed?: boolean;
+  categories: string[];
+  latest: {
+    version: string;
+    content_hash: string;
+    risk_level: string;
+    max_severity: string;
+  } | null;
+  versions: string[];
 }
 
-export interface PermissionSet {
-  tools: string[];
-  data_classes: string[];
-  egress_hosts: string[];
-  max_risk_level: "minimal" | "limited" | "high";
+export interface Capability {
+  key: string;
+  level: number;
 }
 
-export interface ListingDetail extends Listing {
-  /** Permissions the listing requests now. */
-  permissions: PermissionSet;
-  /** Permissions the installed version already holds (absent when not installed). */
-  installed_permissions?: PermissionSet | null;
+/** `POST /v1/marketplace/installs/preview`: what installing would grant, and the digest consent must echo. */
+export interface InstallPreview {
+  namespace: string;
+  name: string;
+  version: string;
+  content_hash: string;
+  risk_level: string;
+  max_severity?: string;
+  findings: Array<{ id: string; severity: string; path?: string; message: string }>;
+  capabilities: Capability[];
+  diff: {
+    added: Array<{
+      key: string;
+      change: "new" | "raised";
+      level: number;
+      previous_level?: number | null;
+    }>;
+    removed: Array<{ key: string; level: number; new_level?: number | null }>;
+    widening: boolean;
+  };
+  consent_digest: string;
+}
+
+export interface MarketplaceInstall {
+  id: string;
+  namespace: string;
+  name: string;
+  version: string;
+  content_hash: string;
+  state: "active" | "flagged" | "uninstalled";
+  granted: Capability[];
+  consented_at?: string;
+}
+
+export interface RegistryNamespace {
+  namespace: string;
+  public?: boolean;
+  created_at?: string;
+}
+
+export interface RegistryVersion {
+  namespace: string;
+  name: string;
+  version: string;
+  content_hash: string;
+  risk_level: "minimal" | "limited" | "high";
+  signature: { key_id: string; signed_at: string; sig: string };
+  published_at: string;
+  state?: "active" | "deprecated" | "yanked";
+}
+
+export interface ResolvedBlueprint extends RegistryVersion {
+  verification: {
+    key_id: string;
+    builder?: string;
+    source_ref?: string;
+    compiler_version?: string;
+  };
 }
 
 // ---------------------------------------------------------------- errors
@@ -336,6 +394,30 @@ export function readCookie(name: string, source?: string): string | undefined {
       return decodeURIComponent(part.slice(i + 1).trim());
   }
   return undefined;
+}
+
+/**
+ * The server's AGIL `Explanation` (steps and remediation are objects with a `text`) into the console's flat shape. Older servers (and the
+ * mock) already send strings; both are accepted. The console never composes explanation text itself.
+ */
+export function normalizeExplanation(x: unknown): Explanation {
+  const o = (x ?? {}) as Record<string, unknown>;
+  const text = (v: unknown): string =>
+    typeof v === "string"
+      ? v
+      : typeof (v as { text?: unknown })?.text === "string"
+        ? (v as { text: string }).text
+        : "";
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  return {
+    summary: typeof o["summary"] === "string" ? o["summary"] : "",
+    steps: list(o["steps"]).map(text).filter(Boolean),
+    decision_refs: list(o["decision_refs"]).map((r) => {
+      const d = r as { audit_event_id: string; seq?: number };
+      return { audit_event_id: d.audit_event_id, ...(d.seq !== undefined ? { seq: d.seq } : {}) };
+    }),
+    remediation: list(o["remediation"]).map(text).filter(Boolean),
+  };
 }
 
 export function newIdempotencyKey(): string {
@@ -403,7 +485,7 @@ export interface Api {
     policy: Record<string, unknown>,
     request: { enforcement_point: string; action?: string; context: Record<string, unknown> },
   ): Promise<GateDecision>;
-  activatePolicy(versionId: string): Promise<unknown>;
+  activatePolicy(versionId: string): Promise<PolicyPack>;
   // audit
   listAuditEvents(q?: {
     limit?: number;
@@ -433,7 +515,8 @@ export interface Api {
   // AGIL (ADDITIVE)
   explainRun(id: string): Promise<Explanation>;
   explainApproval(id: string): Promise<Explanation>;
-  explainAuditEvent(id: string): Promise<Explanation>;
+  /** `ref` is the audit `seq` (as text); `traceId` lets an audit event ID be resolved to its seq. */
+  explainAuditEvent(ref: string, traceId?: string): Promise<Explanation>;
   // admin
   tenant(): Promise<TenantInfo>;
   listMembers(): Promise<Page<Member>>;
@@ -458,10 +541,17 @@ export interface Api {
   getSso(): Promise<SsoSettings>;
   putSso(s: SsoSettings): Promise<SsoSettings>;
   listDirectories(): Promise<{ items: Directory[] }>;
-  // marketplace (ADDITIVE, feature-flagged)
-  listListings(q?: { q?: string }): Promise<Page<Listing>>;
-  getListing(id: string): Promise<ListingDetail>;
-  installListing(id: string, acceptedPermissions: PermissionSet): Promise<{ installed: true }>;
+  // marketplace and registry (OpenAPI 1.2.0)
+  listListings(q?: { q?: string }): Promise<{ items: Listing[] }>;
+  getListing(namespace: string, name: string): Promise<Listing>;
+  previewInstall(namespace: string, name: string, range?: string): Promise<InstallPreview>;
+  /** Consent is the digest of the previewed diff; version and hash come from that preview. */
+  installListing(preview: InstallPreview): Promise<MarketplaceInstall>;
+  listInstalls(): Promise<{ items: MarketplaceInstall[] }>;
+  listRegistryNamespaces(): Promise<{ items: RegistryNamespace[] }>;
+  listRegistryVersions(namespace: string, name: string): Promise<{ items: RegistryVersion[] }>;
+  resolveRegistry(ref: string): Promise<ResolvedBlueprint>;
+  getApproval(id: string): Promise<Approval>;
 }
 
 export function createApi(opts: ClientOptions = {}): Api {
@@ -522,7 +612,21 @@ export function createApi(opts: ClientOptions = {}): Api {
   const enc = encodeURIComponent;
 
   return {
-    session: () => json("GET", "/auth/me"),
+    session: async () => {
+      const me = await json<{
+        tenant: { id: string; name?: string; region?: string };
+        member: { id: string; email?: string; display_name?: string; role: Role };
+      }>("GET", "/v1/me");
+      return {
+        member: {
+          id: me.member.id,
+          email: me.member.email ?? "",
+          role: me.member.role,
+          ...(me.member.display_name ? { display_name: me.member.display_name } : {}),
+        },
+        tenant: { id: me.tenant.id, name: me.tenant.name ?? "", region: me.tenant.region ?? "" },
+      };
+    },
     validateAbl: (text, signal) =>
       json("POST", "/api/abl/validate", {
         body: { text },
@@ -567,7 +671,7 @@ export function createApi(opts: ClientOptions = {}): Api {
     // The path contains a colon (`/policies:test`); it is part of the contract, not an escape.
     testPolicy: (policy, request) =>
       json("POST", "/v1/policies:test", { body: { policy, request } }),
-    activatePolicy: (versionId) => json("POST", `/admin/v1/policies/${enc(versionId)}/activate`),
+    activatePolicy: (versionId) => json("POST", `/v1/policies/${enc(versionId)}/activate`),
     listAuditEvents: (q) => json("GET", "/v1/audit/events", { query: q ?? {} }),
     verifyAudit: (range) => json("POST", "/v1/audit/verify", { body: range ?? {} }),
     listKillSwitches: () => json("GET", "/v1/kill-switches"),
@@ -576,9 +680,32 @@ export function createApi(opts: ClientOptions = {}): Api {
     listEvalRuns: () => json("GET", "/v1/evals/runs"),
     startEvalRun: (suite, blueprint) =>
       json("POST", "/v1/evals/runs", { body: { suite, blueprint }, idempotent: true }),
-    explainRun: (id) => json("GET", `/v1/runs/${enc(id)}/explanation`),
-    explainApproval: (id) => json("GET", `/v1/approvals/${enc(id)}/explanation`),
-    explainAuditEvent: (id) => json("GET", `/v1/audit/events/${enc(id)}/explanation`),
+    explainRun: async (id) =>
+      normalizeExplanation(await json("GET", `/v1/runs/${enc(id)}/explanation`)),
+    // An approval is explained by the explanation of the run it belongs to (AGIL explains runs and audited decisions).
+    explainApproval: async (id) => {
+      const a = await json<Approval>("GET", `/v1/approvals/${enc(id)}`);
+      return normalizeExplanation(await json("GET", `/v1/runs/${enc(a.run_id)}/explanation`));
+    },
+    explainAuditEvent: async (ref, traceId) => {
+      let seq = /^\d+$/.test(ref) ? ref : undefined;
+      if (seq === undefined && traceId) {
+        const hit = (
+          await json<Page<AuditEvent>>("GET", "/v1/audit/events", {
+            query: { trace_id: traceId, limit: 200 },
+          })
+        ).items.find((e) => e.id === ref);
+        seq = hit ? String(hit.seq) : undefined;
+      }
+      if (seq === undefined)
+        throw new ApiError(
+          404,
+          { title: "audit event not found", status: 404 },
+          "audit event not found",
+        );
+      return normalizeExplanation(await json("GET", `/v1/audit/events/${enc(seq)}/explanation`));
+    },
+    getApproval: (id) => json("GET", `/v1/approvals/${enc(id)}`),
     tenant: () => json("GET", "/admin/v1/tenant"),
     listMembers: () => json("GET", "/admin/v1/members"),
     inviteMember: (email, role) => json("POST", "/admin/v1/members", { body: { email, role } }),
@@ -600,12 +727,25 @@ export function createApi(opts: ClientOptions = {}): Api {
     putSso: (s) => json("PUT", "/admin/v1/sso/connection", { body: s }),
     listDirectories: () => json("GET", "/admin/v1/directories"),
     listListings: (q) => json("GET", "/v1/marketplace/listings", { query: q ?? {} }),
-    getListing: (id) => json("GET", `/v1/marketplace/listings/${enc(id)}`),
-    installListing: (id, accepted) =>
-      json("POST", `/v1/marketplace/listings/${enc(id)}/install`, {
-        body: { accepted_permissions: accepted },
+    getListing: (ns, name) => json("GET", `/v1/marketplace/listings/${enc(ns)}/${enc(name)}`),
+    previewInstall: (namespace, name, range = "*") =>
+      json("POST", "/v1/marketplace/installs/preview", { body: { namespace, name, range } }),
+    installListing: (p) =>
+      json("POST", "/v1/marketplace/installs", {
+        body: {
+          namespace: p.namespace,
+          name: p.name,
+          version: p.version,
+          content_hash: p.content_hash,
+          consent_digest: p.consent_digest,
+        },
         idempotent: true,
       }),
+    listInstalls: () => json("GET", "/v1/marketplace/installs"),
+    listRegistryNamespaces: () => json("GET", "/v1/registry/namespaces"),
+    listRegistryVersions: (ns, name) =>
+      json("GET", `/v1/registry/blueprints/${enc(ns)}/${enc(name)}/versions`),
+    resolveRegistry: (ref) => json("GET", "/v1/registry/resolve", { query: { ref } }),
   };
 }
 

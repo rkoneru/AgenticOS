@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkCsrf, resolveUpstream } from "@/lib/bff";
+import { bearerFromCookie, checkCsrf, resolveUpstream, upstreamKind } from "@/lib/bff";
 import { buildCsp, isPublicPath, newNonce, safeReturnTo, securityHeaders } from "@/lib/security";
 import { can, NAV, ROLES } from "@/lib/roles";
 import { countdown } from "@/lib/sla";
@@ -214,5 +214,25 @@ describe("features", () => {
     expect(
       parseFeatures({ NEXT_PUBLIC_FEATURE_MARKETPLACE: "0", NEXT_PUBLIC_DEV_LOGIN: "true" }),
     ).toEqual({ marketplace: false, evals: true, devLogin: true });
+  });
+});
+
+describe("gateway vs control-plane routing and the bearer conversion", () => {
+  it("/v1 goes to the gateway, everything else allowed to the control plane", () => {
+    expect(upstreamKind(["v1", "runs"])).toBe("gateway");
+    expect(upstreamKind(["admin", "v1", "members"])).toBe("control");
+    expect(upstreamKind(["auth", "refresh"])).toBe("control");
+  });
+  it("takes the access token from the session cookie only, and refuses odd values", () => {
+    const c = "a=1; __Host-axis_at=tok.en-123; __Host-axis_csrf=c";
+    expect(bearerFromCookie(c, "__Host-axis_at")).toBe("tok.en-123");
+    expect(bearerFromCookie("x=1", "__Host-axis_at")).toBeUndefined();
+    expect(bearerFromCookie(null, "__Host-axis_at")).toBeUndefined();
+    expect(bearerFromCookie("__Host-axis_at=a b", "__Host-axis_at")).toBeUndefined();
+    expect(
+      bearerFromCookie(`__Host-axis_at=${"x".repeat(5000)}`, "__Host-axis_at"),
+    ).toBeUndefined();
+    // a look-alike cookie name is not the session cookie
+    expect(bearerFromCookie("evil__Host-axis_at=zzz", "__Host-axis_at")).toBeUndefined();
   });
 });

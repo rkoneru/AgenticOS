@@ -175,15 +175,24 @@ function Lines({ items, ordered }: { items: string[]; ordered?: boolean }) {
  * AGIL explanation panel. Fetches the explanation the service produced from the audit log and renders
  * exactly its fields as text; nothing here composes or infers explanation content.
  */
-export function Explanation({ kind, id }: { kind: "run" | "approval" | "audit"; id: string }) {
+export function Explanation({
+  kind,
+  id,
+  traceId,
+}: {
+  kind: "run" | "approval" | "audit";
+  id: string;
+  /** For `audit`: lets an audit event ID (not a seq) be resolved. */
+  traceId?: string | undefined;
+}) {
   const res = useResource<ExplanationData>(
     () =>
       kind === "run"
         ? api.explainRun(id)
         : kind === "approval"
           ? api.explainApproval(id)
-          : api.explainAuditEvent(id),
-    [kind, id],
+          : api.explainAuditEvent(id, traceId),
+    [kind, id, traceId],
   );
   const [open, setOpen] = useState(true);
   return (

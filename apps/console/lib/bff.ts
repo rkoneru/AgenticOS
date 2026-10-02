@@ -38,6 +38,26 @@ export function resolveUpstream(
   return `${root}/${segments.join("/")}${search}`;
 }
 
+/** `/v1/*` is the API gateway; `/admin/v1/*` and `/auth/*` are the control plane (login, session refresh, tenant admin). */
+export function upstreamKind(segments: readonly string[]): "gateway" | "control" {
+  return segments[0] === "v1" ? "gateway" : "control";
+}
+
+/** The session access token from a Cookie header: the gateway authenticates a bearer token, never a cookie. */
+export function bearerFromCookie(
+  cookieHeader: string | null,
+  cookieName: string,
+): string | undefined {
+  for (const part of (cookieHeader ?? "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === cookieName) {
+      const v = part.slice(i + 1).trim();
+      return /^[\x21-\x7e]{1,4096}$/.test(v) ? v : undefined;
+    }
+  }
+  return undefined;
+}
+
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export type CsrfVerdict = { ok: true } | { ok: false; reason: string };
