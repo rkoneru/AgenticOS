@@ -10,8 +10,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint && prettier --check .",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "cov": "turbo run cov",
+    "test": "turbo run test --concurrency=2",
+    "cov": "turbo run cov --concurrency=2",
     "format": "prettier --write ."
   },
   "devDependencies": {

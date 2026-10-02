@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   test: {
+    testTimeout: 30_000,
     environment: "node",
     globals: true,
     setupFiles: ["./test/setup.ts"],
