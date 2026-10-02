@@ -619,7 +619,8 @@ class RunServer:
         except TimeoutError:
             reason = "max_duration"
         finally:
-            w.write(f"event: end\ndata: {json.dumps({'reason': reason})}\n\n".encode())
+            end = json.dumps({"reason": reason}, separators=(",", ":"))
+            w.write(f"event: end\ndata: {end}\n\n".encode())
             await w.drain()
 
 
