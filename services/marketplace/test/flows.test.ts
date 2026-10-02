@@ -978,6 +978,57 @@ describe.each(envs)("installs (%s)", (_n, mk) => {
   });
 });
 
+describe.each(envs)("review integrity and fail-closed audit (%s)", (_n, mk) => {
+  it("a review whose recorded hash no longer matches the registry cannot be approved", async () => {
+    const env = await mk();
+    const pub = await Pub.create(env);
+    await pub.publish(ablDoc("helper-agent", "1.0.0"));
+    await env.mp.reviews.submit(pub.b, {
+      namespace: pub.namespace,
+      name: "helper-agent",
+      version: "1.0.0",
+    });
+    const key = `${pub.namespace}/helper-agent@1.0.0`;
+    const d = (await env.docs.get({ kind: "platform" }, pub.tenantId, "reviews", key))!;
+    await env.docs.update({ kind: "platform" }, pub.tenantId, "reviews", key, d.rev, {
+      ...d.data,
+      contentHash: "e".repeat(64),
+    });
+    await expect(
+      env.mp.reviews.decide(reviewer(), `${pub.tenantId}|${key}`, {
+        decision: "approve",
+        note: "should be refused",
+      }),
+    ).rejects.toMatchObject({ checks: ["content_hash_changed"] });
+  });
+  it("an unwritable audit log means nothing is performed", async () => {
+    const env = await mk();
+    const pub = await Pub.create(env);
+    const { ServiceAudit } = await import("@axis/registry");
+    const { createMarketplace } = await import("../src/index.js");
+    const broken = createMarketplace({
+      docs: env.docs,
+      registry: env.registry,
+      audit: new ServiceAudit({ append: () => Promise.reject(new Error("down")) }, "marketplace"),
+      domain: env.domain,
+      identity: env.identity,
+    });
+    await expect(
+      broken.publishers.start(tenantP(await env.tenant(), "admin"), {
+        legalName: "Zed Corp",
+        domain: "zed.example.com",
+        contactEmail: "a@zed.example.com",
+      }),
+    ).rejects.toMatchObject({ code: "unavailable" });
+    await expect(broken.installs.setBaseline(pub.p, [])).rejects.toMatchObject({
+      code: "unavailable",
+    });
+    expect((await broken.installs.baseline(pub.p)).granted).toEqual([
+      { key: "memory:run", level: 1 },
+    ]);
+  });
+});
+
 describe.each(envs)("listings (%s)", (_n, mk) => {
   it("creation rules, catalog search without any credential, categories", async () => {
     const env = await mk();

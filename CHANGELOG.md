@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 7 - Registry and marketplace (component B)
+
+- `services/registry` (`@axis/registry`): immutable semver blueprint versions per tenant namespace, ABL content hash, detached Ed25519 signatures with
+  a per-namespace key registry (add/rotate/revoke, effective times, compromised vs retired), in-toto/DSSE provenance, verify-on-resolve (fail closed, no
+  silent fallback), range resolution checked against the reference `semver`, typosquat/dependency-confusion guards, yank/deprecate, Postgres store with
+  forced owner-checked RLS (migration 0020) + memory port (ADR 0030).
+- `services/marketplace` (`@axis/marketplace`): publisher verification workflow, security review state machine with a static capability scan, listings
+  and an anonymous catalog, consented installs (permission diff, digest-bound consent, pinned reference, deny-by-default policy pack stub), updates with
+  re-consent on widening, takedown, `marketplace_installs` metering hook (migration 0021, ADR 0031). Dev servers are non-production. NEEDS #1100-#1111.
+
 ## Phase 6 - Independent review fixes (ADR 0023)
 
 - Fixed: admin to owner via an admin-controlled IdP link (`sso.manage` now owner-only) and e-mail linking that never bound an identity;

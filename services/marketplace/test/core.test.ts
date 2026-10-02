@@ -372,6 +372,10 @@ describe("recommended policy pack", () => {
     const rules = new Map(pack.spec.rules.map((r) => [r.id, r.decision]));
     expect(rules.get("allow-function-lookup")).toBe("ALLOW");
     expect(rules.get("deny-ungranted-tools")).toBe("DENY");
+    // the denials must outrank every allow (allows have the default priority 100)
+    const prio = (id: string) =>
+      (pack.spec.rules.find((r) => r.id === id) as { priority?: number }).priority ?? 100;
+    expect(prio("deny-ungranted-tools")).toBeGreaterThan(prio("allow-function-lookup"));
     for (const id of ["deny-code-exec", "deny-browser", "deny-phi", "deny-long-term-memory"])
       expect(rules.get(id)).toBe("DENY");
   });
