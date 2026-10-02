@@ -571,6 +571,33 @@ describe("HTTP surface (Postgres store)", () => {
     expect((await scim("GET", "/Users")).json.totalResults).toBe(2);
   });
 
+  it("budget config bridge: the tenant's own budgets for the runtime, tenant from the bearer only", async () => {
+    const rtTenant = (w as unknown as { rtTenant: string }).rtTenant;
+    const owner = await w.login(rtTenant, (await w.store.listMembers(rtTenant, 5)).items[0]!.id);
+    await w.cp.admin.putBudget(owner, {
+      scope: "tenant",
+      metric: "tokens",
+      period: "day",
+      hard: 1234,
+    });
+    const ok = await req("GET", "/internal/v1/budget-config", { token: "rt-token" });
+    expect(ok.status).toBe(200);
+    expect(ok.json.tenant).toEqual(
+      expect.arrayContaining([expect.objectContaining({ metric: "tokens", hard: 1234 })]),
+    );
+    expect(ok.json.run.length).toBeGreaterThan(0);
+    expect((await req("GET", "/internal/v1/budget-config")).status).toBe(401);
+    expect((await req("GET", "/internal/v1/budget-config", { token: "nope" })).status).toBe(401);
+    // a runtime token for tenant X never returns Y's budgets: Y's token reads Y's
+    const other = await provisioned();
+    w.cp.deps.runtimeAuth = runtimeAuthFromTokens({
+      [rtTenant]: "rt-token",
+      [other.tenantId]: "rt-other",
+    });
+    const o = await req("GET", "/internal/v1/budget-config", { token: "rt-other" });
+    expect(JSON.stringify(o.json)).not.toContain("1234");
+  });
+
   it("runtime bridge: per-tenant bearer, tenant from the credential only", async () => {
     const rtTenant = (w as unknown as { rtTenant: string }).rtTenant;
     const other = await provisioned();

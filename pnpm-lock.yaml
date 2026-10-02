@@ -68,15 +68,27 @@ importers:
       '@axis/audit':
         specifier: workspace:*
         version: link:../services/audit
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../services/billing
       '@axis/channels':
         specifier: workspace:*
         version: link:../services/channels
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../services/control-plane
       '@axis/risk-kernel':
         specifier: workspace:*
         version: link:../services/risk-kernel
       pg:
         specifier: ^8.13.0
         version: 8.23.1
+      yaml:
+        specifier: ^2.5.0
+        version: 2.9.1
 
   packages/abl:
     dependencies:

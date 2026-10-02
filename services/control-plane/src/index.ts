@@ -19,6 +19,8 @@ export * from "./scim.js";
 export * from "./sso.js";
 export * from "./provisioning.js";
 export * from "./tenancy.js";
+export * from "./routing.js";
+export * from "./bundles.js";
 export * from "./admin.js";
 export * from "./http.js";
 export * from "./runtime-bridge.js";

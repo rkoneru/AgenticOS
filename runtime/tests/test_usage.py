@@ -196,3 +196,62 @@ async def test_projection_matches_the_golden_contract_fixture_the_billing_servic
     if not fixture.exists():  # first run writes it; afterwards it is a regression pin
         fixture.write_text(json.dumps(projected, indent=2, sort_keys=True) + "\n")
     assert json.loads(fixture.read_text()) == json.loads(json.dumps(projected))
+
+
+# ---- RunDeps.usage: the run forwards its own log when it ends (Phase 6 wiring) -----------------------------------------
+
+
+class _SpyEmitter:
+    def __init__(self, fail: bool = False) -> None:
+        self.calls: list[str] = []
+        self.fail = fail
+
+    async def emit_run(self, log: Any, run_id: str) -> dict[str, Any]:
+        self.calls.append(run_id)
+        events = await log.read(run_id)
+        assert events and events[-1].type == "process_exited"  # emitted AFTER the run finished
+        if self.fail:
+            raise UsageUnavailable("http_503")
+        return {"records": 0}
+
+
+async def test_a_run_emits_its_log_once_when_it_ends_and_a_failure_never_changes_the_result(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from axis_runtime.run import run_agent
+    from conftest import ScriptedTransport, make_deps, make_manifest, openai_body
+
+    for fail in (False, True):
+        spy = _SpyEmitter(fail)
+        deps = make_deps(
+            gate=ScriptedGate(allow()),
+            transport=ScriptedTransport([(200, openai_body("hi", None, 10, 5))]),
+            run_id=f"run-usage-{fail}",
+            usage=spy,
+        )
+        result = await run_agent(make_manifest(), "hello", deps)
+        assert result.status == "completed"
+        assert spy.calls == [f"run-usage-{fail}"]
+    assert "usage emission failed" in caplog.text
+
+
+async def test_usage_of_a_cancelled_run_is_still_sent_and_the_cancellation_is_honoured() -> None:
+    import asyncio
+
+    from axis_runtime.run import emit_usage
+
+    sent: list[str] = []
+
+    class Slow:
+        async def emit_run(self, log: Any, run_id: str) -> dict[str, Any]:
+            await asyncio.sleep(0.05)
+            sent.append(run_id)
+            return {}
+
+    task = asyncio.ensure_future(emit_usage(Slow(), InMemoryRunEventLog(), "r-killed"))
+    await asyncio.sleep(0.01)
+    task.cancel()  # a supervisor killing the run while its usage is on the wire
+    task.cancel()  # and again: the send must still complete
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert sent == ["r-killed"]

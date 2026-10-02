@@ -419,11 +419,21 @@ describe.each(KINDS)("tenant admin (%s store)", (kind) => {
         soft: 1,
         hard: 2,
       });
+      // a fractional cost budget is legitimate and must be auditable (the audit hash covers arbitrary JSON payloads)
+      await admin.putBudget(t.owner, {
+        scope: "tenant",
+        metric: "cost_usd",
+        period: "hour",
+        soft: 0.0005,
+        hard: 0.001,
+      });
+      const frac = (await eventsOf(w, t.tenantId)).filter((e) => e.action === "budgets.write");
+      expect(frac.every((e) => e.decision === "ALLOW")).toBe(true);
       const cfg = await admin.budgetConfig(t.tenantId);
       expect(cfg.agents["agent-x"]).toEqual([
         { metric: "cost_usd", period: "day", soft: 1, hard: 2 },
       ]);
-      expect(cfg.tenant.length).toBe(2);
+      expect(cfg.tenant.length).toBe(3);
       expect(cfg.run.length).toBe(2);
       const b = (await admin.listBudgets(t.owner)).find((x) => x.target === "agent-x")!;
       await admin.deleteBudget(t.owner, b.id);

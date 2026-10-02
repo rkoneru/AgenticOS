@@ -20,6 +20,7 @@ import type { DomainService } from "./domains.js";
 import { CpError, conflict, forbidden, invalid, notFound } from "./errors.js";
 import type { IdentityProvider } from "./idp.js";
 import type { ModelKeyService, PublicModelKey } from "./modelkeys.js";
+import type { PolicyBundlePublisher } from "./bundles.js";
 import type { PackValidator, PolicyPackService, PublicPackVersion } from "./policies.js";
 import { isExternalRole, isRole, ROLE_RANK, type Role } from "./roles.js";
 import type { SessionService } from "./sessions.js";
@@ -55,6 +56,8 @@ export interface AdminDeps {
   idp: IdentityProvider;
   region: RegionGuard;
   auditReader?: AuditReaderLike;
+  /** Publishes the tenant's compiled active policy for the Risk Kernel after every activation/deactivation (dev: files). */
+  bundles?: PolicyBundlePublisher;
   newId?: () => string;
   now?: () => Date;
   validator?: PackValidator;
@@ -490,6 +493,7 @@ export class AdminService {
     const vid = idOf(versionId);
     return this.guarded(p, "policies.activate", { detail: { version: vid } }, async () => {
       const r = await this.d.policies.activate(p, vid);
+      await this.d.bundles?.publish(p.tenantId);
       return { result: r, outputs: { policy_version: r.policyVersion } };
     });
   }
@@ -500,6 +504,7 @@ export class AdminService {
       { detail: { pack, op: "deactivate" } },
       async () => {
         await this.d.policies.deactivate(p, pack);
+        await this.d.bundles?.publish(p.tenantId);
         return { result: undefined };
       },
     );

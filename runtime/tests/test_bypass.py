@@ -403,6 +403,11 @@ def test_path_open_reads_are_accepted_but_modes_are_checked_in_both_positions() 
 def test_allowlist_is_scoped_to_exact_files() -> None:
     assert bs.scan_source("tools.py", "import httpx") == []
     assert bs.scan_source("models/adapters/openai.py", "import httpx") != []  # siblings: no
+    assert bs.scan_source("controlplane.py", "import httpx") == []
+    assert (
+        bs.scan_source("models/secrets_http.py", "import httpx") != []
+    )  # the store wraps the bridge, no own HTTP
+    assert bs.scan_source("tenant_budgets.py", "import httpx") != []
     assert bs.scan_source("models/secrets.py", "import os\nos.replace('a', 'b')") == []
     assert bs.scan_source("tools.py", "import os\nos.replace('a', 'b')") != []
     assert bs.scan_source("gate.py", "import grpc\nimport grpc.aio") == []

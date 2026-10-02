@@ -109,6 +109,13 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "carries no content, and the service bills only ALLOWed actions. A failure never denies "
         "or stops anything (metering is off the decision path).",
     },
+    "controlplane.py": {
+        "httpx": "ControlPlaneBridge: read-only client of the control plane's runtime bridge (loopback "
+        "dev surface, NEEDS #186): the tenant's BYO model key (HttpSecretStore) and budget config (TKI "
+        "limits). Not an agent action and unreachable from one; the control plane derives the tenant "
+        "from the bearer token and the client refuses to ask for another tenant. A failure is "
+        "fail-closed (no key: no model call; no budgets: no run).",
+    },
     "channels.py": {
         "httpx": "HttpChannelSender: client of the channels service (loopback dev surface, NEEDS). "
         "Reachable only through MessageSend performed by ActionExecutor: a DENY never sends; the "

@@ -371,6 +371,15 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
       return;
     }
 
+    // The tenant's budget configuration for the runtime (TKI ledger limits). Same bearer as the key bridge: the tenant is the one
+    // the token was issued for. Read-only, no secrets. DEV bridge (NEEDS #186 covers production transport).
+    if (path === "/internal/v1/budget-config" && method === "GET") {
+      const tenant = d.runtimeAuth?.(req.headers.authorization);
+      if (!tenant) throw unauthenticated();
+      json(res, 200, await d.admin.budgetConfig(tenant));
+      return;
+    }
+
     // ---------------- /admin/v1
     if (path.startsWith("/admin/v1/")) {
       const p = await authenticate(req);

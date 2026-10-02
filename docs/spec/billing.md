@@ -1,7 +1,8 @@
 # Billing and usage metering (Phase 6 B)
 
 Status: Prototype (library + loopback dev server; no live Stripe, no real ClickHouse, no tax). Code: `services/billing`,
-runtime emitter `runtime/src/axis_runtime/usage.py`. Decisions: ADR 0018 (schema), ADR 0019 (Stripe test mode).
+runtime emitter `runtime/src/axis_runtime/usage.py`. Decisions: ADR 0018 (schema), ADR 0019 (Stripe test mode), ADR 0022 (wiring).
+Wired into a real run and checked for accuracy in `make e2e-phase6` (`docs/runbooks/saas-e2e.md`).
 
 ## 1. Meters
 
@@ -108,3 +109,13 @@ Loopback, static bearer tokens, refuses `NODE_ENV=production`. The tenant always
 decisions; no tool arguments or results, no text or audio). Resending everything is safe (idempotent keys). A failure raises
 `UsageUnavailable`; metering is never on the decision path. `services/billing/test/fixtures/run-projection.json` is a golden file
 checked by both the Python and the TypeScript tests.
+
+### Wiring (`RunDeps.usage`)
+
+`RunDeps.usage` takes a `UsageEmitter`; when set, the run forwards its own log (`emit_usage`) when it ends, whatever the exit reason, off the
+decision path (a failure is logged). The send is **shielded from cancellation**: a run stopped by a budget trip or a kill is cancelled by its
+supervisor, and emitting inside that cancellation used to drop its usage (found by the Phase 6 accuracy e2e). Accuracy is checked by recomputing
+tokens (the model provider's own counts), tool executions (ALLOW rows of the audit chain) and runtime (RUNNING intervals of the run logs)
+independently of the service and requiring the ledger, the statement and the rated invoice to equal them; the e2e then closes the period, verifies
+the seal, pushes to the payment fake and reconciles (clean), injects a duplicate, a dropped and an altered provider record and requires them to be reported
+without any repair. Runtime time bills only the RUNNING state: a run that spends its time WAITING (gate round trips) can legitimately bill 0 ms.

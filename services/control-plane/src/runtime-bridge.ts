@@ -11,6 +11,11 @@ import type { ModelKeyService } from "./modelkeys.js";
  * The tenant is the one the bearer token was issued for (never the body). Plaintext crosses the wire: loopback plus TLS termination
  * only. A production deployment replaces this with the runtime calling the KMS directly (NEEDS #183, #186).
  */
+export const BudgetConfigContract = {
+  path: "/internal/v1/budget-config",
+  method: "GET",
+} as const;
+
 export const HttpSecretStoreContract = {
   path: "/internal/v1/model-keys/reveal",
   method: "POST",

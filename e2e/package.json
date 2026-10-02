@@ -3,12 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Phase 2 exit (test_phase2_core_loop.py): ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Phase 3 exit (test_phase3_orchestration.py): multi-agent TKI run, budgets, NEXUS stage metrics, approvals end to end. Phase 5 exit (test_phase5_channels.py): one agent on web, Slack, SMS, email and voice; continuity, isolation, gated replies, transcripts in the audit chain.",
+  "description": "Phase 2 exit (test_phase2_core_loop.py): ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Phase 3 exit (test_phase3_orchestration.py): multi-agent TKI run, budgets, NEXUS stage metrics, approvals end to end. Phase 5 exit (test_phase5_channels.py): one agent on web, Slack, SMS, email and voice; continuity, isolation, gated replies, transcripts in the audit chain. Phase 6 exit (test_phase6_saas.py): SSO signup, BYO key + tenant policy + budgets, metered usage that equals the audit/run log, invoice reconciliation, RBAC and cross-tenant attacks.",
   "dependencies": {
     "@axis/abl": "workspace:*",
     "@axis/audit": "workspace:*",
+    "@axis/billing": "workspace:*",
     "@axis/channels": "workspace:*",
+    "@axis/contracts": "workspace:*",
+    "@axis/control-plane": "workspace:*",
     "@axis/risk-kernel": "workspace:*",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "yaml": "^2.5.0"
   }
 }

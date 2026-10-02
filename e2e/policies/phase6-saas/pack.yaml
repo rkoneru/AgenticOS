@@ -1,0 +1,25 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: tenant-acme
+  version: 1.0.0
+  description: "Phase 6 e2e fixture (not a shipped pack): the pack a SaaS tenant publishes and activates through the control plane on top of baseline-deny. Model calls and the report tool are allowed; one read tool is explicitly forbidden, which beats the baseline read-allow."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+  rules:
+    - id: allow-model-calls
+      enforcementPoints: [model_call]
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-send-report
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: send-report }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: deny-restricted-lookup
+      priority: 400
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: lookup-restricted }
+      decision: DENY

@@ -95,6 +95,7 @@ from axis_runtime.tooldefs import (
     memory_definitions,
 )
 from axis_runtime.tools import McpManifestSource, ToolRegistry
+from axis_runtime.usage import UsageEmitter
 
 log = logging.getLogger("axis_runtime.run")
 
@@ -165,6 +166,13 @@ class RunDeps:
     #: Send the root agent's final output through ``Backends.channels`` as a gated ``MessageSend``
     #: (tool ``channel.reply``). Requires ``channels`` (or ``backends.channels``).
     reply: ReplyTarget | None = None
+    #: Metering. When set, the run's billing projection (``usage.BILLING_FIELDS``: counts, ids,
+    #: decisions; no content)
+    #: is forwarded to the billing service when the run ends, whatever its exit reason. Best effort
+    #: and OFF the decision
+    #: path: a failure is logged and never changes the run's result (the durable run log can be re-
+    #: sent; keys are idempotent).
+    usage: UsageEmitter | None = None
 
 
 @dataclass(frozen=True)
@@ -999,9 +1007,37 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
             return await root.run(input_text)
         finally:
             await ctx.aclose()
+            if deps.usage is not None:
+                await emit_usage(deps.usage, deps.log, run_id)
 
     task = asyncio.create_task(drive())
     return RunHandle(ctx, root, task)
+
+
+async def emit_usage(usage: UsageEmitter, run_log: RunEventLog, run_id: str) -> None:
+    """Forward a finished run's log for metering: best effort and OFF the decision path.
+
+    A run that ends because a budget tripped, or because an operator killed it, is
+    CANCELLED by its supervisor. Emitting inside that cancellation dropped the run's
+    usage (the provider had billed it, the ledger did not know: under-billing). So the
+    send runs to completion shielded from cancellation (the emitter's own timeout
+    bounds it) and the cancellation is re-raised afterwards. A failure is logged."""
+
+    async def send() -> None:
+        try:
+            await usage.emit_run(run_log, run_id)
+        except Exception:  # noqa: BLE001 - metering never decides or fails a run
+            log.warning("usage emission failed for run %s", run_id, exc_info=True)
+
+    task = asyncio.ensure_future(send())
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            cancelled = True  # honoured once the (bounded) send is over
+    if cancelled:
+        raise asyncio.CancelledError
 
 
 async def _close_all(closers: list[Callable[[], Awaitable[None]]]) -> None:

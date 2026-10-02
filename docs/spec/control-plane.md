@@ -1,7 +1,8 @@
 # Control plane (Phase 6 / A)
 
 `services/control-plane` (`@axis/control-plane`). Status: **Prototype**. Built and tested against fakes (IdP, KMS, DNS) and a real
-Postgres 16; no real WorkOS, KMS or DNS. See `docs/NEEDS.md` #179-#195, ADRs 0020 and 0021 and the threat model
+Postgres 16; no real WorkOS, KMS or DNS. Wired end to end with the Risk Kernel, the runtime and billing in `make e2e-phase6`
+(ADR 0022, `docs/runbooks/saas-e2e.md`). See `docs/NEEDS.md` #179-#195 and #197-#205, ADRs 0020-0022 and the threat model
 `docs/security/control-plane-threat-model.md`.
 
 ## 1. Surfaces
@@ -17,6 +18,7 @@ Postgres 16; no real WorkOS, KMS or DNS. See `docs/NEEDS.md` #179-#195, ADRs 002
 | `POST /platform/v1/tenants`               | platform token                                          | tenant signup (platform-operated, NEEDS #185)                                     |
 | `POST /dev/session`                       | dev token                                               | DEV ONLY: session for a named member                                              |
 | `POST /internal/v1/model-keys/reveal`     | per-tenant runtime token                                | DEV ONLY runtime bridge (section 7)                                               |
+| `GET /internal/v1/budget-config`          | per-tenant runtime token                                | DEV ONLY: the tenant's budgets for the TKI ledger (section 5)                     |
 
 Errors on `/admin/v1` are `application/problem+json` `{type, title, status, code, detail}`; codes: `unauthenticated` 401, `forbidden` 403,
 `not_found` 404, `conflict` 409, `invalid` 422, `region_mismatch` 421, `unavailable` 503, `internal` 500 (opaque), `too_large` 413.
@@ -75,7 +77,12 @@ Id-based operations resolve the resource inside the caller's tenant; a missing o
 API keys: `axk_<16 hex prefix>_<43 char secret>` (256-bit random), only HMAC-SHA256(pepper, key) stored, shown once; scopes, expiry (default 90 d, max 365), environment, owner, `last_used_at` (write rate bounded),
 rotate (new key + old revoked), revoke; verification = format, exact (prefix, HMAC) lookup under the 0009 lookup policy, constant-time compare, revoked/expired/owner-active checks; every failure is the same 401.
 Policy packs: versioned, immutable; publish compiles with `opa check --strict` and a Wasm build; activation re-validates the whole prospective active set, is audited, and baseline-deny can never be deactivated;
-new tenants get baseline-deny active. Budgets: tenant/agent/run, soft <= hard; `AdminService.budgetConfig(tenantId)` is the structure the runtime (TKI) and the kernel's budget gate are configured from (wiring is NEEDS #191).
+new tenants get baseline-deny active. **Kernel delivery (DEV, ADR 0022):** with a `bundleSink` configured, signup and every activation/deactivation
+compile the tenant's active set to a Wasm bundle and write it to `<dir>/<tenant uuid>.tar.gz`; the kernel dev process (`AXIS_POLICY_BUNDLE_DIR`) serves each
+tenant its own bundle and DENIES a tenant with no loadable bundle (NEEDS #197). A publication failure after a committed activation is a 503 (the kernel keeps its previous bundle; re-activating republishes).
+Budgets: tenant/agent/run, soft <= hard, fractional values allowed (`cost_usd`); `AdminService.budgetConfig(tenantId)` is served to the runtime at
+`GET /internal/v1/budget-config` and applied to the TKI ledger by `runtime/.../tenant_budgets.py` (tenant account limits; run limits merged with the blueprint's, the tighter wins).
+The kernel's `budget` gate and agent-scope budgets are not fed from it (NEEDS #198).
 Retention: audit >= 365 d and never shortened, transcripts and memory 1-3650 d. Region pinning: `tenants.region` is fixed at signup; a control plane instance refuses writes (421) for tenants of another region (real multi-region is NEEDS #192).
 
 ## 6. Tenancy tiers
@@ -88,9 +95,10 @@ Identity data stays in the control database (ADR 0021). Deployment of dedicated 
 
 One AES-256 data key per tenant, wrapped by a `Kms` (`LocalKms` is the fake; tenant bound as context); each secret AES-256-GCM with AAD `axis-byo:<tenant>:<provider>:<label>`. Plaintext is never stored, returned by `/admin/v1`,
 audited or put in an error. Runtime path (DEV, non-production): `POST /internal/v1/model-keys/reveal` with `Authorization: Bearer <per-tenant runtime token>` and `{"provider","label"}` -> `{"value"}`;
-the tenant is the one the token was issued for. An `HttpSecretStore` client for `runtime/src/axis_runtime/models/secrets.py` against this endpoint is not built (NEEDS #186).
+the tenant is the one the token was issued for. The runtime reads it through `HttpSecretStore` (`runtime/src/axis_runtime/models/secrets_http.py` over `controlplane.ControlPlaneBridge`); production reads through KMS (NEEDS #186).
 
 ## 8. Configuration (`wireControlPlane`)
 
 `store` (Memory or `PgControlPlaneStore`, connecting as `axis_app`), `auditSink` (+`auditReader`), `authorizer` (`Authorizer.fromPackFile()` needs `opa`), `idp`, `kms`, `dns`, `region`/`regions`,
-`secrets.{pepper, cookieKey, signingKeys[]}` (each >= 32 bytes; rotate signing keys by prepending a new `kid`), `redirectUri`, `allowedReturnOrigins`, optional `platformToken`, `devToken`, `runtimeAuth`.
+`secrets.{pepper, cookieKey, signingKeys[]}` (each >= 32 bytes; rotate signing keys by prepending a new `kid`), `redirectUri`, `allowedReturnOrigins`, optional `platformToken`, `devToken`, `runtimeAuth`, `bundleSink` (DEV: `FileBundleSink(dir)`).
+`RoutedAuditLog({router, open})` is an `AuditSink` + reader that sends each tenant's events to the database its placement names (use it as `auditSink`/`auditReader` when dedicated tiers exist).

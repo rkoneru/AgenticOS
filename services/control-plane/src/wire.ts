@@ -1,5 +1,6 @@
 import { AdminAudit } from "./audit.js";
 import { AdminService, type AuditReaderLike } from "./admin.js";
+import { PolicyBundlePublisher, type BundleSink } from "./bundles.js";
 import { ApiKeyService } from "./apikeys.js";
 import { Authorizer } from "./authz.js";
 import { TokenSigner } from "./crypto.js";
@@ -37,6 +38,8 @@ export interface WireConfig {
   redirectUri: string;
   allowedReturnOrigins: readonly string[];
   validator?: PackValidator;
+  /** DEV mechanism for the kernel: compiled active policy per tenant is written here after signup/activation. */
+  bundleSink?: BundleSink;
   defaultPacks?: unknown[];
   now?: () => Date;
   platformToken?: string;
@@ -82,6 +85,9 @@ export function wireControlPlane(c: WireConfig): ControlPlane {
     ...(c.validator ? { validator: c.validator } : {}),
     ...(now ? { now } : {}),
   });
+  const bundles = c.bundleSink
+    ? new PolicyBundlePublisher({ policies, sink: c.bundleSink })
+    : undefined;
   const directories = new DirectoryService({
     store: c.store,
     sessions,
@@ -103,6 +109,7 @@ export function wireControlPlane(c: WireConfig): ControlPlane {
     domains,
     idp: c.idp,
     region,
+    ...(bundles ? { bundles } : {}),
     ...(c.auditReader ? { auditReader: c.auditReader } : {}),
     ...(now ? { now } : {}),
   });
@@ -123,6 +130,7 @@ export function wireControlPlane(c: WireConfig): ControlPlane {
     regions: c.regions,
     ...(c.defaultPacks ? { defaultPacks: c.defaultPacks } : {}),
     ...(c.validator ? { validator: c.validator } : {}),
+    ...(bundles ? { afterProvision: (t: string) => bundles.publish(t).then(() => undefined) } : {}),
   });
   const deps: HttpDeps = {
     admin,
