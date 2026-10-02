@@ -111,6 +111,18 @@ describe.each(KINDS)("SSO (%s store)", (kind) => {
     }
   });
 
+  it("rejects a forged login cookie (plain or sealed with another key) even when its contents are self-consistent", async () => {
+    const { b64u, seal } = await import("../src/index.js");
+    const { randomBytes } = await import("node:crypto");
+    const verifier = "attacker-verifier-attacker-verifier-attacker-verifier";
+    const payload = { s: "forged-state", n: "forged-nonce", v: verifier, o: ORG, r: "/", exp: Math.floor(w.clock.now().getTime() / 1000) + 600 };
+    const code = w.idp.issueRogue({ ...profile({ id: "forger", email: "forger@acme-corp.test" }), nonce: "forged-nonce" }, "https://cp.example.test/auth/sso/callback", verifier);
+    const plain = b64u(Buffer.from(JSON.stringify(payload)));
+    const wrongKey = b64u(seal(randomBytes(32), Buffer.from(JSON.stringify(payload)), "axis-login.v1"));
+    for (const cookie of [plain, wrongKey]) expect(await code2(w.cp.sso.callback({ code, state: "forged-state" }, cookie))).toBe("unauthenticated");
+    expect(await w.store.findMemberByEmail(tenantId, "forger@acme-corp.test")).toBeUndefined();
+  });
+
   it("rejects IdP-side failures: bad code, wrong PKCE verifier binding, reused code, wrong org", async () => {
     const a = await start();
     expect(await code(w.cp.sso.callback({ code: "not-a-code", state: a.state }, a.cookie))).toBe("unauthenticated");

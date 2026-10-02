@@ -23,17 +23,17 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
     const t = await w.tenant();
     const k = await w.cp.apiKeys.create(t.owner, { name: "ci", scopes: ["runs:write", "runs:read"] });
     expect(k.secret).toMatch(/^axk_[0-9a-f]{16}_[A-Za-z0-9_-]{43}$/);
-    expect(Buffer.from(k.secret.split("_")[2]!, "base64url")).toHaveLength(32);
-    expect(JSON.stringify(k.key)).not.toContain(k.secret.split("_")[2]!);
+    expect(Buffer.from(k.secret.slice(21), "base64url")).toHaveLength(32);
+    expect(JSON.stringify(k.key)).not.toContain(k.secret.slice(21));
     expect("keyHash" in k.key).toBe(false);
     const rec = (await w.store.getApiKey(t.tenantId, k.key.id))!;
     // only a keyed hash is stored: neither the key, its secret half, nor a plain SHA-256 of it
     const stored = rec.keyHash.toString("hex");
     expect(stored).toHaveLength(64);
     expect(stored).not.toBe(createHash("sha256").update(k.secret).digest("hex"));
-    expect(Buffer.from(JSON.stringify(rec)).includes(k.secret.split("_")[2]!)).toBe(false);
+    expect(Buffer.from(JSON.stringify(rec)).includes(k.secret.slice(21))).toBe(false);
     const listed = await w.cp.apiKeys.list(t.owner);
-    expect(JSON.stringify(listed)).not.toContain(k.secret.split("_")[2]!);
+    expect(JSON.stringify(listed)).not.toContain(k.secret.slice(21));
     expect(k.key.expiresAt!.getTime()).toBeGreaterThan(w.clock.now().getTime());
   });
 
@@ -48,7 +48,9 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
   it("rejects unknown, malformed, truncated, case-changed and other-prefix keys with the same answer", async () => {
     const t = await w.tenant();
     const k = await w.cp.apiKeys.create(t.owner, { name: "x", scopes: ["*"] });
-    const [axk, prefix, secret] = k.secret.split("_") as [string, string, string];
+    const axk = "axk";
+    const prefix = k.secret.slice(4, 20);
+    const secret = k.secret.slice(21);
     const bad = [
       "", "axk_", "nonsense", k.secret.slice(0, -1), `${k.secret}x`, `${axk}_${prefix}_${secret.replace(/./, (c) => (c === "A" ? "B" : "A"))}`,
       `${axk}_${"0".repeat(16)}_${secret}`, `${axk}_${prefix}_${"A".repeat(43)}`, k.secret.toUpperCase(), ` ${k.secret}`, `${k.secret}\n`,
@@ -125,7 +127,7 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
     expect((await w.cp.apiKeys.verify(ka.secret))?.tenantId).toBe(a.tenantId);
     expect((await w.cp.apiKeys.verify(kb.secret))?.tenantId).toBe(b.tenantId);
     // a key with A's prefix but B's secret is nothing
-    const franken = `axk_${ka.secret.split("_")[1]}_${kb.secret.split("_")[2]}`;
+    const franken = `axk_${ka.secret.slice(4, 20)}_${kb.secret.slice(21)}`;
     expect(await w.cp.apiKeys.verify(franken)).toBeUndefined();
   });
 

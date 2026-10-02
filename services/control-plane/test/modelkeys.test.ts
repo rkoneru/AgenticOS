@@ -64,6 +64,11 @@ describe.each(KINDS)("BYO model keys (%s store)", (kind) => {
     const ca = (await w.store.getModelCredential(a.tenantId, "anthropic", "default"))!;
     await w.store.putModelCredential({ ...ca, tenantId: b.tenantId, label: "moved", id: "00000000-0000-4000-8000-0000000000aa" });
     expect(await w.cp.modelKeys.revealForRuntime(b.tenantId, "anthropic", "moved")).toBeUndefined();
+    // within one tenant, a ciphertext copied to another label (or provider) is also refused: the AAD binds both
+    await w.store.putModelCredential({ ...ca, label: "copied", id: "00000000-0000-4000-8000-0000000000ab" });
+    await w.store.putModelCredential({ ...ca, provider: "other", id: "00000000-0000-4000-8000-0000000000ac" });
+    expect(await w.cp.modelKeys.revealForRuntime(a.tenantId, "anthropic", "copied")).toBeUndefined();
+    expect(await w.cp.modelKeys.revealForRuntime(a.tenantId, "other", "default")).toBeUndefined();
     // a data key wrapped for A cannot be unwrapped for B
     const ka = (await w.store.getActiveTenantKey(a.tenantId))!;
     await expect(w.kms.unwrap(b.tenantId, ka.kmsKeyId, ka.wrappedDek)).rejects.toThrow();
