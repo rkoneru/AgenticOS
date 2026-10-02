@@ -9,6 +9,7 @@ import {
   createDevServer,
   listenLoopback,
   parseTranscriptEvent,
+  redactPatterns,
   sha256Hex,
   staticTokenAuthenticator,
   type InboxItem,
@@ -247,5 +248,25 @@ describe("web hub memory", () => {
     const got: number[] = [];
     hub.subscribe(T1, `sid-999`.padEnd(16, "x"), (e) => got.push(e.id));
     expect(got).toHaveLength(1);
+  });
+});
+
+describe("redaction cost", () => {
+  it("is not quadratic in the length of attacker text (event-loop DoS)", () => {
+    for (const evil of [
+      "a".repeat(60_000),
+      "a.".repeat(30_000),
+      `${"1".repeat(60_000)}a`,
+      `${"1-".repeat(30_000)}x`,
+    ]) {
+      const t = Date.now();
+      redactPatterns(evil);
+      expect(Date.now() - t).toBeLessThan(500);
+    }
+  });
+  it("still redacts an address and a phone number", () => {
+    expect(redactPatterns("mail bob.smith+x@example.co.uk or call +1 (555) 123-4567 now")).toBe(
+      "mail [email] or call [phone] now",
+    );
   });
 });
