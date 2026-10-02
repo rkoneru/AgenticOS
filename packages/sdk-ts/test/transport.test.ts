@@ -435,4 +435,16 @@ describe("credential safety", () => {
     expect(server.calls[0]?.url.pathname).toContain("a%20b%2Fc");
     await expect(ax.api.startRun({} as never)).rejects.toThrow(/body is required/);
   });
+  it("a path parameter that is a dot segment is refused: '..' must not climb out of its route (URL parsers resolve it even when encoded)", async () => {
+    const { ax, server } = setup();
+    for (const bad of ["..", "."]) {
+      await expect(ax.runs.get(bad)).rejects.toThrow(/dot segment|path parameter/);
+      await expect(ax.blueprints.get("agent-one", bad)).rejects.toThrow(/dot segment|path parameter/);
+    }
+    // never sent: not even to a route the caller did not name
+    expect(server.calls).toHaveLength(0);
+    // ordinary values that merely contain dots are still fine
+    await ax.blueprints.get("a.b", "1.0.0..2").catch(() => undefined);
+    expect(server.calls[0]?.url.pathname).toContain("a.b");
+  });
 });

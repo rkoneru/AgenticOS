@@ -144,6 +144,9 @@ class _Core:
                 v = str(v)
             if not isinstance(v, str) or v == "":
                 raise TypeError(f'{op.id}: missing path parameter "{name}"')
+            if v in (".", ".."):
+                # quote() leaves "." alone and joining resolves "." / ".." (also as %2e): the id would climb out of its route.
+                raise TypeError(f'{op.id}: path parameter "{name}" must not be a dot segment')
             rel = rel.replace("{" + name + "}", quote(v, safe=""))
         url = urljoin(
             self.base, "." + rel

@@ -426,6 +426,20 @@ def test_path_params_required_encoded_and_body_required() -> None:
         ax.api.start_run(body=None)  # type: ignore[arg-type]
 
 
+def test_dot_segment_path_params_are_refused() -> None:
+    # quote() leaves "." alone and URL joining resolves "." / ".." (even encoded): the id would climb out of its route.
+    server = MockServer()
+    ax, _ = make(server)
+    for bad in ("..", "."):
+        with pytest.raises(TypeError, match="dot segment"):
+            ax.runs.get(bad)
+        with pytest.raises(TypeError, match="dot segment"):
+            ax.blueprints.get("agent-one", bad)
+    assert server.calls == []
+    ax.blueprints.get("a.b", "1.0.0..2")  # dots inside a value are ordinary
+    assert "a.b" in server.calls[0].url.raw_path.decode()
+
+
 def test_retriable_matrix() -> None:
     assert is_retriable(OPERATIONS["getRun"], None)
     assert not is_retriable(OPERATIONS["startRun"], None)

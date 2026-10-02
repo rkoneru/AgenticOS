@@ -153,6 +153,9 @@ export class HttpTransport implements Transport {
       const v = typeof raw === "number" && Number.isSafeInteger(raw) ? String(raw) : raw;
       if (typeof v !== "string" || v === "")
         throw new TypeError(`${op.id}: missing path parameter "${name}"`);
+      // encodeURIComponent leaves "." alone, and URL parsers resolve a "." / ".." segment (also as %2e): the id would climb out of its route.
+      if (v === "." || v === "..")
+        throw new TypeError(`${op.id}: path parameter "${name}" must not be a dot segment`);
       path = path.replace(`{${name}}`, encodeURIComponent(v));
     }
     const url = new URL(`.${path}`, this.#base); // "./policies:test": a bare "policies:test" would parse as a URL scheme;
