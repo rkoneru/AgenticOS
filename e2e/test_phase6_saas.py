@@ -834,3 +834,173 @@ async def test_09_the_tenants_cost_hard_cap_from_the_control_plane_stops_the_run
     S.runs.append(ok)
     S.providers.append(ok.provider)
     assert ok.exit_reason is ExitReason.COMPLETED
+
+
+# ==== (4) metering: the ledger equals what an independent recomputation says =============================================
+
+
+def by_meter(totals: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for t in totals:
+        out[t["meter"]] = out.get(t["meter"], 0) + int(t["quantity"])
+    return out
+
+
+async def independent_expectation(stack: Stack, a: Tenant) -> dict[str, int]:
+    """What the ledger MUST say, from sources the billing service never touched: the model provider's own token counts, the
+    tenant's audit chain (ALLOWed tool calls) and the runs' event logs (time spent RUNNING)."""
+    tokens_in, tokens_out = provider_tokens(*S.providers)
+    tool_rows = [e for e in events(stack.db_url, a.id, "tool_call") if e["decision"] == "ALLOW"]
+    runtime = 0
+    for o in S.runs:
+        runtime += running_ms(await o.log.read(o.run_id))
+    return {
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "tool_executions": len(tool_rows),
+        "runtime_seconds": runtime,
+    }
+
+
+async def test_10_the_ledger_equals_totals_recomputed_from_the_audit_chain_and_the_run_logs(stack: Stack) -> None:
+    a = tenant_a()
+    period = current_period()
+    ledger = by_meter((await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"])
+    want = await independent_expectation(stack, a)
+    assert want["tokens_in"] == 200 + 50 + 3 * 4000 and want["tokens_out"] == 50 + 10 + 3 * 1000  # sanity of the scenario itself
+    assert want["tool_executions"] == 2  # lookup-claim and send-report; the DENIED lookup-restricted is not billed
+    assert {k: ledger.get(k, 0) for k in want} == want, (ledger, want)
+    assert set(ledger) <= {"tokens_in", "tokens_out", "tool_executions", "runtime_seconds"}
+    # per run: the denied run, the cache hit and the cap-stopped runs each carry exactly what they spent
+    entries = await usage_entries(stack, a, period)
+    per_run: dict[str, dict[str, int]] = {}
+    for e in entries:
+        per_run.setdefault(e["dimensions"]["run"], {}).setdefault(e["meter"], 0)
+        per_run[e["dimensions"]["run"]][e["meter"]] += int(e["quantity"])
+    denied, full, miss, hit, tok_cap, cost_cap, after = (r.run_id for r in S.runs)
+    assert not {"tokens_in", "tokens_out", "tool_executions"} & set(per_run.get(denied, {}))
+    assert {k: v for k, v in per_run[full].items() if k != "runtime_seconds"} == {"tokens_in": 200, "tokens_out": 50, "tool_executions": 2}  # fmt: skip
+    assert not {"tokens_in", "tokens_out", "tool_executions"} & set(per_run.get(hit, {}))  # cache hit: zero tokens
+    assert per_run[tok_cap]["tokens_in"] == 4000 and per_run[tok_cap]["tokens_out"] == 1000  # the provider billed it, the cap stopped the run
+    # the tenant sees the same numbers through the billing read API (a statement), with ITS read credential
+    st = await call(stack.billing, "GET", "/v1/usage/statement", token=a.read_token, params={"period": period})
+    assert st.status_code == 200, st.text
+    assert by_meter(st.json()["totals"]) == ledger
+    # and nothing of tenant B's is in tenant A's ledger
+    assert (await stack.ops("billing/totals", tenant_id=tenant_b().id, period=period))["totals"] == []
+
+
+async def test_11_replayed_conflicting_and_forged_usage_cannot_change_the_ledger(stack: Stack) -> None:
+    from axis_runtime.usage import project_event
+
+    a, b = tenant_a(), tenant_b()
+    period = current_period()
+    before = (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"]
+    full = S.runs[1]
+    events_ = await full.log.read(full.run_id)
+    proj = [p for e in events_ if (p := project_event(e)) is not None]
+
+    async def post(token: str | None, body: dict[str, Any]) -> httpx.Response:
+        return await call(stack.billing, "POST", "/v1/usage/run-events", token=token, json_body=body)
+
+    # replay: the same run sent again is a no-op (idempotency keys), reported as duplicates
+    again = await post(a.ingest_token, {"run_id": full.run_id, "events": proj})
+    assert again.status_code == 200 and again.json()["inserted"] == 0 and again.json()["duplicates"] >= 1
+    # a conflicting payload under an existing key is rejected and reported, never applied
+    tampered = json.loads(json.dumps(proj))
+    for p in tampered:
+        if p["type"] == "model_call":
+            p["data"]["output_tokens"] += 1_000_000
+    conflict = await post(a.ingest_token, {"run_id": full.run_id, "events": tampered})
+    assert conflict.status_code == 200 and conflict.json()["inserted"] == 0 and conflict.json()["conflicts"] >= 1
+    assert (await stack.ops("billing/conflicts", tenant_id=a.id))["conflicts"]
+    # forged usage for another tenant: the ingest token fixes the tenant
+    forged_events = json.loads(json.dumps(proj))
+    for p in forged_events:
+        if p["type"] == "run_started":
+            p["data"]["tenant_id"] = b.id
+    r = await post(a.ingest_token, {"run_id": full.run_id, "events": forged_events})
+    assert r.status_code == 403  # the run says it belongs to B, the credential says A
+    r = await post(a.ingest_token, {"tenant_id": b.id, "run_id": full.run_id, "events": proj})
+    assert r.status_code == 403  # a tenant named in the body is never honoured
+    r = await post(b.ingest_token, {"run_id": full.run_id, "events": proj})
+    assert r.status_code == 403  # B's runtime cannot bill A's run (run_started names A)
+    r = await call(stack.billing, "GET", "/v1/usage/statement", token=b.read_token, params={"period": period, "tenant_id": a.id})
+    assert r.status_code == 403
+    # credentials are scoped: read cannot ingest, ingest cannot read, anonymous gets nothing
+    assert (await post(a.read_token, {"run_id": full.run_id, "events": proj})).status_code == 403
+    assert (await call(stack.billing, "GET", "/v1/usage/statement", token=a.ingest_token, params={"period": period})).status_code == 403
+    assert (await post(None, {"run_id": full.run_id, "events": proj})).status_code == 401
+    # none of it changed anything
+    assert (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"] == before
+    assert (await stack.ops("billing/totals", tenant_id=b.id, period=period))["totals"] == []
+
+
+def next_month_start() -> datetime:
+    n = datetime.now(UTC)
+    return datetime(n.year + (n.month == 12), n.month % 12 + 1, 1, 0, 5, tzinfo=UTC)
+
+
+def rnd(numerator: int, per: int) -> int:
+    return (2 * numerator + per) // (2 * per)  # half up (all quantities are non-negative)
+
+
+async def test_12_period_close_seal_invoice_and_stripe_fake_reconcile_clean(stack: Stack) -> None:
+    a = tenant_a()
+    period = current_period()
+    totals_open = (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"]
+    # the month cannot be closed while it is running
+    early = await call(stack.ops_url, "POST", "/ops/billing/close", token=OPS_TOKEN, json_body={"tenant_id": a.id, "period": period})
+    assert early.status_code == 500 and "PERIOD_NOT_CLOSABLE" in early.text
+    await stack.ops("clock", iso=next_month_start().isoformat())
+    closed = await stack.ops("billing/close", tenant_id=a.id, period=period)
+    assert closed["seal"]["periodId"] == period and closed["seal"]["eventCount"] > 0
+    assert (await stack.ops("billing/verify-seal", tenant_id=a.id, period=period))["verdict"] == {"ok": True}
+    assert (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"] == totals_open  # sealing changes no number
+    # the invoice, rated with the price book, equals the invoice recomputed independently from the audit/run/provider numbers
+    want = await independent_expectation(stack, a)
+    price = {
+        "tokens_in": rnd(want["tokens_in"] * 3_000_000, 1_000_000),
+        "tokens_out": rnd(want["tokens_out"] * 15_000_000, 1_000_000),
+        "tool_executions": rnd(want["tool_executions"] * 1_000, 1),
+        "runtime_seconds": rnd(want["runtime_seconds"] * 100, 1_000),
+    }
+    inv = closed["invoice"]
+    lines = {ln["meter"]: int(ln["amountMicro"]) for ln in inv["lines"] if ln["meter"]}
+    assert lines == {k: v for k, v in price.items() if want[k] > 0}, (lines, price)
+    assert int(inv["totalMicro"]) == 10_000_000 + sum(price.values())  # + the $10 base fee
+    assert inv["warnings"] == [] and inv["revision"] == 1
+    # push to the Stripe FAKE (test mode) and reconcile: ledger vs provider usage vs our invoice vs the provider's invoice
+    pushed = await stack.ops("billing/push", tenant_id=a.id, period=period)
+    assert pushed["usage_events"] >= 3 and pushed["provider_invoice"]
+    state = await stack.ops("billing/provider-state", tenant_id=a.id)
+    assert {u["meter"]: int(u["quantity"]) for u in state["usage"] if u["meter"] != "runtime_seconds"} == {k: v for k, v in want.items() if k != "runtime_seconds"}
+    assert int(state["invoices"][0]["totalMinor"]) == rnd(int(inv["totalMicro"]), 10_000)
+    report = (await stack.ops("billing/reconcile", tenant_id=a.id, period=period))["report"]
+    assert report == {"tenantId": a.id, "periodId": period, "clean": True, "discrepancies": []}
+    # the statement shows the sealed period and the invoice
+    st = (await call(stack.billing, "GET", "/v1/usage/statement", token=a.read_token, params={"period": period})).json()
+    assert st["sealed"] is True and int(st["invoice"]["totalMicro"]) == int(inv["totalMicro"])
+
+
+async def test_13_injected_provider_faults_are_reported_and_never_silently_fixed(stack: Stack) -> None:
+    a = tenant_a()
+    period = current_period()
+    ledger_before = (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"]
+    await stack.ops("billing/inject", tenant_id=a.id, period=period, meter="tokens_in", kind="duplicate")
+    await stack.ops("billing/inject", tenant_id=a.id, period=period, meter="tool_executions", kind="drop")
+    await stack.ops("billing/inject", tenant_id=a.id, period=period, meter="tokens_out", kind="alter")
+    provider_before = await stack.ops("billing/provider-state", tenant_id=a.id)
+    rep = (await stack.ops("billing/reconcile", tenant_id=a.id, period=period))["report"]
+    assert rep["clean"] is False
+    kinds = {(d["kind"], d.get("meter")) for d in rep["discrepancies"]}
+    assert ("usage_duplicated_at_provider", "tokens_in") in kinds  # the duplicate record
+    assert ("usage_missing_at_provider", "tool_executions") in kinds  # the dropped event
+    assert ("usage_quantity_mismatch", "tokens_out") in kinds  # an altered quantity
+    # reconciliation is read-only: asking again gives the same answer, and neither side changed
+    assert (await stack.ops("billing/reconcile", tenant_id=a.id, period=period))["report"] == rep
+    assert await stack.ops("billing/provider-state", tenant_id=a.id) == provider_before
+    assert (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"] == ledger_before
+    assert (await stack.ops("billing/verify-seal", tenant_id=a.id, period=period))["verdict"] == {"ok": True}
+    st = (await call(stack.billing, "GET", "/v1/usage/statement", token=a.read_token, params={"period": period})).json()
+    assert st["invoice"]["revision"] == 1  # nothing re-rated the invoice behind our back

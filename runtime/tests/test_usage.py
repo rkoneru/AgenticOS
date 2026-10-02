@@ -233,3 +233,25 @@ async def test_a_run_emits_its_log_once_when_it_ends_and_a_failure_never_changes
         assert result.status == "completed"
         assert spy.calls == [f"run-usage-{fail}"]
     assert "usage emission failed" in caplog.text
+
+
+async def test_usage_of_a_cancelled_run_is_still_sent_and_the_cancellation_is_honoured() -> None:
+    import asyncio
+
+    from axis_runtime.run import emit_usage
+
+    sent: list[str] = []
+
+    class Slow:
+        async def emit_run(self, log: Any, run_id: str) -> dict[str, Any]:
+            await asyncio.sleep(0.05)
+            sent.append(run_id)
+            return {}
+
+    task = asyncio.ensure_future(emit_usage(Slow(), InMemoryRunEventLog(), "r-killed"))
+    await asyncio.sleep(0.01)
+    task.cancel()  # a supervisor killing the run while its usage is on the wire
+    task.cancel()  # and again: the send must still complete
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert sent == ["r-killed"]
