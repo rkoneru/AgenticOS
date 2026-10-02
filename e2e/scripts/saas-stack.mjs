@@ -142,7 +142,8 @@ const sealJson = (s) => ({ ...s, closedAt: s.closedAt.toISOString() });
 async function customerOf(tenantId) {
   let id = customers.get(tenantId);
   if (!id) {
-    id = (await provider.createCustomer({ tenantId, name: `e2e-${tenantId}` }, `cus:${tenantId}`)).id;
+    id = (await provider.createCustomer({ tenantId, name: `e2e-${tenantId}` }, `cus:${tenantId}`))
+      .id;
     customers.set(tenantId, id);
   }
   return id;
@@ -194,7 +195,11 @@ const ops = {
     const r = await billing.closeAndRate(b.tenant_id, b.period);
     return {
       seal: sealJson(r.seal),
-      invoice: { id: r.invoice.id, revision: r.invoice.revision, ...invoiceToJson(r.invoice.invoice) },
+      invoice: {
+        id: r.invoice.id,
+        revision: r.invoice.revision,
+        ...invoiceToJson(r.invoice.invoice),
+      },
     };
   },
   "billing/verify-seal": async (b) => ({ verdict: await ledger.verifySeal(b.tenant_id, b.period) }),
@@ -215,7 +220,7 @@ const ops = {
     const usage = await billing.pushUsage(b.tenant_id, b.period, customer);
     const latest = (await invoices.list(b.tenant_id, b.period)).at(-1);
     const invoice = latest
-      ? latest.providerInvoiceId ?? (await billing.pushInvoice(b.tenant_id, latest, customer))
+      ? (latest.providerInvoiceId ?? (await billing.pushInvoice(b.tenant_id, latest, customer)))
       : null;
     return { customer, usage_events: usage, provider_invoice: invoice };
   },
@@ -226,7 +231,9 @@ const ops = {
     usage: provider.usage
       .filter((u) => u.customerId === customers.get(b.tenant_id))
       .map((u) => ({ identifier: u.identifier, meter: u.meter, quantity: u.quantity })),
-    invoices: [...provider.invoices.values()].filter((i) => i.customerId === customers.get(b.tenant_id)),
+    invoices: [...provider.invoices.values()].filter(
+      (i) => i.customerId === customers.get(b.tenant_id),
+    ),
   }),
   "billing/inject": async (b) => {
     // Provider-side faults AFTER a clean push, as a flaky provider would produce them. Nothing here touches the ledger.
@@ -241,14 +248,20 @@ const ops = {
   },
   "billing/live-key": async (b) => {
     try {
-      new StripePaymentProvider({ apiKey: b.key, transport: { request: async () => ({ status: 500, body: "{}" }) } });
+      new StripePaymentProvider({
+        apiKey: b.key,
+        transport: { request: async () => ({ status: 500, body: "{}" }) },
+      });
       return { refused: false };
     } catch (e) {
       return { refused: true, code: e.code, echoed: String(e.message).includes(b.key) };
     }
   },
   "billing/conflicts": async (b) => ({ conflicts: await ledger.conflicts(b.tenant_id) }),
-  "cp/effective-policy": async (b) => ({ ...(await cp.policies.effective(b.tenant_id)), rego: undefined }),
+  "cp/effective-policy": async (b) => ({
+    ...(await cp.policies.effective(b.tenant_id)),
+    rego: undefined,
+  }),
 };
 
 const opsServer = http.createServer((req, res) => {
@@ -259,7 +272,8 @@ const opsServer = http.createServer((req, res) => {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(json(body));
     };
-    if (req.headers.authorization !== `Bearer ${cfg.ops_token}`) return send(401, { error: "unauthorized" });
+    if (req.headers.authorization !== `Bearer ${cfg.ops_token}`)
+      return send(401, { error: "unauthorized" });
     const name = (req.url ?? "").replace(/^\/ops\//, "");
     const op = ops[name];
     if (!op || req.method !== "POST") return send(404, { error: "no such op" });
