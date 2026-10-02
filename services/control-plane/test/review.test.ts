@@ -1,6 +1,5 @@
 // Independent Phase 6 review: regression tests for defects found by the adversarial reviewer.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
 import { CpError, type PackValidator } from "../src/index.js";
 import { KINDS, cachedValidator, eventsOf, makeWorld, type World } from "./world.js";
 
