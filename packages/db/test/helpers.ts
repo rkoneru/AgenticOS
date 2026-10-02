@@ -153,6 +153,47 @@ export async function seedTenant(
     "INSERT INTO memory_chunks (tenant_id, kb_id, scope, content, embedding) VALUES ($1, $2, 'kb', 'hello', $3::vector)",
     [t, kb.rows[0].id, `[${[1, ...Array<number>(1535).fill(0)].join(",")}]`],
   );
+  const mem = await q("SELECT id FROM members WHERE tenant_id = $1", [t]);
+  const memberId = mem.rows[0].id as string;
+  await q(
+    "INSERT INTO sessions (tenant_id, member_id, refresh_hash, auth_method, expires_at) VALUES ($1, $2, decode($3, 'hex'), 'dev', now() + interval '1 day')",
+    [t, memberId, H("1")],
+  );
+  const dir = await q(
+    "INSERT INTO directories (tenant_id, name, token_prefix, token_hash) VALUES ($1, 'd', $2, decode($3, 'hex')) RETURNING id",
+    [t, `scim_${slug}`, H("2")],
+  );
+  const grp = await q(
+    "INSERT INTO scim_groups (tenant_id, directory_id, display_name) VALUES ($1, $2, 'g') RETURNING id",
+    [t, dir.rows[0].id],
+  );
+  await q("INSERT INTO scim_group_members (tenant_id, group_id, member_id) VALUES ($1, $2, $3)", [
+    t,
+    grp.rows[0].id,
+    memberId,
+  ]);
+  await q(
+    "INSERT INTO directory_role_mappings (tenant_id, directory_id, group_name, role) VALUES ($1, $2, 'g', 'builder')",
+    [t, dir.rows[0].id],
+  );
+  await q(
+    "INSERT INTO identity_connections (tenant_id, idp_org_id, connection_type) VALUES ($1, $2, 'saml')",
+    [t, `org_${slug}`],
+  );
+  await q("INSERT INTO verified_domains (tenant_id, domain) VALUES ($1, $2)", [
+    t,
+    `${slug}.example.com`,
+  ]);
+  await q(
+    "INSERT INTO tenant_keys (tenant_id, version, kms_key_id, wrapped_dek) VALUES ($1, 1, 'k', '\\x01')",
+    [t],
+  );
+  await q(
+    "INSERT INTO policy_assignments (tenant_id, pack_id, version_id, activated_by) VALUES ($1, $2, (SELECT id FROM policy_pack_versions WHERE tenant_id = $1 LIMIT 1), 'seed')",
+    [t, pp.rows[0].id],
+  );
+  await q("INSERT INTO tenant_settings (tenant_id) VALUES ($1)", [t]);
+  await q("INSERT INTO tenant_placements (tenant_id) VALUES ($1)", [t]);
   return { runId };
 }
 

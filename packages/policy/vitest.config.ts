@@ -2,8 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    // Several tests shell out to the real `opa` binary (incl. the 73-case control-plane pack).
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     coverage: {
       provider: "v8",
       include: ["src/**"],

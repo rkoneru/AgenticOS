@@ -23,6 +23,17 @@ ADR for Stripe test mode only (0041). Status: Prototype (library + loopback dev 
 - **Verified:** 125 TypeScript tests on real Postgres 16 (see the report for coverage), `scripts-mutation.mjs` safety mutants,
   Python emitter tests, bypass scanner entry for `usage.py` only. NEEDS 163-178.
 
+## Phase 6 - Control plane (component A, `services/control-plane`)
+
+Prototype: built against fakes (IdP, KMS, DNS) and a real Postgres 16. Additive migration `0009_control_plane` (ADR 0020, `FREEZE.json`
+regenerated); frozen OpenAPI/proto/audit contracts unchanged (ADR 0021: the admin API is an internal `/admin/v1`, NEEDS #189).
+
+- IdP port with a FAKE; SSO callback (sealed login cookie, state, PKCE, nonce, org match, safe return URL), JIT limited to verified domains,
+  signed short-lived sessions with rotating refresh and server-side revocation; SCIM 2.0 Users/Groups with deprovision-revokes.
+- RBAC + ABAC on the policy toolchain (`policies/control-plane`, 73 golden cases in `make policy-test`), fail-closed; every admin mutation audited in the tenant chain.
+- Tenant admin: signup, members/roles, API keys, BYO keys (envelope encryption), policy pack assignment, budgets, retention, region pinning; `TenantRouter` over shared / dedicated database tiers.
+- 204 tests (memory and Postgres stores), 98% lines; `pnpm mutation`: 95 safety mutants killed. Gaps: NEEDS #179-#195.
+
 ## Phase 5 - Channels and voice (e2e integration)
 
 Components A (channels service) and B (voice pipeline) were built as libraries; this entry is the integration (component C, ADR

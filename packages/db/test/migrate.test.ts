@@ -24,6 +24,7 @@ describe("migration runner", () => {
       "0006_memory_service",
       "0007_channels",
       "0008_billing",
+      "0009_control_plane",
     ]);
     for (const x of m) expect(x.checksum).toMatch(/^[0-9a-f]{64}$/);
   });
