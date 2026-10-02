@@ -769,3 +769,26 @@ describe("HttpRunsPort against a stub run service", () => {
     void MemoryKillSwitchRecords;
   });
 });
+
+describe("audit list defence in depth", () => {
+  it("never relays a row of another tenant even if the store returns one", async () => {
+    const other = await makeWorld(open);
+    const o = await other.tenant();
+    const foreign = await seed(other);
+    const rows = await other.audit.listEvents(foreign.owner.tenantId, { limit: 10 });
+    const leaky = await makeWorld(open, {
+      auditLog: {
+        list: async () => rows,
+        head: async () => 1,
+        verify: async () => ({ ok: true, length: 1 }),
+      },
+    });
+    const me = await leaky.tenant();
+    const r = await call(leaky, "GET", "/audit/events", { token: me.token });
+    expect(r.status).toBe(200);
+    expect(r.body.items).toEqual([]);
+    void o;
+    await other.close();
+    await leaky.close();
+  });
+});
