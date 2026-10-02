@@ -1,6 +1,6 @@
 """Ergonomic clients: ``Axis`` (sync) and ``AsyncAxis``.
 
-The tenant is always derived from the credential by the server. There is deliberately no tenant argument.
+The tenant is always derived from the credential by the server; there is no tenant argument.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import asyncio
 import os
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -18,6 +18,7 @@ from ._generated.models import (
     Approval,
     ApprovalStatus,
     BlueprintVersion,
+    Decision,
     EvalRun,
     GateDecision,
     KillSwitch,
@@ -26,6 +27,7 @@ from ._generated.models import (
     RunEvent,
     Signal,
     StartRunRequest,
+    TestPolicyRequest,
 )
 from ._generated.operations import DEFAULT_BASE_URL, OPERATIONS
 from .errors import (
@@ -42,6 +44,7 @@ from .transport import AsyncHttpTransport, HttpTransport, TransportConfig
 from .transport_types import RequestOptions
 
 BlueprintRef = str | dict[str, str]
+UsageGroupBy = Literal["meter", "model", "blueprint", "day"]
 _TERMINAL: frozenset[str] = frozenset({"terminated"})
 _TENANT_KEYS = frozenset({"tenant", "tenant_id", "tenantid"})
 
@@ -68,7 +71,9 @@ def _config(
 ) -> TransportConfig:
     for k in kw:
         if k.lower() in _TENANT_KEYS:
-            raise TypeError("the tenant is derived from the credential; it cannot be passed to the client")
+            raise TypeError(
+                "the tenant is derived from the credential; it cannot be passed to the client"
+            )
     key = api_key if api_key is not None else (None if token else os.environ.get("AXIS_API_KEY"))
     if not key and not token:
         raise TypeError("an API key is required (api_key argument or AXIS_API_KEY)")
@@ -107,7 +112,7 @@ class Runs:
         idempotency_key: str | None = None,
         options: RequestOptions | None = None,
     ) -> Run:
-        """Start a run. Retried safely: an Idempotency-Key is generated once and reused across retries."""
+        """Start a run. Retries reuse one auto-generated Idempotency-Key."""
         body: StartRunRequest = {"blueprint": parse_blueprint_ref(blueprint)}
         if input is not None:
             body["input"] = input
@@ -125,7 +130,9 @@ class Runs:
         blueprint: str | None = None,
         options: RequestOptions | None = None,
     ) -> Any:
-        return self._ax.api.list_runs(limit=limit, cursor=cursor, state=state, blueprint=blueprint, options=options)
+        return self._ax.api.list_runs(
+            limit=limit, cursor=cursor, state=state, blueprint=blueprint, options=options
+        )
 
     def iterate(
         self,
@@ -137,7 +144,9 @@ class Runs:
         options: RequestOptions | None = None,
     ) -> Iterator[Run]:
         return paginate(
-            lambda c: dict(self.list(limit=limit, cursor=c, state=state, blueprint=blueprint, options=options)),
+            lambda c: dict(
+                self.list(limit=limit, cursor=c, state=state, blueprint=blueprint, options=options)
+            ),
             max_items,
         )
 
@@ -166,7 +175,9 @@ class Runs:
         options: RequestOptions | None = None,
     ) -> Any:
         """TERM by default (graceful); ``force`` sends KILL."""
-        return self.signal(run_id, "KILL" if force else "TERM", pid=pid, reason=reason, options=options)
+        return self.signal(
+            run_id, "KILL" if force else "TERM", pid=pid, reason=reason, options=options
+        )
 
     def events(
         self,
@@ -180,7 +191,9 @@ class Runs:
             run_id=run_id, after_sequence=after_sequence, limit=limit, options=options
         )
 
-    def all_events(self, run_id: str, *, options: RequestOptions | None = None) -> Iterator[RunEvent]:
+    def all_events(
+        self, run_id: str, *, options: RequestOptions | None = None
+    ) -> Iterator[RunEvent]:
         after = 0
         while True:
             page = self.events(run_id, after_sequence=after, options=options)
@@ -198,7 +211,7 @@ class Runs:
         poll_interval: float = 1.0,
         options: RequestOptions | None = None,
     ) -> Run:
-        """Poll until the run terminates; raises AxisWaitTimeoutError when ``timeout`` seconds elapse first."""
+        """Poll until the run terminates; AxisWaitTimeoutError after ``timeout`` seconds."""
         started = self._ax._clock()
         while True:
             run = self.get(run_id, options=options)
@@ -218,7 +231,7 @@ class Runs:
         reconnect_delay: float = 1.0,
         options: RequestOptions | None = None,
     ) -> Iterator[RunEvent]:
-        """Live typed events over SSE; reconnects with Last-Event-ID, skips duplicates, honours ``retry:``."""
+        """Live typed events over SSE; reconnects with Last-Event-ID and skips duplicates."""
         parser = SseParser()
         last = after_sequence
         failures = 0
@@ -229,7 +242,10 @@ class Runs:
                     OPERATIONS["listRunEvents"],
                     path={"runId": run_id},
                     query={"after_sequence": last},
-                    headers={"last-event-id": str(last), **dict((options.headers or {}) if options else {})},
+                    headers={
+                        "last-event-id": str(last),
+                        **dict((options.headers or {}) if options else {}),
+                    },
                     timeout=(options.timeout if options and options.timeout else 24 * 3600.0),
                 )
                 for chunk in chunks:
@@ -248,7 +264,7 @@ class Runs:
                 if self.get(run_id, options=options)["state"] in _TERMINAL:
                     return
             except AxisApiError as err:
-                if err.status is not None and not (err.status in (408, 429) or err.status >= 500):
+                if err.status is None or not (err.status in (408, 429) or err.status >= 500):
                     raise
                 failures = 1 if progressed else failures + 1
             except AxisConnectionError:
@@ -256,7 +272,8 @@ class Runs:
             if failures > max_reconnects:
                 raise AxisError(f"event stream for run {run_id} failed {failures} times in a row")
             delay = (
-                parser.retry / 1000 if parser.retry is not None
+                parser.retry / 1000
+                if parser.retry is not None
                 else min(reconnect_delay * 2 ** max(0, failures - 1), 10.0)
             )
             self._ax._sleep(delay)
@@ -266,39 +283,96 @@ class Blueprints:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
 
-    def list(self, *, limit: int | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> Any:
+    def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
         return self._ax.api.list_blueprints(limit=limit, cursor=cursor, options=options)
 
-    def iterate(self, *, limit: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> Iterator[BlueprintVersion]:
-        return paginate(lambda c: dict(self.list(limit=limit, cursor=c, options=options)), max_items)
+    def iterate(
+        self,
+        *,
+        limit: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Iterator[BlueprintVersion]:
+        return paginate(
+            lambda c: dict(self.list(limit=limit, cursor=c, options=options)), max_items
+        )
 
-    def get(self, name: str, version: str, *, options: RequestOptions | None = None) -> BlueprintVersion:
+    def get(
+        self, name: str, version: str, *, options: RequestOptions | None = None
+    ) -> BlueprintVersion:
         return self._ax.api.get_blueprint_version(name=name, version=version, options=options)
 
-    def publish(self, abl: dict[str, Any], *, idempotency_key: str | None = None, options: RequestOptions | None = None) -> BlueprintVersion:
-        return self._ax.api.publish_blueprint_version(body={"abl": abl}, idempotency_key=idempotency_key, options=options)
+    def publish(
+        self,
+        abl: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> BlueprintVersion:
+        return self._ax.api.publish_blueprint_version(
+            body={"abl": abl}, idempotency_key=idempotency_key, options=options
+        )
 
 
 class Approvals:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
 
-    def list(self, *, status: ApprovalStatus | None = None, limit: int | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> Any:
-        return self._ax.api.list_approvals(status=status, limit=limit, cursor=cursor, options=options)
+    def list(
+        self,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_approvals(
+            status=status, limit=limit, cursor=cursor, options=options
+        )
 
-    def iterate(self, *, status: ApprovalStatus | None = None, limit: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> Iterator[Approval]:
-        return paginate(lambda c: dict(self.list(status=status, limit=limit, cursor=c, options=options)), max_items)
+    def iterate(
+        self,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Iterator[Approval]:
+        return paginate(
+            lambda c: dict(self.list(status=status, limit=limit, cursor=c, options=options)),
+            max_items,
+        )
 
-    def decide(self, approval_id: str, decision: str, *, comment: str | None = None, idempotency_key: str | None = None, options: RequestOptions | None = None) -> Approval:
+    def decide(
+        self,
+        approval_id: str,
+        decision: str,
+        *,
+        comment: str | None = None,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Approval:
         if decision not in ("approve", "reject"):
             raise ValueError('decision must be "approve" or "reject"')
         body: Any = {"decision": decision, **_drop_none(comment=comment)}
-        return self._ax.api.decide_approval(approval_id=approval_id, body=body, idempotency_key=idempotency_key, options=options)
+        return self._ax.api.decide_approval(
+            approval_id=approval_id, body=body, idempotency_key=idempotency_key, options=options
+        )
 
-    def approve(self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None) -> Approval:
+    def approve(
+        self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None
+    ) -> Approval:
         return self.decide(approval_id, "approve", comment=comment, options=options)
 
-    def reject(self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None) -> Approval:
+    def reject(
+        self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None
+    ) -> Approval:
         return self.decide(approval_id, "reject", comment=comment, options=options)
 
 
@@ -306,31 +380,96 @@ class Policies:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
 
-    def list(self, *, limit: int | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> Any:
+    def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
         return self._ax.api.list_policy_packs(limit=limit, cursor=cursor, options=options)
 
-    def iterate(self, *, limit: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> Iterator[Any]:
-        return paginate(lambda c: dict(self.list(limit=limit, cursor=c, options=options)), max_items)
+    def iterate(
+        self,
+        *,
+        limit: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Iterator[Any]:
+        return paginate(
+            lambda c: dict(self.list(limit=limit, cursor=c, options=options)), max_items
+        )
 
     def publish(self, policy: dict[str, Any], *, options: RequestOptions | None = None) -> Any:
         return self._ax.api.publish_policy_pack(body={"policy": policy}, options=options)
 
-    def test(self, policy: dict[str, Any], request: dict[str, Any], *, options: RequestOptions | None = None) -> GateDecision:
+    def test(
+        self,
+        policy: dict[str, Any],
+        request: dict[str, Any],
+        *,
+        options: RequestOptions | None = None,
+    ) -> GateDecision:
         """Evaluate a hypothetical request against a policy without executing anything."""
-        return self._ax.api.test_policy(body={"policy": policy, "request": request}, options=options)  # type: ignore[typeddict-item]
+        return self._ax.api.test_policy(
+            body=cast("TestPolicyRequest", {"policy": policy, "request": request}), options=options
+        )
 
 
 class Audit:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
 
-    def events(self, *, limit: int | None = None, cursor: str | None = None, trace_id: str | None = None, decision: str | None = None, from_seq: int | None = None, options: RequestOptions | None = None) -> Any:
-        return self._ax.api.list_audit_events(limit=limit, cursor=cursor, trace_id=trace_id, decision=decision, from_seq=from_seq, options=options)  # type: ignore[arg-type]
+    def events(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        trace_id: str | None = None,
+        decision: Decision | None = None,
+        from_seq: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_audit_events(
+            limit=limit,
+            cursor=cursor,
+            trace_id=trace_id,
+            decision=decision,
+            from_seq=from_seq,
+            options=options,
+        )
 
-    def iterate(self, *, limit: int | None = None, trace_id: str | None = None, decision: str | None = None, from_seq: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> Iterator[Any]:
-        return paginate(lambda c: dict(self.events(limit=limit, cursor=c, trace_id=trace_id, decision=decision, from_seq=from_seq, options=options)), max_items)
+    def iterate(
+        self,
+        *,
+        limit: int | None = None,
+        trace_id: str | None = None,
+        decision: Decision | None = None,
+        from_seq: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Iterator[Any]:
+        return paginate(
+            lambda c: dict(
+                self.events(
+                    limit=limit,
+                    cursor=c,
+                    trace_id=trace_id,
+                    decision=decision,
+                    from_seq=from_seq,
+                    options=options,
+                )
+            ),
+            max_items,
+        )
 
-    def verify(self, *, from_seq: int | None = None, to_seq: int | None = None, options: RequestOptions | None = None) -> Any:
+    def verify(
+        self,
+        *,
+        from_seq: int | None = None,
+        to_seq: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
         body: Any = _drop_none(from_seq=from_seq, to_seq=to_seq) or None
         return self._ax.api.verify_audit_chain(body=body, options=options)
 
@@ -342,7 +481,15 @@ class KillSwitches:
     def list(self, *, options: RequestOptions | None = None) -> Any:
         return self._ax.api.list_kill_switches(options=options)
 
-    def set(self, scope: str, engaged: bool, *, target: str | None = None, reason: str | None = None, options: RequestOptions | None = None) -> KillSwitch:
+    def set(
+        self,
+        scope: str,
+        engaged: bool,
+        *,
+        target: str | None = None,
+        reason: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> KillSwitch:
         if scope not in ("tenant", "agent", "tool"):
             raise ValueError('scope must be "tenant", "agent" or "tool"')
         if scope != "tenant" and not target:
@@ -350,10 +497,24 @@ class KillSwitches:
         body: Any = {"scope": scope, "engaged": engaged, **_drop_none(target=target, reason=reason)}
         return self._ax.api.set_kill_switch(body=body, options=options)
 
-    def engage(self, scope: str, target: str | None = None, reason: str | None = None, *, options: RequestOptions | None = None) -> KillSwitch:
+    def engage(
+        self,
+        scope: str,
+        target: str | None = None,
+        reason: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> KillSwitch:
         return self.set(scope, True, target=target, reason=reason, options=options)
 
-    def release(self, scope: str, target: str | None = None, reason: str | None = None, *, options: RequestOptions | None = None) -> KillSwitch:
+    def release(
+        self,
+        scope: str,
+        target: str | None = None,
+        reason: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> KillSwitch:
         return self.set(scope, False, target=target, reason=reason, options=options)
 
 
@@ -361,16 +522,34 @@ class Usage:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
 
-    def get(self, from_: str, to: str, *, group_by: str | None = None, options: RequestOptions | None = None) -> Any:
-        return self._ax.api.get_usage(from_=from_, to=to, group_by=group_by, options=options)  # type: ignore[arg-type]
+    def get(
+        self,
+        from_: str,
+        to: str,
+        *,
+        group_by: UsageGroupBy | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.get_usage(from_=from_, to=to, group_by=group_by, options=options)
 
 
 class Evals:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
 
-    def start(self, suite: str, blueprint: BlueprintRef, *, idempotency_key: str | None = None, options: RequestOptions | None = None) -> EvalRun:
-        return self._ax.api.start_eval_run(body={"suite": suite, "blueprint": parse_blueprint_ref(blueprint)}, idempotency_key=idempotency_key, options=options)
+    def start(
+        self,
+        suite: str,
+        blueprint: BlueprintRef,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> EvalRun:
+        return self._ax.api.start_eval_run(
+            body={"suite": suite, "blueprint": parse_blueprint_ref(blueprint)},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
 
 
 class Axis:
@@ -392,8 +571,16 @@ class Axis:
         **extra: Any,
     ) -> None:
         cfg = _config(
-            api_key, token, base_url,
-            {"timeout": timeout, "max_retries": max_retries, "allow_insecure": allow_insecure, "on_response": on_response, **extra},
+            api_key,
+            token,
+            base_url,
+            {
+                "timeout": timeout,
+                "max_retries": max_retries,
+                "allow_insecure": allow_insecure,
+                "on_response": on_response,
+                **extra,
+            },
         )
         self._sleep = sleep
         self._clock = clock
@@ -443,7 +630,9 @@ class AsyncRuns:
         body: StartRunRequest = {"blueprint": parse_blueprint_ref(blueprint)}
         if input is not None:
             body["input"] = input
-        return await self._ax.api.start_run(body=body, idempotency_key=idempotency_key, options=options)
+        return await self._ax.api.start_run(
+            body=body, idempotency_key=idempotency_key, options=options
+        )
 
     async def get(self, run_id: str, *, options: RequestOptions | None = None) -> Run:
         return await self._ax.api.get_run(run_id=run_id, options=options)
@@ -457,7 +646,9 @@ class AsyncRuns:
         blueprint: str | None = None,
         options: RequestOptions | None = None,
     ) -> Any:
-        return await self._ax.api.list_runs(limit=limit, cursor=cursor, state=state, blueprint=blueprint, options=options)
+        return await self._ax.api.list_runs(
+            limit=limit, cursor=cursor, state=state, blueprint=blueprint, options=options
+        )
 
     def iterate(
         self,
@@ -469,7 +660,11 @@ class AsyncRuns:
         options: RequestOptions | None = None,
     ) -> AsyncIterator[Run]:
         async def page(c: str | None) -> dict[str, Any]:
-            return dict(await self.list(limit=limit, cursor=c, state=state, blueprint=blueprint, options=options))
+            return dict(
+                await self.list(
+                    limit=limit, cursor=c, state=state, blueprint=blueprint, options=options
+                )
+            )
 
         return apaginate(page, max_items)
 
@@ -484,7 +679,9 @@ class AsyncRuns:
         options: RequestOptions | None = None,
     ) -> Any:
         body: Any = {"signal": signal, **_drop_none(pid=pid, reason=reason)}
-        return await self._ax.api.signal_run(run_id=run_id, body=body, idempotency_key=idempotency_key, options=options)
+        return await self._ax.api.signal_run(
+            run_id=run_id, body=body, idempotency_key=idempotency_key, options=options
+        )
 
     async def cancel(
         self,
@@ -495,7 +692,9 @@ class AsyncRuns:
         pid: str | None = None,
         options: RequestOptions | None = None,
     ) -> Any:
-        return await self.signal(run_id, "KILL" if force else "TERM", pid=pid, reason=reason, options=options)
+        return await self.signal(
+            run_id, "KILL" if force else "TERM", pid=pid, reason=reason, options=options
+        )
 
     async def events(
         self,
@@ -505,9 +704,13 @@ class AsyncRuns:
         limit: int | None = None,
         options: RequestOptions | None = None,
     ) -> Any:
-        return await self._ax.api.list_run_events(run_id=run_id, after_sequence=after_sequence, limit=limit, options=options)
+        return await self._ax.api.list_run_events(
+            run_id=run_id, after_sequence=after_sequence, limit=limit, options=options
+        )
 
-    async def all_events(self, run_id: str, *, options: RequestOptions | None = None) -> AsyncIterator[RunEvent]:
+    async def all_events(
+        self, run_id: str, *, options: RequestOptions | None = None
+    ) -> AsyncIterator[RunEvent]:
         after = 0
         while True:
             page = await self.events(run_id, after_sequence=after, options=options)
@@ -521,7 +724,7 @@ class AsyncRuns:
         self,
         run_id: str,
         *,
-        timeout: float = 300.0,
+        timeout: float = 300.0,  # noqa: ASYNC109 - a deadline in seconds, not asyncio.timeout
         poll_interval: float = 1.0,
         options: RequestOptions | None = None,
     ) -> Run:
@@ -554,7 +757,10 @@ class AsyncRuns:
                     OPERATIONS["listRunEvents"],
                     path={"runId": run_id},
                     query={"after_sequence": last},
-                    headers={"last-event-id": str(last), **dict((options.headers or {}) if options else {})},
+                    headers={
+                        "last-event-id": str(last),
+                        **dict((options.headers or {}) if options else {}),
+                    },
                     timeout=(options.timeout if options and options.timeout else 24 * 3600.0),
                 )
                 async for chunk in chunks:
@@ -573,7 +779,7 @@ class AsyncRuns:
                 if (await self.get(run_id, options=options))["state"] in _TERMINAL:
                     return
             except AxisApiError as err:
-                if err.status is not None and not (err.status in (408, 429) or err.status >= 500):
+                if err.status is None or not (err.status in (408, 429) or err.status >= 500):
                     raise
                 failures = 1 if progressed else failures + 1
             except AxisConnectionError:
@@ -581,7 +787,8 @@ class AsyncRuns:
             if failures > max_reconnects:
                 raise AxisError(f"event stream for run {run_id} failed {failures} times in a row")
             delay = (
-                parser.retry / 1000 if parser.retry is not None
+                parser.retry / 1000
+                if parser.retry is not None
                 else min(reconnect_delay * 2 ** max(0, failures - 1), 10.0)
             )
             await self._ax._sleep(delay)
@@ -591,45 +798,97 @@ class AsyncBlueprints:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
 
-    async def list(self, *, limit: int | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> Any:
+    async def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
         return await self._ax.api.list_blueprints(limit=limit, cursor=cursor, options=options)
 
-    def iterate(self, *, limit: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> AsyncIterator[BlueprintVersion]:
+    def iterate(
+        self,
+        *,
+        limit: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> AsyncIterator[BlueprintVersion]:
         async def page(c: str | None) -> dict[str, Any]:
             return dict(await self.list(limit=limit, cursor=c, options=options))
 
         return apaginate(page, max_items)
 
-    async def get(self, name: str, version: str, *, options: RequestOptions | None = None) -> BlueprintVersion:
+    async def get(
+        self, name: str, version: str, *, options: RequestOptions | None = None
+    ) -> BlueprintVersion:
         return await self._ax.api.get_blueprint_version(name=name, version=version, options=options)
 
-    async def publish(self, abl: dict[str, Any], *, idempotency_key: str | None = None, options: RequestOptions | None = None) -> BlueprintVersion:
-        return await self._ax.api.publish_blueprint_version(body={"abl": abl}, idempotency_key=idempotency_key, options=options)
+    async def publish(
+        self,
+        abl: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> BlueprintVersion:
+        return await self._ax.api.publish_blueprint_version(
+            body={"abl": abl}, idempotency_key=idempotency_key, options=options
+        )
 
 
 class AsyncApprovals:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
 
-    async def list(self, *, status: ApprovalStatus | None = None, limit: int | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> Any:
-        return await self._ax.api.list_approvals(status=status, limit=limit, cursor=cursor, options=options)
+    async def list(
+        self,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_approvals(
+            status=status, limit=limit, cursor=cursor, options=options
+        )
 
-    def iterate(self, *, status: ApprovalStatus | None = None, limit: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> AsyncIterator[Approval]:
+    def iterate(
+        self,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> AsyncIterator[Approval]:
         async def page(c: str | None) -> dict[str, Any]:
             return dict(await self.list(status=status, limit=limit, cursor=c, options=options))
 
         return apaginate(page, max_items)
 
-    async def decide(self, approval_id: str, decision: str, *, comment: str | None = None, idempotency_key: str | None = None, options: RequestOptions | None = None) -> Approval:
+    async def decide(
+        self,
+        approval_id: str,
+        decision: str,
+        *,
+        comment: str | None = None,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Approval:
         if decision not in ("approve", "reject"):
             raise ValueError('decision must be "approve" or "reject"')
         body: Any = {"decision": decision, **_drop_none(comment=comment)}
-        return await self._ax.api.decide_approval(approval_id=approval_id, body=body, idempotency_key=idempotency_key, options=options)
+        return await self._ax.api.decide_approval(
+            approval_id=approval_id, body=body, idempotency_key=idempotency_key, options=options
+        )
 
-    async def approve(self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None) -> Approval:
+    async def approve(
+        self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None
+    ) -> Approval:
         return await self.decide(approval_id, "approve", comment=comment, options=options)
 
-    async def reject(self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None) -> Approval:
+    async def reject(
+        self, approval_id: str, comment: str | None = None, *, options: RequestOptions | None = None
+    ) -> Approval:
         return await self.decide(approval_id, "reject", comment=comment, options=options)
 
 
@@ -637,36 +896,98 @@ class AsyncPolicies:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
 
-    async def list(self, *, limit: int | None = None, cursor: str | None = None, options: RequestOptions | None = None) -> Any:
+    async def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
         return await self._ax.api.list_policy_packs(limit=limit, cursor=cursor, options=options)
 
-    def iterate(self, *, limit: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> AsyncIterator[Any]:
+    def iterate(
+        self,
+        *,
+        limit: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> AsyncIterator[Any]:
         async def page(c: str | None) -> dict[str, Any]:
             return dict(await self.list(limit=limit, cursor=c, options=options))
 
         return apaginate(page, max_items)
 
-    async def publish(self, policy: dict[str, Any], *, options: RequestOptions | None = None) -> Any:
+    async def publish(
+        self, policy: dict[str, Any], *, options: RequestOptions | None = None
+    ) -> Any:
         return await self._ax.api.publish_policy_pack(body={"policy": policy}, options=options)
 
-    async def test(self, policy: dict[str, Any], request: dict[str, Any], *, options: RequestOptions | None = None) -> GateDecision:
-        return await self._ax.api.test_policy(body={"policy": policy, "request": request}, options=options)  # type: ignore[typeddict-item]
+    async def test(
+        self,
+        policy: dict[str, Any],
+        request: dict[str, Any],
+        *,
+        options: RequestOptions | None = None,
+    ) -> GateDecision:
+        return await self._ax.api.test_policy(
+            body=cast("TestPolicyRequest", {"policy": policy, "request": request}), options=options
+        )
 
 
 class AsyncAudit:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
 
-    async def events(self, *, limit: int | None = None, cursor: str | None = None, trace_id: str | None = None, decision: str | None = None, from_seq: int | None = None, options: RequestOptions | None = None) -> Any:
-        return await self._ax.api.list_audit_events(limit=limit, cursor=cursor, trace_id=trace_id, decision=decision, from_seq=from_seq, options=options)  # type: ignore[arg-type]
+    async def events(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        trace_id: str | None = None,
+        decision: Decision | None = None,
+        from_seq: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_audit_events(
+            limit=limit,
+            cursor=cursor,
+            trace_id=trace_id,
+            decision=decision,
+            from_seq=from_seq,
+            options=options,
+        )
 
-    def iterate(self, *, limit: int | None = None, trace_id: str | None = None, decision: str | None = None, from_seq: int | None = None, max_items: int | None = None, options: RequestOptions | None = None) -> AsyncIterator[Any]:
+    def iterate(
+        self,
+        *,
+        limit: int | None = None,
+        trace_id: str | None = None,
+        decision: Decision | None = None,
+        from_seq: int | None = None,
+        max_items: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> AsyncIterator[Any]:
         async def page(c: str | None) -> dict[str, Any]:
-            return dict(await self.events(limit=limit, cursor=c, trace_id=trace_id, decision=decision, from_seq=from_seq, options=options))
+            return dict(
+                await self.events(
+                    limit=limit,
+                    cursor=c,
+                    trace_id=trace_id,
+                    decision=decision,
+                    from_seq=from_seq,
+                    options=options,
+                )
+            )
 
         return apaginate(page, max_items)
 
-    async def verify(self, *, from_seq: int | None = None, to_seq: int | None = None, options: RequestOptions | None = None) -> Any:
+    async def verify(
+        self,
+        *,
+        from_seq: int | None = None,
+        to_seq: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
         body: Any = _drop_none(from_seq=from_seq, to_seq=to_seq) or None
         return await self._ax.api.verify_audit_chain(body=body, options=options)
 
@@ -678,7 +999,15 @@ class AsyncKillSwitches:
     async def list(self, *, options: RequestOptions | None = None) -> Any:
         return await self._ax.api.list_kill_switches(options=options)
 
-    async def set(self, scope: str, engaged: bool, *, target: str | None = None, reason: str | None = None, options: RequestOptions | None = None) -> KillSwitch:
+    async def set(
+        self,
+        scope: str,
+        engaged: bool,
+        *,
+        target: str | None = None,
+        reason: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> KillSwitch:
         if scope not in ("tenant", "agent", "tool"):
             raise ValueError('scope must be "tenant", "agent" or "tool"')
         if scope != "tenant" and not target:
@@ -686,10 +1015,24 @@ class AsyncKillSwitches:
         body: Any = {"scope": scope, "engaged": engaged, **_drop_none(target=target, reason=reason)}
         return await self._ax.api.set_kill_switch(body=body, options=options)
 
-    async def engage(self, scope: str, target: str | None = None, reason: str | None = None, *, options: RequestOptions | None = None) -> KillSwitch:
+    async def engage(
+        self,
+        scope: str,
+        target: str | None = None,
+        reason: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> KillSwitch:
         return await self.set(scope, True, target=target, reason=reason, options=options)
 
-    async def release(self, scope: str, target: str | None = None, reason: str | None = None, *, options: RequestOptions | None = None) -> KillSwitch:
+    async def release(
+        self,
+        scope: str,
+        target: str | None = None,
+        reason: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> KillSwitch:
         return await self.set(scope, False, target=target, reason=reason, options=options)
 
 
@@ -697,16 +1040,34 @@ class AsyncUsage:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
 
-    async def get(self, from_: str, to: str, *, group_by: str | None = None, options: RequestOptions | None = None) -> Any:
-        return await self._ax.api.get_usage(from_=from_, to=to, group_by=group_by, options=options)  # type: ignore[arg-type]
+    async def get(
+        self,
+        from_: str,
+        to: str,
+        *,
+        group_by: UsageGroupBy | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.get_usage(from_=from_, to=to, group_by=group_by, options=options)
 
 
 class AsyncEvals:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
 
-    async def start(self, suite: str, blueprint: BlueprintRef, *, idempotency_key: str | None = None, options: RequestOptions | None = None) -> EvalRun:
-        return await self._ax.api.start_eval_run(body={"suite": suite, "blueprint": parse_blueprint_ref(blueprint)}, idempotency_key=idempotency_key, options=options)
+    async def start(
+        self,
+        suite: str,
+        blueprint: BlueprintRef,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> EvalRun:
+        return await self._ax.api.start_eval_run(
+            body={"suite": suite, "blueprint": parse_blueprint_ref(blueprint)},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
 
 
 class AsyncAxis:
@@ -728,8 +1089,16 @@ class AsyncAxis:
         **extra: Any,
     ) -> None:
         cfg = _config(
-            api_key, token, base_url,
-            {"timeout": timeout, "max_retries": max_retries, "allow_insecure": allow_insecure, "on_response": on_response, **extra},
+            api_key,
+            token,
+            base_url,
+            {
+                "timeout": timeout,
+                "max_retries": max_retries,
+                "allow_insecure": allow_insecure,
+                "on_response": on_response,
+                **extra,
+            },
         )
         self._sleep = sleep
         self._clock = clock

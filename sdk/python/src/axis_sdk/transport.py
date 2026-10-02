@@ -1,7 +1,7 @@
 """HTTP transports (sync + async) over httpx.
 
 Safety properties (each has a mutation-checked test):
-  * retries only for idempotent verbs or POSTs carrying an Idempotency-Key (auto-generated once per logical call);
+  * retries only for idempotent verbs or POSTs carrying an Idempotency-Key (one key per call);
   * credentials go only to the configured base origin; a redirect to another origin is refused;
   * the tenant is never a client input;
   * credentials never appear in repr(), exceptions or logs.
@@ -75,7 +75,9 @@ def origin(url: str) -> tuple[str, str, int | None]:
 
 def is_retriable(op: OperationSpec, idempotency_key: str | None) -> bool:
     """Safe to repeat? Idempotent verbs and keyed POSTs only; anything else is sent exactly once."""
-    return op.idempotent == "always" or (op.idempotent == "with-key" and idempotency_key is not None)
+    return op.idempotent == "always" or (
+        op.idempotent == "with-key" and idempotency_key is not None
+    )
 
 
 @dataclass(slots=True)
@@ -141,7 +143,9 @@ class _Core:
             if not isinstance(v, str) or v == "":
                 raise TypeError(f'{op.id}: missing path parameter "{name}"')
             rel = rel.replace("{" + name + "}", quote(v, safe=""))
-        url = urljoin(self.base, "." + rel)  # "./policies:test": a bare "policies:test" parses as a scheme
+        url = urljoin(
+            self.base, "." + rel
+        )  # "./policies:test": a bare "policies:test" parses as a scheme
         pairs = [(k, _qs(v)) for k, v in query.items() if v is not None and k in op.query_params]
         if pairs:
             url += "?" + "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in pairs)
@@ -169,8 +173,10 @@ class _Core:
                 raise TypeError(f'header "{k}" may not be set per request')
             headers[k.lower()] = v
         retriable = is_retriable(op, key)
-        max_retries = 0 if sse or not retriable else (
-            opts.max_retries if opts.max_retries is not None else cfg.max_retries
+        max_retries = (
+            0
+            if sse or not retriable
+            else (opts.max_retries if opts.max_retries is not None else cfg.max_retries)
         )
         return _Plan(
             op=op,
@@ -185,7 +191,9 @@ class _Core:
             sse=sse,
         )
 
-    def build_request(self, client: httpx.Client | httpx.AsyncClient, plan: _Plan, url: str) -> httpx.Request:
+    def build_request(
+        self, client: httpx.Client | httpx.AsyncClient, plan: _Plan, url: str
+    ) -> httpx.Request:
         return client.build_request(
             plan.method,
             url,
@@ -194,7 +202,9 @@ class _Core:
             timeout=plan.timeout,
         )
 
-    def redirect_target(self, current: str, status: int, location: str | None, hop: int) -> str | None:
+    def redirect_target(
+        self, current: str, status: int, location: str | None, hop: int
+    ) -> str | None:
         """Next URL for a redirect response, or None to treat the response as final."""
         if status not in _REDIRECT or not location:
             return None
@@ -220,7 +230,9 @@ class _Core:
             return AxisTimeoutError(f"{op.id}: request timed out")
         return AxisConnectionError(self.scrub(f"{op.id}: {type(exc).__name__}: {exc}"))
 
-    def meta(self, plan: _Plan, status: int, headers: Mapping[str, str], attempt: int, started: float) -> ResponseMeta:
+    def meta(
+        self, plan: _Plan, status: int, headers: Mapping[str, str], attempt: int, started: float
+    ) -> ResponseMeta:
         trace = headers.get("x-trace-id")
         if trace is None:
             m = _TRACEPARENT.match(headers.get("traceparent") or "")
@@ -239,7 +251,9 @@ class _Core:
         if cb is not None:
             cb(meta)
 
-    def problem(self, status: int, headers: Mapping[str, str], body: bytes, meta: ResponseMeta) -> AxisApiError:
+    def problem(
+        self, status: int, headers: Mapping[str, str], body: bytes, meta: ResponseMeta
+    ) -> AxisApiError:
         parsed: dict[str, Any] | None = None
         try:
             v = json.loads(body)
@@ -305,10 +319,14 @@ class HttpTransport:
         url, method, content = plan.url, plan.method, plan.content
         headers = dict(plan.headers)
         for hop in range(_MAX_REDIRECTS + 2):
-            req = self._client.build_request(method, url, headers=headers, content=content, timeout=plan.timeout)
+            req = self._client.build_request(
+                method, url, headers=headers, content=content, timeout=plan.timeout
+            )
             res = self._client.send(req, stream=stream, follow_redirects=False)
             try:
-                nxt = self._core.redirect_target(url, res.status_code, res.headers.get("location"), hop)
+                nxt = self._core.redirect_target(
+                    url, res.status_code, res.headers.get("location"), hop
+                )
             except AxisError:
                 res.close()
                 raise
@@ -365,10 +383,12 @@ class HttpTransport:
         path: Mapping[str, Any],
         query: Mapping[str, Any],
         headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109 - passed through to httpx
     ) -> Iterator[str]:
         """Open a text/event-stream response and yield decoded text chunks (single attempt)."""
-        plan = self._core.plan(op, path, query, None, None, RequestOptions(headers=headers, timeout=timeout), sse=True)
+        plan = self._core.plan(
+            op, path, query, None, None, RequestOptions(headers=headers, timeout=timeout), sse=True
+        )
         started = time.monotonic()
         try:
             res = self._send(plan, stream=True)
@@ -389,7 +409,9 @@ class HttpTransport:
         try:
             yield from res.iter_text()
         except httpx.HTTPError as exc:
-            raise AxisConnectionError(self._core.scrub(f"{op.id}: event stream interrupted: {exc}")) from None
+            raise AxisConnectionError(
+                self._core.scrub(f"{op.id}: event stream interrupted: {exc}")
+            ) from None
         finally:
             res.close()
 
@@ -423,10 +445,14 @@ class AsyncHttpTransport:
         url, method, content = plan.url, plan.method, plan.content
         headers = dict(plan.headers)
         for hop in range(_MAX_REDIRECTS + 2):
-            req = self._client.build_request(method, url, headers=headers, content=content, timeout=plan.timeout)
+            req = self._client.build_request(
+                method, url, headers=headers, content=content, timeout=plan.timeout
+            )
             res = await self._client.send(req, stream=stream, follow_redirects=False)
             try:
-                nxt = self._core.redirect_target(url, res.status_code, res.headers.get("location"), hop)
+                nxt = self._core.redirect_target(
+                    url, res.status_code, res.headers.get("location"), hop
+                )
             except AxisError:
                 await res.aclose()
                 raise
@@ -483,9 +509,11 @@ class AsyncHttpTransport:
         path: Mapping[str, Any],
         query: Mapping[str, Any],
         headers: Mapping[str, str] | None = None,
-        timeout: float | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109 - passed through to httpx
     ) -> AsyncIterator[str]:
-        plan = self._core.plan(op, path, query, None, None, RequestOptions(headers=headers, timeout=timeout), sse=True)
+        plan = self._core.plan(
+            op, path, query, None, None, RequestOptions(headers=headers, timeout=timeout), sse=True
+        )
         started = time.monotonic()
         try:
             res = await self._send(plan, stream=True)
@@ -507,6 +535,8 @@ class AsyncHttpTransport:
             async for chunk in res.aiter_text():
                 yield chunk
         except httpx.HTTPError as exc:
-            raise AxisConnectionError(self._core.scrub(f"{op.id}: event stream interrupted: {exc}")) from None
+            raise AxisConnectionError(
+                self._core.scrub(f"{op.id}: event stream interrupted: {exc}")
+            ) from None
         finally:
             await res.aclose()

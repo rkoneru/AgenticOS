@@ -16,7 +16,9 @@ from urllib.parse import unquote
 
 import httpx
 
-MODEL: dict[str, Any] = json.loads((Path(__file__).parent / "fixtures" / "mock-model.json").read_text())
+MODEL: dict[str, Any] = json.loads(
+    (Path(__file__).parent / "fixtures" / "mock-model.json").read_text()
+)
 OPS: list[dict[str, Any]] = MODEL["operations"]
 
 _PATTERN_SAMPLES = {
@@ -111,7 +113,9 @@ def validate(schema: dict[str, Any], value: Any, path: str = "$") -> list[str]:
         if schema.get("format") == "uuid" and not _UUID.match(value):
             errs.append(f"{path}: uuid")
     if isinstance(value, int | float) and not isinstance(value, bool):
-        if value < schema.get("minimum", float("-inf")) or value > schema.get("maximum", float("inf")):
+        if value < schema.get("minimum", float("-inf")) or value > schema.get(
+            "maximum", float("inf")
+        ):
             errs.append(f"{path}: range")
     if isinstance(value, list):
         for i, item in enumerate(value):
@@ -129,9 +133,19 @@ def validate(schema: dict[str, Any], value: Any, path: str = "$") -> list[str]:
     return errs
 
 
-def problem(status: int, code: str, headers: dict[str, str] | None = None, **extra: Any) -> httpx.Response:
-    body = {"type": f"https://axis.example/problems/{code}", "title": code.replace("_", " "), "status": status, "code": code, **extra}
-    return httpx.Response(status, json=body, headers={"content-type": "application/problem+json", **(headers or {})})
+def problem(
+    status: int, code: str, headers: dict[str, str] | None = None, **extra: Any
+) -> httpx.Response:
+    body = {
+        "type": f"https://axis.example/problems/{code}",
+        "title": code.replace("_", " "),
+        "status": status,
+        "code": code,
+        **extra,
+    }
+    return httpx.Response(
+        status, json=body, headers={"content-type": "application/problem+json", **(headers or {})}
+    )
 
 
 def sample_params(operation_id: str) -> dict[str, Any]:
@@ -141,7 +155,11 @@ def sample_params(operation_id: str) -> dict[str, Any]:
     for p in op["parameters"]:
         if p["in"] == "path" or (p["in"] == "query" and p.get("required")):
             out[p["name"]] = synthesize(p["schema"])
-    schema = ((op.get("requestBody") or {}).get("content") or {}).get("application/json", {}).get("schema")
+    schema = (
+        ((op.get("requestBody") or {}).get("content") or {})
+        .get("application/json", {})
+        .get("schema")
+    )
     if schema:
         out["body"] = synthesize(schema)
     return out
@@ -175,7 +193,7 @@ class MockServer:
         base = httpx.URL(self.base_url)
         if (url.scheme, url.host) != (base.scheme, base.host):
             raise httpx.ConnectError(f"mock: unexpected origin {url.host}")
-        rel = url.path[len(base.path):]
+        rel = url.raw_path.decode().split("?")[0][len(base.path) :]
         route = None
         for op in OPS:
             if op["method"] != request.method:
@@ -202,7 +220,9 @@ class MockServer:
             r = ov(call, n)
             if r is not None:
                 return r
-        cred = request.headers.get("x-axis-api-key") or re.sub(r"^Bearer ", "", request.headers.get("authorization", ""))
+        cred = request.headers.get("x-axis-api-key") or re.sub(
+            r"^Bearer ", "", request.headers.get("authorization", "")
+        )
         if not cred:
             return problem(401, "unauthenticated")
         names = re.findall(r"\{([^}]+)\}", op["path"])
@@ -248,12 +268,21 @@ class MockServer:
             bad("unexpected body")
         status = next(c for c in op["responses"] if re.match(r"^2\d\d$", c))
         content = op["responses"][status].get("content") or {}
-        if "text/event-stream" in request.headers.get("accept", "") and "text/event-stream" in content:
+        if (
+            "text/event-stream" in request.headers.get("accept", "")
+            and "text/event-stream" in content
+        ):
             ev = synthesize(content["application/json"]["schema"])["items"][0]
-            return httpx.Response(200, text=f"id: {ev['sequence']}\ndata: {json.dumps(ev)}\n\n", headers={"content-type": "text/event-stream"})
+            return httpx.Response(
+                200,
+                text=f"id: {ev['sequence']}\ndata: {json.dumps(ev)}\n\n",
+                headers={"content-type": "text/event-stream"},
+            )
         schema2 = (content.get("application/json") or {}).get("schema")
         if not schema2:
             return httpx.Response(int(status))
         value = synthesize(schema2)
         assert not validate(schema2, value), f"synthesized response invalid for {op['operationId']}"
-        return httpx.Response(int(status), json=value, headers={"x-request-id": f"req-{len(self.calls)}"})
+        return httpx.Response(
+            int(status), json=value, headers={"x-request-id": f"req-{len(self.calls)}"}
+        )

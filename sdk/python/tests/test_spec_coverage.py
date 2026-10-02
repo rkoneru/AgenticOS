@@ -6,17 +6,22 @@ from pathlib import Path
 
 import httpx
 import pytest
-from mock_server import MODEL, MockServer, sample_params
-
 from axis_sdk import OPERATIONS, AsyncAxis, Axis
 from axis_sdk._generated.client import GeneratedApi
+from mock_server import MODEL, MockServer, sample_params
 
 KEY = "axk_test_key_123456"
 RUN = "3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"
 
 
 def sync_client(server: MockServer, **kw: object) -> Axis:
-    return Axis(KEY, base_url=server.base_url, http_client=httpx.Client(transport=server.transport()), sleep=lambda _s: None, **kw)  # type: ignore[arg-type]
+    return Axis(
+        KEY,
+        base_url=server.base_url,
+        http_client=httpx.Client(transport=server.transport()),
+        sleep=lambda _s: None,
+        **kw,
+    )  # type: ignore[arg-type]
 
 
 def snake(op_id: str) -> str:
@@ -68,7 +73,12 @@ async def test_generated_async_method_sends_spec_valid_request(op_id: str) -> No
     async def noop(_s: float) -> None:
         return None
 
-    async with AsyncAxis(KEY, base_url=server.base_url, http_client=httpx.AsyncClient(transport=server.transport()), sleep=noop) as ax:
+    async with AsyncAxis(
+        KEY,
+        base_url=server.base_url,
+        http_client=httpx.AsyncClient(transport=server.transport()),
+        sleep=noop,
+    ) as ax:
         out = await getattr(ax.api, snake(op_id))(**_kwargs(op_id))
     assert server.violations == []
     assert [c.operation_id for c in server.calls] == [op_id]
@@ -88,12 +98,16 @@ ERGONOMIC = {
     "decideApproval": lambda ax: ax.approvals.approve(RUN, "ok"),
     "listPolicyPacks": lambda ax: ax.policies.list(),
     "publishPolicyPack": lambda ax: ax.policies.publish({"policy_version": "1"}),
-    "testPolicy": lambda ax: ax.policies.test({}, {"enforcement_point": "tool_call", "context": {}}),
+    "testPolicy": lambda ax: ax.policies.test(
+        {}, {"enforcement_point": "tool_call", "context": {}}
+    ),
     "listAuditEvents": lambda ax: ax.audit.events(from_seq=1),
     "verifyAuditChain": lambda ax: ax.audit.verify(from_seq=1, to_seq=9),
     "listKillSwitches": lambda ax: ax.kill_switches.list(),
     "setKillSwitch": lambda ax: ax.kill_switches.engage("agent", "agent-one", "drill"),
-    "getUsage": lambda ax: ax.usage.get("2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", group_by="day"),
+    "getUsage": lambda ax: ax.usage.get(
+        "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", group_by="day"
+    ),
     "startEvalRun": lambda ax: ax.evals.start("smoke", "agent-one@1.0.0"),
 }
 
@@ -117,7 +131,12 @@ async def test_ergonomic_async_layer_reaches_every_operation(op_id: str) -> None
     async def noop(_s: float) -> None:
         return None
 
-    async with AsyncAxis(KEY, base_url=server.base_url, http_client=httpx.AsyncClient(transport=server.transport()), sleep=noop) as ax:
+    async with AsyncAxis(
+        KEY,
+        base_url=server.base_url,
+        http_client=httpx.AsyncClient(transport=server.transport()),
+        sleep=noop,
+    ) as ax:
         await ERGONOMIC[op_id](ax)
     assert server.violations == []
     assert [c.operation_id for c in server.calls] == [op_id]
@@ -131,7 +150,13 @@ def test_generated_files_are_current() -> None:
     if node is None:
         pytest.skip("node not installed")
     root = Path(__file__).resolve().parents[3]
-    r = subprocess.run([node, "scripts/generate-sdks.mjs", "--check"], cwd=root, capture_output=True, text=True, check=False)  # noqa: S603
+    r = subprocess.run(  # noqa: S603
+        [node, "scripts/generate-sdks.mjs", "--check"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )  # noqa: S603
     assert r.returncode == 0, r.stderr
 
 
@@ -142,4 +167,6 @@ def test_idempotency_key_is_generated_or_passed_through() -> None:
     ax.runs.start("a-b@1", idempotency_key="my-own-key-1")
     assert len(server.calls[0].headers["idempotency-key"]) == 36
     assert server.calls[1].headers["idempotency-key"] == "my-own-key-1"
-    assert json.loads(json.dumps(server.calls[0].body)) == {"blueprint": {"name": "a-b", "version": "1"}}
+    assert json.loads(json.dumps(server.calls[0].body)) == {
+        "blueprint": {"name": "a-b", "version": "1"}
+    }

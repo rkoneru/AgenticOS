@@ -168,7 +168,8 @@ def error_from_problem(
     slug = problem_slug(problem)
     title = (problem or {}).get("title") or f"HTTP {status}"
     detail = (problem or {}).get("detail")
-    message = f"{title}{': ' + str(detail) if detail else ''} (HTTP {status}{', ' + slug if slug else ''})"
+    tail = f"HTTP {status}{', ' + slug if slug else ''}"
+    message = f"{title}{': ' + str(detail) if detail else ''} ({tail})"
     cls = _BY_SLUG.get(slug or "")
     if cls is None:
         cls = _BY_STATUS.get(status) or (InternalServerError if status >= 500 else AxisApiError)

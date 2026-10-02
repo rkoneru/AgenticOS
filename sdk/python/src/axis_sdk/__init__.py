@@ -1,10 +1,10 @@
-"""AXIS Python SDK: a generated, typed layer (``axis_sdk._generated``) and an ergonomic client on top."""
+"""AXIS Python SDK: a generated typed layer plus an ergonomic client on top."""
 
 from __future__ import annotations
 
 from ._generated.models import *  # noqa: F403 - re-export the wire types
 from ._generated.operations import API_VERSION, DEFAULT_BASE_URL, OPERATIONS, OperationSpec
-from .client import Axis, AsyncAxis, parse_blueprint_ref
+from .client import AsyncAxis, Axis, parse_blueprint_ref
 from .errors import (
     ApprovalRequiredError,
     AuthenticationError,
