@@ -7,8 +7,9 @@ export function proxy(req: NextRequest): NextResponse {
   const { pathname, search } = req.nextUrl;
   const dev = process.env.NODE_ENV !== "production";
   const nonce = newNonce();
-  const csp = buildCsp(nonce, { dev });
-  const sec = securityHeaders(csp, { https: !dev && process.env["AXIS_INSECURE_HTTP"] !== "1" });
+  const insecureHttp = process.env["AXIS_INSECURE_HTTP"] === "1";
+  const csp = buildCsp(nonce, { dev, insecureHttp });
+  const sec = securityHeaders(csp, { https: !dev && !insecureHttp });
 
   // Optimistic gate only: the control plane validates the session on every API call.
   const isApi = pathname.startsWith("/api/");

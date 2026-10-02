@@ -1,6 +1,9 @@
 /** Security headers and CSP for every response (see `proxy.ts`). */
 
-export function buildCsp(nonce: string, opts: { dev?: boolean } = {}): string {
+export function buildCsp(
+  nonce: string,
+  opts: { dev?: boolean; insecureHttp?: boolean } = {},
+): string {
   const dev = opts.dev ?? false;
   const directives: Array<[string, string[]]> = [
     ["default-src", ["'self'"]],
@@ -21,7 +24,7 @@ export function buildCsp(nonce: string, opts: { dev?: boolean } = {}): string {
     ["manifest-src", ["'self'"]],
   ];
   const out = directives.map(([k, v]) => `${k} ${v.join(" ")}`);
-  if (!dev) out.push("upgrade-insecure-requests");
+  if (!dev && !opts.insecureHttp) out.push("upgrade-insecure-requests");
   return out.join("; ");
 }
 

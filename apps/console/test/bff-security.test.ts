@@ -105,6 +105,9 @@ describe("security", () => {
     expect(csp).not.toContain("unsafe-eval");
     expect(csp).not.toContain("unsafe-inline");
   });
+  it("omits upgrade-insecure-requests for explicit insecure-http test deployments", () => {
+    expect(buildCsp("abc", { insecureHttp: true })).not.toContain("upgrade-insecure-requests");
+  });
   it("relaxes only for dev", () => {
     const csp = buildCsp("abc", { dev: true });
     expect(csp).toContain("'unsafe-eval'");
