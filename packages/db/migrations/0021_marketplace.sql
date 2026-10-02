@@ -1,16 +1,10 @@
--- 0021: marketplace documents for services/marketplace (docs/adr/0031). ADDITIVE: one new table + two helper functions.
+-- 0021: marketplace documents for services/marketplace (docs/adr/0031). ADDITIVE: one new table (axis.is_platform/set_platform are in 0020).
 -- Collections (publishers, evidence, listings, reviews, events, installs, takedowns, baselines, metering) share one table with FORCED RLS.
 -- Three read/write paths, all explicit in code and all visible here:
 --   tenant    : tenant_id = current tenant (set per transaction by the service from the CREDENTIAL, never from a request)
 --   platform  : axis.platform = 'on' (set ONLY by the reviewer/moderator/catalog code paths of the marketplace service)
 --   catalog   : SELECT of listings whose status is 'listed' (anonymous catalog reads set neither tenant nor platform)
 -- Nothing is deleted. Append-only collections (events, evidence, takedowns) also forbid UPDATE.
-
-CREATE FUNCTION axis.is_platform() RETURNS boolean
-LANGUAGE sql STABLE AS $$ SELECT coalesce(current_setting('axis.platform', true), '') = 'on' $$;
-CREATE FUNCTION axis.set_platform(on_ boolean) RETURNS void
-LANGUAGE sql AS $$ SELECT set_config('axis.platform', CASE WHEN on_ THEN 'on' ELSE 'off' END, true) $$;
-GRANT EXECUTE ON FUNCTION axis.is_platform(), axis.set_platform(boolean) TO axis_app;
 
 CREATE TABLE marketplace_docs (
   tenant_id   uuid NOT NULL REFERENCES tenants (id),
@@ -25,7 +19,7 @@ CREATE TABLE marketplace_docs (
 CREATE INDEX marketplace_docs_state_idx ON marketplace_docs (coll, (data ->> 'state'));
 CREATE INDEX marketplace_docs_listing_idx ON marketplace_docs (coll, (data ->> 'namespace'), (data ->> 'name'));
 
-CREATE FUNCTION axis.marketplace_docs_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION axis.marketplace_docs_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'DELETE on marketplace_docs is forbidden' USING ERRCODE = 'insufficient_privilege';

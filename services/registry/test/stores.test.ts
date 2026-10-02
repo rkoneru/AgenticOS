@@ -85,6 +85,16 @@ describe("Postgres RLS, directly", () => {
         `INSERT INTO registry_versions (namespace,name,version,tenant_id,abl,content_hash,risk_level,signature,provenance,published_at,published_by) VALUES ('${ns}','agent-one','9.9.9','${b}','{}','${"a".repeat(64)}','minimal','{}','{}',now(),'x')`,
       ),
     ).rejects.toThrow();
+    // a private namespace's own row is invisible to other tenants and to anonymous readers
+    expect(
+      (await as(b, `SELECT * FROM registry_namespaces WHERE namespace = '${ns}'`)).rowCount,
+    ).toBe(0);
+    expect(
+      (await as(null, `SELECT * FROM registry_namespaces WHERE namespace = '${ns}'`)).rowCount,
+    ).toBe(0);
+    expect(
+      (await as(a, `SELECT * FROM registry_namespaces WHERE namespace = '${ns}'`)).rowCount,
+    ).toBe(1);
     // an unlisted namespace never leaks, whatever the query
     expect((await as(b, `SELECT * FROM registry_keys WHERE namespace = '${ns}'`)).rowCount).toBe(0);
     // even the table owner / superuser cannot rewrite or delete a published version (trigger, not just missing grants)

@@ -3,6 +3,14 @@
 -- registry_public_namespaces, everything in it is READABLE by every tenant and by anonymous catalog readers (no tenant set).
 -- Writes are always the owner's (WITH CHECK tenant_id = current tenant). Versions are immutable and nothing is ever deleted.
 
+-- Marketplace/platform staff context (transaction-local, set ONLY by the platform code paths of the registry and marketplace services).
+-- Tenant-path code never sets it. Functions in schema axis pin search_path (hardening test).
+CREATE FUNCTION axis.is_platform() RETURNS boolean
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$ SELECT coalesce(current_setting('axis.platform', true), '') = 'on' $$;
+CREATE FUNCTION axis.set_platform(on_ boolean) RETURNS void
+LANGUAGE sql SET search_path = pg_catalog, pg_temp AS $$ SELECT set_config('axis.platform', CASE WHEN on_ THEN 'on' ELSE 'off' END, true) $$;
+GRANT EXECUTE ON FUNCTION axis.is_platform(), axis.set_platform(boolean) TO axis_app;
+
 CREATE TABLE registry_namespaces (
   namespace   text PRIMARY KEY CHECK (namespace ~ '^[a-z][a-z0-9-]{1,62}$' AND namespace !~ '-$' AND namespace !~ '--'),
   tenant_id   uuid NOT NULL REFERENCES tenants (id),
@@ -14,15 +22,13 @@ CREATE TRIGGER registry_namespaces_immutable BEFORE UPDATE OR DELETE ON registry
   FOR EACH ROW EXECUTE FUNCTION axis.forbid_mutation();
 ALTER TABLE registry_namespaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registry_namespaces FORCE ROW LEVEL SECURITY;
--- Namespace names are global (uniqueness, typosquat checks), so existence is readable; contents are protected by their own tables.
-CREATE POLICY ns_read ON registry_namespaces FOR SELECT USING (true);
 CREATE POLICY ns_insert ON registry_namespaces FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
 GRANT SELECT, INSERT ON registry_namespaces TO axis_app;
 
 -- True when `t` is the current tenant AND owns namespace `ns`: the write check for every table of a namespace. (A tenant could otherwise
 -- write rows tagged with its own id into somebody else's namespace.) Plain SQL over registry_namespaces, whose names are world-readable.
 CREATE FUNCTION axis.registry_owns(ns text, t uuid) RETURNS boolean
-LANGUAGE sql STABLE AS $$
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
   SELECT t = axis.current_tenant() AND EXISTS (SELECT 1 FROM public.registry_namespaces n WHERE n.namespace = ns AND n.tenant_id = t)
 $$;
 GRANT EXECUTE ON FUNCTION axis.registry_owns(text, uuid) TO axis_app;
@@ -41,9 +47,15 @@ CREATE POLICY pub_read ON registry_public_namespaces FOR SELECT USING (true);
 CREATE POLICY pub_insert ON registry_public_namespaces FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
 GRANT SELECT, INSERT ON registry_public_namespaces TO axis_app;
 
+-- Visible to the owner, to everyone once public, and to the platform path (the marketplace looks up owners). Name UNIQUE constraints still
+-- reject a claim on a taken name whatever is visible.
+CREATE POLICY ns_read ON registry_namespaces FOR SELECT USING (
+  tenant_id = axis.current_tenant() OR axis.is_platform()
+  OR EXISTS (SELECT 1 FROM public.registry_public_namespaces p WHERE p.namespace = registry_namespaces.namespace));
+
 -- True when the row belongs to the current tenant or lives in a public namespace. Plain SQL: inlined, evaluated under the caller's RLS.
 CREATE FUNCTION axis.registry_visible(ns text, owner uuid) RETURNS boolean
-LANGUAGE sql STABLE AS $$
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
   SELECT owner = axis.current_tenant() OR EXISTS (SELECT 1 FROM public.registry_public_namespaces p WHERE p.namespace = ns)
 $$;
 GRANT EXECUTE ON FUNCTION axis.registry_visible(text, uuid) TO axis_app;
@@ -64,7 +76,7 @@ CREATE TABLE registry_keys (
   CHECK ((revoked_at IS NULL) = (revoke_reason IS NULL)),
   CHECK (valid_until IS NULL OR valid_until > valid_from)
 );
-CREATE FUNCTION axis.registry_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION axis.registry_key_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'DELETE on registry_keys is forbidden' USING ERRCODE = 'insufficient_privilege';

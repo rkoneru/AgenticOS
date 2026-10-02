@@ -16,6 +16,8 @@ import {
 let c: pg.Client;
 let runA: string;
 let tenantTables: string[];
+/** Readable by every tenant and by anonymous readers BY DESIGN (public registry namespaces and their rows, migration 0020; the seed's private namespace is checked by the loop through the child tables, and services/registry tests cover the namespace table's private rows). */
+const PUBLIC_BY_DESIGN = new Set(["registry_public_namespaces", "registry_namespaces"]);
 
 beforeAll(async () => {
   c = await connect();
@@ -102,7 +104,7 @@ describe("cross-tenant isolation at the database layer", () => {
             .rows[0].n as number,
         }));
         expect(own, `${t} own`).toBeGreaterThanOrEqual(1);
-        expect(foreign, `${t} foreign`).toBe(0);
+        if (!PUBLIC_BY_DESIGN.has(t)) expect(foreign, `${t} foreign`).toBe(0);
       }
     }
   });
@@ -113,7 +115,7 @@ describe("cross-tenant isolation at the database layer", () => {
         c,
         async (x) => (await x.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n as number,
       );
-      expect(n, t).toBe(0);
+      if (!PUBLIC_BY_DESIGN.has(t)) expect(n, t).toBe(0);
     }
   });
 

@@ -148,12 +148,16 @@ export class PgRegistryStore implements RegistryStore {
     // Namespace names are readable by everyone (global uniqueness); hide the record unless the viewer may see the namespace.
     return row && (row.is_public || row.tenant_id === viewer.tenantId) ? toNs(row) : undefined;
   }
+  /** Platform path (marketplace moderation needs the owner of any namespace); the namespace name is not secret but its row is RLS-protected. */
   async ownerOf(namespace: string): Promise<string | undefined> {
-    const r = await this.tx(null, (c) =>
-      c.query<{ tenant_id: string }>(
-        "SELECT tenant_id FROM registry_namespaces WHERE namespace = $1",
-        [namespace],
-      ),
+    const r = await inTx(
+      this.o.pool,
+      { tenantId: null, platform: true, ...(this.o.role ? { role: this.o.role } : {}) },
+      (c) =>
+        c.query<{ tenant_id: string }>(
+          "SELECT tenant_id FROM registry_namespaces WHERE namespace = $1",
+          [namespace],
+        ),
     );
     return r.rows[0]?.tenant_id;
   }
