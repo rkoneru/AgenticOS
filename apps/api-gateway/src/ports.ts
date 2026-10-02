@@ -1,0 +1,257 @@
+import type { AuditEvent, ChainVerdict } from "@axis/contracts";
+import type { Principal, Role } from "@axis/control-plane";
+
+export type { Principal, Role };
+
+/** The OpenAPI shapes the ports return (field names are the wire names). */
+export interface BlueprintVersionDto {
+  name: string;
+  version: string;
+  risk_level: "minimal" | "limited" | "high";
+  content_hash: string;
+  signature: string | null;
+  created_at: string;
+  abl: unknown;
+}
+export interface RunDto {
+  id: string;
+  init_pid?: string;
+  blueprint: { name: string; version: string };
+  state: string;
+  exit_reason?: string | null;
+  trace_id?: string;
+  created_at: string;
+  finished_at?: string | null;
+}
+export interface RunEventDto {
+  sequence: number;
+  type: string;
+  pid: string;
+  at: string;
+  audit_event_id?: string;
+  data?: Record<string, unknown>;
+}
+export interface ApprovalDto {
+  id: string;
+  status: "pending" | "approved" | "rejected" | "expired" | "escalated";
+  run_id: string;
+  pid?: string;
+  action?: string;
+  roles?: string[];
+  requested_at: string;
+  sla_deadline: string;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  comment?: string | null;
+}
+export interface PolicyPackDto {
+  name: string;
+  version: string;
+  content_hash?: string;
+  created_at: string;
+}
+export interface KillSwitchDto {
+  scope: "global" | "tenant" | "agent" | "tool";
+  target?: string | null;
+  engaged: boolean;
+  reason?: string | null;
+  updated_at: string;
+}
+export interface GateDecisionDto {
+  decision: "ALLOW" | "DENY" | "REQUIRE_APPROVAL" | "ALLOW_WITH_REDACTION";
+  policy_version: string;
+  reason?: string;
+  matched_rule_ids?: string[];
+  redact_fields?: string[];
+}
+export interface UsageRowDto {
+  meter: string;
+  quantity: number;
+  unit: string;
+  group?: string;
+}
+export interface Page<T> {
+  items: T[];
+  /** Opaque position token the PORT understands; the gateway wraps it into a signed cursor. */
+  next?: string | undefined;
+}
+
+/** Thrown by a port for "this tenant has no such thing"; the gateway turns it into 404 (same as a foreign id). */
+export class PortNotFound extends Error {}
+/** Thrown by a port for a state conflict (duplicate version, illegal signal, already decided). */
+export class PortConflict extends Error {}
+/** Thrown by a port for a refusal the caller can fix (bad input the schema cannot see). */
+export class PortInvalid extends Error {
+  constructor(
+    message: string,
+    readonly issues: { path: string; message: string; keyword?: string }[] = [],
+  ) {
+    super(message);
+  }
+}
+/** Thrown by a port when a dependency is down: the gateway answers 503 and the caller retries. */
+export class PortUnavailable extends Error {}
+/** Thrown by a port when the operation is not permitted for this caller for reasons the role matrix cannot see. */
+export class PortForbidden extends Error {}
+
+// ---- authentication ------------------------------------------------------------------------------------------------
+
+export interface Authenticator {
+  /** The principal for a presented credential, or undefined. Throws only when a dependency is down (-> 503). */
+  authenticate(c: { bearer?: string; apiKey?: string }): Promise<Principal | undefined>;
+}
+
+// ---- authorization -------------------------------------------------------------------------------------------------
+
+export interface AuthzDecisionLike {
+  allowed: boolean;
+  reason: string;
+  policyVersion: string;
+}
+export interface Authz {
+  decide(p: Principal, action: string): Promise<AuthzDecisionLike>;
+}
+
+/** Audit of API mutations and denials (the control plane's `AdminAudit`). Throws when the chain cannot be appended. */
+export interface ApiAudit {
+  record(e: {
+    tenantId: string;
+    actor: { type: "human" | "system"; id: string };
+    action: string;
+    decision: "ALLOW" | "DENY";
+    policyVersion: string;
+    reason: string;
+    inputs: unknown;
+    outputs: unknown;
+    traceId: string;
+  }): Promise<unknown>;
+}
+
+// ---- domain ports ----------------------------------------------------------------------------------------------------
+
+export interface BlueprintStore {
+  /** Immutable once published; duplicate name@version throws PortConflict. */
+  publish(tenantId: string, v: BlueprintVersionDto): Promise<BlueprintVersionDto>;
+  list(tenantId: string, q: { limit: number; after?: string }): Promise<Page<BlueprintVersionDto>>;
+  get(tenantId: string, name: string, version: string): Promise<BlueprintVersionDto | undefined>;
+}
+
+export interface StartRun {
+  tenantId: string;
+  runId: string;
+  traceId: string;
+  blueprint: { name: string; version: string };
+  /** The compiled RuntimeManifest (ABL -> manifest happens in the gateway with the TS compiler). */
+  manifest: unknown;
+  input: Record<string, unknown>;
+  principal: { memberId: string; role: string };
+}
+
+export interface RunsPort {
+  start(r: StartRun): Promise<RunDto>;
+  get(tenantId: string, runId: string): Promise<RunDto | undefined>;
+  list(
+    tenantId: string,
+    q: { limit: number; after?: string; state?: string; blueprint?: string },
+  ): Promise<Page<RunDto>>;
+  signal(
+    tenantId: string,
+    runId: string,
+    s: { pid?: string; signal: string; reason?: string },
+  ): Promise<{ pid: string; state: string }>;
+  events(
+    tenantId: string,
+    runId: string,
+    q: { afterSequence: number; limit: number },
+  ): Promise<RunEventDto[] | undefined>;
+  /** Live feed after `afterSequence`; ends when the run is terminal and drained, or when `signal` aborts. */
+  stream(
+    tenantId: string,
+    runId: string,
+    afterSequence: number,
+    signal: AbortSignal,
+  ): AsyncIterable<RunEventDto>;
+}
+
+export interface ApprovalsPort {
+  list(
+    p: Principal,
+    q: { status?: ApprovalDto["status"]; limit: number; after?: string },
+  ): Promise<Page<ApprovalDto>>;
+  decide(
+    p: Principal,
+    id: string,
+    d: { decision: "approve" | "reject"; comment?: string },
+  ): Promise<ApprovalDto>;
+}
+
+export interface PolicyPort {
+  list(p: Principal, q: { limit: number; after?: string }): Promise<Page<PolicyPackDto>>;
+  publish(p: Principal, doc: unknown): Promise<PolicyPackDto>;
+  test(
+    p: Principal,
+    q: { policy: unknown; request: { enforcement_point: string; action?: string; context: Record<string, unknown> } },
+  ): Promise<GateDecisionDto>;
+}
+
+export interface AuditPort {
+  list(
+    tenantId: string,
+    q: { fromSeq?: number; traceId?: string; limit: number },
+  ): Promise<AuditEvent[]>;
+  /** Highest seq in the tenant's chain (0 when empty). */
+  head(tenantId: string): Promise<number>;
+  verify(tenantId: string, range: { fromSeq?: number; toSeq?: number }): Promise<ChainVerdict>;
+}
+
+export interface KillSwitchPort {
+  list(tenantId: string): Promise<KillSwitchDto[]>;
+  set(
+    p: Principal,
+    r: { scope: "tenant" | "agent" | "tool"; target?: string; engaged: boolean; reason?: string },
+  ): Promise<KillSwitchDto>;
+}
+
+export interface UsagePort {
+  query(
+    tenantId: string,
+    q: { from: Date; to: Date; groupBy?: "meter" | "model" | "blueprint" | "day" },
+  ): Promise<UsageRowDto[]>;
+}
+
+export interface ExplainPort {
+  explainRun(tenantId: string, q: { traceId: string; runEvents: RunEventDto[] }): Promise<unknown>;
+  explainEvent(tenantId: string, seq: number): Promise<unknown | undefined>;
+}
+
+// ---- cross-cutting -----------------------------------------------------------------------------------------------------
+
+export interface IdempotencyEntry {
+  fingerprint: string;
+  state: "in_progress" | "done";
+  response?: StoredResponse;
+  expiresAt: number;
+}
+export interface StoredResponse {
+  status: number;
+  body: unknown;
+  headers: Record<string, string>;
+}
+export type IdemBegin =
+  | { kind: "new" }
+  | { kind: "replay"; response: StoredResponse }
+  | { kind: "mismatch" }
+  | { kind: "in_progress" };
+
+export interface IdempotencyStore {
+  /** Atomically: absent -> reserve (`new`); present with another fingerprint -> `mismatch`; in flight -> `in_progress`; done -> `replay`. */
+  begin(scope: string, key: string, fingerprint: string, ttlMs: number): Promise<IdemBegin>;
+  complete(scope: string, key: string, response: StoredResponse): Promise<void>;
+  /** Releases a reservation (the request failed in a way that must be retryable). */
+  abort(scope: string, key: string): Promise<void>;
+}
+
+export interface RateLimiter {
+  /** Takes `cost` tokens from the bucket of `key`. */
+  take(key: string, cost: number): { ok: boolean; limit: number; remaining: number; retryAfterSec: number };
+}
