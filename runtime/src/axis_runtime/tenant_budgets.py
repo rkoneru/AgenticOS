@@ -24,7 +24,6 @@ a cap that cannot be understood must stop the run, not be dropped."""
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -68,7 +67,8 @@ def _entry(raw: Any) -> BudgetEntry:
         v = raw.get(k)
         if v is not None and (isinstance(v, bool) or not isinstance(v, int | float) or v < 0):
             raise BudgetConfigError(f"budget {k} must be a non-negative number")
-        if v is not None and (not math.isfinite(v) or v > MAX_LIMIT):
+        # (``v != v`` is the NaN test; the bypass guard's allowlist does not admit ``math``.)
+        if v is not None and (v != v or v > MAX_LIMIT):
             raise BudgetConfigError(f"budget {k} must be a finite number <= {MAX_LIMIT:g}")
         vals[k] = v
     return BudgetEntry(str(metric), str(raw.get("period", "")), vals["soft"], vals["hard"])
