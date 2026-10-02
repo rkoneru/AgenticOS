@@ -20,7 +20,7 @@ import {
   type SealVerdict,
 } from "./seal.js";
 import {
-  assertTenant,
+  canonicalTenant,
   payloadHash,
   validateInput,
   type AdjustmentInput,
@@ -120,7 +120,6 @@ export class PgUsageLedger implements UsageLedger {
   }
 
   private async tx<T>(tenantId: string, fn: (c: ClientBase) => Promise<T>): Promise<T> {
-    assertTenant(tenantId);
     const client = await this.o.pool.connect();
     try {
       return await withTenant(client, tenantId, fn, this.o.role ? { role: this.o.role } : {});
@@ -208,9 +207,10 @@ export class PgUsageLedger implements UsageLedger {
   }
 
   async entries(
-    tenantId: string,
+    tenantIdIn: string,
     filter: { periodId?: string; meter?: Meter } = {},
   ): Promise<UsageEntry[]> {
+    const tenantId = canonicalTenant(tenantIdIn);
     return this.tx(tenantId, async (c) => {
       const r = await c.query<EntryRow>(
         `SELECT * FROM usage_events WHERE tenant_id = $1 AND ($2::text IS NULL OR period_id = $2)
@@ -221,7 +221,8 @@ export class PgUsageLedger implements UsageLedger {
     });
   }
 
-  async totals(tenantId: string, periodId: string): Promise<TotalRow[]> {
+  async totals(tenantIdIn: string, periodId: string): Promise<TotalRow[]> {
+    const tenantId = canonicalTenant(tenantIdIn);
     return this.tx(tenantId, async (c) => {
       const r = await c.query<{ meter: Meter; mc: string | null; tk: string | null; q: string }>(
         `SELECT meter, dimensions->>'model_class' AS mc, dimensions->>'tool_kind' AS tk, sum(quantity)::text AS q
@@ -239,9 +240,10 @@ export class PgUsageLedger implements UsageLedger {
   }
 
   async rollup(
-    tenantId: string,
+    tenantIdIn: string,
     q: { granularity: Granularity; from: Date; to: Date; meter?: Meter },
   ): Promise<RollupRow[]> {
+    const tenantId = canonicalTenant(tenantIdIn);
     return this.tx(tenantId, async (c) => {
       const r = await c.query<{ meter: Meter; event_time: Date; quantity: string }>(
         `SELECT meter, event_time, quantity FROM usage_events
@@ -259,7 +261,8 @@ export class PgUsageLedger implements UsageLedger {
     });
   }
 
-  async closePeriod(tenantId: string, periodId: string): Promise<PeriodSeal> {
+  async closePeriod(tenantIdIn: string, periodId: string): Promise<PeriodSeal> {
+    const tenantId = canonicalTenant(tenantIdIn);
     periodBounds(periodId);
     const now = this.now();
     assertClosable(periodId, now);
@@ -307,7 +310,8 @@ export class PgUsageLedger implements UsageLedger {
     });
   }
 
-  async seals(tenantId: string): Promise<PeriodSeal[]> {
+  async seals(tenantIdIn: string): Promise<PeriodSeal[]> {
+    const tenantId = canonicalTenant(tenantIdIn);
     return this.tx(tenantId, async (c) => {
       const r = await c.query<SealDbRow>(
         "SELECT * FROM billing_period_seals WHERE tenant_id = $1 ORDER BY seq",
@@ -324,7 +328,8 @@ export class PgUsageLedger implements UsageLedger {
     return verifySeal(seal, entries.map(toSealRow), this.o.signer);
   }
 
-  async conflicts(tenantId: string): Promise<ConflictReport[]> {
+  async conflicts(tenantIdIn: string): Promise<ConflictReport[]> {
+    const tenantId = canonicalTenant(tenantIdIn);
     return this.tx(tenantId, async (c) => {
       const r = await c.query<{
         idempotency_key: string;

@@ -4,7 +4,7 @@ import { withTenant } from "@axis/db";
 import { BillingError } from "./errors.js";
 import type { Invoice, InvoiceLine } from "./rating.js";
 import type { PgPoolLike } from "./pg-ledger.js";
-import { assertTenant, type Meter } from "./types.js";
+import { canonicalTenant, type Meter } from "./types.js";
 import { randomUUID } from "node:crypto";
 
 type JsonLine = Omit<
@@ -95,24 +95,24 @@ export interface InvoiceStore {
 export class MemoryInvoiceStore implements InvoiceStore {
   private readonly rows: (StoredInvoice & { tenantId: string; links: Map<string, string> })[] = [];
   save(invoice: Invoice): Promise<StoredInvoice> {
-    assertTenant(invoice.tenantId);
+    const tenantId = canonicalTenant(invoice.tenantId);
     const revision =
-      this.rows.filter(
-        (r) => r.tenantId === invoice.tenantId && r.invoice.periodId === invoice.periodId,
-      ).length + 1;
+      this.rows.filter((r) => r.tenantId === tenantId && r.invoice.periodId === invoice.periodId)
+        .length + 1;
     const row = {
       id: randomUUID(),
       revision,
       hash: invoiceHash(invoice),
       invoice,
       providerInvoiceId: null,
-      tenantId: invoice.tenantId,
+      tenantId,
       links: new Map<string, string>(),
     };
     this.rows.push(row);
     return Promise.resolve(strip(row));
   }
-  list(tenantId: string, periodId?: string): Promise<StoredInvoice[]> {
+  list(tenantIdIn: string, periodId?: string): Promise<StoredInvoice[]> {
+    const tenantId = canonicalTenant(tenantIdIn);
     return Promise.resolve(
       this.rows
         .filter(
@@ -147,8 +147,8 @@ const strip = (r: StoredInvoice & { links: Map<string, string> }): StoredInvoice
 
 export class PgInvoiceStore implements InvoiceStore {
   constructor(private readonly o: { pool: PgPoolLike; role?: string }) {}
-  private async tx<T>(tenantId: string, fn: Parameters<typeof withTenant<T>>[2]): Promise<T> {
-    assertTenant(tenantId);
+  private async tx<T>(tenantIdIn: string, fn: Parameters<typeof withTenant<T>>[2]): Promise<T> {
+    const tenantId = canonicalTenant(tenantIdIn);
     const c = await this.o.pool.connect();
     try {
       return await withTenant(c, tenantId, fn, this.o.role ? { role: this.o.role } : {});
@@ -160,7 +160,7 @@ export class PgInvoiceStore implements InvoiceStore {
     const hash = invoiceHash(invoice);
     return this.tx(invoice.tenantId, async (c) => {
       await c.query("SELECT pg_advisory_xact_lock(727281, hashtext($1))", [
-        `${invoice.tenantId}${invoice.periodId}`,
+        `${invoice.tenantId.toLowerCase()}${invoice.periodId}`,
       ]);
       const rev = await c.query<{ n: number }>(
         "SELECT count(*)::int AS n FROM invoices WHERE tenant_id = $1 AND period_id = $2",
