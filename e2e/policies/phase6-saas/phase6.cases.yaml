@@ -1,0 +1,25 @@
+packs: [../../../policies/baseline-deny/pack.yaml, pack.yaml]
+cases:
+  - name: model calls are allowed by the tenant pack (baseline denies them)
+    input: { enforcement_point: model_call, data: { phi: false } }
+    expect: { decision: ALLOW, winners: [tenant-acme/allow-model-calls] }
+  - name: the report tool is allowed by the tenant pack
+    input:
+      { enforcement_point: tool_call, tool: { name: send-report, side_effects: write }, args: {} }
+    expect: { decision: ALLOW, winners: [tenant-acme/allow-send-report] }
+  - name: a read tool is allowed by the baseline
+    input:
+      { enforcement_point: tool_call, tool: { name: lookup-claim, side_effects: read }, args: {} }
+    expect: { decision: ALLOW, winners: [baseline-deny/allow-read-tools] }
+  - name: the tenant's explicit deny beats the baseline read allow
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: lookup-restricted, side_effects: read },
+        args: {},
+      }
+    expect: { decision: DENY, winners: [tenant-acme/deny-restricted-lookup] }
+  - name: any other write tool is denied by default
+    input:
+      { enforcement_point: tool_call, tool: { name: wire-transfer, side_effects: write }, args: {} }
+    expect: { decision: DENY, winners: [] }

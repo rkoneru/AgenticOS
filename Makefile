@@ -1,4 +1,4 @@
-.PHONY: e2e-core e2e-phase3 e2e-phase4 e2e-phase5 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -80,6 +80,18 @@ e2e-phase4:
 e2e-phase5:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase5_channels.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
+
+# Phase 6 exit: a new tenant signs up via SSO (fake IdP), the admin configures a BYO model key, a policy pack and a budget over the
+# control-plane HTTP API, an agent runs through the real Risk Kernel with THAT tenant's activated policy (a DENY from the tenant's
+# pack is enforced), the key comes from the control plane (HttpSecretStore), the tenant's budgets are enforced by TKI, usage is
+# metered into the billing ledger and equals totals recomputed independently from the audit chain and the run log, period close +
+# seal + invoice + Stripe-fake reconciliation are clean, injected provider faults are reported and never silently fixed; RBAC,
+# cross-tenant admin attacks, API key scopes, SCIM deprovisioning, region pinning, live-key refusal, replayed/forged usage and
+# dedicated-database routing are exercised; then the bypass guard stays green. Same prerequisites as e2e-core (two databases are created).
+e2e-phase6:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase6_saas.py -p no:cacheprovider --no-cov
 	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
 
 # (Phase 7) Playwright console + CLI e2e
