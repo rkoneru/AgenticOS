@@ -13,21 +13,34 @@ import {
 import { PgAuditLog } from "@axis/audit";
 import type { AuditSink } from "@axis/contracts";
 import pg from "pg";
-import { createGateServer, listen, staticTokenAuthenticator, type Principal } from "./grpc.js";
+import {
+  createGateServer,
+  listen,
+  staticTokenAuthenticator,
+  type Authenticator,
+  type Principal,
+} from "./grpc.js";
 import { WasmPolicyEngine } from "./engine.js";
+import { ReloadingTokenTable, TenantBundleEngine } from "./tenant-engine.js";
 import { RiskKernel } from "./kernel.js";
 import { MemoryAuditSink } from "./memory-sink.js";
 import { MemoryCounterStore, MemoryKillSwitchStore } from "./stores.js";
 
+// AXIS_POLICY_BUNDLE (one wasm bundle for every tenant) XOR AXIS_POLICY_BUNDLE_DIR (DEV, Phase 6: `<tenant uuid>.tar.gz` per tenant,
+// written by the control plane when a tenant activates a pack; a tenant without a bundle is DENIED). With the directory form the token
+// file is re-read when it changes (AXIS_RK_TOKENS_RELOAD is implied) so tenants created after start can be given a token.
 const bundle = process.env["AXIS_POLICY_BUNDLE"];
+const bundleDir = process.env["AXIS_POLICY_BUNDLE_DIR"];
 const tokens = process.env["AXIS_RK_TOKENS"];
-if (!bundle || !tokens) {
+if ((!bundle && !bundleDir) || (bundle && bundleDir) || !tokens) {
   console.error(
-    "AXIS_POLICY_BUNDLE (wasm bundle .tar.gz) and AXIS_RK_TOKENS (json file: token -> principal) are required",
+    "exactly one of AXIS_POLICY_BUNDLE (wasm bundle .tar.gz) or AXIS_POLICY_BUNDLE_DIR (per-tenant bundles), and AXIS_RK_TOKENS (json file: token -> principal), are required",
   );
   process.exit(1);
 }
-const engine = await WasmPolicyEngine.fromBundle(readFileSync(bundle));
+const engine = bundleDir
+  ? new TenantBundleEngine(bundleDir)
+  : await WasmPolicyEngine.fromBundle(readFileSync(bundle as string));
 // AXIS_AUDIT_PG_URL: durable hash-chained audit in Postgres (connect as the axis_app role). Otherwise in-memory (dev only).
 const pgUrl = process.env["AXIS_AUDIT_PG_URL"];
 const audit: AuditSink = pgUrl
@@ -41,7 +54,10 @@ const counters = new MemoryCounterStore();
 // AXIS_APPROVALS_HMAC_KEY (hex, >= 32 bytes): wires an in-process approvals service (in-memory store, same audit chain) into the
 // kernel's requester/verifier ports. Without it REQUIRE_APPROVAL yields an empty approval_id (clients DENY).
 // AXIS_APPROVALS_DEV_BRIDGE=1 additionally serves the loopback dev bridge (docs/NEEDS.md #62): e2e/dev only, NOT an approver API.
-const tokenTable = JSON.parse(readFileSync(tokens, "utf8")) as Record<string, Principal>;
+const reloading = bundleDir ? new ReloadingTokenTable<Principal>(tokens) : undefined;
+const tokenTable = reloading
+  ? {}
+  : (JSON.parse(readFileSync(tokens, "utf8")) as Record<string, Principal>);
 const hmacKey = process.env["AXIS_APPROVALS_HMAC_KEY"];
 const approvals = hmacKey
   ? (() => {
@@ -79,7 +95,13 @@ const kernel = new RiskKernel({
     error: (m, f) => console.error(JSON.stringify({ level: "error", m, ...f })),
   },
 });
-const authenticate = staticTokenAuthenticator(tokenTable);
+const authenticate: Authenticator = reloading
+  ? (md) => {
+      const h = md.get("authorization")[0];
+      const token = typeof h === "string" && h.startsWith("Bearer ") ? h.slice(7) : undefined;
+      return Promise.resolve(token === undefined ? undefined : reloading.get(token));
+    }
+  : staticTokenAuthenticator(tokenTable);
 const server = createGateServer({ kernel, audit, killSwitches, authenticate });
 const port = await listen(server, `127.0.0.1:${process.env["AXIS_RK_PORT"] ?? "0"}`);
 let approvalsPort: number | undefined;
