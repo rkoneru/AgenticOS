@@ -10,7 +10,13 @@ export class OpaError extends Error {}
 
 function run(args: string[], input?: string): string {
   try {
-    return execFileSync(bin(), args, { encoding: "utf8", input, stdio: ["pipe", "pipe", "pipe"] });
+    // A hard stop for a pathological input: `opa` is superlinear in the size of the generated Rego and this call is synchronous.
+    return execFileSync(bin(), args, {
+      encoding: "utf8",
+      input,
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 60_000,
+    });
   } catch (err) {
     const e = err as { code?: string; stderr?: string; stdout?: string };
     if (e.code === "ENOENT")

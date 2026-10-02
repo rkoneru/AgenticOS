@@ -30,6 +30,35 @@ export const compileValidator: PackValidator = (docs) => {
 
 export const BASELINE_PACK = "baseline-deny";
 
+/**
+ * Resource limits applied BEFORE the (synchronous, superlinear) `opa check --strict` + Wasm build. The compiler turns each rule and
+ * condition into several Rego rules and `opa` needs seconds for a few hundred of them (300 two-condition rules: ~4.5 s; 1400:
+ * minutes), and the call blocks this process's event loop: without a limit one tenant's publish stalls every tenant.
+ */
+export const MAX_PACK_RULES = 100;
+export const MAX_PACK_NODES = 300;
+export const MAX_SET_NODES = 600;
+
+/** Number of rules and condition nodes (leaves, all/any/not) of an UNVALIDATED pack document. Never throws. */
+export function packWeight(doc: unknown): { rules: number; nodes: number } {
+  const spec = (doc as { spec?: { rules?: unknown } } | null)?.spec;
+  const rules = Array.isArray(spec?.rules) ? (spec?.rules as unknown[]) : [];
+  let nodes = 0;
+  const walk = (c: unknown, depth: number): void => {
+    if (typeof c !== "object" || c === null || Array.isArray(c)) return;
+    nodes++;
+    if (depth > 24) {
+      nodes += MAX_PACK_NODES; // absurd nesting: weigh it out of range
+      return;
+    }
+    const o = c as { all?: unknown; any?: unknown; not?: unknown };
+    for (const k of [o.all, o.any]) if (Array.isArray(k)) for (const x of k) walk(x, depth + 1);
+    if (o.not !== undefined) walk(o.not, depth + 1);
+  };
+  for (const r of rules) walk((r as { when?: unknown } | null)?.when, 0);
+  return { rules: rules.length, nodes: nodes + rules.length };
+}
+
 export interface PublicPackVersion {
   versionId: string;
   pack: string;
@@ -69,6 +98,11 @@ export class PolicyPackService {
   }
 
   async publish(p: Principal, doc: unknown): Promise<PublicPackVersion> {
+    const w = packWeight(doc);
+    if (w.rules > MAX_PACK_RULES || w.nodes > MAX_PACK_NODES)
+      throw invalid(
+        `policy pack too large: at most ${MAX_PACK_RULES} rules and ${MAX_PACK_NODES} condition nodes per pack`,
+      );
     const v = this.validate([doc]);
     if (!v.ok) throw issuesToError(v.issues);
     const meta = (doc as { metadata: { name: string; version: string } }).metadata;
@@ -144,6 +178,7 @@ export class PolicyPackService {
   ): Promise<{ policyVersion: string; pack: string; version: string }> {
     const v = await this.getVersion(p, versionId);
     const { docs } = await this.prospective(p.tenantId, v);
+    this.assertSetSize(docs);
     const r = this.validate(docs);
     if (!r.ok) throw issuesToError(r.issues);
     await this.o.store.activatePackVersion(
@@ -173,6 +208,14 @@ export class PolicyPackService {
       }
     }
     throw notFound("pack is not active");
+  }
+
+  private assertSetSize(docs: unknown[]): void {
+    const total = docs.reduce<number>((n, d) => n + packWeight(d).nodes, 0);
+    if (total > MAX_SET_NODES)
+      throw invalid(
+        `active policy set too large: at most ${MAX_SET_NODES} condition nodes in total`,
+      );
   }
 
   /** What the Risk Kernel should load for this tenant. */
