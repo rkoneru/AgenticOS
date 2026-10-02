@@ -1,0 +1,17 @@
+{
+  "name": "@axis/docs-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsx src/build.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "marked": "^15.0.0",
+    "yaml": "^2.5.0"
+  }
+}
