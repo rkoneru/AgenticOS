@@ -46,6 +46,12 @@ Private namespace: owner only (other tenants get 404, never 403 data). Public na
 and anonymously, writable only by the owner. Roles (control-plane ladder): read = viewer, publish = builder, yank/deprecate/keys/claim = admin.
 Platform-only operations (`setNamespacePublic`, `platformYank`) need the `platform/marketplace` principal.
 
+## 4a. Public API (OpenAPI 1.2.0, ADR 0053)
+
+The gateway serves namespaces, keys, publish (a client-signed bundle), versions, yank and `resolve` under `/v1/registry/*`, in process, with the tenant and role from the
+credential. A verification failure is 422 with the failed check codes in `errors[].keyword`. Signing is publisher tooling (`axis registry sign`): the provenance contains the
+compiler's lint results (NEEDS #273). The e2e tampers a stored version behind the registry's back and requires resolve and the marketplace preview to refuse it.
+
 ## 5. Dev HTTP (non-production, loopback, static bearer tokens)
 
 See the header of `services/registry/src/dev-server.ts` for the route list. Tenant and role come from the token; a spoofed `tenant_id` is 403;

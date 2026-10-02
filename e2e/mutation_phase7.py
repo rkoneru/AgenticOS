@@ -56,8 +56,8 @@ MUTANTS = [
         (
             (
                 "services/registry/src/service.ts",
-                "    if (!verdict.ok) {",
-                "    if (!verdict.ok && false) {",
+                "      (await this.store.getKeys(viewer, rec.namespace)).map((k) => [k.keyId, k]),\n    );\n    const verdict = verifyVersion(rec, keys, this.verifyOpts);",
+                '      (await this.store.getKeys(viewer, rec.namespace)).map((k) => [k.keyId, k]),\n    );\n    const verdict = Math.random() >= 0 ? ({ ok: true, keyId: "x", builder: "x", sourceRef: "x", compilerVersion: "x" } as const) : verifyVersion(rec, keys, this.verifyOpts);',
             ),
         ),
     ),

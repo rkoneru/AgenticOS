@@ -60,6 +60,11 @@ unbounded = 1e15), `process:max_children`, `process:restart_always`. Default ten
 source `marketplace`, through the billing `UsageSink` (accepted by the real in-memory ledger in tests). Failure leaves `meteredAt = null`;
 `flushMetering` retries safely. Publisher payouts: not implemented (NEEDS).
 
+## 6a. Public API (OpenAPI 1.2.0, ADR 0053)
+
+Tenant side only, under `/v1/marketplace/*`: catalog, listing, `installs/preview` (diff, findings, `consent_digest`), `installs` (digest + hash must match a fresh evaluation, else 409),
+list, uninstall. Publisher onboarding, review decisions, listing creation and takedown stay outside the API (NEEDS #274); the e2e drives them through the services.
+
 ## 7. Storage
 
 Migration `0011_marketplace.sql`: `marketplace_docs` (collections `publishers evidence listings reviews events installs baselines takedowns`),

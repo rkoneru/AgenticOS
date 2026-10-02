@@ -1,8 +1,9 @@
 # Console and docs site (Phase 7 / D)
 
 `apps/console` (Next.js 16 App Router, TypeScript, Tailwind 4), `packages/ui` (component kit), `apps/docs-site` (static docs). Status: **Prototype**.
-Built and tested against a **mock control-plane API** (`apps/console/mock-api`) that follows the frozen `/v1` OpenAPI; it has not been run against
-the real gateway (NEEDS #242). ADRs 0050-0052. Gaps: `docs/NEEDS.md` #242-#258.
+Tested against a **mock API** (`apps/console/mock-api`, 59 Playwright flows incl. axe) AND against the REAL stack (`apps/console/e2e-real`, 14 Playwright tests in
+`make console-e2e`: SSO through the control plane, the gateway, Risk Kernel, run service, AGIL, registry, marketplace, XSS, CSRF, cross-tenant). Admin pages are mock-verified only
+(NEEDS #277). ADRs 0050-0054, 0053 (OpenAPI 1.2.0). Gaps: `docs/NEEDS.md` #242-#258, #272-#283.
 
 ## 1. Architecture
 
@@ -10,9 +11,9 @@ the real gateway (NEEDS #242). ADRs 0050-0052. Gaps: `docs/NEEDS.md` #242-#258.
 browser --same-origin--> console (Next, Node)
                            |- /api/axis/[...path]  BFF: allow-list, CSRF, cookie + header forward, streams SSE
                            |- /api/abl/validate    live ABL check (real @axis/abl compiler + linter, server side)
-                           |- /auth/sso/*          rewrite to the control plane (SSO start/callback land on the console origin)
+                           |- /auth/sso/*          route handler to the control plane (start/callback only; address read at run time)
                            '- proxy.ts             CSP nonce + security headers + optimistic sign-in gate
-control plane / gateway (AXIS_API_URL, server-only)
+gateway (AXIS_API_URL: /v1, bearer made from the session cookie) and control plane (AXIS_CONTROL_PLANE_URL: /admin/v1, /auth; both server-only)
 ```
 
 - **One data module.** Every call goes through `lib/api.ts` (`createApi`, the `api` singleton). Types mirror `packages/contracts/openapi/axis-v1.yaml`;
@@ -37,7 +38,7 @@ control plane / gateway (AXIS_API_URL, server-only)
 | `/audit`                                                | filter (trace id, decision), search loaded events, detail incl. hashes, **verification**: server `POST /v1/audit/verify` AND an independent SHA-256 recomputation in the browser (`lib/hashchain.ts`, same canonical JSON as `@axis/contracts`); disagreement is flagged. A filtered view is not contiguous, so the local check is skipped and says so.               |
 | `/usage`                                                | meter totals and a per-day bar chart in plain SVG (one series, validated reference palette slot 1, 2 px rounded data ends, per-bar hover/focus tooltip, table view).                                                                                                                                                                                                  |
 | `/admin`                                                | members/roles, API keys (**secret shown once** in a dialog, never in lists), BYO model keys (**write-only**), budgets (soft <= hard enforced client-side and by the server), SSO/SCIM/region (SSO edit owner-only).                                                                                                                                                   |
-| `/marketplace`, `/marketplace/[id]`                     | browse; install requires consent in a **permission-diff dialog** (added/removed/unchanged tools, data classes, egress, max risk); the accepted set is sent and the server must match it. Feature flag `NEXT_PUBLIC_FEATURE_MARKETPLACE`; a 404/501 shows "not available".                                                                                             |
+| `/marketplace`, `/marketplace/[ns]/[name]`              | browse the catalog; install previews the server's **permission diff** (added capabilities, findings, risk) and requires an explicit consent checkbox; the install echoes the preview's version, hash and consent digest (a stale digest is a 409). `/registry`: your namespaces and a resolve box that shows what the server verified (read-only: signing needs a private key). `/kill-switch`: engage/release the tenant switch with a reason. |
 
 **AGIL panel** (`Explanation` in `components/common.tsx`): beside every run, every approval, and every non-ALLOW audit event. It fetches
 `GET /v1/runs/{id}/explanation`, `/v1/approvals/{id}/explanation`, `/v1/audit/events/{id}/explanation` and renders exactly `{summary, steps[], decision_refs[], remediation[]}`
@@ -67,7 +68,7 @@ Automated axe (WCAG 2.0/2.1 A+AA) runs on **every page in light and dark** in th
 | UI kit         | `pnpm --filter @axis/ui cov`        | 16 tests incl. axe; thresholds 85/80                                                                                |
 | Console logic  | `pnpm --filter @axis/console cov`   | 78 tests; `lib/` ~99% lines (threshold 85)                                                                          |
 | Docs site      | `pnpm --filter @axis/docs-site cov` | 10 tests incl. a real offline, deterministic build and link check                                                   |
-| Playwright e2e | `make console-e2e`                  | builds the console, scans the bundle, runs 56 tests against the mock API (Chromium from `PLAYWRIGHT_BROWSERS_PATH`) |
+| Playwright e2e | `make console-e2e`                  | builds the console, scans the bundle, runs 59 mock-API flows, then 14 real-stack tests (Chromium from `PLAYWRIGHT_BROWSERS_PATH`) |
 | Docs build     | `make docs-build`                   | `apps/docs-site/dist` (67 files)                                                                                    |
 
 Dev: `pnpm --filter @axis/console mock-api` (port 4010) and `NEXT_PUBLIC_DEV_LOGIN=1 pnpm --filter @axis/console dev` (port 3100). Config: `AXIS_API_URL` (server-only),
@@ -78,9 +79,7 @@ The mock API enforces what the console relies on the server for (cookie session,
 
 ## 6. Additive API the console assumes (not in the frozen `/v1`)
 
-`GET /auth/me` ({member, tenant}); `GET /v1/{runs|approvals}/{id}/explanation` and `GET /v1/audit/events/{id}/explanation` (AGIL shape above);
-`GET /v1/evals/runs` (list); `/v1/marketplace/listings[/{id}[/install]]`; optional fields `requested_by`, `args_hash`, `policy_reason`, `matched_rule_ids` on `Approval`;
-`policy`, `active`, `version_id` on `PolicyPack`; `/admin/v1` response shapes (snake_case, see `lib/api.ts`); `PUT /admin/v1/budgets` taking `{items}`. Each degrades to a message when the server answers 404/405/501. NEEDS #243.
+Resolved by OpenAPI 1.2.0 (ADR 0053): identity is `GET /v1/me`, approval-by-id, `POST /v1/policies/{versionId}/activate`, registry and marketplace operations; AGIL is `GET /v1/runs/{id}/explanation` and `/v1/audit/events/{seq}/explanation` (steps/remediation are objects, flattened by `normalizeExplanation`; an approval is explained by its run). Still assumed and unverified against the real control plane: optional `Approval` fields (`requested_by`, `args_hash`, `policy_reason`, `matched_rule_ids`), `GET /v1/evals/runs`, and the `/admin/v1` shapes (NEEDS #243, #277).
 
 ## 7. packages/ui
 

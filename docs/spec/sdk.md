@@ -77,3 +77,7 @@ with Axis(
 ## Tests
 
 TS: `pnpm --filter @axis/sdk cov` (vitest, 85% gate; 118+ tests). Python: `uv run pytest sdk/python` (154 tests, 99% coverage, 85% gate). Both build an in-test mock server from the OpenAPI that validates every request against the spec and answers with synthesized responses; coverage-of-spec tests assert every operationId is reachable from the generated and the ergonomic layers. Mutation check: `node scripts/mutation-sdk.mjs`.
+
+## OpenAPI 1.2.0 additions (ADR 0053)
+
+`ax.me()`, `approvals.get`, `policies.activate`, `registry.{namespaces,claim,keys,addKey,publish,versions,yank,resolve}`, `marketplace.{listings,listing,preview,install,installWithConsent,installs,uninstall}` (TS and Python, sync and async). `registry.publish` takes a signed bundle; the SDKs never hold a key. The Phase 7 e2e runs the SDKs against the real gateway (SSE shape confirmed: `event: run_event`, `id` = sequence, final `event: end`).
