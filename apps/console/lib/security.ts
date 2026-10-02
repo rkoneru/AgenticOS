@@ -60,13 +60,12 @@ export function isPublicPath(pathname: string): boolean {
 
 /** Only same-site relative paths are honoured as a post-login target. */
 export function safeReturnTo(v: string | null | undefined): string {
-  if (
-    !v ||
-    !v.startsWith("/") ||
-    v.startsWith("//") ||
-    v.startsWith("/\\") ||
-    /[\u0000-\u001f]/.test(v)
-  )
+  if (!v || !v.startsWith("/") || v.startsWith("//") || v.startsWith("/\\") || hasControlChars(v))
     return "/";
   return v;
+}
+
+function hasControlChars(v: string): boolean {
+  for (let i = 0; i < v.length; i++) if (v.charCodeAt(i) < 0x20) return true;
+  return false;
 }

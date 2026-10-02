@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@import "@axis/ui/tokens.css";
+@source "../../../packages/ui/src";
+
+@layer base {
+  html,
+  body {
+    background: var(--axis-bg);
+    color: var(--axis-fg);
+    min-height: 100%;
+  }
+  body {
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      sans-serif;
+    line-height: 1.5;
+  }
+  a {
+    color: var(--axis-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--axis-focus);
+    outline-offset: 2px;
+  }
+  pre,
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--axis-surface);
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

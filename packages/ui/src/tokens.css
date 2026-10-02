@@ -73,3 +73,16 @@
   --axis-info-bg: #102a4c;
   color-scheme: dark;
 }
+
+/* Data-viz series slot 1 (validated reference palette, light/dark steps). */
+:root {
+  --axis-viz-1: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --axis-viz-1: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  --axis-viz-1: #3987e5;
+}

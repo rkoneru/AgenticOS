@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { sealEvent, type AuditEvent as CAuditEvent, type UnsealedEvent } from "@axis/contracts";
 import * as abl from "@axis/abl";
 import { canonicalize, reasonText, sha256Hex, sortBySeq, verifyChainLocal } from "@/lib/hashchain";
-import { checkAbl, pointerToPath, STARTER_ABL, MAX_ABL_BYTES } from "@/lib/abl-diagnostics";
+import { checkAbl, pointerToPath, MAX_ABL_BYTES } from "@/lib/abl-diagnostics";
+import { STARTER_ABL } from "@/lib/abl-starter";
 import type { AuditEvent } from "@/lib/api";
 
 const base = (i: number): UnsealedEvent => ({

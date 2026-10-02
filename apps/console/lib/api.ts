@@ -169,6 +169,24 @@ export interface Explanation {
   remediation: string[];
 }
 
+export interface AblDiagnostic {
+  line: number;
+  column: number;
+  severity: "error" | "warning";
+  message: string;
+  code: string;
+  path: string;
+}
+
+export interface AblCheckResult {
+  ok: boolean;
+  diagnostics: AblDiagnostic[];
+  doc?: Record<string, unknown>;
+  riskLevel?: string;
+  name?: string;
+  version?: string;
+}
+
 export type Role = "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer";
 
 export interface Session {
@@ -340,6 +358,8 @@ export interface Api {
   session(): Promise<Session>;
   logout(): Promise<void>;
   // blueprints
+  /** Live ABL check (console server route running the real compiler/linter); not a control-plane endpoint. */
+  validateAbl(text: string, signal?: AbortSignal): Promise<AblCheckResult>;
   listBlueprints(q?: { limit?: number; cursor?: string }): Promise<Page<BlueprintVersion>>;
   getBlueprintVersion(name: string, version: string): Promise<BlueprintVersion>;
   publishBlueprint(abl: Record<string, unknown>): Promise<BlueprintVersion>;
@@ -459,6 +479,7 @@ export function createApi(opts: ClientOptions = {}): Api {
       idempotent?: boolean;
       accept?: string;
       signal?: AbortSignal;
+      absolute?: boolean;
     } = {},
   ): Promise<Response> {
     const headers: Record<string, string> = { accept: init.accept ?? "application/json" };
@@ -468,7 +489,7 @@ export function createApi(opts: ClientOptions = {}): Api {
       if (t) headers[CSRF_HEADER] = t;
     }
     if (init.idempotent) headers["idempotency-key"] = idem();
-    const res = await doFetch(`${base}${withQuery(path, init.query)}`, {
+    const res = await doFetch(`${init.absolute ? "" : base}${withQuery(path, init.query)}`, {
       method,
       headers,
       credentials: "same-origin",
@@ -502,6 +523,12 @@ export function createApi(opts: ClientOptions = {}): Api {
 
   return {
     session: () => json("GET", "/auth/me"),
+    validateAbl: (text, signal) =>
+      json("POST", "/api/abl/validate", {
+        body: { text },
+        absolute: true,
+        ...(signal ? { signal } : {}),
+      }),
     logout: () => json("POST", "/auth/logout"),
     listBlueprints: (q) => json("GET", "/v1/blueprints", { query: q ?? {} }),
     getBlueprintVersion: (n, v) => json("GET", `/v1/blueprints/${enc(n)}/versions/${enc(v)}`),
