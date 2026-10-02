@@ -58,6 +58,7 @@ async function start(
         ? { body: typeof body === "string" ? body : JSON.stringify(body) }
         : {}),
     });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper: loosely typed JSON bodies
     return { status: res.status, body: (await res.json()) as Record<string, any> };
   };
   return { env, pub, buyer, other, call, port };

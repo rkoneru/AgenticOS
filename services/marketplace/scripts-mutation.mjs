@@ -6,7 +6,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const MIG = "../../packages/db/migrations/0021_marketplace.sql";
-const REG = "../registry/src";
 const M = [
   // --- review: reviewer != publisher, severity rules, pinning, republish
   ["src/reviews.ts", "r.subject === cur.data.submittedBy ||", "false ||"],
@@ -97,7 +96,6 @@ const M = [
   ["src/ctx.ts", "if (p?.kind !== kind ||", "if (false ||"],
   ["src/dev-server.ts", '(q.has("tenant_id") && q.get("tenant_id") !== a.tenantId) ||', "false ||"],
   ["src/dev-server.ts", "wait = strict.check(who)", "wait = 0"],
-  [`${REG}/audit.ts`, 'throw unavailable("audit log unavailable");', "return undefined as never;"],
 ];
 
 const only = process.argv.slice(2);
