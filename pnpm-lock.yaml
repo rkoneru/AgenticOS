@@ -211,6 +211,9 @@ importers:
       '@axis/abl':
         specifier: workspace:*
         version: link:../packages/abl
+      '@axis/api-gateway':
+        specifier: workspace:*
+        version: link:../apps/api-gateway
       '@axis/audit':
         specifier: workspace:*
         version: link:../services/audit
@@ -226,6 +229,12 @@ importers:
       '@axis/control-plane':
         specifier: workspace:*
         version: link:../services/control-plane
+      '@axis/marketplace':
+        specifier: workspace:*
+        version: link:../services/marketplace
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../services/registry
       '@axis/risk-kernel':
         specifier: workspace:*
         version: link:../services/risk-kernel
