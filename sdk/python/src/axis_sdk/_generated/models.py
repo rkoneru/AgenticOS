@@ -27,7 +27,7 @@ type Meter = Literal["tokens", "runtime_seconds", "tool_executions", "voice_minu
 class Problem(TypedDict):
     type: str
     title: str
-    status: float
+    status: int
     code: NotRequired[Literal["unauthenticated", "forbidden", "policy_denied", "not_found", "conflict", "validation_failed", "rate_limited", "budget_exceeded", "internal"]]
     detail: NotRequired[str]
     trace_id: NotRequired[str]
@@ -42,7 +42,7 @@ class ValidationProblemBodyErrorsItem(TypedDict):
 class ValidationProblemBody(TypedDict):
     type: str
     title: str
-    status: float
+    status: int
     code: NotRequired[Literal["unauthenticated", "forbidden", "policy_denied", "not_found", "conflict", "validation_failed", "rate_limited", "budget_exceeded", "internal"]]
     detail: NotRequired[str]
     trace_id: NotRequired[str]
@@ -86,7 +86,7 @@ class RunPage(TypedDict):
 
 
 class RunEvent(TypedDict):
-    sequence: float
+    sequence: int
     type: str
     pid: Pid
     at: str
@@ -171,7 +171,7 @@ class AuditEvent(TypedDict):
     schema_version: Literal[1]
     id: str
     tenant_id: str
-    seq: float
+    seq: int
     ts: str
     trace_id: str
     actor: AuditEventActor
@@ -249,14 +249,14 @@ class ListAuditEventsResponse(TypedDict):
 
 
 class VerifyAuditChainRequest(TypedDict):
-    from_seq: NotRequired[float]
-    to_seq: NotRequired[float]
+    from_seq: NotRequired[int]
+    to_seq: NotRequired[int]
 
 
 class VerifyAuditChainResponse(TypedDict):
     ok: bool
-    verified: float
-    broken_at_seq: NotRequired[float]
+    verified: int
+    broken_at_seq: NotRequired[int]
     reason: NotRequired[str]
 
 

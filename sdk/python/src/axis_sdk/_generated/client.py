@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Literal, cast
 
 from ..transport_types import AsyncTransport, RequestOptions, SyncTransport
 from .models import (
@@ -51,7 +51,7 @@ class GeneratedApi:
     def list_blueprints(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         options: RequestOptions | None = None,
     ) -> BlueprintPage:
@@ -102,7 +102,7 @@ class GeneratedApi:
     def list_runs(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         state: ProcessState | None = None,
         blueprint: str | None = None,
@@ -173,8 +173,8 @@ class GeneratedApi:
         self,
         *,
         run_id: str,
-        after_sequence: float | None = None,
-        limit: float | None = None,
+        after_sequence: int | None = None,
+        limit: int | None = None,
         options: RequestOptions | None = None,
     ) -> ListRunEventsResponse:
         """GET /runs/{runId}/events: Read the run's append-only event log (basis for replay)"""
@@ -191,7 +191,7 @@ class GeneratedApi:
         self,
         *,
         status: ApprovalStatus | None = None,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         options: RequestOptions | None = None,
     ) -> ApprovalPage:
@@ -226,7 +226,7 @@ class GeneratedApi:
     def list_policy_packs(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         options: RequestOptions | None = None,
     ) -> PolicyPackPage:
@@ -275,11 +275,11 @@ class GeneratedApi:
     def list_audit_events(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         trace_id: str | None = None,
         decision: Decision | None = None,
-        from_seq: float | None = None,
+        from_seq: int | None = None,
         options: RequestOptions | None = None,
     ) -> ListAuditEventsResponse:
         """GET /audit/events: Query the tenant's audit log"""
@@ -384,7 +384,7 @@ class AsyncGeneratedApi:
     async def list_blueprints(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         options: RequestOptions | None = None,
     ) -> BlueprintPage:
@@ -435,7 +435,7 @@ class AsyncGeneratedApi:
     async def list_runs(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         state: ProcessState | None = None,
         blueprint: str | None = None,
@@ -506,8 +506,8 @@ class AsyncGeneratedApi:
         self,
         *,
         run_id: str,
-        after_sequence: float | None = None,
-        limit: float | None = None,
+        after_sequence: int | None = None,
+        limit: int | None = None,
         options: RequestOptions | None = None,
     ) -> ListRunEventsResponse:
         """GET /runs/{runId}/events: Read the run's append-only event log (basis for replay)"""
@@ -524,7 +524,7 @@ class AsyncGeneratedApi:
         self,
         *,
         status: ApprovalStatus | None = None,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         options: RequestOptions | None = None,
     ) -> ApprovalPage:
@@ -559,7 +559,7 @@ class AsyncGeneratedApi:
     async def list_policy_packs(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         options: RequestOptions | None = None,
     ) -> PolicyPackPage:
@@ -608,11 +608,11 @@ class AsyncGeneratedApi:
     async def list_audit_events(
         self,
         *,
-        limit: float | None = None,
+        limit: int | None = None,
         cursor: str | None = None,
         trace_id: str | None = None,
         decision: Decision | None = None,
-        from_seq: float | None = None,
+        from_seq: int | None = None,
         options: RequestOptions | None = None,
     ) -> ListAuditEventsResponse:
         """GET /audit/events: Query the tenant's audit log"""

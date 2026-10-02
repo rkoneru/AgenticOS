@@ -114,6 +114,7 @@ function buildModel() {
       case "string":
         return { k: "prim", t: "string" };
       case "integer":
+        return { k: "prim", t: "integer" };
       case "number":
         return { k: "prim", t: "number" };
       case "boolean":
@@ -256,7 +257,7 @@ function tsType(ir) {
     case "ref":
       return ir.name;
     case "prim":
-      return ir.t;
+      return ir.t === "integer" ? "number" : ir.t;
     case "enum":
       return ir.values.map((v) => JSON.stringify(v)).join(" | ");
     case "array":
@@ -407,9 +408,14 @@ function pyType(ir) {
     case "ref":
       return ir.name;
     case "prim":
-      return { string: "str", number: "float", boolean: "bool", null: "None", unknown: "Any" }[
-        ir.t
-      ];
+      return {
+        string: "str",
+        integer: "int",
+        number: "float",
+        boolean: "bool",
+        null: "None",
+        unknown: "Any",
+      }[ir.t];
     case "enum":
       return `Literal[${ir.values.map((v) => JSON.stringify(v)).join(", ")}]`;
     case "array":
@@ -555,7 +561,7 @@ function pyClient(m) {
     `
 from __future__ import annotations
 
-from typing import cast
+from typing import Literal, cast
 
 from ..transport_types import AsyncTransport, RequestOptions, SyncTransport
 from .models import (
