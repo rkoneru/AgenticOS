@@ -52,6 +52,26 @@ const ALLOW_HEADERS =
 const EXPOSE_HEADERS =
   "x-request-id, retry-after, ratelimit-limit, ratelimit-remaining, idempotent-replayed, www-authenticate";
 
+/**
+ * Token cost of the operations that do real work per call (hashing up to `maxVerifyEvents` events, spawning `opa`, paging through a
+ * run's whole event log, compiling and verifying documents). Everything else costs 1. With the default bucket (burst 60) one tenant
+ * can run 3 chain verifications or 6 policy tests back to back, not 60. `options.costs` overrides per operation.
+ */
+export const DEFAULT_COSTS: Readonly<Record<string, number>> = {
+  verifyAuditChain: 20,
+  testPolicy: 10,
+  publishPolicyPack: 5,
+  explainRun: 5,
+  listAuditEvents: 3,
+  explainAuditEvent: 3,
+  getUsage: 3,
+  publishBlueprintVersion: 3,
+  publishRegistryBlueprint: 3,
+  resolveRegistryBlueprint: 2,
+  previewMarketplaceInstall: 2,
+  startRun: 2,
+};
+
 const DEFAULTS = {
   maxBodyBytes: 1 << 20,
   requestTimeoutMs: 30_000,
@@ -328,7 +348,7 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       const { principal, creds } = await authenticate(req, remote);
       tenant = principal.tenantId;
 
-      const cost = o.costs?.[match.op.id] ?? 1;
+      const cost = o.costs?.[match.op.id] ?? DEFAULT_COSTS[match.op.id] ?? 1;
       const rl = limiter.take(principal.tenantId, cost);
       res.setHeader("ratelimit-limit", String(rl.limit));
       res.setHeader("ratelimit-remaining", String(rl.remaining));
