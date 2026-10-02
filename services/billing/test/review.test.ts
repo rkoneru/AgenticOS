@@ -8,6 +8,7 @@ import {
   DEV_PLAN,
   DEV_PRICE_BOOK,
   FakePaymentProvider,
+  rate,
   MemoryInvoiceStore,
   StripeWebhookProcessor,
   stripeSignature,
@@ -141,5 +142,27 @@ describe("review: an adjustment is audited only if it can be applied, and the au
     expect((await api.adjust(req)).status).toBe("inserted");
     expect(seen).toEqual([0]); // audited while the ledger was still empty
     expect(await ledger.entries(t)).toHaveLength(1);
+  });
+});
+
+describe("review: a meter-wide included allowance is one pool, not one per dimension", () => {
+  it("does not grant the same free tokens again for every model class", () => {
+    const row = (dimension: string, quantity: bigint) => ({
+      meter: "tokens_in" as const,
+      dimension,
+      quantity,
+    });
+    const inv = rate({
+      tenantId: randomUUID(),
+      periodId: "2026-09",
+      totals: [row("frontier", 600_000n), row("small", 600_000n), row("standard", 600_000n)],
+      plan: { ...DEV_PLAN, baseFeeMicro: 0n, included: { tokens_in: 1_000_000n } },
+      priceBook: DEV_PRICE_BOOK,
+    });
+    // 1.8M used, 1M included in total: 800k billable across the rows, in row order (frontier, small, standard)
+    expect(inv.lines.map((l) => [l.dimension, l.quantity])).toEqual([
+      ["small", 200_000n],
+      ["standard", 600_000n],
+    ]);
   });
 });
