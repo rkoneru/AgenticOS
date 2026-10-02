@@ -261,7 +261,8 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
       const m = /^Bearer (\S+)$/.exec(req.headers.authorization ?? "");
       if (!d.devToken || !equalToken(m?.[1], d.devToken)) throw unauthenticated();
       const b = parseJson(await readBody(req)) as Record<string, unknown> | undefined;
-      const member = typeof b?.["tenant_id"] === "string" && typeof b["member_id"] === "string" ? await d.store.getMember(b["tenant_id"], b["member_id"]) : undefined;
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const member = typeof b?.["tenant_id"] === "string" && typeof b["member_id"] === "string" && uuid.test(b["tenant_id"]) && uuid.test(b["member_id"]) ? await d.store.getMember(b["tenant_id"], b["member_id"]) : undefined;
       if (!member) throw new HttpError(404, "member not found", "not_found");
       const sess = await d.sessions.issue(member, "dev");
       json(res, 201, { access_token: sess.accessToken, refresh_token: sess.refreshToken, expires_at: sess.accessExpiresAt.toISOString() });
