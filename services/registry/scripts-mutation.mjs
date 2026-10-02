@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const MIG = "../../packages/db/migrations/0020_registry.sql";
+const MIG = "../../packages/db/migrations/0010_registry.sql";
 const M = [
   // --- verification: every check must matter
   ["src/verify.ts", "if (!verifyDetached(key.publicKey, msg, sig.sig)) fail(", "if (false) fail("],
@@ -39,7 +39,7 @@ const M = [
     "if (!verdict.ok) {\n      if (viewer.tenantId",
     "if (false) {\n      if (viewer.tenantId",
   ],
-  ["src/service.ts", "if (RESERVED_NAMESPACES.includes(namespace))", "if (false)"],
+  ["src/service.ts", "if (RESERVED_NAMESPACES.some(", "if (false && RESERVED_NAMESPACES.some("],
   [
     "src/service.ts",
     'if (row.status.state === "yanked") throw conflict(',

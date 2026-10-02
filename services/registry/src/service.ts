@@ -200,7 +200,7 @@ export class RegistryService {
       throw invalid(
         "namespace must match [a-z][a-z0-9-]{1,62} without trailing or doubled hyphens",
       );
-    if (RESERVED_NAMESPACES.includes(namespace)) throw forbidden("namespace is reserved");
+    // (the folded comparison also covers the exact name)
     if (RESERVED_NAMESPACES.some((r) => normalizeName(r) === normalizeName(namespace)))
       throw forbidden("namespace is reserved");
     return this.mutate(

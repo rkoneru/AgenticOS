@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const MIG = "../../packages/db/migrations/0021_marketplace.sql";
+const MIG = "../../packages/db/migrations/0011_marketplace.sql";
 const M = [
   // --- review: reviewer != publisher, severity rules, pinning, republish
   ["src/reviews.ts", "r.subject === cur.data.submittedBy ||", "false ||"],
@@ -55,6 +55,17 @@ const M = [
     "priority: 900,\n          enforcementPoints: toolPoints,\n          when:",
     "priority: 1,\n          enforcementPoints: toolPoints,\n          when:",
   ],
+  // --- review hardening (test/hardening.test.ts)
+  ["src/installs.ts", "await this.stillInstallable(p.tenantId, doc, rec);", ""],
+  [
+    "src/installs.ts",
+    "`marketplace-install:${who}:${installKey(rec.namespace, rec.name)}`",
+    "`marketplace-install:${rec.id}`",
+  ],
+  ["src/scan.ts", "...(abl.spec.tools ?? []).flatMap((t, i) =>", "...([]).flatMap((t, i) =>"],
+  ["src/scan.ts", 'u.hostname.startsWith("[")', "false"],
+  ["src/scan.ts", '.normalize("NFKC")', ""],
+  ["src/listings.ts", "else if (NOT_PLAIN_TEXT.test(v))", "else if (false)"],
   // --- takedown
   ["src/listings.ts", "for (const v of versions)", "for (const v of [])"],
   ["src/listings.ts", 'state: "flagged",', 'state: "active",'],
