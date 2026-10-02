@@ -137,6 +137,9 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       throw new Error(`route ${id} is not in the OpenAPI document`);
 
   const streams = new Map<string, number>();
+  // Denials are audited (reads too), but a denied credential cannot fill the chain: per (tenant, member, operation) a burst of 5, then
+  // one every 10 s. The fact that denials continue is itself visible as a steady trickle of rows.
+  const denialAudit = new TokenBuckets({ burst: 5, perSecond: 0.1 }, now);
 
   function baseHeaders(
     res: http.ServerResponse,
@@ -264,6 +267,34 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     return out;
   };
 
+  /** After a gateway timeout: records what the still-running handler finally did under its Idempotency-Key (same rules as the live path). */
+  async function settleLater(
+    work: Promise<HandlerResult>,
+    scope: string,
+    key: string,
+    traceId: string,
+  ): Promise<void> {
+    try {
+      const r = await work;
+      if (isStream(r) || r.status >= 500 || r.status === 429) await idem.abort(scope, key);
+      else
+        await idem.complete(scope, key, {
+          status: r.status,
+          body: r.body,
+          headers: { ...(r.headers ?? {}) },
+        });
+    } catch (e) {
+      const err = mapError(e);
+      if (err.status >= 400 && err.status < 500 && err.status !== 429 && err.status !== 408)
+        await idem.complete(scope, key, {
+          status: err.status,
+          body: toProblem(err, traceId),
+          headers: err.headers,
+        });
+      else await idem.abort(scope, key);
+    }
+  }
+
   function mapError(e: unknown): ApiError {
     if (e instanceof ApiError) return e;
     if (e instanceof PortNotFound) return notFound();
@@ -380,7 +411,10 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         }
       }
       if (!decision.allowed) {
-        if (match.route.mutation)
+        if (
+          denialAudit.take(`${principal.tenantId}\u0000${principal.memberId}\u0000${match.op.id}`)
+            .ok
+        )
           await deps.audit
             .record({
               tenantId: principal.tenantId,
@@ -490,6 +524,8 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         reserved = true;
       }
 
+      let timedOut = false;
+      let work: Promise<HandlerResult> | undefined;
       try {
         if (match.route.mutation) {
           try {
@@ -534,10 +570,16 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
           signal: ac.signal,
         };
         let timer: NodeJS.Timeout | undefined;
+        const running = Promise.resolve().then(() => match.route.handler(ctx));
+        running.catch(() => undefined); // its failure after a timeout is handled in settleLater, never as an unhandled rejection
+        work = running;
         const result: HandlerResult = await Promise.race([
-          match.route.handler(ctx),
+          running,
           new Promise<never>((_, rej) => {
-            timer = setTimeout(() => rej(timeout()), o.requestTimeoutMs);
+            timer = setTimeout(() => {
+              timedOut = true;
+              rej(timeout());
+            }, o.requestTimeoutMs);
           }),
         ]).finally(() => clearTimeout(timer));
 
@@ -577,7 +619,14 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         }
         send(res, result.status, result.body, "application/json", extra);
       } catch (e) {
-        if (reserved) {
+        if (reserved && timedOut && work) {
+          // The handler is STILL RUNNING and may yet complete the operation: releasing the key now would let a retry run it a second
+          // time. The key stays reserved (a retry gets 409) until the handler settles; its outcome decides what the key replays.
+          const scope = idemScope;
+          const key = idemKey as string;
+          reserved = false;
+          void settleLater(work, scope, key, traceId).catch(() => undefined);
+        } else if (reserved) {
           const err = mapError(e);
           // Deterministic client errors are remembered (a retry gets the same answer); anything else is retryable.
           if (err.status >= 400 && err.status < 500 && err.status !== 429 && err.status !== 408)

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { OpaCliPolicyTester } from "../src/index.js";
 import { clientAddress } from "../src/limits.js";
-import { call, makeWorld } from "./world.js";
+import { POLICY, call, makeWorld } from "./world.js";
+import { FakeRuns } from "./fakes.js";
+import type { RunDto, StartRun } from "../src/index.js";
 
 describe("rate limits weigh the expensive operations by default", () => {
   it("a tenant cannot run verify/test/explain/audit-scan operations at the rate of /me: each draws more of the bucket", async () => {
@@ -97,5 +103,102 @@ describe("failed-authentication throttling behind a trusted proxy", () => {
     });
     expect(shared.status).toBe(429);
     await d.close();
+  });
+});
+
+describe("the opa child process", () => {
+  it("does not inherit the gateway's environment (control-plane secrets, token-file paths, database URL)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "gw-opa-"));
+    const bin = join(dir, "opa");
+    const dump = join(dir, "env.txt");
+    writeFileSync(
+      bin,
+      `#!/bin/sh\nenv > ${dump}\ncat > /dev/null\necho '{"result":[{"expressions":[{"value":{"decision":"ALLOW","policy_version":"v","reason":"r","matched":[],"redact":[]}}]}]}'\n`,
+    );
+    chmodSync(bin, 0o755);
+    process.env["GW_PEPPER"] = "pepper-sentinel-0123456789";
+    process.env["GW_DATABASE_URL"] = "postgres://secret-sentinel@db/axis";
+    try {
+      const out = await new OpaCliPolicyTester({ bin }).evaluate(POLICY(), {
+        enforcement_point: "tool_call",
+      });
+      expect(out.decision).toBe("ALLOW");
+    } finally {
+      delete process.env["GW_PEPPER"];
+      delete process.env["GW_DATABASE_URL"];
+    }
+    const seen = readFileSync(dump, "utf8");
+    expect(seen).not.toContain("sentinel");
+    expect(seen).toContain("PATH=");
+  });
+});
+
+describe("denied requests are audited, reads included, without letting a denied key flood the chain", () => {
+  it("a viewer denied GET /audit/events leaves a DENY row in the tenant's chain; a flood adds a handful, not hundreds", async () => {
+    const w = await makeWorld({
+      rate: { burst: 1e6, perSecond: 1e6 },
+      unauthRate: { burst: 1e6, perSecond: 1e6 },
+    });
+    const owner = await w.tenant();
+    const viewer = await w.member(owner.tenantId, "viewer");
+    const rows = async () =>
+      (await w.audit.read(owner.tenantId)).filter(
+        (e) => e.decision === "DENY" && e.action === "api.listAuditEvents",
+      );
+    expect((await call(w, "GET", "/audit/events", { token: viewer.token })).status).toBe(403);
+    const first = await rows();
+    expect(first).toHaveLength(1);
+    expect(first[0]?.actor.id).toBe(viewer.memberId);
+    for (let i = 0; i < 200; i++) await call(w, "GET", "/audit/events", { token: viewer.token });
+    const after = (await rows()).length;
+    expect(after).toBeGreaterThan(1);
+    expect(after).toBeLessThanOrEqual(8);
+    // another member and another operation have their own allowance
+    const other = await w.member(owner.tenantId, "viewer");
+    await call(w, "GET", "/audit/events", { token: other.token });
+    expect((await rows()).length).toBe(after + 1);
+    await w.close();
+  });
+});
+
+class SlowRuns extends FakeRuns {
+  constructor(private readonly ms: number) {
+    super();
+  }
+  override async start(r: StartRun): Promise<RunDto> {
+    await new Promise((res) => setTimeout(res, this.ms));
+    return super.start(r);
+  }
+}
+
+describe("an Idempotency-Key survives a gateway timeout", () => {
+  it("while the first execution is still running a retry is refused, afterwards it replays: the run is started once", async () => {
+    const runs = new SlowRuns(400);
+    const w = await makeWorld(
+      { requestTimeoutMs: 100, rate: { burst: 1e6, perSecond: 1e6 } },
+      { runs },
+    );
+    const o = await w.tenant();
+    const bp = { name: "claims", version: "1.0.0" };
+    const abl = (await import("./world.js")).ABL(bp.name, bp.version);
+    expect((await call(w, "POST", "/blueprints", { token: o.token, body: { abl } })).status).toBe(
+      201,
+    );
+    const send = () =>
+      call(w, "POST", "/runs", {
+        token: o.token,
+        headers: { "idempotency-key": "retry-me-0001" },
+        body: { blueprint: bp, input: { prompt: "x" } },
+      });
+    const first = await send();
+    expect(first.status).toBe(504);
+    const during = await send();
+    expect(during.status).toBe(409); // still being processed
+    await new Promise((r) => setTimeout(r, 600)); // the first execution finishes in the background
+    const replay = await send();
+    expect(replay.status, replay.text).toBe(202);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(runs.starts).toHaveLength(1);
+    await w.close();
   });
 });

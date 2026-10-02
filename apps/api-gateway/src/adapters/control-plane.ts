@@ -211,7 +211,12 @@ export class OpaCliPolicyTester implements PolicyTester {
             "json",
             "data.axis.policy.result",
           ],
-          { timeout: this.o.timeoutMs ?? 10_000, maxBuffer: 1 << 20 },
+          {
+            timeout: this.o.timeoutMs ?? 10_000,
+            maxBuffer: 1 << 20,
+            // The child evaluates a tenant-supplied policy: it gets a PATH and nothing else (not the gateway's secrets, token files, URLs).
+            env: { PATH: process.env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin" },
+          },
           (err, out) => (err ? reject(err) : resolve(out)),
         );
         // The child may exit before reading stdin (bad binary, timeout kill): that is the callback's failure, not an unhandled EPIPE.
