@@ -209,11 +209,16 @@ export class ApiSpec {
 }
 
 function issues(v: ValidateFunction): ValidationIssue[] {
-  return (v.errors ?? []).slice(0, 20).map((e) => ({
-    path: e.instancePath === "" ? "/" : e.instancePath,
-    keyword: e.keyword,
-    message: String(e.message),
-  }));
+  return (v.errors ?? []).slice(0, 20).map((e) => {
+    // "must NOT have additional properties" is reported at the parent; name the property so the caller can find it.
+    const extra = e.keyword === "additionalProperties" ? String((e.params as { additionalProperty?: unknown }).additionalProperty) : undefined;
+    const base = e.instancePath === "" ? "" : e.instancePath;
+    return {
+      path: extra !== undefined ? `${base}/${extra.replaceAll("~", "~0").replaceAll("/", "~1")}` : base === "" ? "/" : base,
+      keyword: e.keyword,
+      message: String(e.message),
+    };
+  });
 }
 
 /** Compiled path matcher for `/blueprints/{name}/versions/{version}` style templates. */
