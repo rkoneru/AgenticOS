@@ -41,6 +41,7 @@ export function publicKeyObject(publicKeyB64u: string): KeyObject | undefined {
   try {
     return createPublicKey({ key: Buffer.concat([SPKI_PREFIX, raw]), format: "der", type: "spki" });
   } catch {
+    /* v8 ignore next 2 -- defensive: OpenSSL accepts any 32 bytes here; point validity is checked at verify time */
     return undefined;
   }
 }

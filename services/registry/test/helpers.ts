@@ -21,6 +21,9 @@ import {
 
 export const ROLE = "axis_app";
 export const hex = (n: number): string => randomBytes(n / 2).toString("hex");
+/** Random lowercase id made only of letters that normalizeName does not fold, so two ids never collide as "confusable". */
+export const rid = (n = 6): string =>
+  Array.from(randomBytes(n), (b) => "cdfghjkpquxyz"[b % 13]).join("");
 
 export class Clock {
   constructor(public t: Date) {}

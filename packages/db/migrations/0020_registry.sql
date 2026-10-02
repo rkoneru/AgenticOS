@@ -19,6 +19,14 @@ CREATE POLICY ns_read ON registry_namespaces FOR SELECT USING (true);
 CREATE POLICY ns_insert ON registry_namespaces FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
 GRANT SELECT, INSERT ON registry_namespaces TO axis_app;
 
+-- True when `t` is the current tenant AND owns namespace `ns`: the write check for every table of a namespace. (A tenant could otherwise
+-- write rows tagged with its own id into somebody else's namespace.) Plain SQL over registry_namespaces, whose names are world-readable.
+CREATE FUNCTION axis.registry_owns(ns text, t uuid) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+  SELECT t = axis.current_tenant() AND EXISTS (SELECT 1 FROM public.registry_namespaces n WHERE n.namespace = ns AND n.tenant_id = t)
+$$;
+GRANT EXECUTE ON FUNCTION axis.registry_owns(text, uuid) TO axis_app;
+
 CREATE TABLE registry_public_namespaces (
   namespace  text PRIMARY KEY REFERENCES registry_namespaces (namespace),
   tenant_id  uuid NOT NULL REFERENCES tenants (id),
@@ -30,7 +38,7 @@ CREATE TRIGGER registry_public_namespaces_immutable BEFORE UPDATE OR DELETE ON r
 ALTER TABLE registry_public_namespaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registry_public_namespaces FORCE ROW LEVEL SECURITY;
 CREATE POLICY pub_read ON registry_public_namespaces FOR SELECT USING (true);
-CREATE POLICY pub_insert ON registry_public_namespaces FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
+CREATE POLICY pub_insert ON registry_public_namespaces FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
 GRANT SELECT, INSERT ON registry_public_namespaces TO axis_app;
 
 -- True when the row belongs to the current tenant or lives in a public namespace. Plain SQL: inlined, evaluated under the caller's RLS.
@@ -78,8 +86,8 @@ CREATE TRIGGER registry_keys_guard BEFORE UPDATE OR DELETE ON registry_keys FOR 
 ALTER TABLE registry_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registry_keys FORCE ROW LEVEL SECURITY;
 CREATE POLICY keys_read ON registry_keys FOR SELECT USING (axis.registry_visible(namespace, tenant_id));
-CREATE POLICY keys_insert ON registry_keys FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
-CREATE POLICY keys_update ON registry_keys FOR UPDATE USING (tenant_id = axis.current_tenant()) WITH CHECK (tenant_id = axis.current_tenant());
+CREATE POLICY keys_insert ON registry_keys FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
+CREATE POLICY keys_update ON registry_keys FOR UPDATE USING (axis.registry_owns(namespace, tenant_id)) WITH CHECK (axis.registry_owns(namespace, tenant_id));
 GRANT SELECT, INSERT, UPDATE ON registry_keys TO axis_app;
 
 -- Blueprint names. UNIQUE (namespace, normalized) is the typosquat guard (case/hyphen/look-alike-digit collisions).
@@ -97,7 +105,7 @@ CREATE TRIGGER registry_names_immutable BEFORE UPDATE OR DELETE ON registry_name
 ALTER TABLE registry_names ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registry_names FORCE ROW LEVEL SECURITY;
 CREATE POLICY names_read ON registry_names FOR SELECT USING (axis.registry_visible(namespace, tenant_id));
-CREATE POLICY names_insert ON registry_names FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
+CREATE POLICY names_insert ON registry_names FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
 GRANT SELECT, INSERT ON registry_names TO axis_app;
 
 -- A published version. IMMUTABLE: no update, no delete, primary key = no overwrite. `abl` is the canonical JSON TEXT that was hashed
@@ -122,7 +130,7 @@ CREATE TRIGGER registry_versions_immutable BEFORE UPDATE OR DELETE ON registry_v
 ALTER TABLE registry_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registry_versions FORCE ROW LEVEL SECURITY;
 CREATE POLICY versions_read ON registry_versions FOR SELECT USING (axis.registry_visible(namespace, tenant_id));
-CREATE POLICY versions_insert ON registry_versions FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
+CREATE POLICY versions_insert ON registry_versions FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
 GRANT SELECT, INSERT ON registry_versions TO axis_app;
 
 -- Yank / deprecate. Append-only: the latest event of a version is its status. Versions are never deleted.
@@ -144,6 +152,6 @@ CREATE TRIGGER registry_version_events_immutable BEFORE UPDATE OR DELETE ON regi
 ALTER TABLE registry_version_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registry_version_events FORCE ROW LEVEL SECURITY;
 CREATE POLICY events_read ON registry_version_events FOR SELECT USING (axis.registry_visible(namespace, tenant_id));
-CREATE POLICY events_insert ON registry_version_events FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());
+CREATE POLICY events_insert ON registry_version_events FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
 GRANT SELECT, INSERT ON registry_version_events TO axis_app;
 GRANT USAGE ON SEQUENCE registry_version_events_seq_seq TO axis_app;

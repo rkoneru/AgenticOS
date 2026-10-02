@@ -22,7 +22,7 @@
     "packages/db/migrations/0007_channels.sql": "6a6dfd12c0791e01583f4292e686f5a3ae146d8f5bf40b47f3ede7890435fde1",
     "packages/db/migrations/0008_billing.sql": "b3fa9da76158033ed2d3761786599431d1eab35d9a8b881c8f86a2d3d0aa9608",
     "packages/db/migrations/0009_control_plane.sql": "7f2c40037d9958cea01defb0442935fca65a5dff204256bed1248e9bdea096a9",
-    "packages/db/migrations/0020_registry.sql": "a9b0974cea69a28a95d62afa6d8ec507d6e196f9f047cb6713e0cf7eea5dcb77",
+    "packages/db/migrations/0020_registry.sql": "71839a2ca67e6b9e234fa48a76100bb710e17de993d9767965259cffee4b24c8",
     "packages/db/migrations/0021_marketplace.sql": "3d7bc9245995e5f458b3eb411aae417eeda361e8af7de9b550b124a221688d82"
   }
 }

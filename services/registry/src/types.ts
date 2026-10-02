@@ -134,11 +134,15 @@ export function statusOf(events: readonly VersionEvent[]): VersionStatus {
   return cur;
 }
 
-/** Lower-cased, hyphens removed, look-alike characters folded: two names with the same value are confusable. */
+/**
+ * Lower-cased, hyphens removed, look-alike characters folded (i/l/1, o/0, rn/m, vv/w, 3/e, ...): two names with the same value are
+ * confusable, and the registry refuses the second one.
+ */
 export function normalizeName(s: string): string {
-  const map: Record<string, string> = {
+  const fold: Record<string, string> = {
     "0": "o",
     "1": "l",
+    i: "l",
     "5": "s",
     "3": "e",
     "4": "a",
@@ -149,5 +153,6 @@ export function normalizeName(s: string): string {
     .toLowerCase()
     .replaceAll("-", "")
     .replaceAll("rn", "m")
-    .replace(/[0153478]/g, (c) => map[c] ?? c);
+    .replaceAll("vv", "w")
+    .replace(/[01i53478]/g, (c) => fold[c] ?? c);
 }
