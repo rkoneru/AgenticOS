@@ -756,3 +756,68 @@ def test_10_api_key_scopes_are_honoured_and_keys_never_leak(world: World) -> Non
         json={"blueprint": {"name": "claims-agent", "version": "1.0.0"}},
     )
     assert r.status_code == 403
+
+
+def test_11_private_namespaces_approvals_and_installs_do_not_cross_tenants(world: World) -> None:
+    s = world.stack
+    hb = {"x-axis-api-key": world.key_b}
+    ha = {"x-axis-api-key": world.key_a}
+    # A listed namespace is public (any tenant may resolve it, only the owner may write); a private one is invisible
+    pub = httpx.get(
+        f"{s.gateway}/registry/resolve", params={"ref": f"{world.ns}/helper-agent@^1"}, headers=hb
+    )
+    assert pub.status_code == 200
+    assert pub.json()["verification"]["key_id"] == world.state["publisher_key_id"]
+    private = f"{world.ns}-private"[:60]
+    claim = httpx.post(f"{s.gateway}/registry/namespaces", headers=ha, json={"namespace": private})
+    assert claim.status_code == 201
+    hidden = httpx.get(
+        f"{s.gateway}/registry/resolve", params={"ref": f"{private}/x-agent@^1"}, headers=hb
+    )
+    assert hidden.status_code == 404
+    versions = f"{s.gateway}/registry/blueprints/{private}/x-agent/versions"
+    assert httpx.get(versions, headers=hb).json()["items"] == []
+    seen = httpx.get(f"{s.gateway}/registry/namespaces", headers=hb).json()["items"]
+    assert private not in [n["namespace"] for n in seen]
+    bundle = json.loads(
+        subprocess.run(
+            [*CLI, "registry", "sign", str(world.state["cli_publisher"].tmp / "helper.json"), "--namespace", world.ns,
+             "--key", str(world.state["cli_publisher"].tmp / "publisher.pem")],
+            env={**os.environ, "AXIS_API_KEY": world.key_a, "AXIS_BASE_URL": s.gateway},
+            capture_output=True, text=True, check=True,
+        ).stdout
+    )  # fmt: skip
+    bundle.pop("namespace")
+    p = httpx.post(
+        f"{s.gateway}/registry/namespaces/{world.ns}/blueprints", headers=hb, json=bundle
+    )
+    assert p.status_code in (403, 404)
+    # A's approvals (decided ones included) and audit rows are invisible to B
+    ids_a = {a["id"] for a in httpx.get(f"{s.gateway}/approvals", headers=ha).json()["items"]}
+    ids_b = {a["id"] for a in httpx.get(f"{s.gateway}/approvals", headers=hb).json()["items"]}
+    assert ids_a and not (ids_a & ids_b)
+    tenants_in_b_audit = {
+        e["tenant_id"]
+        for e in httpx.get(f"{s.gateway}/audit/events?limit=200", headers=hb).json()["items"]
+    }
+    assert tenants_in_b_audit <= {world.b["tenant_id"]}
+    # a tenant in the body or query is refused, never honoured
+    assert (
+        httpx.get(
+            f"{s.gateway}/runs", params={"tenant_id": world.a["tenant_id"]}, headers=hb
+        ).status_code
+        == 422
+    )
+    assert (
+        httpx.get(
+            f"{s.gateway}/runs", headers={**hb, "x-tenant-id": world.a["tenant_id"]}
+        ).status_code
+        == 400
+    )
+    # B's installed copy is B's: uninstalling as A finds nothing
+    assert (
+        httpx.post(
+            f"{s.gateway}/marketplace/installs/{world.ns}/helper-agent/uninstall", headers=ha
+        ).status_code
+        == 404
+    )
