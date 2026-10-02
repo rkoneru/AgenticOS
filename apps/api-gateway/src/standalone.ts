@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
+import { isIP } from "node:net";
 
 /** A refusal to start: the message says what to fix and never contains a secret. */
 export class ConfigError extends Error {}
@@ -12,6 +13,8 @@ export interface StandaloneConfig {
   port: number;
   host: string;
   allowedOrigins: string[];
+  /** Reverse proxies (IP literals) whose `X-Forwarded-For` names the client for failed-authentication throttling. Default none. */
+  trustedProxies: string[];
   /** The control plane's secrets: sessions and API keys issued by the control plane must verify here. */
   secrets: { pepper: Buffer; cookieKey: Buffer; signingKey: Buffer };
   /** Key the billing ledger seals with (the gateway only reads; the signer is a constructor requirement). */
@@ -84,6 +87,14 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    trustedProxies: (env["GW_TRUSTED_PROXIES"] ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((a) => {
+        if (isIP(a) === 0) throw new ConfigError("GW_TRUSTED_PROXIES must list IP addresses");
+        return a;
+      }),
     secrets: {
       pepper: hex("GW_PEPPER"),
       cookieKey: hex("GW_COOKIE_KEY"),
@@ -100,18 +111,20 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
 
 /** `{ "<tenant uuid>": "<token>" }` re-read when the file changes (tenants are created after the gateway started). */
 export class TokenTable {
-  private mtime = -1;
+  /** mtime alone misses a rewrite inside one timestamp tick (coarse filesystems): size and inode are part of the cache key. */
+  private stamp = "";
   private data: Record<string, string> = {};
   constructor(private readonly path: string) {}
   get(tenantId: string): string | undefined {
     try {
-      const m = statSync(this.path).mtimeMs;
-      if (m !== this.mtime) {
+      const st = statSync(this.path);
+      const m = `${st.mtimeMs}:${st.size}:${st.ino}`;
+      if (m !== this.stamp) {
         const j = JSON.parse(readFileSync(this.path, "utf8")) as Record<string, unknown>;
         this.data = Object.fromEntries(
           Object.entries(j).filter(([, v]) => typeof v === "string"),
         ) as Record<string, string>;
-        this.mtime = m;
+        this.stamp = m;
       }
     } catch {
       return undefined; // missing or malformed: no credential -> the port answers 503, never a guess

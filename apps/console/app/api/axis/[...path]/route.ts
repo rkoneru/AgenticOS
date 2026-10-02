@@ -5,6 +5,7 @@ import {
   RESPONSE_HEADER_DROP,
   bearerFromCookie,
   checkCsrf,
+  forwardedForHeader,
   resolveUpstream,
   upstreamKind,
 } from "@/lib/bff";
@@ -23,6 +24,8 @@ const CONTROL = process.env["AXIS_CONTROL_PLANE_URL"] ?? GATEWAY;
 // The real gateway authenticates `Authorization: Bearer`, not cookies: the BFF (which can read the HttpOnly session cookie) converts.
 const GATEWAY_BEARER = process.env["AXIS_GATEWAY_BEARER"] === "1";
 const SESSION_COOKIE = process.env["AXIS_SESSION_COOKIE"] ?? "__Host-axis_at";
+// Behind a trusted reverse proxy the client's address is relayed to the gateway (its `GW_TRUSTED_PROXIES` must list this server).
+const TRUST_PROXY = process.env["AXIS_TRUST_PROXY"] === "1";
 
 async function handle(
   req: NextRequest,
@@ -49,6 +52,8 @@ async function handle(
     const v = req.headers.get(h);
     if (v) headers.set(h, v);
   }
+  const xff = forwardedForHeader(req.headers.get("x-forwarded-for"), TRUST_PROXY);
+  if (xff) headers.set("x-forwarded-for", xff);
   if (GATEWAY_BEARER && kind === "gateway") {
     // The credential the gateway sees is the session's own; whatever the browser put in Authorization is discarded.
     headers.delete("authorization");

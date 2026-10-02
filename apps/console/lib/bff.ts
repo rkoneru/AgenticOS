@@ -58,6 +58,21 @@ export function bearerFromCookie(
   return undefined;
 }
 
+/**
+ * The `X-Forwarded-For` the BFF relays to the gateway, so that failed sign-ins are throttled per CLIENT and not for the whole console
+ * (every request reaches the gateway from this server's address). Only when the console itself sits behind a proxy it trusts
+ * (`AXIS_TRUST_PROXY=1`, and the gateway lists this server in `GW_TRUSTED_PROXIES`); otherwise a client could name its own address.
+ * Only IP-literal entries survive.
+ */
+export function forwardedForHeader(value: string | null, trustProxy: boolean): string | undefined {
+  if (!trustProxy || !value) return undefined;
+  const hops = value
+    .split(",")
+    .map((h) => h.trim())
+    .filter((h) => /^[0-9A-Fa-f:.]{2,45}$/.test(h));
+  return hops.length > 0 ? hops.join(", ") : undefined;
+}
+
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export type CsrfVerdict = { ok: true } | { ok: false; reason: string };

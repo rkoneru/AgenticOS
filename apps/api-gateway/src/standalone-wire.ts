@@ -106,6 +106,7 @@ export async function startStandalone(
     },
     {
       allowedOrigins: c.allowedOrigins,
+      ...(c.trustedProxies.length ? { trustedProxies: c.trustedProxies } : {}),
       ...(c.rate ? { rate: c.rate } : {}),
       log: (level, msg, fields) => {
         if (level !== "info") console.error(JSON.stringify({ level, msg, ...fields }));

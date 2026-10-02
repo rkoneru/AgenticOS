@@ -10,7 +10,13 @@ import {
   type HandlerResult,
   type Route,
 } from "./context.js";
-import { CursorCodec, MemoryIdempotencyStore, TokenBuckets, fingerprint } from "./limits.js";
+import {
+  CursorCodec,
+  MemoryIdempotencyStore,
+  TokenBuckets,
+  clientAddress,
+  fingerprint,
+} from "./limits.js";
 import {
   PortConflict,
   PortForbidden,
@@ -116,6 +122,9 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
   const cursors = deps.cursors ?? new CursorCodec();
   const idem = deps.idempotency ?? new MemoryIdempotencyStore(now);
   const origins = new Set(o.allowedOrigins ?? []);
+  const trustedProxies = new Set(
+    (o.trustedProxies ?? []).map((a) => clientAddress(a, undefined, new Set())),
+  );
 
   // The route table and the spec must agree exactly: a missing or extra route fails at start-up.
   const compiled: Compiled[] = spec.operations.map((op) => {
@@ -281,7 +290,11 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     baseHeaders(res, requestId, origin);
     res.setHeader("traceparent", `00-${traceId}-${randomBytes(8).toString("hex")}-01`);
     const method = (req.method ?? "GET").toUpperCase();
-    const remote = req.socket.remoteAddress ?? "unknown";
+    const remote = clientAddress(
+      req.socket.remoteAddress,
+      req.headers["x-forwarded-for"],
+      trustedProxies,
+    );
     let status = 500;
     let opId = "-";
     let tenant = "-";

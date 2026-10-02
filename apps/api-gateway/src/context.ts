@@ -50,6 +50,12 @@ export interface GatewayOptions {
   allowedOrigins?: readonly string[];
   maxBodyBytes?: number;
   requestTimeoutMs?: number;
+  /**
+   * Addresses of reverse proxies in front of the gateway (the console's BFF, a load balancer). Only a connection FROM one of them may
+   * name the client in `X-Forwarded-For`; the client is then the right-most entry that is not itself a trusted proxy. Default none:
+   * the header is ignored and every failed authentication is counted against the peer address.
+   */
+  trustedProxies?: readonly string[];
   /** Per-tenant bucket. Default burst 60, 30/s. */
   rate?: { burst: number; perSecond: number };
   /** Failed authentications per remote address. Default burst 20, 1/s. */
