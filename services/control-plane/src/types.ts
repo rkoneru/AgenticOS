@@ -180,7 +180,15 @@ export interface ProvisionSpec {
   region: string;
   phiMode: boolean;
   owner: { id: string; userRef: string; email: string; displayName?: string };
-  packs: { packId: string; versionId: string; name: string; version: string; source: unknown; rego: string; contentHash: string }[];
+  packs: {
+    packId: string;
+    versionId: string;
+    name: string;
+    version: string;
+    source: unknown;
+    rego: string;
+    contentHash: string;
+  }[];
   budgets: Omit<Budget, "tenantId" | "id">[];
   settings: Omit<TenantSettings, "tenantId">;
   placement: Omit<Placement, "tenantId">;
@@ -211,7 +219,11 @@ export interface ControlPlaneStore {
   getMember(tenantId: string, id: string): Promise<Member | undefined>;
   findMemberByUserRef(tenantId: string, userRef: string): Promise<Member | undefined>;
   findMemberByEmail(tenantId: string, email: string): Promise<Member | undefined>;
-  findMemberByExternalId(tenantId: string, directoryId: string, externalId: string): Promise<Member | undefined>;
+  findMemberByExternalId(
+    tenantId: string,
+    directoryId: string,
+    externalId: string,
+  ): Promise<Member | undefined>;
   listMembers(tenantId: string, limit: number, after?: string): Promise<Page<Member>>;
   /** Atomic w.r.t. the last-owner rule (throws LastOwnerError). */
   updateMember(
@@ -227,29 +239,58 @@ export interface ControlPlaneStore {
   listApiKeys(tenantId: string, limit: number, after?: string): Promise<Page<ApiKeyRecord>>;
   /** Pre-tenant lookup: a row only for the exact (prefix, hash). */
   findApiKeyByLookup(prefix: string, keyHash: Buffer): Promise<ApiKeyRecord | undefined>;
-  updateApiKey(tenantId: string, id: string, patch: { revokedAt?: Date; lastUsedAt?: Date }): Promise<ApiKeyRecord | undefined>;
+  updateApiKey(
+    tenantId: string,
+    id: string,
+    patch: { revokedAt?: Date; lastUsedAt?: Date },
+  ): Promise<ApiKeyRecord | undefined>;
   revokeApiKeysOfMember(tenantId: string, memberId: string, at: Date): Promise<number>;
 
   // sessions
   insertSession(s: SessionRecord): Promise<void>;
   getSession(tenantId: string, id: string): Promise<SessionRecord | undefined>;
   /** Compare-and-set rotation: succeeds only when `expectedHash` is the current refresh hash and the session is live. */
-  rotateRefresh(tenantId: string, id: string, expectedHash: Buffer, newHash: Buffer, now: Date): Promise<boolean>;
+  rotateRefresh(
+    tenantId: string,
+    id: string,
+    expectedHash: Buffer,
+    newHash: Buffer,
+    now: Date,
+  ): Promise<boolean>;
   revokeSession(tenantId: string, id: string, at: Date, reason: string): Promise<boolean>;
-  revokeSessionsOfMember(tenantId: string, memberId: string, at: Date, reason: string): Promise<number>;
+  revokeSessionsOfMember(
+    tenantId: string,
+    memberId: string,
+    at: Date,
+    reason: string,
+  ): Promise<number>;
 
   // directories / SCIM
   insertDirectory(d: DirectoryRecord): Promise<void>;
   getDirectory(tenantId: string, id: string): Promise<DirectoryRecord | undefined>;
   listDirectories(tenantId: string): Promise<DirectoryRecord[]>;
   findDirectoryByLookup(prefix: string, tokenHash: Buffer): Promise<DirectoryRecord | undefined>;
-  updateDirectory(tenantId: string, id: string, patch: { revokedAt?: Date; lastUsedAt?: Date; tokenPrefix?: string; tokenHash?: Buffer }): Promise<void>;
-  setRoleMapping(tenantId: string, directoryId: string, groupName: string, role: Role | undefined): Promise<void>;
+  updateDirectory(
+    tenantId: string,
+    id: string,
+    patch: { revokedAt?: Date; lastUsedAt?: Date; tokenPrefix?: string; tokenHash?: Buffer },
+  ): Promise<void>;
+  setRoleMapping(
+    tenantId: string,
+    directoryId: string,
+    groupName: string,
+    role: Role | undefined,
+  ): Promise<void>;
   listRoleMappings(tenantId: string, directoryId: string): Promise<Record<string, Role>>;
   insertGroup(g: Omit<ScimGroup, "createdAt">): Promise<ScimGroup>;
   getGroup(tenantId: string, directoryId: string, id: string): Promise<ScimGroup | undefined>;
   listGroups(tenantId: string, directoryId: string): Promise<ScimGroup[]>;
-  updateGroup(tenantId: string, directoryId: string, id: string, patch: { displayName?: string; externalId?: string }): Promise<ScimGroup | undefined>;
+  updateGroup(
+    tenantId: string,
+    directoryId: string,
+    id: string,
+    patch: { displayName?: string; externalId?: string },
+  ): Promise<ScimGroup | undefined>;
   deleteGroup(tenantId: string, directoryId: string, id: string): Promise<boolean>;
   groupMembers(tenantId: string, groupId: string): Promise<string[]>;
   setGroupMembers(tenantId: string, groupId: string, memberIds: string[]): Promise<void>;
@@ -269,7 +310,11 @@ export interface ControlPlaneStore {
   getTenantKey(tenantId: string, version: number): Promise<TenantKeyRecord | undefined>;
   insertTenantKey(k: TenantKeyRecord): Promise<void>;
   putModelCredential(c: ModelCredentialRecord): Promise<ModelCredentialRecord>;
-  getModelCredential(tenantId: string, provider: string, label: string): Promise<ModelCredentialRecord | undefined>;
+  getModelCredential(
+    tenantId: string,
+    provider: string,
+    label: string,
+  ): Promise<ModelCredentialRecord | undefined>;
   listModelCredentials(tenantId: string): Promise<ModelCredentialRecord[]>;
   deleteModelCredential(tenantId: string, provider: string, label: string): Promise<boolean>;
 
@@ -278,7 +323,12 @@ export interface ControlPlaneStore {
   getPackVersion(tenantId: string, versionId: string): Promise<PackVersionRecord | undefined>;
   listPackVersions(tenantId: string): Promise<PackVersionRecord[]>;
   /** Deactivates any active assignment of the same pack and activates `versionId`, atomically. */
-  activatePackVersion(tenantId: string, versionId: string, by: string, now: Date): Promise<PolicyAssignment>;
+  activatePackVersion(
+    tenantId: string,
+    versionId: string,
+    by: string,
+    now: Date,
+  ): Promise<PolicyAssignment>;
   deactivatePack(tenantId: string, packId: string, now: Date): Promise<boolean>;
   listActiveAssignments(tenantId: string): Promise<PolicyAssignment[]>;
 

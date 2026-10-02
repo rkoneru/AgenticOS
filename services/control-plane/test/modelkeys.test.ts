@@ -34,7 +34,9 @@ describe.each(KINDS)("BYO model keys (%s store)", (kind) => {
     expect(JSON.stringify(await eventsOf(w, t.tenantId))).not.toContain("SECRET");
     expect(await w.cp.modelKeys.revealForRuntime(t.tenantId, "anthropic", "default")).toBe(SECRET);
     // errors do not echo the value
-    const bad = await w.cp.admin.putModelKey(t.owner, "Bad Provider", "x", SECRET).catch((e: Error) => e.message);
+    const bad = await w.cp.admin
+      .putModelKey(t.owner, "Bad Provider", "x", SECRET)
+      .catch((e: Error) => e.message);
     expect(String(bad)).not.toContain("SECRET");
   });
 
@@ -56,18 +58,37 @@ describe.each(KINDS)("BYO model keys (%s store)", (kind) => {
     const b = await w.tenant();
     await w.cp.admin.putModelKey(a.owner, "anthropic", "default", "A-secret");
     await w.cp.admin.putModelKey(b.owner, "anthropic", "default", "B-secret");
-    expect(await w.cp.modelKeys.revealForRuntime(a.tenantId, "anthropic", "default")).toBe("A-secret");
-    expect(await w.cp.modelKeys.revealForRuntime(b.tenantId, "anthropic", "default")).toBe("B-secret");
+    expect(await w.cp.modelKeys.revealForRuntime(a.tenantId, "anthropic", "default")).toBe(
+      "A-secret",
+    );
+    expect(await w.cp.modelKeys.revealForRuntime(b.tenantId, "anthropic", "default")).toBe(
+      "B-secret",
+    );
     expect(await w.cp.modelKeys.revealForRuntime(b.tenantId, "anthropic", "nope")).toBeUndefined();
     expect((await w.cp.admin.listModelKeys(a.owner)).length).toBe(1);
     // a ciphertext moved to another tenant/row fails to decrypt (AAD binds tenant, provider, label)
     const ca = (await w.store.getModelCredential(a.tenantId, "anthropic", "default"))!;
-    await w.store.putModelCredential({ ...ca, tenantId: b.tenantId, label: "moved", id: "00000000-0000-4000-8000-0000000000aa" });
+    await w.store.putModelCredential({
+      ...ca,
+      tenantId: b.tenantId,
+      label: "moved",
+      id: "00000000-0000-4000-8000-0000000000aa",
+    });
     expect(await w.cp.modelKeys.revealForRuntime(b.tenantId, "anthropic", "moved")).toBeUndefined();
     // within one tenant, a ciphertext copied to another label (or provider) is also refused: the AAD binds both
-    await w.store.putModelCredential({ ...ca, label: "copied", id: "00000000-0000-4000-8000-0000000000ab" });
-    await w.store.putModelCredential({ ...ca, provider: "other", id: "00000000-0000-4000-8000-0000000000ac" });
-    expect(await w.cp.modelKeys.revealForRuntime(a.tenantId, "anthropic", "copied")).toBeUndefined();
+    await w.store.putModelCredential({
+      ...ca,
+      label: "copied",
+      id: "00000000-0000-4000-8000-0000000000ab",
+    });
+    await w.store.putModelCredential({
+      ...ca,
+      provider: "other",
+      id: "00000000-0000-4000-8000-0000000000ac",
+    });
+    expect(
+      await w.cp.modelKeys.revealForRuntime(a.tenantId, "anthropic", "copied"),
+    ).toBeUndefined();
     expect(await w.cp.modelKeys.revealForRuntime(a.tenantId, "other", "default")).toBeUndefined();
     // a data key wrapped for A cannot be unwrapped for B
     const ka = (await w.store.getActiveTenantKey(a.tenantId))!;
@@ -79,12 +100,18 @@ describe.each(KINDS)("BYO model keys (%s store)", (kind) => {
     const v = await w.member(t.tenantId, "viewer");
     const bld = await w.member(t.tenantId, "builder");
     const aud = await w.member(t.tenantId, "auditor");
-    expect(await code(w.cp.admin.putModelKey(v.principal, "anthropic", "x", "s"))).toBe("forbidden");
+    expect(await code(w.cp.admin.putModelKey(v.principal, "anthropic", "x", "s"))).toBe(
+      "forbidden",
+    );
     expect(await code(w.cp.admin.listModelKeys(v.principal))).toBe("forbidden");
     expect(await code(w.cp.admin.putModelKey(bld.principal, "anthropic", "x", "s"))).toBe("ok");
     expect(await code(w.cp.admin.listModelKeys(aud.principal))).toBe("ok");
-    expect(await code(w.cp.admin.putModelKey(aud.principal, "anthropic", "x", "s"))).toBe("forbidden");
-    expect(await code(w.cp.admin.deleteModelKey(aud.principal, "anthropic", "x"))).toBe("forbidden");
+    expect(await code(w.cp.admin.putModelKey(aud.principal, "anthropic", "x", "s"))).toBe(
+      "forbidden",
+    );
+    expect(await code(w.cp.admin.deleteModelKey(aud.principal, "anthropic", "x"))).toBe(
+      "forbidden",
+    );
   });
 
   it("validates provider, label and secret", async () => {
@@ -92,13 +119,20 @@ describe.each(KINDS)("BYO model keys (%s store)", (kind) => {
     expect(await code(w.cp.admin.putModelKey(t.owner, "A", "x", "s"))).toBe("invalid");
     expect(await code(w.cp.admin.putModelKey(t.owner, "anthropic", "-bad", "s"))).toBe("invalid");
     expect(await code(w.cp.admin.putModelKey(t.owner, "anthropic", "x", ""))).toBe("invalid");
-    expect(await code(w.cp.admin.putModelKey(t.owner, "anthropic", "x", "s".repeat(9000)))).toBe("invalid");
-    expect(await code(w.cp.admin.putModelKey(t.owner, "anthropic", "x", 5 as unknown as string))).toBe("invalid");
+    expect(await code(w.cp.admin.putModelKey(t.owner, "anthropic", "x", "s".repeat(9000)))).toBe(
+      "invalid",
+    );
+    expect(
+      await code(w.cp.admin.putModelKey(t.owner, "anthropic", "x", 5 as unknown as string)),
+    ).toBe("invalid");
   });
 
   it("reuses the tenant data key across secrets and survives a concurrent first write", async () => {
     const t = await w.tenant();
-    await Promise.all([w.cp.admin.putModelKey(t.owner, "anthropic", "a", "1"), w.cp.admin.putModelKey(t.owner, "openai", "b", "2")]);
+    await Promise.all([
+      w.cp.admin.putModelKey(t.owner, "anthropic", "a", "1"),
+      w.cp.admin.putModelKey(t.owner, "openai", "b", "2"),
+    ]);
     expect(await w.cp.modelKeys.revealForRuntime(t.tenantId, "anthropic", "a")).toBe("1");
     expect(await w.cp.modelKeys.revealForRuntime(t.tenantId, "openai", "b")).toBe("2");
     expect((await w.store.getActiveTenantKey(t.tenantId))?.version).toBe(1);

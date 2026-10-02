@@ -55,13 +55,25 @@ export class ApiKeyService {
     return hmac(this.o.pepper, "apikey\0", fullKey);
   }
 
-  private async insert(p: Principal, i: CreateKeyInput, extra: { rotatedFrom?: string; ownerMemberId?: string }): Promise<CreatedKey> {
-    if (!/^[\w .:/-]{1,80}$/.test(i.name)) throw invalid("name must be 1-80 characters of letters, digits, space and ._:/-");
-    if (!Array.isArray(i.scopes) || i.scopes.length === 0 || i.scopes.length > 32 || !i.scopes.every((s) => typeof s === "string" && SCOPE_RE.test(s)))
+  private async insert(
+    p: Principal,
+    i: CreateKeyInput,
+    extra: { rotatedFrom?: string; ownerMemberId?: string },
+  ): Promise<CreatedKey> {
+    if (!/^[\w .:/-]{1,80}$/.test(i.name))
+      throw invalid("name must be 1-80 characters of letters, digits, space and ._:/-");
+    if (
+      !Array.isArray(i.scopes) ||
+      i.scopes.length === 0 ||
+      i.scopes.length > 32 ||
+      !i.scopes.every((s) => typeof s === "string" && SCOPE_RE.test(s))
+    )
       throw invalid("scopes must be a non-empty list of '<resource>:read|write|*' or '*'");
     const days = i.expiresInDays ?? 90;
-    if (!Number.isFinite(days) || days <= 0 || days > MAX_KEY_DAYS) throw invalid(`expiresInDays must be in (0, ${MAX_KEY_DAYS}]`);
-    if (i.environment !== undefined && !["dev", "staging", "prod"].includes(i.environment)) throw invalid("unknown environment");
+    if (!Number.isFinite(days) || days <= 0 || days > MAX_KEY_DAYS)
+      throw invalid(`expiresInDays must be in (0, ${MAX_KEY_DAYS}]`);
+    if (i.environment !== undefined && !["dev", "staging", "prod"].includes(i.environment))
+      throw invalid("unknown environment");
     const prefix = randomHex(8);
     const full = `axk_${prefix}_${randomToken(32)}`;
     const now = this.now();
@@ -92,7 +104,11 @@ export class ApiKeyService {
     return k;
   }
 
-  async list(p: Principal, limit = 50, after?: string): Promise<{ items: PublicApiKey[]; nextCursor?: string }> {
+  async list(
+    p: Principal,
+    limit = 50,
+    after?: string,
+  ): Promise<{ items: PublicApiKey[]; nextCursor?: string }> {
     const r = await this.o.store.listApiKeys(p.tenantId, Math.min(Math.max(limit, 1), 200), after);
     return { items: r.items.map(strip), ...(r.nextCursor ? { nextCursor: r.nextCursor } : {}) };
   }
@@ -107,7 +123,15 @@ export class ApiKeyService {
         name: old.name,
         scopes: old.scopes,
         environment: old.environment,
-        expiresInDays: old.expiresAt ? Math.max(1 / 24, Math.min(MAX_KEY_DAYS, (old.expiresAt.getTime() - old.createdAt.getTime()) / 86_400_000)) : 90,
+        expiresInDays: old.expiresAt
+          ? Math.max(
+              1 / 24,
+              Math.min(
+                MAX_KEY_DAYS,
+                (old.expiresAt.getTime() - old.createdAt.getTime()) / 86_400_000,
+              ),
+            )
+          : 90,
       },
       { rotatedFrom: old.id, ownerMemberId: old.ownerMemberId },
     );
@@ -138,6 +162,13 @@ export class ApiKeyService {
     if (!owner || owner.status !== "active") return undefined;
     if (!rec.lastUsedAt || now.getTime() - rec.lastUsedAt.getTime() >= this.granularity)
       await this.o.store.updateApiKey(rec.tenantId, rec.id, { lastUsedAt: now });
-    return { tenantId: rec.tenantId, memberId: owner.id, role: owner.role, credential: "api_key", apiKeyId: rec.id, scopes: rec.scopes };
+    return {
+      tenantId: rec.tenantId,
+      memberId: owner.id,
+      role: owner.role,
+      credential: "api_key",
+      apiKeyId: rec.id,
+      scopes: rec.scopes,
+    };
   }
 }

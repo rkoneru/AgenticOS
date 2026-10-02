@@ -21,7 +21,10 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
 
   it("creates 256-bit keys, shows the secret once and never stores it", async () => {
     const t = await w.tenant();
-    const k = await w.cp.apiKeys.create(t.owner, { name: "ci", scopes: ["runs:write", "runs:read"] });
+    const k = await w.cp.apiKeys.create(t.owner, {
+      name: "ci",
+      scopes: ["runs:write", "runs:read"],
+    });
     expect(k.secret).toMatch(/^axk_[0-9a-f]{16}_[A-Za-z0-9_-]{43}$/);
     expect(Buffer.from(k.secret.slice(21), "base64url")).toHaveLength(32);
     expect(JSON.stringify(k.key)).not.toContain(k.secret.slice(21));
@@ -42,7 +45,14 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
     const bld = await w.member(t.tenantId, "builder");
     const k = await w.cp.apiKeys.create(bld.principal, { name: "svc", scopes: ["policies:read"] });
     const p = await w.cp.apiKeys.verify(k.secret);
-    expect(p).toMatchObject({ tenantId: t.tenantId, memberId: bld.memberId, role: "builder", credential: "api_key", apiKeyId: k.key.id, scopes: ["policies:read"] });
+    expect(p).toMatchObject({
+      tenantId: t.tenantId,
+      memberId: bld.memberId,
+      role: "builder",
+      credential: "api_key",
+      apiKeyId: k.key.id,
+      scopes: ["policies:read"],
+    });
   });
 
   it("rejects unknown, malformed, truncated, case-changed and other-prefix keys with the same answer", async () => {
@@ -52,8 +62,17 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
     const prefix = k.secret.slice(4, 20);
     const secret = k.secret.slice(21);
     const bad = [
-      "", "axk_", "nonsense", k.secret.slice(0, -1), `${k.secret}x`, `${axk}_${prefix}_${secret.replace(/./, (c) => (c === "A" ? "B" : "A"))}`,
-      `${axk}_${"0".repeat(16)}_${secret}`, `${axk}_${prefix}_${"A".repeat(43)}`, k.secret.toUpperCase(), ` ${k.secret}`, `${k.secret}\n`,
+      "",
+      "axk_",
+      "nonsense",
+      k.secret.slice(0, -1),
+      `${k.secret}x`,
+      `${axk}_${prefix}_${secret.replace(/./, (c) => (c === "A" ? "B" : "A"))}`,
+      `${axk}_${"0".repeat(16)}_${secret}`,
+      `${axk}_${prefix}_${"A".repeat(43)}`,
+      k.secret.toUpperCase(),
+      ` ${k.secret}`,
+      `${k.secret}\n`,
     ];
     for (const b of bad) expect(await w.cp.apiKeys.verify(b), b).toBeUndefined();
   });
@@ -84,15 +103,27 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
     expect((await w.store.getApiKey(t.tenantId, k.key.id))!.lastUsedAt).toEqual(first);
     w.clock.advance(61);
     await w.cp.apiKeys.verify(k.secret);
-    expect((await w.store.getApiKey(t.tenantId, k.key.id))!.lastUsedAt!.getTime()).toBeGreaterThan(first.getTime());
+    expect((await w.store.getApiKey(t.tenantId, k.key.id))!.lastUsedAt!.getTime()).toBeGreaterThan(
+      first.getTime(),
+    );
   });
 
   it("rotate returns a new key and kills the old; revoked keys cannot be rotated; ids are tenant scoped", async () => {
     const a = await w.tenant();
     const b = await w.tenant();
-    const k = await w.cp.apiKeys.create(a.owner, { name: "x", scopes: ["runs:read"], environment: "staging", expiresInDays: 30 });
+    const k = await w.cp.apiKeys.create(a.owner, {
+      name: "x",
+      scopes: ["runs:read"],
+      environment: "staging",
+      expiresInDays: 30,
+    });
     const r = await w.cp.apiKeys.rotate(a.owner, k.key.id);
-    expect(r.key).toMatchObject({ name: "x", scopes: ["runs:read"], environment: "staging", rotatedFrom: k.key.id });
+    expect(r.key).toMatchObject({
+      name: "x",
+      scopes: ["runs:read"],
+      environment: "staging",
+      rotatedFrom: k.key.id,
+    });
     expect(await w.cp.apiKeys.verify(k.secret)).toBeUndefined();
     expect(await w.cp.apiKeys.verify(r.secret)).toBeDefined();
     expect(await code(w.cp.apiKeys.rotate(a.owner, k.key.id))).toBe("conflict");
@@ -114,7 +145,8 @@ describe.each(KINDS)("API keys (%s store)", (kind) => {
       ["days3", { name: "x", scopes: ["*"], expiresInDays: Number.NaN }],
       ["env", { name: "x", scopes: ["*"], environment: "qa" as "dev" }],
     ];
-    for (const [n, i] of bad) expect(await code(w.cp.apiKeys.create(t.owner, i)), n).toBe("invalid");
+    for (const [n, i] of bad)
+      expect(await code(w.cp.apiKeys.create(t.owner, i)), n).toBe("invalid");
     const many = Array.from({ length: 33 }, (_, i) => `r${i}x:read`);
     expect(await code(w.cp.apiKeys.create(t.owner, { name: "x", scopes: many }))).toBe("invalid");
   });

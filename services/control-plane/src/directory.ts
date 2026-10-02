@@ -5,7 +5,14 @@ import type { AdminAudit } from "./audit.js";
 import type { DirectoryEvent } from "./idp.js";
 import { isExternalRole, maxRole, type Role } from "./roles.js";
 import type { SessionService } from "./sessions.js";
-import { LastOwnerError, StoreConflict, type ControlPlaneStore, type DirectoryRecord, type Member, type ScimGroup } from "./types.js";
+import {
+  LastOwnerError,
+  StoreConflict,
+  type ControlPlaneStore,
+  type DirectoryRecord,
+  type Member,
+  type ScimGroup,
+} from "./types.js";
 
 export interface DirectoryContext {
   tenantId: string;
@@ -53,9 +60,14 @@ export class DirectoryService {
   }
 
   // ---- directory credential lifecycle (admin API calls these after authorization)
-  async createDirectory(tenantId: string, name: string, defaultRole: Role): Promise<{ directory: DirectoryRecord; token: string }> {
+  async createDirectory(
+    tenantId: string,
+    name: string,
+    defaultRole: Role,
+  ): Promise<{ directory: DirectoryRecord; token: string }> {
     if (!/^[\w .-]{1,80}$/.test(name)) throw invalid("invalid directory name");
-    if (!isExternalRole(defaultRole)) throw invalid("defaultRole must be an external role (never owner)");
+    if (!isExternalRole(defaultRole))
+      throw invalid("defaultRole must be an external role (never owner)");
     const prefix = randomHex(8);
     const token = `axs_${prefix}_${randomToken(32)}`;
     const directory: DirectoryRecord = {
@@ -77,18 +89,29 @@ export class DirectoryService {
     if (!d || d.status !== "active") throw notFound("directory not found");
     const prefix = randomHex(8);
     const token = `axs_${prefix}_${randomToken(32)}`;
-    await this.o.store.updateDirectory(tenantId, directoryId, { tokenPrefix: prefix, tokenHash: this.tokenHash(token) });
+    await this.o.store.updateDirectory(tenantId, directoryId, {
+      tokenPrefix: prefix,
+      tokenHash: this.tokenHash(token),
+    });
     return token;
   }
 
   async revokeDirectory(tenantId: string, directoryId: string): Promise<void> {
-    if (!(await this.o.store.getDirectory(tenantId, directoryId))) throw notFound("directory not found");
+    if (!(await this.o.store.getDirectory(tenantId, directoryId)))
+      throw notFound("directory not found");
     await this.o.store.updateDirectory(tenantId, directoryId, { revokedAt: this.now() });
   }
 
-  async setRoleMapping(tenantId: string, directoryId: string, groupName: string, role: Role | undefined): Promise<void> {
-    if (!(await this.o.store.getDirectory(tenantId, directoryId))) throw notFound("directory not found");
-    if (role !== undefined && !isExternalRole(role)) throw invalid("a directory group can never map to owner");
+  async setRoleMapping(
+    tenantId: string,
+    directoryId: string,
+    groupName: string,
+    role: Role | undefined,
+  ): Promise<void> {
+    if (!(await this.o.store.getDirectory(tenantId, directoryId)))
+      throw notFound("directory not found");
+    if (role !== undefined && !isExternalRole(role))
+      throw invalid("a directory group can never map to owner");
     if (groupName.length === 0 || groupName.length > 200) throw invalid("invalid group name");
     await this.o.store.setRoleMapping(tenantId, directoryId, groupName, role);
   }
@@ -98,21 +121,31 @@ export class DirectoryService {
     const m = /^Bearer (\S+)$/.exec(authorization ?? "");
     const tm = m ? TOKEN_RE.exec(m[1] as string) : null;
     if (!m || !tm) return undefined;
-    const d = await this.o.store.findDirectoryByLookup(tm[1] as string, this.tokenHash(m[1] as string));
+    const d = await this.o.store.findDirectoryByLookup(
+      tm[1] as string,
+      this.tokenHash(m[1] as string),
+    );
     if (!d || d.status !== "active") return undefined;
     await this.o.store.updateDirectory(d.tenantId, d.id, { lastUsedAt: this.now() });
     return { tenantId: d.tenantId, directory: d };
   }
 
   // ---- audit
-  private async audit(ctx: DirectoryContext, action: string, decision: "ALLOW" | "DENY", detail: Record<string, unknown>): Promise<void> {
+  private async audit(
+    ctx: DirectoryContext,
+    action: string,
+    decision: "ALLOW" | "DENY",
+    detail: Record<string, unknown>,
+  ): Promise<void> {
     await this.o.audit.record({
       tenantId: ctx.tenantId,
       actor: { type: "system", id: `scim:${ctx.directory.id}` },
       action,
       decision,
       policyVersion: "scim-directory-token",
-      reason: Object.entries(detail).map(([k, v]) => `${k}=${String(v)}`).join(" "),
+      reason: Object.entries(detail)
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join(" "),
       inputs: { directory: ctx.directory.id, ...detail },
       outputs: {},
     });
@@ -157,30 +190,51 @@ export class DirectoryService {
       await this.audit(ctx, "scim.user.create", "ALLOW", { member: m.id, active: u.active });
       return m;
     } catch (err) {
-      if (err instanceof StoreConflict) throw conflict("a user with this userName, email or externalId already exists");
+      if (err instanceof StoreConflict)
+        throw conflict("a user with this userName, email or externalId already exists");
       throw err;
     }
   }
 
   private validateUser(u: DirectoryUserInput): void {
-    if (typeof u.email !== "string" || !EMAIL.test(u.email)) throw invalid("a valid email (userName or emails[].value) is required");
-    if (u.externalId !== undefined && (typeof u.externalId !== "string" || u.externalId.length === 0 || u.externalId.length > 256)) throw invalid("invalid externalId");
-    if (u.displayName !== undefined && (typeof u.displayName !== "string" || u.displayName.length > 256)) throw invalid("invalid displayName");
+    if (typeof u.email !== "string" || !EMAIL.test(u.email))
+      throw invalid("a valid email (userName or emails[].value) is required");
+    if (
+      u.externalId !== undefined &&
+      (typeof u.externalId !== "string" || u.externalId.length === 0 || u.externalId.length > 256)
+    )
+      throw invalid("invalid externalId");
+    if (
+      u.displayName !== undefined &&
+      (typeof u.displayName !== "string" || u.displayName.length > 256)
+    )
+      throw invalid("invalid displayName");
   }
 
   /** Apply a change to a directory-provisioned member. Owners are never modified except by deprovisioning. */
-  async updateUser(ctx: DirectoryContext, id: string, change: Partial<DirectoryUserInput>): Promise<Member> {
+  async updateUser(
+    ctx: DirectoryContext,
+    id: string,
+    change: Partial<DirectoryUserInput>,
+  ): Promise<Member> {
     const m = await this.getUser(ctx, id);
     if (!m) throw notFound("user not found");
     let cur = m;
-    if (change.userName !== undefined || change.email !== undefined || change.displayName !== undefined) {
+    if (
+      change.userName !== undefined ||
+      change.email !== undefined ||
+      change.displayName !== undefined
+    ) {
       if (change.email !== undefined && !EMAIL.test(change.email)) throw invalid("invalid email");
       try {
         cur =
           (await this.o.store.updateMember(
             ctx.tenantId,
             id,
-            { ...(change.email ? { email: change.email.toLowerCase() } : {}), ...(change.displayName !== undefined ? { displayName: change.displayName } : {}) },
+            {
+              ...(change.email ? { email: change.email.toLowerCase() } : {}),
+              ...(change.displayName !== undefined ? { displayName: change.displayName } : {}),
+            },
             this.now(),
           )) ?? cur;
       } catch (err) {
@@ -188,9 +242,15 @@ export class DirectoryService {
         throw err;
       }
     }
-    if (change.active === false && cur.status === "active") cur = await this.deprovision(ctx, cur, "scim.user.deprovision");
+    if (change.active === false && cur.status === "active")
+      cur = await this.deprovision(ctx, cur, "scim.user.deprovision");
     else if (change.active === true && cur.status === "deprovisioned") {
-      cur = (await this.o.store.updateMember(ctx.tenantId, id, { status: "active" }, this.now())) as Member;
+      cur = (await this.o.store.updateMember(
+        ctx.tenantId,
+        id,
+        { status: "active" },
+        this.now(),
+      )) as Member;
       await this.audit(ctx, "scim.user.reactivate", "ALLOW", { member: id });
       cur = await this.recomputeRole(ctx, cur);
     }
@@ -202,16 +262,29 @@ export class DirectoryService {
     let out = m;
     let lastOwner = false;
     try {
-      out = (await this.o.store.updateMember(ctx.tenantId, m.id, { status: "deprovisioned" }, this.now())) ?? m;
+      out =
+        (await this.o.store.updateMember(
+          ctx.tenantId,
+          m.id,
+          { status: "deprovisioned" },
+          this.now(),
+        )) ?? m;
     } catch (err) {
       if (!(err instanceof LastOwnerError)) throw err;
       lastOwner = true;
     }
     const sessions = await this.o.sessions.revokeAllOfMember(ctx.tenantId, m.id, "deprovisioned");
     const keys = await this.o.store.revokeApiKeysOfMember(ctx.tenantId, m.id, this.now());
-    await this.audit(ctx, lastOwner ? `${action}.last_owner_locked_out` : action, "ALLOW", { member: m.id, sessions, keys });
+    await this.audit(ctx, lastOwner ? `${action}.last_owner_locked_out` : action, "ALLOW", {
+      member: m.id,
+      sessions,
+      keys,
+    });
     if (lastOwner)
-      throw new CpError("conflict", "the last owner cannot be deprovisioned; its sessions and API keys were revoked, an owner must be appointed");
+      throw new CpError(
+        "conflict",
+        "the last owner cannot be deprovisioned; its sessions and API keys were revoked, an owner must be appointed",
+      );
     return out;
   }
 
@@ -227,16 +300,35 @@ export class DirectoryService {
     if (m.role === "owner" || m.directoryId !== ctx.directory.id) return m;
     const mappings = await this.o.store.listRoleMappings(ctx.tenantId, ctx.directory.id);
     const groups = await this.o.store.groupsOfMember(ctx.tenantId, ctx.directory.id, m.id);
-    const mapped = groups.map((g) => mappings[g.displayName]).filter((r): r is Role => r !== undefined && isExternalRole(r));
+    const mapped = groups
+      .map((g) => mappings[g.displayName])
+      .filter((r): r is Role => r !== undefined && isExternalRole(r));
     const role = maxRole([ctx.directory.defaultRole, ...mapped]) as Role;
     if (role === m.role) return m;
-    const next = (await this.o.store.updateMember(ctx.tenantId, m.id, { role }, this.now())) as Member;
-    await this.audit(ctx, "scim.user.role_change", "ALLOW", { member: m.id, from: m.role, to: role });
+    const next = (await this.o.store.updateMember(
+      ctx.tenantId,
+      m.id,
+      { role },
+      this.now(),
+    )) as Member;
+    await this.audit(ctx, "scim.user.role_change", "ALLOW", {
+      member: m.id,
+      from: m.role,
+      to: role,
+    });
     return next;
   }
 
-  async createGroup(ctx: DirectoryContext, g: { displayName: string; externalId?: string; memberIds: string[] }): Promise<ScimGroup> {
-    if (typeof g.displayName !== "string" || g.displayName.length === 0 || g.displayName.length > 200) throw invalid("displayName is required");
+  async createGroup(
+    ctx: DirectoryContext,
+    g: { displayName: string; externalId?: string; memberIds: string[] },
+  ): Promise<ScimGroup> {
+    if (
+      typeof g.displayName !== "string" ||
+      g.displayName.length === 0 ||
+      g.displayName.length > 200
+    )
+      throw invalid("displayName is required");
     try {
       const grp = await this.o.store.insertGroup({
         tenantId: ctx.tenantId,
@@ -249,7 +341,8 @@ export class DirectoryService {
       await this.audit(ctx, "scim.group.create", "ALLOW", { group: grp.id });
       return grp;
     } catch (err) {
-      if (err instanceof StoreConflict) throw conflict("a group with this displayName already exists");
+      if (err instanceof StoreConflict)
+        throw conflict("a group with this displayName already exists");
       throw err;
     }
   }
@@ -276,7 +369,11 @@ export class DirectoryService {
       valid.push(m);
     }
     const before = await this.o.store.groupMembers(ctx.tenantId, groupId);
-    await this.o.store.setGroupMembers(ctx.tenantId, groupId, valid.map((m) => m.id));
+    await this.o.store.setGroupMembers(
+      ctx.tenantId,
+      groupId,
+      valid.map((m) => m.id),
+    );
     const affected = new Set([...before, ...valid.map((m) => m.id)]);
     for (const id of affected) {
       const m = await this.o.store.getMember(ctx.tenantId, id);
@@ -284,17 +381,23 @@ export class DirectoryService {
     }
   }
 
-  async updateGroup(ctx: DirectoryContext, id: string, patch: { displayName?: string; externalId?: string }): Promise<ScimGroup> {
+  async updateGroup(
+    ctx: DirectoryContext,
+    id: string,
+    patch: { displayName?: string; externalId?: string },
+  ): Promise<ScimGroup> {
     try {
       const g = await this.o.store.updateGroup(ctx.tenantId, ctx.directory.id, id, patch);
       if (!g) throw notFound("group not found");
-      if (patch.displayName !== undefined) for (const mid of await this.o.store.groupMembers(ctx.tenantId, id)) {
-        const m = await this.o.store.getMember(ctx.tenantId, mid);
-        if (m) await this.recomputeRole(ctx, m);
-      }
+      if (patch.displayName !== undefined)
+        for (const mid of await this.o.store.groupMembers(ctx.tenantId, id)) {
+          const m = await this.o.store.getMember(ctx.tenantId, mid);
+          if (m) await this.recomputeRole(ctx, m);
+        }
       return g;
     } catch (err) {
-      if (err instanceof StoreConflict) throw conflict("a group with this displayName already exists");
+      if (err instanceof StoreConflict)
+        throw conflict("a group with this displayName already exists");
       throw err;
     }
   }
@@ -317,13 +420,27 @@ export class DirectoryService {
     switch (ev.type) {
       case "user.created":
       case "user.updated": {
-        const existing = await this.o.store.findMemberByExternalId(ctx.tenantId, ctx.directory.id, ev.user.externalId);
-        if (existing) await this.updateUser(ctx, existing.id, { userName: ev.user.userName, email: ev.user.email, active: ev.user.active, ...(ev.user.displayName ? { displayName: ev.user.displayName } : {}) });
+        const existing = await this.o.store.findMemberByExternalId(
+          ctx.tenantId,
+          ctx.directory.id,
+          ev.user.externalId,
+        );
+        if (existing)
+          await this.updateUser(ctx, existing.id, {
+            userName: ev.user.userName,
+            email: ev.user.email,
+            active: ev.user.active,
+            ...(ev.user.displayName ? { displayName: ev.user.displayName } : {}),
+          });
         else await this.createUser(ctx, ev.user);
         return;
       }
       case "user.deleted": {
-        const m = await this.o.store.findMemberByExternalId(ctx.tenantId, ctx.directory.id, ev.externalId);
+        const m = await this.o.store.findMemberByExternalId(
+          ctx.tenantId,
+          ctx.directory.id,
+          ev.externalId,
+        );
         if (m) await this.deleteUser(ctx, m.id);
         return;
       }
@@ -335,8 +452,15 @@ export class DirectoryService {
           const m = await this.o.store.findMemberByExternalId(ctx.tenantId, ctx.directory.id, ext);
           if (m) ids.push(m.id);
         }
-        const g = groups.find((x) => x.externalId === ev.group.externalId || x.displayName === ev.group.name);
-        if (!g) await this.createGroup(ctx, { displayName: ev.group.name, externalId: ev.group.externalId, memberIds: ids });
+        const g = groups.find(
+          (x) => x.externalId === ev.group.externalId || x.displayName === ev.group.name,
+        );
+        if (!g)
+          await this.createGroup(ctx, {
+            displayName: ev.group.name,
+            externalId: ev.group.externalId,
+            memberIds: ids,
+          });
         else {
           await this.updateGroup(ctx, g.id, { displayName: ev.group.name });
           await this.setMembers(ctx, g.id, ids);

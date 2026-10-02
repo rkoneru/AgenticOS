@@ -1,4 +1,12 @@
-export const ROLES = ["owner", "admin", "builder", "operator", "auditor", "billing", "viewer"] as const;
+export const ROLES = [
+  "owner",
+  "admin",
+  "builder",
+  "operator",
+  "auditor",
+  "billing",
+  "viewer",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Privilege rank. A member may grant or modify only roles at or below their own (the role ceiling). */
@@ -16,7 +24,14 @@ export const isRole = (v: unknown): v is Role =>
   typeof v === "string" && (ROLES as readonly string[]).includes(v);
 
 /** Roles an IdP (SCIM, JIT) may ever produce. `owner` is never assignable from outside the tenant's own admins. */
-export const EXTERNAL_ROLES: readonly Role[] = ["admin", "builder", "operator", "auditor", "billing", "viewer"];
+export const EXTERNAL_ROLES: readonly Role[] = [
+  "admin",
+  "builder",
+  "operator",
+  "auditor",
+  "billing",
+  "viewer",
+];
 export const isExternalRole = (v: unknown): v is Role =>
   isRole(v) && (EXTERNAL_ROLES as readonly string[]).includes(v);
 
@@ -25,4 +40,7 @@ export const withinCeiling = (actor: Role, target: Role): boolean =>
   ROLE_RANK[target] <= ROLE_RANK[actor];
 
 export const maxRole = (roles: readonly Role[]): Role | undefined =>
-  roles.reduce<Role | undefined>((m, r) => (m === undefined || ROLE_RANK[r] > ROLE_RANK[m] ? r : m), undefined);
+  roles.reduce<Role | undefined>(
+    (m, r) => (m === undefined || ROLE_RANK[r] > ROLE_RANK[m] ? r : m),
+    undefined,
+  );

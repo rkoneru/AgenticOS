@@ -65,9 +65,15 @@ export interface World {
   pool?: pg.Pool;
   region: string;
   /** Provision a tenant with an owner; returns ids and the owner's authenticated principal. */
-  tenant(slug?: string): Promise<{ tenantId: string; owner: Principal; ownerId: string; slug: string }>;
+  tenant(
+    slug?: string,
+  ): Promise<{ tenantId: string; owner: Principal; ownerId: string; slug: string }>;
   /** Insert a member directly through the store and log them in (real session, real token). */
-  member(tenantId: string, role: Role, email?: string): Promise<{ principal: Principal; memberId: string; email: string }>;
+  member(
+    tenantId: string,
+    role: Role,
+    email?: string,
+  ): Promise<{ principal: Principal; memberId: string; email: string }>;
   login(tenantId: string, memberId: string): Promise<Principal>;
   close(): Promise<void>;
 }
@@ -127,13 +133,25 @@ export async function makeWorld(kind: Kind, over: Partial<WireConfig> = {}): Pro
       return p;
     },
     async tenant(slug = `t-${randomUUID().slice(0, 12)}`) {
-      const r = await cp.provisioner.signup({ slug, name: `Tenant ${slug}`, ownerEmail: `owner@${slug}.test`, region });
+      const r = await cp.provisioner.signup({
+        slug,
+        name: `Tenant ${slug}`,
+        ownerEmail: `owner@${slug}.test`,
+        region,
+      });
       const owner = await w.login(r.tenantId, r.ownerMemberId);
       return { tenantId: r.tenantId, owner, ownerId: r.ownerMemberId, slug };
     },
     async member(tenantId, role, email = `${role}-${randomUUID().slice(0, 8)}@x.test`) {
       const id = randomUUID();
-      await store.insertMember({ tenantId, id, userRef: `test:${id}`, email, role, status: "active" });
+      await store.insertMember({
+        tenantId,
+        id,
+        userRef: `test:${id}`,
+        email,
+        role,
+        status: "active",
+      });
       return { principal: await w.login(tenantId, id), memberId: id, email };
     },
     async close() {
@@ -143,4 +161,5 @@ export async function makeWorld(kind: Kind, over: Partial<WireConfig> = {}): Pro
   return w;
 }
 
-export const eventsOf = (w: World, tenantId: string) => w.auditStore.listEvents(tenantId, { limit: 1000 });
+export const eventsOf = (w: World, tenantId: string) =>
+  w.auditStore.listEvents(tenantId, { limit: 1000 });

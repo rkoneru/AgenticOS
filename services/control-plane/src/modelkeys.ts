@@ -17,7 +17,8 @@ const PROVIDER = /^[a-z][a-z0-9_-]{1,31}$/;
 const LABEL = /^[a-z0-9][a-z0-9_.-]{0,62}$/;
 const MAX_SECRET = 8192;
 
-const aad = (tenantId: string, provider: string, label: string): string => `axis-byo:${tenantId}:${provider}:${label}`;
+const aad = (tenantId: string, provider: string, label: string): string =>
+  `axis-byo:${tenantId}:${provider}:${label}`;
 
 /**
  * BYO model keys with envelope encryption. One AES-256 data key per tenant, wrapped by the KMS (tenant bound as context); each
@@ -28,7 +29,12 @@ const aad = (tenantId: string, provider: string, label: string): string => `axis
 export class ModelKeyService {
   private readonly newId: () => string;
   constructor(
-    private readonly o: { store: ControlPlaneStore; kms: Kms; now?: () => Date; newId?: () => string },
+    private readonly o: {
+      store: ControlPlaneStore;
+      kms: Kms;
+      now?: () => Date;
+      newId?: () => string;
+    },
   ) {
     this.newId = o.newId ?? randomUUID;
   }
@@ -41,20 +47,29 @@ export class ModelKeyService {
     if (!rec) {
       const dk = await this.o.kms.generateDataKey(tenantId);
       try {
-        await this.o.store.insertTenantKey({ tenantId, version: 1, kmsKeyId: dk.keyId, wrappedDek: dk.wrapped });
+        await this.o.store.insertTenantKey({
+          tenantId,
+          version: 1,
+          kmsKeyId: dk.keyId,
+          wrappedDek: dk.wrapped,
+        });
       } catch {
         // A concurrent first write won the race; use its key.
       }
       rec = await this.o.store.getActiveTenantKey(tenantId);
       if (!rec) throw new Error("tenant key unavailable");
     }
-    return { version: rec.version, dek: await this.o.kms.unwrap(tenantId, rec.kmsKeyId, rec.wrappedDek) };
+    return {
+      version: rec.version,
+      dek: await this.o.kms.unwrap(tenantId, rec.kmsKeyId, rec.wrappedDek),
+    };
   }
 
   async put(p: Principal, provider: string, label: string, value: string): Promise<PublicModelKey> {
     if (!PROVIDER.test(provider)) throw invalid("provider must match ^[a-z][a-z0-9_-]{1,31}$");
     if (!LABEL.test(label)) throw invalid("label must match ^[a-z0-9][a-z0-9_.-]{0,62}$");
-    if (typeof value !== "string" || value.length === 0 || value.length > MAX_SECRET) throw invalid(`secret must be 1-${MAX_SECRET} characters`);
+    if (typeof value !== "string" || value.length === 0 || value.length > MAX_SECRET)
+      throw invalid(`secret must be 1-${MAX_SECRET} characters`);
     const { version, dek } = await this.activeKey(p.tenantId);
     const box = seal(dek, Buffer.from(value, "utf8"), aad(p.tenantId, provider, label));
     dek.fill(0);
@@ -76,11 +91,16 @@ export class ModelKeyService {
   }
 
   async delete(p: Principal, provider: string, label: string): Promise<void> {
-    if (!(await this.o.store.deleteModelCredential(p.tenantId, provider, label))) throw notFound("model key not found");
+    if (!(await this.o.store.deleteModelCredential(p.tenantId, provider, label)))
+      throw notFound("model key not found");
   }
 
   /** Runtime path only (tenant is an argument here because the caller is a service credential, see runtime-bridge.ts). */
-  async revealForRuntime(tenantId: string, provider: string, label: string): Promise<string | undefined> {
+  async revealForRuntime(
+    tenantId: string,
+    provider: string,
+    label: string,
+  ): Promise<string | undefined> {
     const rec = await this.o.store.getModelCredential(tenantId, provider, label);
     if (!rec) return undefined;
     const tk = await this.o.store.getTenantKey(tenantId, rec.keyVersion);

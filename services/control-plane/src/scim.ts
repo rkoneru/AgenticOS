@@ -22,7 +22,15 @@ export interface ScimResponse {
 
 /** RFC 7644 section 3.12 error body. */
 export function scimError(status: number, detail: string, scimType?: string): ScimResponse {
-  return { status, body: { schemas: [SCIM_ERROR], status: String(status), ...(scimType ? { scimType } : {}), detail } };
+  return {
+    status,
+    body: {
+      schemas: [SCIM_ERROR],
+      status: String(status),
+      ...(scimType ? { scimType } : {}),
+      detail,
+    },
+  };
 }
 
 class ScimFail extends Error {
@@ -42,8 +50,16 @@ export interface FilterTerm {
   value?: string | boolean;
 }
 
-const FILTER_ATTRS = new Set(["username", "externalid", "emails.value", "displayname", "active", "id"]);
-const TERM = /^\s*([A-Za-z][A-Za-z.]*)\s+(eq|ne|co|sw|pr)(?:\s+("(?:[^"\\]|\\.)*"|true|false))?\s*$/i;
+const FILTER_ATTRS = new Set([
+  "username",
+  "externalid",
+  "emails.value",
+  "displayname",
+  "active",
+  "id",
+]);
+const TERM =
+  /^\s*([A-Za-z][A-Za-z.]*)\s+(eq|ne|co|sw|pr)(?:\s+("(?:[^"\\]|\\.)*"|true|false))?\s*$/i;
 
 /** Parses `attr op "value" [and attr op value ...]`. Anything else (or / not / parentheses / unknown attributes) is `invalidFilter`. */
 export function parseFilter(filter: string): FilterTerm[] {
@@ -51,10 +67,16 @@ export function parseFilter(filter: string): FilterTerm[] {
   const parts = splitAnd(filter);
   return parts.map((p) => {
     const m = TERM.exec(p);
-    if (!m) throw new ScimFail(400, `unsupported filter expression: ${p.trim().slice(0, 60)}`, "invalidFilter");
+    if (!m)
+      throw new ScimFail(
+        400,
+        `unsupported filter expression: ${p.trim().slice(0, 60)}`,
+        "invalidFilter",
+      );
     const attr = (m[1] as string).toLowerCase();
     const op = (m[2] as string).toLowerCase() as FilterTerm["op"];
-    if (!FILTER_ATTRS.has(attr)) throw new ScimFail(400, `unsupported filter attribute: ${attr}`, "invalidFilter");
+    if (!FILTER_ATTRS.has(attr))
+      throw new ScimFail(400, `unsupported filter attribute: ${attr}`, "invalidFilter");
     if (op === "pr") {
       if (m[3] !== undefined) throw new ScimFail(400, "pr takes no value", "invalidFilter");
       return { attr, op };
@@ -86,7 +108,10 @@ function splitAnd(s: string): string[] {
   return out;
 }
 
-function matches(terms: FilterTerm[], get: (attr: string) => string | boolean | undefined): boolean {
+function matches(
+  terms: FilterTerm[],
+  get: (attr: string) => string | boolean | undefined,
+): boolean {
   return terms.every((t) => {
     const v = get(t.attr);
     if (t.op === "pr") return v !== undefined && v !== "";
@@ -96,7 +121,13 @@ function matches(terms: FilterTerm[], get: (attr: string) => string | boolean | 
     }
     const a = v.toLowerCase();
     const b = (t.value as string).toLowerCase(); // SCIM string attributes here are case-insensitive
-    return t.op === "eq" ? a === b : t.op === "ne" ? a !== b : t.op === "co" ? a.includes(b) : a.startsWith(b);
+    return t.op === "eq"
+      ? a === b
+      : t.op === "ne"
+        ? a !== b
+        : t.op === "co"
+          ? a.includes(b)
+          : a.startsWith(b);
   });
 }
 
@@ -109,7 +140,11 @@ const userResource = (m: Member): Record<string, unknown> => ({
   ...(m.displayName ? { displayName: m.displayName } : {}),
   emails: [{ value: m.email, primary: true }],
   active: m.status === "active",
-  meta: { resourceType: "User", created: m.createdAt.toISOString(), lastModified: m.updatedAt.toISOString() },
+  meta: {
+    resourceType: "User",
+    created: m.createdAt.toISOString(),
+    lastModified: m.updatedAt.toISOString(),
+  },
 });
 
 const groupResource = (g: ScimGroup, members: string[]): Record<string, unknown> => ({
@@ -121,17 +156,31 @@ const groupResource = (g: ScimGroup, members: string[]): Record<string, unknown>
   meta: { resourceType: "Group", created: g.createdAt.toISOString() },
 });
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
-const boolish = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : typeof v === "string" && /^(true|false)$/i.test(v) ? v.toLowerCase() === "true" : undefined);
+const boolish = (v: unknown): boolean | undefined =>
+  typeof v === "boolean"
+    ? v
+    : typeof v === "string" && /^(true|false)$/i.test(v)
+      ? v.toLowerCase() === "true"
+      : undefined;
 
 function emailOf(b: Record<string, unknown>): string | undefined {
   const emails = Array.isArray(b["emails"]) ? b["emails"] : [];
-  const primary = emails.find((e): e is Record<string, unknown> => isObj(e) && e["primary"] === true) ?? emails.find(isObj);
+  const primary =
+    emails.find((e): e is Record<string, unknown> => isObj(e) && e["primary"] === true) ??
+    emails.find(isObj);
   return str(isObj(primary) ? primary["value"] : undefined) ?? str(b["userName"]);
 }
 
-function userInput(b: unknown): { userName: string; email: string; externalId?: string; displayName?: string; active: boolean } {
+function userInput(b: unknown): {
+  userName: string;
+  email: string;
+  externalId?: string;
+  displayName?: string;
+  active: boolean;
+} {
   if (!isObj(b)) throw new ScimFail(400, "body must be a JSON object", "invalidSyntax");
   const userName = str(b["userName"]);
   const email = emailOf(b);
@@ -139,7 +188,13 @@ function userInput(b: unknown): { userName: string; email: string; externalId?: 
   const name = isObj(b["name"]) ? str(b["name"]["formatted"]) : undefined;
   const displayName = str(b["displayName"]) ?? name;
   const externalId = str(b["externalId"]);
-  return { userName, email, ...(externalId ? { externalId } : {}), ...(displayName ? { displayName } : {}), active: boolish(b["active"]) ?? true };
+  return {
+    userName,
+    email,
+    ...(externalId ? { externalId } : {}),
+    ...(displayName ? { displayName } : {}),
+    active: boolish(b["active"]) ?? true,
+  };
 }
 
 /** SCIM 2.0 (RFC 7643/7644) Users and Groups for one authenticated directory. Pure: no I/O besides the DirectoryService. */
@@ -152,8 +207,25 @@ export class ScimHandler {
     } catch (err) {
       if (err instanceof ScimFail) return scimError(err.status, err.detail, err.scimType);
       if (err instanceof CpError) {
-        const status = err.code === "conflict" ? 409 : err.code === "not_found" ? 404 : err.code === "invalid" ? 400 : err.code === "forbidden" ? 403 : 500;
-        return scimError(status, err.message, err.code === "conflict" ? "uniqueness" : err.code === "invalid" ? "invalidValue" : undefined);
+        const status =
+          err.code === "conflict"
+            ? 409
+            : err.code === "not_found"
+              ? 404
+              : err.code === "invalid"
+                ? 400
+                : err.code === "forbidden"
+                  ? 403
+                  : 500;
+        return scimError(
+          status,
+          err.message,
+          err.code === "conflict"
+            ? "uniqueness"
+            : err.code === "invalid"
+              ? "invalidValue"
+              : undefined,
+        );
       }
       return scimError(500, "internal error");
     }
@@ -175,7 +247,13 @@ export class ScimHandler {
           changePassword: { supported: false },
           sort: { supported: false },
           etag: { supported: false },
-          authenticationSchemes: [{ type: "oauthbearertoken", name: "Bearer token", description: "Per-directory bearer token" }],
+          authenticationSchemes: [
+            {
+              type: "oauthbearertoken",
+              name: "Bearer token",
+              description: "Per-directory bearer token",
+            },
+          ],
         },
       };
     }
@@ -191,17 +269,42 @@ export class ScimHandler {
   }
 
   private list(items: unknown[], start: number, count: number): ScimResponse {
-    return { status: 200, body: { schemas: [SCIM_LIST], totalResults: items.length, startIndex: start, itemsPerPage: Math.min(count, Math.max(0, items.length - (start - 1))), Resources: items.slice(start - 1, start - 1 + count) } };
+    return {
+      status: 200,
+      body: {
+        schemas: [SCIM_LIST],
+        totalResults: items.length,
+        startIndex: start,
+        itemsPerPage: Math.min(count, Math.max(0, items.length - (start - 1))),
+        Resources: items.slice(start - 1, start - 1 + count),
+      },
+    };
   }
 
   // ---- Users
-  private async users(ctx: DirectoryContext, m: string, id: string | undefined, req: ScimRequest): Promise<ScimResponse> {
+  private async users(
+    ctx: DirectoryContext,
+    m: string,
+    id: string | undefined,
+    req: ScimRequest,
+  ): Promise<ScimResponse> {
     if (id === undefined) {
       if (m === "GET") {
         const filter = req.query.get("filter");
         const terms = filter ? parseFilter(filter) : [];
         const all = (await this.dir.listUsers(ctx)).filter((u) =>
-          matches(terms, (a) => ({ username: u.email, "emails.value": u.email, externalid: u.externalId, displayname: u.displayName, active: u.status === "active", id: u.id })[a]),
+          matches(
+            terms,
+            (a) =>
+              ({
+                username: u.email,
+                "emails.value": u.email,
+                externalid: u.externalId,
+                displayname: u.displayName,
+                active: u.status === "active",
+                id: u.id,
+              })[a],
+          ),
         );
         const { start, count } = this.paging(req.query);
         return this.list(all.map(userResource), start, count);
@@ -235,17 +338,35 @@ export class ScimHandler {
   }
 
   private ops(body: unknown): { op: string; path?: string; value?: unknown }[] {
-    if (!isObj(body) || !Array.isArray(body["Operations"]) || body["Operations"].length === 0 || body["Operations"].length > 100)
+    if (
+      !isObj(body) ||
+      !Array.isArray(body["Operations"]) ||
+      body["Operations"].length === 0 ||
+      body["Operations"].length > 100
+    )
       throw new ScimFail(400, "Operations must be a non-empty array", "invalidSyntax");
     return body["Operations"].map((o) => {
-      if (!isObj(o) || typeof o["op"] !== "string" || !["add", "replace", "remove"].includes(o["op"].toLowerCase()))
+      if (
+        !isObj(o) ||
+        typeof o["op"] !== "string" ||
+        !["add", "replace", "remove"].includes(o["op"].toLowerCase())
+      )
         throw new ScimFail(400, "invalid operation", "invalidSyntax");
       const path = str(o["path"]);
-      return { op: o["op"].toLowerCase(), ...(path !== undefined ? { path } : {}), value: o["value"] };
+      return {
+        op: o["op"].toLowerCase(),
+        ...(path !== undefined ? { path } : {}),
+        value: o["value"],
+      };
     });
   }
 
-  private userPatch(body: unknown): { userName?: string; email?: string; displayName?: string; active?: boolean } {
+  private userPatch(body: unknown): {
+    userName?: string;
+    email?: string;
+    displayName?: string;
+    active?: boolean;
+  } {
     const out: { userName?: string; email?: string; displayName?: string; active?: boolean } = {};
     const apply = (key: string, v: unknown): void => {
       const k = key.toLowerCase();
@@ -260,7 +381,8 @@ export class ScimHandler {
         out.email = s;
       } else if (k === "displayname" || k === "name.formatted") {
         const s = str(v);
-        if (s === undefined) throw new ScimFail(400, "displayName must be a string", "invalidValue");
+        if (s === undefined)
+          throw new ScimFail(400, "displayName must be a string", "invalidValue");
         out.displayName = s;
       } else if (k === "emails" || k.startsWith("emails[") || k === "emails.value") {
         const e = Array.isArray(v) ? emailOf({ emails: v }) : str(v);
@@ -268,7 +390,8 @@ export class ScimHandler {
       } else throw new ScimFail(400, `unsupported patch path: ${key.slice(0, 60)}`, "invalidPath");
     };
     for (const o of this.ops(body)) {
-      if (o.op === "remove") throw new ScimFail(400, "remove is not supported for Users", "mutability");
+      if (o.op === "remove")
+        throw new ScimFail(400, "remove is not supported for Users", "mutability");
       if (o.path) apply(o.path, o.value);
       else if (isObj(o.value)) for (const [k, v] of Object.entries(o.value)) apply(k, v);
       else throw new ScimFail(400, "value required", "invalidValue");
@@ -277,7 +400,10 @@ export class ScimHandler {
   }
 
   // ---- Groups
-  private async groupResource(ctx: DirectoryContext, g: ScimGroup): Promise<Record<string, unknown>> {
+  private async groupResource(
+    ctx: DirectoryContext,
+    g: ScimGroup,
+  ): Promise<Record<string, unknown>> {
     return groupResource(g, await this.dir.groupMembers(ctx, g.id));
   }
 
@@ -290,19 +416,30 @@ export class ScimHandler {
     });
   }
 
-  private async groups(ctx: DirectoryContext, m: string, id: string | undefined, req: ScimRequest): Promise<ScimResponse> {
+  private async groups(
+    ctx: DirectoryContext,
+    m: string,
+    id: string | undefined,
+    req: ScimRequest,
+  ): Promise<ScimResponse> {
     if (id === undefined) {
       if (m === "GET") {
         const filter = req.query.get("filter");
         const terms = filter ? parseFilter(filter) : [];
-        const all = (await this.dir.listGroups(ctx)).filter((g) => matches(terms, (a) => ({ displayname: g.displayName, externalid: g.externalId, id: g.id })[a]));
+        const all = (await this.dir.listGroups(ctx)).filter((g) =>
+          matches(
+            terms,
+            (a) => ({ displayname: g.displayName, externalid: g.externalId, id: g.id })[a],
+          ),
+        );
         const { start, count } = this.paging(req.query);
         const res = await Promise.all(all.map((g) => this.groupResource(ctx, g)));
         return this.list(res, start, count);
       }
       if (m === "POST") {
         const b = req.body;
-        if (!isObj(b) || !str(b["displayName"])) throw new ScimFail(400, "displayName is required", "invalidValue");
+        if (!isObj(b) || !str(b["displayName"]))
+          throw new ScimFail(400, "displayName is required", "invalidValue");
         const g = await this.dir.createGroup(ctx, {
           displayName: b["displayName"] as string,
           ...(str(b["externalId"]) ? { externalId: str(b["externalId"]) as string } : {}),
@@ -321,9 +458,14 @@ export class ScimHandler {
     }
     if (m === "PUT") {
       const b = req.body;
-      if (!isObj(b) || !str(b["displayName"])) throw new ScimFail(400, "displayName is required", "invalidValue");
+      if (!isObj(b) || !str(b["displayName"]))
+        throw new ScimFail(400, "displayName is required", "invalidValue");
       const g = await this.dir.updateGroup(ctx, id, { displayName: b["displayName"] as string });
-      await this.dir.setMembers(ctx, id, b["members"] === undefined ? [] : this.memberIds(b["members"]));
+      await this.dir.setMembers(
+        ctx,
+        id,
+        b["members"] === undefined ? [] : this.memberIds(b["members"]),
+      );
       return { status: 200, body: await this.groupResource(ctx, g) };
     }
     if (m === "PATCH") {
@@ -331,10 +473,18 @@ export class ScimHandler {
       let name: string | undefined;
       for (const o of this.ops(req.body)) {
         const path = o.path?.toLowerCase();
-        if (path === "displayname" || (path === undefined && isObj(o.value) && "displayName" in o.value)) {
-          name = str(path === undefined ? (o.value as Record<string, unknown>)["displayName"] : o.value);
+        if (
+          path === "displayname" ||
+          (path === undefined && isObj(o.value) && "displayName" in o.value)
+        ) {
+          name = str(
+            path === undefined ? (o.value as Record<string, unknown>)["displayName"] : o.value,
+          );
           if (!name) throw new ScimFail(400, "displayName must be a string", "invalidValue");
-        } else if (path === "members" || (path === undefined && isObj(o.value) && "members" in o.value)) {
+        } else if (
+          path === "members" ||
+          (path === undefined && isObj(o.value) && "members" in o.value)
+        ) {
           const v = path === undefined ? (o.value as Record<string, unknown>)["members"] : o.value;
           if (o.op === "replace") members = this.memberIds(v);
           else if (o.op === "add") members = [...new Set([...members, ...this.memberIds(v)])];
@@ -347,7 +497,12 @@ export class ScimHandler {
           const mm = /^members\[value\s+eq\s+"([^"]+)"\]$/i.exec(o.path as string);
           if (!mm) throw new ScimFail(400, "unsupported members path", "invalidPath");
           members = members.filter((x) => x !== mm[1]);
-        } else throw new ScimFail(400, `unsupported patch path: ${(o.path ?? "").slice(0, 60)}`, "invalidPath");
+        } else
+          throw new ScimFail(
+            400,
+            `unsupported patch path: ${(o.path ?? "").slice(0, 60)}`,
+            "invalidPath",
+          );
       }
       const g = name ? await this.dir.updateGroup(ctx, id, { displayName: name }) : g0;
       await this.dir.setMembers(ctx, id, members);

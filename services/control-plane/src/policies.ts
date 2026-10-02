@@ -5,7 +5,8 @@ import { conflict, CpError, invalid, notFound } from "./errors.js";
 import type { Principal } from "./authz.js";
 import { StoreConflict, type ControlPlaneStore, type PackVersionRecord } from "./types.js";
 
-export type ValidationResult = { ok: true; policyVersion: string; rego: string } | { ok: false; issues: PolicyIssue[] };
+export type ValidationResult =
+  { ok: true; policyVersion: string; rego: string } | { ok: false; issues: PolicyIssue[] };
 
 /** Validates a SET of policy documents the way the Risk Kernel will load it: DSL schema + compile + `opa check --strict` + Wasm build. */
 export type PackValidator = (docs: unknown[]) => ValidationResult;
@@ -17,7 +18,12 @@ export const compileValidator: PackValidator = (docs) => {
     opaCheck(c.rego);
     opaBuildWasm(c.rego);
   } catch (err) {
-    return { ok: false, issues: [{ doc: -1, path: "/", code: "OPA_REJECTED", message: (err as Error).message.slice(0, 300) }] };
+    return {
+      ok: false,
+      issues: [
+        { doc: -1, path: "/", code: "OPA_REJECTED", message: (err as Error).message.slice(0, 300) },
+      ],
+    };
   }
   return { ok: true, policyVersion: c.policyVersion, rego: c.rego };
 };
@@ -34,7 +40,12 @@ export interface PublicPackVersion {
 }
 
 const issuesToError = (issues: PolicyIssue[]): CpError =>
-  invalid(`policy does not validate: ${issues.slice(0, 5).map((i) => `${i.code} ${i.path}`).join("; ")}`);
+  invalid(
+    `policy does not validate: ${issues
+      .slice(0, 5)
+      .map((i) => `${i.code} ${i.path}`)
+      .join("; ")}`,
+  );
 
 /**
  * Versioned policy packs per tenant. A version is immutable once published (validated by compiling it). Activation compiles the
@@ -44,7 +55,12 @@ const issuesToError = (issues: PolicyIssue[]): CpError =>
 export class PolicyPackService {
   private readonly newId: () => string;
   constructor(
-    private readonly o: { store: ControlPlaneStore; validator?: PackValidator; now?: () => Date; newId?: () => string },
+    private readonly o: {
+      store: ControlPlaneStore;
+      validator?: PackValidator;
+      now?: () => Date;
+      newId?: () => string;
+    },
   ) {
     this.newId = o.newId ?? randomUUID;
   }
@@ -69,17 +85,28 @@ export class PolicyPackService {
       });
       return this.pub(rec, false);
     } catch (err) {
-      if (err instanceof StoreConflict) throw conflict(`${meta.name}@${meta.version} already exists (versions are immutable)`);
+      if (err instanceof StoreConflict)
+        throw conflict(`${meta.name}@${meta.version} already exists (versions are immutable)`);
       throw err;
     }
   }
 
   private pub(r: PackVersionRecord, active: boolean): PublicPackVersion {
-    return { versionId: r.versionId, pack: r.packName, version: r.version, contentHash: r.contentHash, createdAt: r.createdAt, active };
+    return {
+      versionId: r.versionId,
+      pack: r.packName,
+      version: r.version,
+      contentHash: r.contentHash,
+      createdAt: r.createdAt,
+      active,
+    };
   }
 
   async list(p: Principal): Promise<PublicPackVersion[]> {
-    const [versions, active] = await Promise.all([this.o.store.listPackVersions(p.tenantId), this.o.store.listActiveAssignments(p.tenantId)]);
+    const [versions, active] = await Promise.all([
+      this.o.store.listPackVersions(p.tenantId),
+      this.o.store.listActiveAssignments(p.tenantId),
+    ]);
     const on = new Set(active.map((a) => a.versionId));
     return versions.map((v) => this.pub(v, on.has(v.versionId)));
   }
@@ -91,7 +118,10 @@ export class PolicyPackService {
   }
 
   /** The documents that would be active if `replace` became active (same pack name replaced). */
-  private async prospective(tenantId: string, replace?: PackVersionRecord): Promise<{ docs: unknown[]; names: string[] }> {
+  private async prospective(
+    tenantId: string,
+    replace?: PackVersionRecord,
+  ): Promise<{ docs: unknown[]; names: string[] }> {
     const active = await this.o.store.listActiveAssignments(tenantId);
     const docs: unknown[] = [];
     const names: string[] = [];
@@ -108,22 +138,37 @@ export class PolicyPackService {
     return { docs, names };
   }
 
-  async activate(p: Principal, versionId: string): Promise<{ policyVersion: string; pack: string; version: string }> {
+  async activate(
+    p: Principal,
+    versionId: string,
+  ): Promise<{ policyVersion: string; pack: string; version: string }> {
     const v = await this.getVersion(p, versionId);
     const { docs } = await this.prospective(p.tenantId, v);
     const r = this.validate(docs);
     if (!r.ok) throw issuesToError(r.issues);
-    await this.o.store.activatePackVersion(p.tenantId, versionId, p.memberId, this.o.now ? this.o.now() : new Date());
+    await this.o.store.activatePackVersion(
+      p.tenantId,
+      versionId,
+      p.memberId,
+      this.o.now ? this.o.now() : new Date(),
+    );
     return { policyVersion: r.policyVersion, pack: v.packName, version: v.version };
   }
 
   async deactivate(p: Principal, packName: string): Promise<void> {
-    if (packName === BASELINE_PACK) throw conflict("the baseline-deny pack cannot be deactivated; activate a newer version instead");
+    if (packName === BASELINE_PACK)
+      throw conflict(
+        "the baseline-deny pack cannot be deactivated; activate a newer version instead",
+      );
     const active = await this.o.store.listActiveAssignments(p.tenantId);
     for (const a of active) {
       const v = await this.o.store.getPackVersion(p.tenantId, a.versionId);
       if (v?.packName === packName) {
-        await this.o.store.deactivatePack(p.tenantId, a.packId, this.o.now ? this.o.now() : new Date());
+        await this.o.store.deactivatePack(
+          p.tenantId,
+          a.packId,
+          this.o.now ? this.o.now() : new Date(),
+        );
         return;
       }
     }
@@ -131,7 +176,9 @@ export class PolicyPackService {
   }
 
   /** What the Risk Kernel should load for this tenant. */
-  async effective(tenantId: string): Promise<{ policyVersion: string; rego: string; packs: string[] }> {
+  async effective(
+    tenantId: string,
+  ): Promise<{ policyVersion: string; rego: string; packs: string[] }> {
     const { docs, names } = await this.prospective(tenantId);
     const r = this.validate(docs);
     if (!r.ok) throw issuesToError(r.issues);

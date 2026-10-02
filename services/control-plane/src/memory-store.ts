@@ -60,7 +60,10 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
   }
 
   provisionTenant(spec: ProvisionSpec): Promise<void> {
-    if ([...this.tenants.values()].some((t) => t.slug === spec.slug) || this.tenants.has(spec.tenantId))
+    if (
+      [...this.tenants.values()].some((t) => t.slug === spec.slug) ||
+      this.tenants.has(spec.tenantId)
+    )
       return Promise.reject(new StoreConflict("slug already in use"));
     const now = new Date();
     this.tenants.set(spec.tenantId, {
@@ -125,7 +128,9 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
         x.tenantId === m.tenantId &&
         (x.userRef === m.userRef ||
           x.email.toLowerCase() === m.email.toLowerCase() ||
-          (m.externalId !== undefined && x.externalId === m.externalId && x.directoryId === m.directoryId)),
+          (m.externalId !== undefined &&
+            x.externalId === m.externalId &&
+            x.directoryId === m.directoryId)),
     );
     if (dup) return Promise.reject(new StoreConflict("member exists"));
     const now = new Date();
@@ -145,14 +150,20 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(this.findMember(t, (m) => m.userRef === userRef));
   }
   findMemberByEmail(t: string, email: string): Promise<Member | undefined> {
-    return Promise.resolve(this.findMember(t, (m) => m.email.toLowerCase() === email.toLowerCase()));
+    return Promise.resolve(
+      this.findMember(t, (m) => m.email.toLowerCase() === email.toLowerCase()),
+    );
   }
   findMemberByExternalId(t: string, d: string, e: string): Promise<Member | undefined> {
     return Promise.resolve(this.findMember(t, (m) => m.directoryId === d && m.externalId === e));
   }
   listMembers(t: string, limit: number, after?: string): Promise<Page<Member>> {
     return Promise.resolve(
-      page([...this.members.values()].filter((m) => m.tenantId === t).map((m) => ({ ...m })), limit, after),
+      page(
+        [...this.members.values()].filter((m) => m.tenantId === t).map((m) => ({ ...m })),
+        limit,
+        after,
+      ),
     );
   }
   updateMember(
@@ -165,7 +176,10 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     if (!m) return Promise.resolve(undefined);
     const next: Member = { ...m, ...patch, updatedAt: now };
     if (patch.status === "deprovisioned") next.deprovisionedAt = now;
-    const losesOwner = m.role === "owner" && m.status === "active" && (next.role !== "owner" || next.status !== "active");
+    const losesOwner =
+      m.role === "owner" &&
+      m.status === "active" &&
+      (next.role !== "owner" || next.status !== "active");
     if (losesOwner) {
       const others = [...this.members.values()].filter(
         (x) => x.tenantId === t && x.id !== id && x.role === "owner" && x.status === "active",
@@ -174,7 +188,8 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     }
     if (patch.email !== undefined) {
       const dup = [...this.members.values()].some(
-        (x) => x.tenantId === t && x.id !== id && x.email.toLowerCase() === patch.email?.toLowerCase(),
+        (x) =>
+          x.tenantId === t && x.id !== id && x.email.toLowerCase() === patch.email?.toLowerCase(),
       );
       if (dup) return Promise.reject(new StoreConflict("email in use"));
     }
@@ -194,13 +209,24 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(x && { ...x });
   }
   listApiKeys(t: string, limit: number, after?: string): Promise<Page<ApiKeyRecord>> {
-    return Promise.resolve(page([...this.keys.values()].filter((x) => x.tenantId === t).map((x) => ({ ...x })), limit, after));
+    return Promise.resolve(
+      page(
+        [...this.keys.values()].filter((x) => x.tenantId === t).map((x) => ({ ...x })),
+        limit,
+        after,
+      ),
+    );
   }
   findApiKeyByLookup(prefix: string, hash: Buffer): Promise<ApiKeyRecord | undefined> {
-    for (const x of this.keys.values()) if (x.prefix === prefix && safeEqual(x.keyHash, hash)) return Promise.resolve({ ...x });
+    for (const x of this.keys.values())
+      if (x.prefix === prefix && safeEqual(x.keyHash, hash)) return Promise.resolve({ ...x });
     return Promise.resolve(undefined);
   }
-  updateApiKey(t: string, id: string, patch: { revokedAt?: Date; lastUsedAt?: Date }): Promise<ApiKeyRecord | undefined> {
+  updateApiKey(
+    t: string,
+    id: string,
+    patch: { revokedAt?: Date; lastUsedAt?: Date },
+  ): Promise<ApiKeyRecord | undefined> {
     const x = this.keys.get(k(t, id));
     if (!x) return Promise.resolve(undefined);
     if (patch.revokedAt && !x.revokedAt) x.revokedAt = patch.revokedAt;
@@ -226,7 +252,13 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     const s = this.sessions.get(k(t, id));
     return Promise.resolve(s && { ...s });
   }
-  rotateRefresh(t: string, id: string, expected: Buffer, next: Buffer, now: Date): Promise<boolean> {
+  rotateRefresh(
+    t: string,
+    id: string,
+    expected: Buffer,
+    next: Buffer,
+    now: Date,
+  ): Promise<boolean> {
     const s = this.sessions.get(k(t, id));
     if (!s || s.revokedAt || !safeEqual(s.refreshHash, expected)) return Promise.resolve(false);
     s.prevRefreshHash = s.refreshHash;
@@ -263,13 +295,21 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(d && { ...d });
   }
   listDirectories(t: string): Promise<DirectoryRecord[]> {
-    return Promise.resolve([...this.dirs.values()].filter((d) => d.tenantId === t).map((d) => ({ ...d })));
+    return Promise.resolve(
+      [...this.dirs.values()].filter((d) => d.tenantId === t).map((d) => ({ ...d })),
+    );
   }
   findDirectoryByLookup(prefix: string, hash: Buffer): Promise<DirectoryRecord | undefined> {
-    for (const d of this.dirs.values()) if (d.tokenPrefix === prefix && safeEqual(d.tokenHash, hash)) return Promise.resolve({ ...d });
+    for (const d of this.dirs.values())
+      if (d.tokenPrefix === prefix && safeEqual(d.tokenHash, hash))
+        return Promise.resolve({ ...d });
     return Promise.resolve(undefined);
   }
-  updateDirectory(t: string, id: string, patch: { revokedAt?: Date; lastUsedAt?: Date; tokenPrefix?: string; tokenHash?: Buffer }): Promise<void> {
+  updateDirectory(
+    t: string,
+    id: string,
+    patch: { revokedAt?: Date; lastUsedAt?: Date; tokenPrefix?: string; tokenHash?: Buffer },
+  ): Promise<void> {
     const d = this.dirs.get(k(t, id));
     if (d) {
       if (patch.revokedAt) {
@@ -296,7 +336,14 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(out);
   }
   insertGroup(g: Omit<ScimGroup, "createdAt">): Promise<ScimGroup> {
-    if ([...this.groups.values()].some((x) => x.tenantId === g.tenantId && x.directoryId === g.directoryId && x.displayName === g.displayName))
+    if (
+      [...this.groups.values()].some(
+        (x) =>
+          x.tenantId === g.tenantId &&
+          x.directoryId === g.directoryId &&
+          x.displayName === g.displayName,
+      )
+    )
       return Promise.reject(new StoreConflict("group exists"));
     const row = { ...g, createdAt: new Date() };
     this.groups.set(k(g.tenantId, g.id), row);
@@ -307,9 +354,18 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(g && g.directoryId === d ? { ...g } : undefined);
   }
   listGroups(t: string, d: string): Promise<ScimGroup[]> {
-    return Promise.resolve([...this.groups.values()].filter((g) => g.tenantId === t && g.directoryId === d).map((g) => ({ ...g })));
+    return Promise.resolve(
+      [...this.groups.values()]
+        .filter((g) => g.tenantId === t && g.directoryId === d)
+        .map((g) => ({ ...g })),
+    );
   }
-  updateGroup(t: string, d: string, id: string, patch: { displayName?: string; externalId?: string }): Promise<ScimGroup | undefined> {
+  updateGroup(
+    t: string,
+    d: string,
+    id: string,
+    patch: { displayName?: string; externalId?: string },
+  ): Promise<ScimGroup | undefined> {
     const g = this.groups.get(k(t, id));
     if (!g || g.directoryId !== d) return Promise.resolve(undefined);
     if (patch.displayName !== undefined) g.displayName = patch.displayName;
@@ -334,14 +390,19 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
   groupsOfMember(t: string, d: string, memberId: string): Promise<ScimGroup[]> {
     return Promise.resolve(
       [...this.groups.values()]
-        .filter((g) => g.tenantId === t && g.directoryId === d && this.gmembers.get(k(t, g.id))?.has(memberId))
+        .filter(
+          (g) =>
+            g.tenantId === t && g.directoryId === d && this.gmembers.get(k(t, g.id))?.has(memberId),
+        )
         .map((g) => ({ ...g })),
     );
   }
 
   // identity
   upsertConnection(c: IdentityConnection): Promise<void> {
-    if ([...this.conns.values()].some((x) => x.idpOrgId === c.idpOrgId && x.tenantId !== c.tenantId))
+    if (
+      [...this.conns.values()].some((x) => x.idpOrgId === c.idpOrgId && x.tenantId !== c.tenantId)
+    )
       return Promise.reject(new StoreConflict("organization already linked"));
     this.conns.set(k(c.tenantId, c.id), { ...c });
     return Promise.resolve();
@@ -351,10 +412,17 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(undefined);
   }
   listConnections(t: string): Promise<IdentityConnection[]> {
-    return Promise.resolve([...this.conns.values()].filter((c) => c.tenantId === t).map((c) => ({ ...c })));
+    return Promise.resolve(
+      [...this.conns.values()].filter((c) => c.tenantId === t).map((c) => ({ ...c })),
+    );
   }
   upsertDomain(d: VerifiedDomain): Promise<void> {
-    if (d.status === "verified" && [...this.domains.values()].some((x) => x.domain === d.domain && x.status === "verified" && x.tenantId !== d.tenantId))
+    if (
+      d.status === "verified" &&
+      [...this.domains.values()].some(
+        (x) => x.domain === d.domain && x.status === "verified" && x.tenantId !== d.tenantId,
+      )
+    )
       return Promise.reject(new StoreConflict("domain verified by another tenant"));
     this.domains.set(k(d.tenantId, d.domain), { ...d });
     return Promise.resolve();
@@ -364,12 +432,16 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(d && { ...d });
   }
   listDomains(t: string): Promise<VerifiedDomain[]> {
-    return Promise.resolve([...this.domains.values()].filter((d) => d.tenantId === t).map((d) => ({ ...d })));
+    return Promise.resolve(
+      [...this.domains.values()].filter((d) => d.tenantId === t).map((d) => ({ ...d })),
+    );
   }
 
   // BYO
   getActiveTenantKey(t: string): Promise<TenantKeyRecord | undefined> {
-    const all = [...this.tkeys.values()].filter((x) => x.tenantId === t && !x.retiredAt).sort((a, b) => b.version - a.version);
+    const all = [...this.tkeys.values()]
+      .filter((x) => x.tenantId === t && !x.retiredAt)
+      .sort((a, b) => b.version - a.version);
     return Promise.resolve(all[0] && { ...all[0] });
   }
   getTenantKey(t: string, version: number): Promise<TenantKeyRecord | undefined> {
@@ -377,23 +449,32 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(x && { ...x });
   }
   insertTenantKey(key: TenantKeyRecord): Promise<void> {
-    if (this.tkeys.has(k(key.tenantId, String(key.version)))) return Promise.reject(new StoreConflict("key version exists"));
+    if (this.tkeys.has(k(key.tenantId, String(key.version))))
+      return Promise.reject(new StoreConflict("key version exists"));
     this.tkeys.set(k(key.tenantId, String(key.version)), { ...key });
     return Promise.resolve();
   }
   putModelCredential(c: ModelCredentialRecord): Promise<ModelCredentialRecord> {
     const key = k(c.tenantId, c.provider, c.label);
     const prev = this.creds.get(key);
-    const row = prev ? { ...c, id: prev.id, createdAt: prev.createdAt, rotatedAt: c.createdAt } : { ...c };
+    const row = prev
+      ? { ...c, id: prev.id, createdAt: prev.createdAt, rotatedAt: c.createdAt }
+      : { ...c };
     this.creds.set(key, row);
     return Promise.resolve({ ...row });
   }
-  getModelCredential(t: string, provider: string, label: string): Promise<ModelCredentialRecord | undefined> {
+  getModelCredential(
+    t: string,
+    provider: string,
+    label: string,
+  ): Promise<ModelCredentialRecord | undefined> {
     const c = this.creds.get(k(t, provider, label));
     return Promise.resolve(c && { ...c });
   }
   listModelCredentials(t: string): Promise<ModelCredentialRecord[]> {
-    return Promise.resolve([...this.creds.values()].filter((c) => c.tenantId === t).map((c) => ({ ...c })));
+    return Promise.resolve(
+      [...this.creds.values()].filter((c) => c.tenantId === t).map((c) => ({ ...c })),
+    );
   }
   deleteModelCredential(t: string, provider: string, label: string): Promise<boolean> {
     return Promise.resolve(this.creds.delete(k(t, provider, label)));
@@ -401,10 +482,20 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
 
   // policies
   insertPackVersion(v: Omit<PackVersionRecord, "createdAt">): Promise<PackVersionRecord> {
-    if ([...this.versions.values()].some((x) => x.tenantId === v.tenantId && x.packName === v.packName && x.version === v.version))
+    if (
+      [...this.versions.values()].some(
+        (x) => x.tenantId === v.tenantId && x.packName === v.packName && x.version === v.version,
+      )
+    )
       return Promise.reject(new StoreConflict("version exists (versions are immutable)"));
-    const existing = [...this.versions.values()].find((x) => x.tenantId === v.tenantId && x.packName === v.packName);
-    const row: PackVersionRecord = { ...v, packId: existing?.packId ?? v.packId, createdAt: new Date() };
+    const existing = [...this.versions.values()].find(
+      (x) => x.tenantId === v.tenantId && x.packName === v.packName,
+    );
+    const row: PackVersionRecord = {
+      ...v,
+      packId: existing?.packId ?? v.packId,
+      createdAt: new Date(),
+    };
     this.versions.set(k(v.tenantId, v.versionId), row);
     return Promise.resolve({ ...row });
   }
@@ -413,9 +504,16 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(v && { ...v });
   }
   listPackVersions(t: string): Promise<PackVersionRecord[]> {
-    return Promise.resolve([...this.versions.values()].filter((v) => v.tenantId === t).map((v) => ({ ...v })));
+    return Promise.resolve(
+      [...this.versions.values()].filter((v) => v.tenantId === t).map((v) => ({ ...v })),
+    );
   }
-  activatePackVersion(t: string, versionId: string, by: string, now: Date): Promise<PolicyAssignment> {
+  activatePackVersion(
+    t: string,
+    versionId: string,
+    by: string,
+    now: Date,
+  ): Promise<PolicyAssignment> {
     const v = this.versions.get(k(t, versionId));
     if (!v) return Promise.reject(new StoreConflict("unknown version"));
     for (const a of this.assigns.values())
@@ -424,7 +522,15 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
         a.deactivatedAt = now;
       }
     const id = this.id();
-    const row: PolicyAssignment = { tenantId: t, id, packId: v.packId, versionId, active: true, activatedBy: by, activatedAt: now };
+    const row: PolicyAssignment = {
+      tenantId: t,
+      id,
+      packId: v.packId,
+      versionId,
+      active: true,
+      activatedBy: by,
+      activatedAt: now,
+    };
     this.assigns.set(k(t, id), row);
     return Promise.resolve({ ...row });
   }
@@ -439,13 +545,20 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve(hit);
   }
   listActiveAssignments(t: string): Promise<PolicyAssignment[]> {
-    return Promise.resolve([...this.assigns.values()].filter((a) => a.tenantId === t && a.active).map((a) => ({ ...a })));
+    return Promise.resolve(
+      [...this.assigns.values()].filter((a) => a.tenantId === t && a.active).map((a) => ({ ...a })),
+    );
   }
 
   // budgets etc
   upsertBudget(b: Budget): Promise<Budget> {
     const dup = [...this.budgets.values()].find(
-      (x) => x.tenantId === b.tenantId && x.scope === b.scope && x.target === b.target && x.metric === b.metric && x.period === b.period,
+      (x) =>
+        x.tenantId === b.tenantId &&
+        x.scope === b.scope &&
+        x.target === b.target &&
+        x.metric === b.metric &&
+        x.period === b.period,
     );
     const id = dup?.id ?? b.id;
     const row = { ...b, id };
@@ -453,7 +566,9 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
     return Promise.resolve({ ...row });
   }
   listBudgets(t: string): Promise<Budget[]> {
-    return Promise.resolve([...this.budgets.values()].filter((b) => b.tenantId === t).map((b) => ({ ...b })));
+    return Promise.resolve(
+      [...this.budgets.values()].filter((b) => b.tenantId === t).map((b) => ({ ...b })),
+    );
   }
   deleteBudget(t: string, id: string): Promise<boolean> {
     return Promise.resolve(this.budgets.delete(k(t, id)));

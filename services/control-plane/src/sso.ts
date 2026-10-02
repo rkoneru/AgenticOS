@@ -55,6 +55,7 @@ const COOKIE_AAD = "axis-login.v1";
  */
 export function safeReturnTo(raw: string | undefined, allowedOrigins: readonly string[]): string {
   if (raw === undefined || raw.length === 0 || raw.length > 2048) return "/";
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
   if (/[\u0000-\u001f\u007f\\]/.test(raw)) return "/";
   if (raw.startsWith("/")) return raw.startsWith("//") ? "/" : raw;
   try {
@@ -94,7 +95,13 @@ export class SsoService {
     };
     const cookie = b64u(seal(this.o.cookieKey, Buffer.from(JSON.stringify(payload)), COOKIE_AAD));
     return {
-      redirectUrl: this.o.idp.authorizationUrl({ organizationId, redirectUri: this.o.redirectUri, state, codeChallenge: pkceChallenge(verifier), nonce }),
+      redirectUrl: this.o.idp.authorizationUrl({
+        organizationId,
+        redirectUri: this.o.redirectUri,
+        state,
+        codeChallenge: pkceChallenge(verifier),
+        nonce,
+      }),
       cookie,
       cookieMaxAgeSec: this.ttl,
     };
@@ -103,8 +110,17 @@ export class SsoService {
   private unseal(cookie: string | undefined): LoginCookie {
     if (!cookie) throw unauthenticated("login attempt not found");
     try {
-      const v = JSON.parse(open(this.o.cookieKey, fromB64u(cookie), COOKIE_AAD).toString("utf8")) as LoginCookie;
-      if (typeof v.s !== "string" || typeof v.n !== "string" || typeof v.v !== "string" || typeof v.o !== "string" || typeof v.r !== "string" || typeof v.exp !== "number")
+      const v = JSON.parse(
+        open(this.o.cookieKey, fromB64u(cookie), COOKIE_AAD).toString("utf8"),
+      ) as LoginCookie;
+      if (
+        typeof v.s !== "string" ||
+        typeof v.n !== "string" ||
+        typeof v.v !== "string" ||
+        typeof v.o !== "string" ||
+        typeof v.r !== "string" ||
+        typeof v.exp !== "number"
+      )
         throw new Error("shape");
       return v;
     } catch {
@@ -114,20 +130,25 @@ export class SsoService {
 
   private async deny(tenantId: string | undefined, why: string, who: string): Promise<never> {
     if (tenantId)
-      await this.o.audit.record({
-        tenantId,
-        actor: { type: "system", id: `idp:${who}`.slice(0, 120) },
-        action: "auth.sso_login",
-        decision: "DENY",
-        policyVersion: "sso",
-        reason: `why=${why}`,
-        inputs: { why },
-        outputs: {},
-      }).catch(() => undefined);
+      await this.o.audit
+        .record({
+          tenantId,
+          actor: { type: "system", id: `idp:${who}`.slice(0, 120) },
+          action: "auth.sso_login",
+          decision: "DENY",
+          policyVersion: "sso",
+          reason: `why=${why}`,
+          inputs: { why },
+          outputs: {},
+        })
+        .catch(() => undefined);
     throw unauthenticated("sign-in failed");
   }
 
-  async callback(q: { code?: string; state?: string; error?: string }, cookie: string | undefined): Promise<LoginResult> {
+  async callback(
+    q: { code?: string; state?: string; error?: string },
+    cookie: string | undefined,
+  ): Promise<LoginResult> {
     const c = this.unseal(cookie);
     const now = Math.floor(this.now().getTime() / 1000);
     if (c.exp <= now) throw unauthenticated("login attempt expired");
@@ -139,7 +160,11 @@ export class SsoService {
 
     let profile: IdpProfile;
     try {
-      profile = await this.o.idp.exchangeCode({ code: q.code, codeVerifier: c.v, redirectUri: this.o.redirectUri });
+      profile = await this.o.idp.exchangeCode({
+        code: q.code,
+        codeVerifier: c.v,
+        redirectUri: this.o.redirectUri,
+      });
     } catch {
       throw unauthenticated("sign-in failed");
     }
@@ -147,13 +172,20 @@ export class SsoService {
     if (!conn || profile.organizationId !== c.o) throw unauthenticated("sign-in failed"); // IdP asserted a different org than we asked for
     const tenantId = conn.tenantId;
     if (profile.nonce !== undefined) {
-      if (!safeEqual(sha256(profile.nonce), sha256(c.n))) return this.deny(tenantId, "nonce_mismatch", profile.id);
-    } else if (profile.connectionType === "oidc") return this.deny(tenantId, "nonce_missing", profile.id);
-    if (conn.connectionType !== profile.connectionType) return this.deny(tenantId, "connection_type_mismatch", profile.id);
+      if (!safeEqual(sha256(profile.nonce), sha256(c.n)))
+        return this.deny(tenantId, "nonce_mismatch", profile.id);
+    } else if (profile.connectionType === "oidc")
+      return this.deny(tenantId, "nonce_missing", profile.id);
+    if (conn.connectionType !== profile.connectionType)
+      return this.deny(tenantId, "connection_type_mismatch", profile.id);
 
     const email = profile.email.toLowerCase();
-    let member: Member | undefined = await this.o.store.findMemberByUserRef(tenantId, `idp:${profile.id}`);
-    if (!member && profile.emailVerified) member = await this.o.store.findMemberByEmail(tenantId, email);
+    let member: Member | undefined = await this.o.store.findMemberByUserRef(
+      tenantId,
+      `idp:${profile.id}`,
+    );
+    if (!member && profile.emailVerified)
+      member = await this.o.store.findMemberByEmail(tenantId, email);
     if (member) {
       if (member.status !== "active") return this.deny(tenantId, "member_deprovisioned", member.id);
     } else {
@@ -174,7 +206,13 @@ export class SsoService {
   }
 
   /** JIT provisioning only for a verified e-mail at a domain the tenant admin verified, never `owner`. */
-  private async jit(tenantId: string, enabled: boolean, defaultRole: Role, p: IdpProfile, email: string): Promise<Member> {
+  private async jit(
+    tenantId: string,
+    enabled: boolean,
+    defaultRole: Role,
+    p: IdpProfile,
+    email: string,
+  ): Promise<Member> {
     if (!enabled) return this.deny(tenantId, "jit_disabled", p.id);
     if (!p.emailVerified) return this.deny(tenantId, "email_unverified", p.id);
     const domain = email.split("@")[1] ?? "";
@@ -188,7 +226,9 @@ export class SsoService {
       email,
       role: defaultRole,
       status: "active",
-      ...(p.firstName || p.lastName ? { displayName: [p.firstName, p.lastName].filter(Boolean).join(" ") } : {}),
+      ...(p.firstName || p.lastName
+        ? { displayName: [p.firstName, p.lastName].filter(Boolean).join(" ") }
+        : {}),
     });
     await this.o.audit.record({
       tenantId,
@@ -208,4 +248,3 @@ export class SsoService {
     return this.spent.size;
   }
 }
-

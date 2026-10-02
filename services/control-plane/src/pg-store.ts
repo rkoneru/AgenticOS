@@ -42,7 +42,8 @@ function clean<T extends object>(o: Record<string, unknown>): T {
   return o as T;
 }
 const d = (v: unknown): Date | undefined => (v instanceof Date ? v : undefined);
-const num = (v: unknown): number | undefined => (v === null || v === undefined ? undefined : Number(v));
+const num = (v: unknown): number | undefined =>
+  v === null || v === undefined ? undefined : Number(v);
 
 const memberOf = (r: Row): Member =>
   clean<Member>({
@@ -217,7 +218,7 @@ function pageOf<T extends { id: string }>(rows: T[], limit: number): Page<T> {
 
 /**
  * Postgres implementation. Every method runs in `withTenant` (FORCED RLS for the tenant) and also names tenant_id in its WHERE
- * clause. The three pre-tenant lookups set the transaction-local lookup settings that the 0008 policies match on.
+ * clause. The three pre-tenant lookups set the transaction-local lookup settings that the 0009 policies match on.
  */
 export class PgControlPlaneStore implements ControlPlaneStore {
   constructor(private readonly o: PgStoreOptions) {}
@@ -235,13 +236,18 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
 
   /** A transaction with no tenant, only lookup settings. */
-  private async lookup<T>(settings: Record<string, string>, fn: (c: ClientBase) => Promise<T>): Promise<T> {
+  private async lookup<T>(
+    settings: Record<string, string>,
+    fn: (c: ClientBase) => Promise<T>,
+  ): Promise<T> {
     const client = await this.o.pool.connect();
     try {
       await client.query("BEGIN");
       try {
-        if (this.o.role) await client.query(`SET LOCAL ROLE ${client.escapeIdentifier(this.o.role)}`);
-        for (const [key, v] of Object.entries(settings)) await client.query("SELECT set_config($1, $2, true)", [key, v]);
+        if (this.o.role)
+          await client.query(`SET LOCAL ROLE ${client.escapeIdentifier(this.o.role)}`);
+        for (const [key, v] of Object.entries(settings))
+          await client.query("SELECT set_config($1, $2, true)", [key, v]);
         const out = await fn(client);
         await client.query("COMMIT");
         return out;
@@ -259,18 +265,37 @@ export class PgControlPlaneStore implements ControlPlaneStore {
     try {
       await client.query("BEGIN");
       try {
-        if (this.o.role) await client.query(`SET LOCAL ROLE ${client.escapeIdentifier(this.o.role)}`);
-        await client.query("SELECT axis.provision_tenant($1, $2, $3, $4, $5)", [s.tenantId, s.slug, s.name, s.region, s.phiMode]);
+        if (this.o.role)
+          await client.query(`SET LOCAL ROLE ${client.escapeIdentifier(this.o.role)}`);
+        await client.query("SELECT axis.provision_tenant($1, $2, $3, $4, $5)", [
+          s.tenantId,
+          s.slug,
+          s.name,
+          s.region,
+          s.phiMode,
+        ]);
         await client.query("SELECT axis.set_tenant($1::uuid)", [s.tenantId]);
         await client.query(
           "INSERT INTO members (tenant_id, id, user_ref, email, role, display_name) VALUES ($1,$2,$3,$4,'owner',$5)",
           [s.tenantId, s.owner.id, s.owner.userRef, s.owner.email, s.owner.displayName ?? null],
         );
         for (const p of s.packs) {
-          await client.query("INSERT INTO policy_packs (tenant_id, id, name) VALUES ($1,$2,$3)", [s.tenantId, p.packId, p.name]);
+          await client.query("INSERT INTO policy_packs (tenant_id, id, name) VALUES ($1,$2,$3)", [
+            s.tenantId,
+            p.packId,
+            p.name,
+          ]);
           await client.query(
             "INSERT INTO policy_pack_versions (tenant_id, id, pack_id, version, source, rego, content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-            [s.tenantId, p.versionId, p.packId, p.version, JSON.stringify(p.source), p.rego, p.contentHash],
+            [
+              s.tenantId,
+              p.versionId,
+              p.packId,
+              p.version,
+              JSON.stringify(p.source),
+              p.rego,
+              p.contentHash,
+            ],
           );
           await client.query(
             "INSERT INTO policy_assignments (tenant_id, pack_id, version_id, activated_by) VALUES ($1,$2,$3,$4)",
@@ -284,17 +309,22 @@ export class PgControlPlaneStore implements ControlPlaneStore {
           );
         await client.query(
           "INSERT INTO tenant_settings (tenant_id, retention_audit_days, retention_transcript_days, retention_memory_days) VALUES ($1,$2,$3,$4)",
-          [s.tenantId, s.settings.retentionAuditDays, s.settings.retentionTranscriptDays, s.settings.retentionMemoryDays],
+          [
+            s.tenantId,
+            s.settings.retentionAuditDays,
+            s.settings.retentionTranscriptDays,
+            s.settings.retentionMemoryDays,
+          ],
         );
-        await client.query("INSERT INTO tenant_placements (tenant_id, isolation_tier, pool_key) VALUES ($1,$2,$3)", [
-          s.tenantId,
-          s.placement.isolationTier,
-          s.placement.poolKey ?? null,
-        ]);
+        await client.query(
+          "INSERT INTO tenant_placements (tenant_id, isolation_tier, pool_key) VALUES ($1,$2,$3)",
+          [s.tenantId, s.placement.isolationTier, s.placement.poolKey ?? null],
+        );
         await client.query("COMMIT");
       } catch (err) {
         await client.query("ROLLBACK");
-        if ((err as { code?: string }).code === UNIQUE) throw new StoreConflict("slug already in use");
+        if ((err as { code?: string }).code === UNIQUE)
+          throw new StoreConflict("slug already in use");
         throw err;
       }
     } finally {
@@ -304,9 +334,22 @@ export class PgControlPlaneStore implements ControlPlaneStore {
 
   getTenant(t: string): Promise<TenantRecord | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT id, slug, name, region, phi_mode, status FROM tenants WHERE id = $1", [t]);
+      const r = await c.query(
+        "SELECT id, slug, name, region, phi_mode, status FROM tenants WHERE id = $1",
+        [t],
+      );
       const x = r.rows[0] as Row | undefined;
-      return x && ({ id: x["id"], slug: x["slug"], name: x["name"], region: x["region"], phiMode: x["phi_mode"], status: x["status"] } as TenantRecord);
+      return (
+        x &&
+        ({
+          id: x["id"],
+          slug: x["slug"],
+          name: x["name"],
+          region: x["region"],
+          phiMode: x["phi_mode"],
+          status: x["status"],
+        } as TenantRecord)
+      );
     });
   }
 
@@ -316,7 +359,17 @@ export class PgControlPlaneStore implements ControlPlaneStore {
       const r = await c.query(
         `INSERT INTO members (tenant_id, id, user_ref, email, role, status, display_name, external_id, directory_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [m.tenantId, m.id, m.userRef, m.email, m.role, m.status, m.displayName ?? null, m.externalId ?? null, m.directoryId ?? null],
+        [
+          m.tenantId,
+          m.id,
+          m.userRef,
+          m.email,
+          m.role,
+          m.status,
+          m.displayName ?? null,
+          m.externalId ?? null,
+          m.directoryId ?? null,
+        ],
       );
       return memberOf(r.rows[0] as Row);
     });
@@ -329,7 +382,10 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   private findMember(t: string, where: string, params: unknown[]): Promise<Member | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query(`SELECT * FROM members WHERE tenant_id = $1 AND ${where} LIMIT 1`, [t, ...params]);
+      const r = await c.query(`SELECT * FROM members WHERE tenant_id = $1 AND ${where} LIMIT 1`, [
+        t,
+        ...params,
+      ]);
       return r.rows[0] ? memberOf(r.rows[0] as Row) : undefined;
     });
   }
@@ -344,23 +400,37 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   listMembers(t: string, limit: number, after?: string): Promise<Page<Member>> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM members WHERE tenant_id = $1 AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3", [
-        t,
-        after ?? null,
-        limit + 1,
-      ]);
+      const r = await c.query(
+        "SELECT * FROM members WHERE tenant_id = $1 AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3",
+        [t, after ?? null, limit + 1],
+      );
       return pageOf((r.rows as Row[]).map(memberOf), limit);
     });
   }
-  updateMember(t: string, id: string, patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email">>, now: Date): Promise<Member | undefined> {
+  updateMember(
+    t: string,
+    id: string,
+    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email">>,
+    now: Date,
+  ): Promise<Member | undefined> {
     return this.tx(t, async (c) => {
       // Serialise every owner-affecting change of this tenant, then count owners under the lock.
       await c.query("SELECT pg_advisory_xact_lock(727281, hashtext($1))", [t]);
-      const cur = await c.query("SELECT * FROM members WHERE tenant_id = $1 AND id = $2 FOR UPDATE", [t, id]);
+      const cur = await c.query(
+        "SELECT * FROM members WHERE tenant_id = $1 AND id = $2 FOR UPDATE",
+        [t, id],
+      );
       const m = cur.rows[0] as Row | undefined;
       if (!m) return undefined;
-      const next = { role: patch.role ?? (m["role"] as string), status: patch.status ?? (m["status"] as string) };
-      if (m["role"] === "owner" && m["status"] === "active" && (next.role !== "owner" || next.status !== "active")) {
+      const next = {
+        role: patch.role ?? (m["role"] as string),
+        status: patch.status ?? (m["status"] as string),
+      };
+      if (
+        m["role"] === "owner" &&
+        m["status"] === "active" &&
+        (next.role !== "owner" || next.status !== "active")
+      ) {
         const o = await c.query(
           "SELECT count(*)::int AS n FROM members WHERE tenant_id = $1 AND id <> $2 AND role = 'owner' AND status = 'active'",
           [t, id],
@@ -383,7 +453,20 @@ export class PgControlPlaneStore implements ControlPlaneStore {
       const r = await c.query(
         `INSERT INTO api_keys (tenant_id, id, name, prefix, key_hash, scopes, environment, owner_member_id, created_by, created_at, expires_at, rotated_from)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-        [k.tenantId, k.id, k.name, k.prefix, k.keyHash, k.scopes, k.environment, k.ownerMemberId, k.createdBy, k.createdAt, k.expiresAt ?? null, k.rotatedFrom ?? null],
+        [
+          k.tenantId,
+          k.id,
+          k.name,
+          k.prefix,
+          k.keyHash,
+          k.scopes,
+          k.environment,
+          k.ownerMemberId,
+          k.createdBy,
+          k.createdAt,
+          k.expiresAt ?? null,
+          k.rotatedFrom ?? null,
+        ],
       );
       return keyOf(r.rows[0] as Row);
     });
@@ -396,21 +479,27 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   listApiKeys(t: string, limit: number, after?: string): Promise<Page<ApiKeyRecord>> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM api_keys WHERE tenant_id = $1 AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3", [
-        t,
-        after ?? null,
-        limit + 1,
-      ]);
+      const r = await c.query(
+        "SELECT * FROM api_keys WHERE tenant_id = $1 AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3",
+        [t, after ?? null, limit + 1],
+      );
       return pageOf((r.rows as Row[]).map(keyOf), limit);
     });
   }
   findApiKeyByLookup(prefix: string, keyHash: Buffer): Promise<ApiKeyRecord | undefined> {
-    return this.lookup({ "axis.lookup_prefix": prefix, "axis.lookup_hash": keyHash.toString("hex") }, async (c) => {
-      const r = await c.query("SELECT * FROM api_keys WHERE prefix = $1 LIMIT 1", [prefix]);
-      return r.rows[0] ? keyOf(r.rows[0] as Row) : undefined;
-    });
+    return this.lookup(
+      { "axis.lookup_prefix": prefix, "axis.lookup_hash": keyHash.toString("hex") },
+      async (c) => {
+        const r = await c.query("SELECT * FROM api_keys WHERE prefix = $1 LIMIT 1", [prefix]);
+        return r.rows[0] ? keyOf(r.rows[0] as Row) : undefined;
+      },
+    );
   }
-  updateApiKey(t: string, id: string, patch: { revokedAt?: Date; lastUsedAt?: Date }): Promise<ApiKeyRecord | undefined> {
+  updateApiKey(
+    t: string,
+    id: string,
+    patch: { revokedAt?: Date; lastUsedAt?: Date },
+  ): Promise<ApiKeyRecord | undefined> {
     return this.tx(t, async (c) => {
       const r = await c.query(
         `UPDATE api_keys SET revoked_at = COALESCE(revoked_at, $3), last_used_at = COALESCE($4, last_used_at)
@@ -422,7 +511,10 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   revokeApiKeysOfMember(t: string, memberId: string, at: Date): Promise<number> {
     return this.tx(t, async (c) => {
-      const r = await c.query("UPDATE api_keys SET revoked_at = $3 WHERE tenant_id = $1 AND owner_member_id = $2 AND revoked_at IS NULL", [t, memberId, at]);
+      const r = await c.query(
+        "UPDATE api_keys SET revoked_at = $3 WHERE tenant_id = $1 AND owner_member_id = $2 AND revoked_at IS NULL",
+        [t, memberId, at],
+      );
       return r.rowCount ?? 0;
     });
   }
@@ -433,7 +525,17 @@ export class PgControlPlaneStore implements ControlPlaneStore {
       await c.query(
         `INSERT INTO sessions (tenant_id, id, member_id, refresh_hash, counter, auth_method, created_at, expires_at, refreshed_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [s.tenantId, s.id, s.memberId, s.refreshHash, s.counter, s.authMethod, s.createdAt, s.expiresAt, s.refreshedAt],
+        [
+          s.tenantId,
+          s.id,
+          s.memberId,
+          s.refreshHash,
+          s.counter,
+          s.authMethod,
+          s.createdAt,
+          s.expiresAt,
+          s.refreshedAt,
+        ],
       );
     });
   }
@@ -443,7 +545,13 @@ export class PgControlPlaneStore implements ControlPlaneStore {
       return r.rows[0] ? sessionOf(r.rows[0] as Row) : undefined;
     });
   }
-  rotateRefresh(t: string, id: string, expected: Buffer, next: Buffer, now: Date): Promise<boolean> {
+  rotateRefresh(
+    t: string,
+    id: string,
+    expected: Buffer,
+    next: Buffer,
+    now: Date,
+  ): Promise<boolean> {
     return this.tx(t, async (c) => {
       const r = await c.query(
         `UPDATE sessions SET prev_refresh_hash = refresh_hash, refresh_hash = $4, counter = counter + 1, refreshed_at = $5
@@ -455,13 +563,19 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   revokeSession(t: string, id: string, at: Date, reason: string): Promise<boolean> {
     return this.tx(t, async (c) => {
-      const r = await c.query("UPDATE sessions SET revoked_at = $3, revoked_reason = $4 WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL", [t, id, at, reason]);
+      const r = await c.query(
+        "UPDATE sessions SET revoked_at = $3, revoked_reason = $4 WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL",
+        [t, id, at, reason],
+      );
       return (r.rowCount ?? 0) === 1;
     });
   }
   revokeSessionsOfMember(t: string, memberId: string, at: Date, reason: string): Promise<number> {
     return this.tx(t, async (c) => {
-      const r = await c.query("UPDATE sessions SET revoked_at = $3, revoked_reason = $4 WHERE tenant_id = $1 AND member_id = $2 AND revoked_at IS NULL", [t, memberId, at, reason]);
+      const r = await c.query(
+        "UPDATE sessions SET revoked_at = $3, revoked_reason = $4 WHERE tenant_id = $1 AND member_id = $2 AND revoked_at IS NULL",
+        [t, memberId, at, reason],
+      );
       return r.rowCount ?? 0;
     });
   }
@@ -472,38 +586,75 @@ export class PgControlPlaneStore implements ControlPlaneStore {
       await c.query(
         `INSERT INTO directories (tenant_id, id, name, idp_directory_id, token_prefix, token_hash, default_role, status, created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [x.tenantId, x.id, x.name, x.idpDirectoryId ?? null, x.tokenPrefix, x.tokenHash, x.defaultRole, x.status, x.createdAt],
+        [
+          x.tenantId,
+          x.id,
+          x.name,
+          x.idpDirectoryId ?? null,
+          x.tokenPrefix,
+          x.tokenHash,
+          x.defaultRole,
+          x.status,
+          x.createdAt,
+        ],
       );
     });
   }
   getDirectory(t: string, id: string): Promise<DirectoryRecord | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM directories WHERE tenant_id = $1 AND id = $2", [t, id]);
+      const r = await c.query("SELECT * FROM directories WHERE tenant_id = $1 AND id = $2", [
+        t,
+        id,
+      ]);
       return r.rows[0] ? dirOf(r.rows[0] as Row) : undefined;
     });
   }
   listDirectories(t: string): Promise<DirectoryRecord[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM directories WHERE tenant_id = $1 ORDER BY id", [t])).rows.map((r) => dirOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (await c.query("SELECT * FROM directories WHERE tenant_id = $1 ORDER BY id", [t])).rows.map(
+        (r) => dirOf(r as Row),
+      ),
+    );
   }
   findDirectoryByLookup(prefix: string, tokenHash: Buffer): Promise<DirectoryRecord | undefined> {
-    return this.lookup({ "axis.lookup_prefix": prefix, "axis.lookup_hash": tokenHash.toString("hex") }, async (c) => {
-      const r = await c.query("SELECT * FROM directories WHERE token_prefix = $1 LIMIT 1", [prefix]);
-      return r.rows[0] ? dirOf(r.rows[0] as Row) : undefined;
-    });
+    return this.lookup(
+      { "axis.lookup_prefix": prefix, "axis.lookup_hash": tokenHash.toString("hex") },
+      async (c) => {
+        const r = await c.query("SELECT * FROM directories WHERE token_prefix = $1 LIMIT 1", [
+          prefix,
+        ]);
+        return r.rows[0] ? dirOf(r.rows[0] as Row) : undefined;
+      },
+    );
   }
-  updateDirectory(t: string, id: string, p: { revokedAt?: Date; lastUsedAt?: Date; tokenPrefix?: string; tokenHash?: Buffer }): Promise<void> {
+  updateDirectory(
+    t: string,
+    id: string,
+    p: { revokedAt?: Date; lastUsedAt?: Date; tokenPrefix?: string; tokenHash?: Buffer },
+  ): Promise<void> {
     return this.tx(t, async (c) => {
       await c.query(
         `UPDATE directories SET revoked_at = COALESCE($3, revoked_at), status = CASE WHEN $3::timestamptz IS NOT NULL THEN 'revoked' ELSE status END,
            last_used_at = COALESCE($4, last_used_at), token_prefix = COALESCE($5, token_prefix), token_hash = COALESCE($6, token_hash)
          WHERE tenant_id = $1 AND id = $2`,
-        [t, id, p.revokedAt ?? null, p.lastUsedAt ?? null, p.tokenPrefix ?? null, p.tokenHash ?? null],
+        [
+          t,
+          id,
+          p.revokedAt ?? null,
+          p.lastUsedAt ?? null,
+          p.tokenPrefix ?? null,
+          p.tokenHash ?? null,
+        ],
       );
     });
   }
   setRoleMapping(t: string, dir: string, name: string, role: Role | undefined): Promise<void> {
     return this.tx(t, async (c) => {
-      if (role === undefined) await c.query("DELETE FROM directory_role_mappings WHERE tenant_id = $1 AND directory_id = $2 AND group_name = $3", [t, dir, name]);
+      if (role === undefined)
+        await c.query(
+          "DELETE FROM directory_role_mappings WHERE tenant_id = $1 AND directory_id = $2 AND group_name = $3",
+          [t, dir, name],
+        );
       else
         await c.query(
           `INSERT INTO directory_role_mappings (tenant_id, directory_id, group_name, role) VALUES ($1,$2,$3,$4)
@@ -514,32 +665,49 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   listRoleMappings(t: string, dir: string): Promise<Record<string, Role>> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT group_name, role FROM directory_role_mappings WHERE tenant_id = $1 AND directory_id = $2", [t, dir]);
-      return Object.fromEntries((r.rows as Row[]).map((x) => [x["group_name"] as string, x["role"] as Role]));
+      const r = await c.query(
+        "SELECT group_name, role FROM directory_role_mappings WHERE tenant_id = $1 AND directory_id = $2",
+        [t, dir],
+      );
+      return Object.fromEntries(
+        (r.rows as Row[]).map((x) => [x["group_name"] as string, x["role"] as Role]),
+      );
     });
   }
   insertGroup(g: Omit<ScimGroup, "createdAt">): Promise<ScimGroup> {
     return this.tx(g.tenantId, async (c) => {
-      const r = await c.query("INSERT INTO scim_groups (tenant_id, id, directory_id, display_name, external_id) VALUES ($1,$2,$3,$4,$5) RETURNING *", [
-        g.tenantId,
-        g.id,
-        g.directoryId,
-        g.displayName,
-        g.externalId ?? null,
-      ]);
+      const r = await c.query(
+        "INSERT INTO scim_groups (tenant_id, id, directory_id, display_name, external_id) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+        [g.tenantId, g.id, g.directoryId, g.displayName, g.externalId ?? null],
+      );
       return groupOf(r.rows[0] as Row);
     });
   }
   getGroup(t: string, dir: string, id: string): Promise<ScimGroup | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM scim_groups WHERE tenant_id = $1 AND directory_id = $2 AND id = $3", [t, dir, id]);
+      const r = await c.query(
+        "SELECT * FROM scim_groups WHERE tenant_id = $1 AND directory_id = $2 AND id = $3",
+        [t, dir, id],
+      );
       return r.rows[0] ? groupOf(r.rows[0] as Row) : undefined;
     });
   }
   listGroups(t: string, dir: string): Promise<ScimGroup[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM scim_groups WHERE tenant_id = $1 AND directory_id = $2 ORDER BY id", [t, dir])).rows.map((r) => groupOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (
+        await c.query(
+          "SELECT * FROM scim_groups WHERE tenant_id = $1 AND directory_id = $2 ORDER BY id",
+          [t, dir],
+        )
+      ).rows.map((r) => groupOf(r as Row)),
+    );
   }
-  updateGroup(t: string, dir: string, id: string, p: { displayName?: string; externalId?: string }): Promise<ScimGroup | undefined> {
+  updateGroup(
+    t: string,
+    dir: string,
+    id: string,
+    p: { displayName?: string; externalId?: string },
+  ): Promise<ScimGroup | undefined> {
     return this.tx(t, async (c) => {
       const r = await c.query(
         "UPDATE scim_groups SET display_name = COALESCE($4, display_name), external_id = COALESCE($5, external_id) WHERE tenant_id = $1 AND directory_id = $2 AND id = $3 RETURNING *",
@@ -550,16 +718,29 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   deleteGroup(t: string, dir: string, id: string): Promise<boolean> {
     return this.tx(t, async (c) => {
-      const r = await c.query("DELETE FROM scim_groups WHERE tenant_id = $1 AND directory_id = $2 AND id = $3", [t, dir, id]);
+      const r = await c.query(
+        "DELETE FROM scim_groups WHERE tenant_id = $1 AND directory_id = $2 AND id = $3",
+        [t, dir, id],
+      );
       return (r.rowCount ?? 0) === 1;
     });
   }
   groupMembers(t: string, groupId: string): Promise<string[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT member_id FROM scim_group_members WHERE tenant_id = $1 AND group_id = $2", [t, groupId])).rows.map((r) => (r as Row)["member_id"] as string));
+    return this.tx(t, async (c) =>
+      (
+        await c.query(
+          "SELECT member_id FROM scim_group_members WHERE tenant_id = $1 AND group_id = $2",
+          [t, groupId],
+        )
+      ).rows.map((r) => (r as Row)["member_id"] as string),
+    );
   }
   setGroupMembers(t: string, groupId: string, ids: string[]): Promise<void> {
     return this.tx(t, async (c) => {
-      await c.query("DELETE FROM scim_group_members WHERE tenant_id = $1 AND group_id = $2", [t, groupId]);
+      await c.query("DELETE FROM scim_group_members WHERE tenant_id = $1 AND group_id = $2", [
+        t,
+        groupId,
+      ]);
       if (ids.length > 0)
         await c.query(
           `INSERT INTO scim_group_members (tenant_id, group_id, member_id)
@@ -588,18 +769,32 @@ export class PgControlPlaneStore implements ControlPlaneStore {
          VALUES ($1,$2,$3,$4,$5,$6,$7)
          ON CONFLICT (tenant_id, id) DO UPDATE SET idp_connection_id = EXCLUDED.idp_connection_id, connection_type = EXCLUDED.connection_type,
            jit_enabled = EXCLUDED.jit_enabled, jit_default_role = EXCLUDED.jit_default_role`,
-        [x.tenantId, x.id, x.idpOrgId, x.idpConnectionId ?? null, x.connectionType, x.jitEnabled, x.jitDefaultRole],
+        [
+          x.tenantId,
+          x.id,
+          x.idpOrgId,
+          x.idpConnectionId ?? null,
+          x.connectionType,
+          x.jitEnabled,
+          x.jitDefaultRole,
+        ],
       );
     });
   }
   findConnectionByOrg(org: string): Promise<IdentityConnection | undefined> {
     return this.lookup({ "axis.lookup_idp_org": org }, async (c) => {
-      const r = await c.query("SELECT * FROM identity_connections WHERE idp_org_id = $1 LIMIT 1", [org]);
+      const r = await c.query("SELECT * FROM identity_connections WHERE idp_org_id = $1 LIMIT 1", [
+        org,
+      ]);
       return r.rows[0] ? connOf(r.rows[0] as Row) : undefined;
     });
   }
   listConnections(t: string): Promise<IdentityConnection[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM identity_connections WHERE tenant_id = $1 ORDER BY id", [t])).rows.map((r) => connOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (
+        await c.query("SELECT * FROM identity_connections WHERE tenant_id = $1 ORDER BY id", [t])
+      ).rows.map((r) => connOf(r as Row)),
+    );
   }
   upsertDomain(x: VerifiedDomain): Promise<void> {
     return this.tx(x.tenantId, async (c) => {
@@ -612,30 +807,46 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   getDomain(t: string, domain: string): Promise<VerifiedDomain | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM verified_domains WHERE tenant_id = $1 AND domain = $2", [t, domain]);
+      const r = await c.query(
+        "SELECT * FROM verified_domains WHERE tenant_id = $1 AND domain = $2",
+        [t, domain],
+      );
       return r.rows[0] ? domainOf(r.rows[0] as Row) : undefined;
     });
   }
   listDomains(t: string): Promise<VerifiedDomain[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM verified_domains WHERE tenant_id = $1 ORDER BY domain", [t])).rows.map((r) => domainOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (
+        await c.query("SELECT * FROM verified_domains WHERE tenant_id = $1 ORDER BY domain", [t])
+      ).rows.map((r) => domainOf(r as Row)),
+    );
   }
 
   // BYO
   getActiveTenantKey(t: string): Promise<TenantKeyRecord | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM tenant_keys WHERE tenant_id = $1 AND retired_at IS NULL ORDER BY version DESC LIMIT 1", [t]);
+      const r = await c.query(
+        "SELECT * FROM tenant_keys WHERE tenant_id = $1 AND retired_at IS NULL ORDER BY version DESC LIMIT 1",
+        [t],
+      );
       return r.rows[0] ? tkeyOf(r.rows[0] as Row) : undefined;
     });
   }
   getTenantKey(t: string, version: number): Promise<TenantKeyRecord | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM tenant_keys WHERE tenant_id = $1 AND version = $2", [t, version]);
+      const r = await c.query("SELECT * FROM tenant_keys WHERE tenant_id = $1 AND version = $2", [
+        t,
+        version,
+      ]);
       return r.rows[0] ? tkeyOf(r.rows[0] as Row) : undefined;
     });
   }
   insertTenantKey(x: TenantKeyRecord): Promise<void> {
     return this.tx(x.tenantId, async (c) => {
-      await c.query("INSERT INTO tenant_keys (tenant_id, version, kms_key_id, wrapped_dek) VALUES ($1,$2,$3,$4)", [x.tenantId, x.version, x.kmsKeyId, x.wrappedDek]);
+      await c.query(
+        "INSERT INTO tenant_keys (tenant_id, version, kms_key_id, wrapped_dek) VALUES ($1,$2,$3,$4)",
+        [x.tenantId, x.version, x.kmsKeyId, x.wrappedDek],
+      );
     });
   }
   putModelCredential(x: ModelCredentialRecord): Promise<ModelCredentialRecord> {
@@ -648,23 +859,51 @@ export class PgControlPlaneStore implements ControlPlaneStore {
          ON CONFLICT (tenant_id, provider, label) DO UPDATE SET key_version = EXCLUDED.key_version, nonce = EXCLUDED.nonce,
            ciphertext = EXCLUDED.ciphertext, rotated_at = EXCLUDED.created_at, created_by = EXCLUDED.created_by
          RETURNING *`,
-        [x.tenantId, x.id, x.provider, x.label, `cp:${x.id}`, x.keyVersion, nonce, ct, x.createdBy, x.createdAt],
+        [
+          x.tenantId,
+          x.id,
+          x.provider,
+          x.label,
+          `cp:${x.id}`,
+          x.keyVersion,
+          nonce,
+          ct,
+          x.createdBy,
+          x.createdAt,
+        ],
       );
       return credOf(r.rows[0] as Row);
     });
   }
-  getModelCredential(t: string, provider: string, label: string): Promise<ModelCredentialRecord | undefined> {
+  getModelCredential(
+    t: string,
+    provider: string,
+    label: string,
+  ): Promise<ModelCredentialRecord | undefined> {
     return this.tx(t, async (c) => {
-      const r = await c.query("SELECT * FROM model_credentials WHERE tenant_id = $1 AND provider = $2 AND label = $3 AND ciphertext IS NOT NULL", [t, provider, label]);
+      const r = await c.query(
+        "SELECT * FROM model_credentials WHERE tenant_id = $1 AND provider = $2 AND label = $3 AND ciphertext IS NOT NULL",
+        [t, provider, label],
+      );
       return r.rows[0] ? credOf(r.rows[0] as Row) : undefined;
     });
   }
   listModelCredentials(t: string): Promise<ModelCredentialRecord[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM model_credentials WHERE tenant_id = $1 AND ciphertext IS NOT NULL ORDER BY provider, label", [t])).rows.map((r) => credOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (
+        await c.query(
+          "SELECT * FROM model_credentials WHERE tenant_id = $1 AND ciphertext IS NOT NULL ORDER BY provider, label",
+          [t],
+        )
+      ).rows.map((r) => credOf(r as Row)),
+    );
   }
   deleteModelCredential(t: string, provider: string, label: string): Promise<boolean> {
     return this.tx(t, async (c) => {
-      const r = await c.query("DELETE FROM model_credentials WHERE tenant_id = $1 AND provider = $2 AND label = $3", [t, provider, label]);
+      const r = await c.query(
+        "DELETE FROM model_credentials WHERE tenant_id = $1 AND provider = $2 AND label = $3",
+        [t, provider, label],
+      );
       return (r.rowCount ?? 0) === 1;
     });
   }
@@ -672,16 +911,32 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   // policies
   insertPackVersion(v: Omit<PackVersionRecord, "createdAt">): Promise<PackVersionRecord> {
     return this.tx(v.tenantId, async (c) => {
-      const ex = await c.query("SELECT id FROM policy_packs WHERE tenant_id = $1 AND name = $2", [v.tenantId, v.packName]);
+      const ex = await c.query("SELECT id FROM policy_packs WHERE tenant_id = $1 AND name = $2", [
+        v.tenantId,
+        v.packName,
+      ]);
       let packId = (ex.rows[0] as Row | undefined)?.["id"] as string | undefined;
       if (!packId) {
-        await c.query("INSERT INTO policy_packs (tenant_id, id, name) VALUES ($1,$2,$3)", [v.tenantId, v.packId, v.packName]);
+        await c.query("INSERT INTO policy_packs (tenant_id, id, name) VALUES ($1,$2,$3)", [
+          v.tenantId,
+          v.packId,
+          v.packName,
+        ]);
         packId = v.packId;
       }
       const r = await c.query(
         `INSERT INTO policy_pack_versions (tenant_id, id, pack_id, version, source, rego, content_hash) VALUES ($1,$2,$3,$4,$5,$6,$7)
          RETURNING *, $8::text AS pack_name`,
-        [v.tenantId, v.versionId, packId, v.version, JSON.stringify(v.source), v.rego, v.contentHash, v.packName],
+        [
+          v.tenantId,
+          v.versionId,
+          packId,
+          v.version,
+          JSON.stringify(v.source),
+          v.rego,
+          v.contentHash,
+          v.packName,
+        ],
       );
       return versionOf(r.rows[0] as Row);
     });
@@ -705,12 +960,23 @@ export class PgControlPlaneStore implements ControlPlaneStore {
       ).rows.map((r) => versionOf(r as Row)),
     );
   }
-  activatePackVersion(t: string, versionId: string, by: string, now: Date): Promise<PolicyAssignment> {
+  activatePackVersion(
+    t: string,
+    versionId: string,
+    by: string,
+    now: Date,
+  ): Promise<PolicyAssignment> {
     return this.tx(t, async (c) => {
-      const v = await c.query("SELECT pack_id FROM policy_pack_versions WHERE tenant_id = $1 AND id = $2", [t, versionId]);
+      const v = await c.query(
+        "SELECT pack_id FROM policy_pack_versions WHERE tenant_id = $1 AND id = $2",
+        [t, versionId],
+      );
       const packId = (v.rows[0] as Row | undefined)?.["pack_id"];
       if (!packId) throw new StoreConflict("unknown version");
-      await c.query("UPDATE policy_assignments SET active = false, deactivated_at = $3 WHERE tenant_id = $1 AND pack_id = $2 AND active", [t, packId, now]);
+      await c.query(
+        "UPDATE policy_assignments SET active = false, deactivated_at = $3 WHERE tenant_id = $1 AND pack_id = $2 AND active",
+        [t, packId, now],
+      );
       const r = await c.query(
         "INSERT INTO policy_assignments (tenant_id, pack_id, version_id, activated_by, activated_at) VALUES ($1,$2,$3,$4,$5) RETURNING *",
         [t, packId, versionId, by, now],
@@ -720,12 +986,22 @@ export class PgControlPlaneStore implements ControlPlaneStore {
   }
   deactivatePack(t: string, packId: string, now: Date): Promise<boolean> {
     return this.tx(t, async (c) => {
-      const r = await c.query("UPDATE policy_assignments SET active = false, deactivated_at = $3 WHERE tenant_id = $1 AND pack_id = $2 AND active", [t, packId, now]);
+      const r = await c.query(
+        "UPDATE policy_assignments SET active = false, deactivated_at = $3 WHERE tenant_id = $1 AND pack_id = $2 AND active",
+        [t, packId, now],
+      );
       return (r.rowCount ?? 0) > 0;
     });
   }
   listActiveAssignments(t: string): Promise<PolicyAssignment[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM policy_assignments WHERE tenant_id = $1 AND active ORDER BY id", [t])).rows.map((r) => assignOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (
+        await c.query(
+          "SELECT * FROM policy_assignments WHERE tenant_id = $1 AND active ORDER BY id",
+          [t],
+        )
+      ).rows.map((r) => assignOf(r as Row)),
+    );
   }
 
   // budgets etc
@@ -740,10 +1016,19 @@ export class PgControlPlaneStore implements ControlPlaneStore {
     });
   }
   listBudgets(t: string): Promise<Budget[]> {
-    return this.tx(t, async (c) => (await c.query("SELECT * FROM budgets WHERE tenant_id = $1 ORDER BY id", [t])).rows.map((r) => budgetOf(r as Row)));
+    return this.tx(t, async (c) =>
+      (await c.query("SELECT * FROM budgets WHERE tenant_id = $1 ORDER BY id", [t])).rows.map((r) =>
+        budgetOf(r as Row),
+      ),
+    );
   }
   deleteBudget(t: string, id: string): Promise<boolean> {
-    return this.tx(t, async (c) => ((await c.query("DELETE FROM budgets WHERE tenant_id = $1 AND id = $2", [t, id])).rowCount ?? 0) === 1);
+    return this.tx(
+      t,
+      async (c) =>
+        ((await c.query("DELETE FROM budgets WHERE tenant_id = $1 AND id = $2", [t, id]))
+          .rowCount ?? 0) === 1,
+    );
   }
   getSettings(t: string): Promise<TenantSettings | undefined> {
     return this.tx(t, async (c) => {
@@ -757,7 +1042,13 @@ export class PgControlPlaneStore implements ControlPlaneStore {
         `INSERT INTO tenant_settings (tenant_id, retention_audit_days, retention_transcript_days, retention_memory_days, updated_by) VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (tenant_id) DO UPDATE SET retention_audit_days = EXCLUDED.retention_audit_days, retention_transcript_days = EXCLUDED.retention_transcript_days,
            retention_memory_days = EXCLUDED.retention_memory_days, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [s.tenantId, s.retentionAuditDays, s.retentionTranscriptDays, s.retentionMemoryDays, s.updatedBy ?? null],
+        [
+          s.tenantId,
+          s.retentionAuditDays,
+          s.retentionTranscriptDays,
+          s.retentionMemoryDays,
+          s.updatedBy ?? null,
+        ],
       );
     });
   }
@@ -765,7 +1056,14 @@ export class PgControlPlaneStore implements ControlPlaneStore {
     return this.tx(t, async (c) => {
       const r = await c.query("SELECT * FROM tenant_placements WHERE tenant_id = $1", [t]);
       const x = r.rows[0] as Row | undefined;
-      return x && clean<Placement>({ tenantId: x["tenant_id"], isolationTier: x["isolation_tier"], poolKey: x["pool_key"] });
+      return (
+        x &&
+        clean<Placement>({
+          tenantId: x["tenant_id"],
+          isolationTier: x["isolation_tier"],
+          poolKey: x["pool_key"],
+        })
+      );
     });
   }
   putPlacement(p: Placement): Promise<void> {

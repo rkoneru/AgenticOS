@@ -1,6 +1,15 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { LocalKms, TokenSigner, open, safeEqual, seal, sha256Hex, fromB64u, b64u } from "../src/index.js";
+import {
+  LocalKms,
+  TokenSigner,
+  open,
+  safeEqual,
+  seal,
+  sha256Hex,
+  fromB64u,
+  b64u,
+} from "../src/index.js";
 
 describe("crypto primitives", () => {
   it("seal/open round-trips and binds the AAD", () => {
@@ -56,11 +65,27 @@ describe("crypto primitives", () => {
     const signer = new TokenSigner([k]);
     // craft a correctly-MACed but non-object body via the same primitive
     const body = b64u(Buffer.from("not json"));
-    
-    const sig = b64u(createHmac("sha256", k.key).update("p").update("\0").update("a").update(".").update(body).digest());
+
+    const sig = b64u(
+      createHmac("sha256", k.key)
+        .update("p")
+        .update("\0")
+        .update("a")
+        .update(".")
+        .update(body)
+        .digest(),
+    );
     expect(signer.verify("p", `a.${body}.${sig}`)).toBeUndefined();
     const arrBody = b64u(Buffer.from("[1]"));
-    const sig2 = b64u(createHmac("sha256", k.key).update("p").update("\0").update("a").update(".").update(arrBody).digest());
+    const sig2 = b64u(
+      createHmac("sha256", k.key)
+        .update("p")
+        .update("\0")
+        .update("a")
+        .update(".")
+        .update(arrBody)
+        .digest(),
+    );
     expect(signer.verify("p", `a.${arrBody}.${sig2}`)).toBeUndefined();
   });
 

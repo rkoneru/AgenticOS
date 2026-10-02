@@ -14,8 +14,12 @@ export function extractWasm(tarGz: Uint8Array): Uint8Array {
     const header = tar.subarray(off, off + 512);
     if (header.every((b) => b === 0)) break;
     const name = Buffer.from(header.subarray(0, 100)).toString("utf8").replace(/\0.*$/, "");
-    const size = parseInt(Buffer.from(header.subarray(124, 136)).toString("utf8").replace(/\0.*$/, "").trim() || "0", 8);
-    if (name.endsWith("policy.wasm")) return new Uint8Array(tar.subarray(off + 512, off + 512 + size));
+    const size = parseInt(
+      Buffer.from(header.subarray(124, 136)).toString("utf8").replace(/\0.*$/, "").trim() || "0",
+      8,
+    );
+    if (name.endsWith("policy.wasm"))
+      return new Uint8Array(tar.subarray(off + 512, off + 512 + size));
     off += 512 + Math.ceil(size / 512) * 512;
   }
   throw new Error("bundle contains no policy.wasm");

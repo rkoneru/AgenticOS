@@ -53,8 +53,16 @@ export class SessionService {
     return hmac(this.o.pepper, "refresh\0", secret);
   }
 
-  private mintAccess(s: { tenantId: string; id: string; memberId: string }, expiresAt: Date): string {
-    return this.o.signer.sign(ACCESS, { t: s.tenantId, s: s.id, m: s.memberId, exp: Math.floor(expiresAt.getTime() / 1000) });
+  private mintAccess(
+    s: { tenantId: string; id: string; memberId: string },
+    expiresAt: Date,
+  ): string {
+    return this.o.signer.sign(ACCESS, {
+      t: s.tenantId,
+      s: s.id,
+      m: s.memberId,
+      exp: Math.floor(expiresAt.getTime() / 1000),
+    });
   }
 
   async issue(member: Member, method: "sso" | "dev" = "sso"): Promise<IssuedSession> {
@@ -94,12 +102,19 @@ export class SessionService {
     const p = this.o.signer.verify(ACCESS, token);
     if (!p) return undefined;
     const { t, s, m, exp } = p as { t?: unknown; s?: unknown; m?: unknown; exp?: unknown };
-    if (typeof t !== "string" || typeof s !== "string" || typeof m !== "string" || typeof exp !== "number") return undefined;
+    if (
+      typeof t !== "string" ||
+      typeof s !== "string" ||
+      typeof m !== "string" ||
+      typeof exp !== "number"
+    )
+      return undefined;
     if (!UUID.test(t) || !UUID.test(s) || !UUID.test(m)) return undefined;
     const now = this.now();
     if (exp * 1000 <= now.getTime()) return undefined;
     const sess = await this.o.store.getSession(t, s);
-    if (!sess || sess.memberId !== m || sess.revokedAt || sess.expiresAt.getTime() <= now.getTime()) return undefined;
+    if (!sess || sess.memberId !== m || sess.revokedAt || sess.expiresAt.getTime() <= now.getTime())
+      return undefined;
     const member = await this.o.store.getMember(t, m);
     if (!member || member.status !== "active") return undefined;
     return { tenantId: t, memberId: m, role: member.role, credential: "session", sessionId: s };
@@ -109,10 +124,12 @@ export class SessionService {
     const parts = refreshToken.split(".");
     if (parts.length !== 4 || parts[0] !== "axr") throw unauthenticated("invalid refresh token");
     const [, t, s, secret] = parts as [string, string, string, string];
-    if (!UUID.test(t) || !UUID.test(s) || secret.length < 20) throw unauthenticated("invalid refresh token");
+    if (!UUID.test(t) || !UUID.test(s) || secret.length < 20)
+      throw unauthenticated("invalid refresh token");
     const now = this.now();
     const sess = await this.o.store.getSession(t, s);
-    if (!sess || sess.revokedAt || sess.expiresAt.getTime() <= now.getTime()) throw unauthenticated("invalid refresh token");
+    if (!sess || sess.revokedAt || sess.expiresAt.getTime() <= now.getTime())
+      throw unauthenticated("invalid refresh token");
     const presented = this.refreshHash(secret);
     if (sess.prevRefreshHash && safeEqual(sess.prevRefreshHash, presented)) {
       await this.o.store.revokeSession(t, s, now, "refresh_token_reuse");
@@ -129,7 +146,10 @@ export class SessionService {
     const accessExpiresAt = this.accessExpiry(now, sess.expiresAt);
     return {
       sessionId: s,
-      accessToken: this.mintAccess({ tenantId: t, id: s, memberId: sess.memberId }, accessExpiresAt),
+      accessToken: this.mintAccess(
+        { tenantId: t, id: s, memberId: sess.memberId },
+        accessExpiresAt,
+      ),
       refreshToken: `axr.${t}.${s}.${next}`,
       accessExpiresAt,
       sessionExpiresAt: sess.expiresAt,

@@ -9,7 +9,8 @@ import {
 
 export const b64u = (b: Uint8Array): string => Buffer.from(b).toString("base64url");
 export const fromB64u = (s: string): Buffer => Buffer.from(s, "base64url");
-export const sha256 = (data: string | Uint8Array): Buffer => createHash("sha256").update(data).digest();
+export const sha256 = (data: string | Uint8Array): Buffer =>
+  createHash("sha256").update(data).digest();
 export const sha256Hex = (data: string | Uint8Array): string => sha256(data).toString("hex");
 export const hmac = (key: Uint8Array, ...parts: (string | Uint8Array)[]): Buffer => {
   const h = createHmac("sha256", key);
@@ -56,7 +57,8 @@ export interface SigningKey {
 export class TokenSigner {
   constructor(private readonly keys: readonly SigningKey[]) {
     if (keys.length === 0) throw new Error("at least one signing key is required");
-    for (const k of keys) if (k.key.length < 32) throw new Error("signing keys must be >= 32 bytes");
+    for (const k of keys)
+      if (k.key.length < 32) throw new Error("signing keys must be >= 32 bytes");
   }
 
   sign(purpose: string, payload: Record<string, unknown>): string {

@@ -28,7 +28,13 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
   it("authenticates a fresh token with the member's CURRENT role (not the token's)", async () => {
     const { t, m, s } = await fresh();
     const p = await w.cp.sessions.authenticate(s.accessToken);
-    expect(p).toMatchObject({ tenantId: t.tenantId, memberId: m.id, role: "owner", credential: "session", sessionId: s.sessionId });
+    expect(p).toMatchObject({
+      tenantId: t.tenantId,
+      memberId: m.id,
+      role: "owner",
+      credential: "session",
+      sessionId: s.sessionId,
+    });
     const second = await w.member(t.tenantId, "admin");
     const s2 = await w.cp.sessions.issue((await w.store.getMember(t.tenantId, second.memberId))!);
     await w.store.updateMember(t.tenantId, second.memberId, { role: "viewer" }, w.clock.now());
@@ -41,11 +47,15 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
     expect(await w.cp.sessions.authenticate(s.accessToken)).toBeUndefined();
     const { s: s2 } = await fresh();
     const [kid, body, sig] = s2.accessToken.split(".") as [string, string, string];
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as Record<string, unknown>;
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as Record<
+      string,
+      unknown
+    >;
     payload["m"] = "33333333-3333-4333-8333-333333333333";
     const forged = `${kid}.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.${sig}`;
     expect(await w.cp.sessions.authenticate(forged)).toBeUndefined();
-    for (const junk of ["", "a.b", "a.b.c.d", "x".repeat(5000), "k1..", "null"]) expect(await w.cp.sessions.authenticate(junk)).toBeUndefined();
+    for (const junk of ["", "a.b", "a.b.c.d", "x".repeat(5000), "k1..", "null"])
+      expect(await w.cp.sessions.authenticate(junk)).toBeUndefined();
   });
 
   it("rejects an access token whose session was revoked server-side (revocation list)", async () => {
@@ -84,17 +94,30 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
     // the legitimate holder of r1 is now locked out too
     expect(await w.cp.sessions.authenticate(r1.accessToken)).toBeUndefined();
     expect(await rejects(w.cp.sessions.refresh(r1.refreshToken))).toBe("unauthenticated");
-    expect((await w.store.getSession(t.tenantId, s.sessionId))?.revokedReason).toBe("refresh_token_reuse");
+    expect((await w.store.getSession(t.tenantId, s.sessionId))?.revokedReason).toBe(
+      "refresh_token_reuse",
+    );
   });
 
   it("rejects malformed refresh tokens and tokens for another session", async () => {
     const a = await fresh();
     const b = await fresh();
-    for (const junk of ["", "axr", "axr.a.b.c", `axr.${a.t.tenantId}.${a.s.sessionId}.short`, "x.y.z.w"]) expect(await rejects(w.cp.sessions.refresh(junk))).toBe("unauthenticated");
+    for (const junk of [
+      "",
+      "axr",
+      "axr.a.b.c",
+      `axr.${a.t.tenantId}.${a.s.sessionId}.short`,
+      "x.y.z.w",
+    ])
+      expect(await rejects(w.cp.sessions.refresh(junk))).toBe("unauthenticated");
     const secretA = a.s.refreshToken.split(".")[3];
-    expect(await rejects(w.cp.sessions.refresh(`axr.${b.t.tenantId}.${b.s.sessionId}.${secretA}`))).toBe("unauthenticated");
+    expect(
+      await rejects(w.cp.sessions.refresh(`axr.${b.t.tenantId}.${b.s.sessionId}.${secretA}`)),
+    ).toBe("unauthenticated");
     // a tenant-A session id presented under tenant B is simply not found
-    expect(await rejects(w.cp.sessions.refresh(`axr.${b.t.tenantId}.${a.s.sessionId}.${secretA}`))).toBe("unauthenticated");
+    expect(
+      await rejects(w.cp.sessions.refresh(`axr.${b.t.tenantId}.${a.s.sessionId}.${secretA}`)),
+    ).toBe("unauthenticated");
   });
 
   it("an inactive member cannot get, use or refresh a session", async () => {
@@ -106,7 +129,9 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
     await w.store.updateMember(t.tenantId, om.id, { status: "deprovisioned" }, w.clock.now());
     expect(await w.cp.sessions.authenticate(os.accessToken)).toBeUndefined();
     expect(await rejects(w.cp.sessions.refresh(os.refreshToken))).toBe("unauthenticated");
-    expect(await rejects(w.cp.sessions.issue({ ...om, status: "deprovisioned" }))).toBe("unauthenticated");
+    expect(await rejects(w.cp.sessions.issue({ ...om, status: "deprovisioned" }))).toBe(
+      "unauthenticated",
+    );
     void s;
   });
 
@@ -118,8 +143,13 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
     const s1 = await w.cp.sessions.issue(ma);
     const s2 = await w.cp.sessions.issue(ma);
     expect(await w.cp.sessions.revokeAllOfMember(t.tenantId, a.memberId, "test")).toBe(3); // incl. the one from w.member()
-    for (const s of [s1, s2]) expect(await w.cp.sessions.authenticate(s.accessToken)).toBeUndefined();
-    expect(await w.cp.sessions.authenticate((await w.cp.sessions.issue((await w.store.getMember(t.tenantId, b.memberId))!)).accessToken)).toBeDefined();
+    for (const s of [s1, s2])
+      expect(await w.cp.sessions.authenticate(s.accessToken)).toBeUndefined();
+    expect(
+      await w.cp.sessions.authenticate(
+        (await w.cp.sessions.issue((await w.store.getMember(t.tenantId, b.memberId))!)).accessToken,
+      ),
+    ).toBeDefined();
   });
 
   it("key rotation: tokens signed by a retired key stop verifying when it is removed", async () => {
@@ -127,12 +157,30 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
     const { secrets } = await import("./world.js");
     const sec = secrets();
     const base = {
-      store: w.store, auditSink: w.auditStore, authorizer: await (await import("./world.js")).sharedAuthorizer(), idp: w.idp, kms: w.kms, dns: w.dns,
-      region: w.region, regions: ["us-east-1"], redirectUri: "https://x/cb", allowedReturnOrigins: [], now: w.clock.now,
+      store: w.store,
+      auditSink: w.auditStore,
+      authorizer: await (await import("./world.js")).sharedAuthorizer(),
+      idp: w.idp,
+      kms: w.kms,
+      dns: w.dns,
+      region: w.region,
+      regions: ["us-east-1"],
+      redirectUri: "https://x/cb",
+      allowedReturnOrigins: [],
+      now: w.clock.now,
     };
     const old = wireControlPlane({ ...base, secrets: sec });
-    const rotated = wireControlPlane({ ...base, secrets: { ...sec, signingKeys: [{ kid: "k2", key: Buffer.alloc(32, 9) }, ...sec.signingKeys] } });
-    const dropped = wireControlPlane({ ...base, secrets: { ...sec, signingKeys: [{ kid: "k2", key: Buffer.alloc(32, 9) }] } });
+    const rotated = wireControlPlane({
+      ...base,
+      secrets: {
+        ...sec,
+        signingKeys: [{ kid: "k2", key: Buffer.alloc(32, 9) }, ...sec.signingKeys],
+      },
+    });
+    const dropped = wireControlPlane({
+      ...base,
+      secrets: { ...sec, signingKeys: [{ kid: "k2", key: Buffer.alloc(32, 9) }] },
+    });
     const tt = await w.tenant();
     const issued = await old.sessions.issue((await w.store.getMember(tt.tenantId, tt.ownerId))!);
     expect(await rotated.sessions.authenticate(issued.accessToken)).toBeDefined();
@@ -141,6 +189,42 @@ describe.each(KINDS)("sessions (%s store)", (kind) => {
 
   it("requires a strong pepper", async () => {
     const { SessionService, TokenSigner } = await import("../src/index.js");
-    expect(() => new SessionService({ store: w.store, signer: new TokenSigner([{ kid: "a", key: Buffer.alloc(32) }]), pepper: Buffer.alloc(8) })).toThrow(/pepper/);
+    expect(
+      () =>
+        new SessionService({
+          store: w.store,
+          signer: new TokenSigner([{ kid: "a", key: Buffer.alloc(32) }]),
+          pepper: Buffer.alloc(8),
+        }),
+    ).toThrow(/pepper/);
   });
 });
+
+describe.each(KINDS)(
+  "sessions with a token minted beyond the session lifetime (%s store)",
+  (kind) => {
+    it("the server-side absolute expiry still applies even if an access token claims a later exp", async () => {
+      const { TokenSigner } = await import("../src/index.js");
+      const { secrets } = await import("./world.js");
+      const sec = secrets();
+      const w = await makeWorld(kind, { secrets: sec, absoluteTtlSec: 3600 });
+      try {
+        const t = await w.tenant();
+        const m = (await w.store.getMember(t.tenantId, t.ownerId))!;
+        const s = await w.cp.sessions.issue(m, "sso");
+        const far = Math.floor(w.clock.now().getTime() / 1000) + 10 * 86_400;
+        const long = new TokenSigner(sec.signingKeys).sign("axis-access.v1", {
+          t: t.tenantId,
+          s: s.sessionId,
+          m: m.id,
+          exp: far,
+        });
+        expect(await w.cp.sessions.authenticate(long)).toBeDefined();
+        w.clock.advance(3601);
+        expect(await w.cp.sessions.authenticate(long)).toBeUndefined();
+      } finally {
+        await w.close();
+      }
+    });
+  },
+);

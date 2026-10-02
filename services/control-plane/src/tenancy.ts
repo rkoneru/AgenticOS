@@ -44,15 +44,25 @@ export class TenantRouter {
       throw new CpError("unavailable", "tenant placement unavailable");
     }
     if (!placement) throw new CpError("unavailable", "tenant has no placement");
-    if (placement.isolationTier === "shared_rls") return { tier: "shared_rls", pool: this.o.shared, poolKey: undefined };
+    if (placement.isolationTier === "shared_rls")
+      return { tier: "shared_rls", pool: this.o.shared, poolKey: undefined };
     const pool = placement.poolKey ? this.o.dedicated?.[placement.poolKey] : undefined;
-    if (!pool) throw new CpError("unavailable", `no pool is configured for ${placement.isolationTier} tenant placement`);
-    if (pool === this.o.shared) throw new CpError("unavailable", "a dedicated placement must not resolve to the shared pool");
+    if (!pool)
+      throw new CpError(
+        "unavailable",
+        `no pool is configured for ${placement.isolationTier} tenant placement`,
+      );
+    if (pool === this.o.shared)
+      throw new CpError("unavailable", "a dedicated placement must not resolve to the shared pool");
     return { tier: placement.isolationTier, pool, poolKey: placement.poolKey };
   }
 }
 
-export function routerFromStore(store: ControlPlaneStore, shared: PoolLike, dedicated?: Record<string, PoolLike>): TenantRouter {
+export function routerFromStore(
+  store: ControlPlaneStore,
+  shared: PoolLike,
+  dedicated?: Record<string, PoolLike>,
+): TenantRouter {
   return new TenantRouter({ placements: store, shared, ...(dedicated ? { dedicated } : {}) });
 }
 
@@ -66,6 +76,9 @@ export class RegionGuard {
     const t = await this.store.getTenant(tenantId);
     if (!t) throw new CpError("not_found", "tenant not found");
     if (t.region !== this.region)
-      throw new CpError("region_mismatch", `tenant is homed in ${t.region}; this endpoint serves ${this.region}`);
+      throw new CpError(
+        "region_mismatch",
+        `tenant is homed in ${t.region}; this endpoint serves ${this.region}`,
+      );
   }
 }

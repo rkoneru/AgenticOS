@@ -70,7 +70,11 @@ function readBody(req: http.IncomingMessage): Promise<string> {
       if (size > MAX_BODY) big = true;
       else chunks.push(c);
     });
-    req.on("end", () => (big ? reject(new HttpError(413, "request body too large", "too_large")) : resolve(Buffer.concat(chunks).toString("utf8"))));
+    req.on("end", () =>
+      big
+        ? reject(new HttpError(413, "request body too large", "too_large"))
+        : resolve(Buffer.concat(chunks).toString("utf8")),
+    );
     req.on("error", reject);
   });
 }
@@ -94,10 +98,13 @@ const cookies = (h: string | undefined): Record<string, string> =>
   );
 
 const obj = (b: unknown): Record<string, unknown> => {
-  if (typeof b !== "object" || b === null || Array.isArray(b)) throw invalid("body must be a JSON object");
+  if (typeof b !== "object" || b === null || Array.isArray(b))
+    throw invalid("body must be a JSON object");
   const o = b as Record<string, unknown>;
   // The tenant is derived from the credential ONLY (OpenAPI convention). A body that names one is a client bug or an attack.
-  for (const k of Object.keys(o)) if (/^tenant[_-]?id$/i.test(k)) throw invalid("tenant_id is not accepted: the tenant comes from your credential");
+  for (const k of Object.keys(o))
+    if (/^tenant[_-]?id$/i.test(k))
+      throw invalid("tenant_id is not accepted: the tenant comes from your credential");
   return o;
 };
 const s = (v: unknown, name: string): string => {
@@ -112,11 +119,23 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     `Path=/; Max-Age=${maxAge}; SameSite=${sameSite}${httpOnly ? "; HttpOnly" : ""}${secure ? "; Secure" : ""}`;
 
   function problem(res: http.ServerResponse, status: number, code: string, detail: string): void {
-    res.writeHead(status, { "content-type": "application/problem+json", "cache-control": "no-store" });
+    res.writeHead(status, {
+      "content-type": "application/problem+json",
+      "cache-control": "no-store",
+    });
     res.end(JSON.stringify({ type: "about:blank", title: code, status, code, detail }));
   }
-  function json(res: http.ServerResponse, status: number, body: unknown, extra: Record<string, string | string[]> = {}): void {
-    res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store", ...extra });
+  function json(
+    res: http.ServerResponse,
+    status: number,
+    body: unknown,
+    extra: Record<string, string | string[]> = {},
+  ): void {
+    res.writeHead(status, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+      ...extra,
+    });
     res.end(body === undefined ? undefined : JSON.stringify(body));
   }
 
@@ -125,7 +144,9 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     const m = /^Bearer (\S+)$/.exec(auth ?? "");
     if (m) {
       const tok = m[1] as string;
-      const p = tok.startsWith("axk_") ? await d.apiKeys.verify(tok) : await d.sessions.authenticate(tok);
+      const p = tok.startsWith("axk_")
+        ? await d.apiKeys.verify(tok)
+        : await d.sessions.authenticate(tok);
       if (!p) throw unauthenticated();
       return p;
     }
@@ -133,16 +154,28 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     const at = c[COOKIE_ACCESS];
     if (at) {
       const unsafe = !["GET", "HEAD", "OPTIONS"].includes(req.method ?? "GET");
-      if (unsafe && !equalToken(c[COOKIE_CSRF], req.headers["x-axis-csrf"] as string | undefined)) throw forbidden("CSRF token missing or wrong");
+      if (unsafe && !equalToken(c[COOKIE_CSRF], req.headers["x-axis-csrf"] as string | undefined))
+        throw forbidden("CSRF token missing or wrong");
       const p = await d.sessions.authenticate(at);
       if (p) return p;
     }
     throw unauthenticated();
   }
 
-  function sessionCookies(sess: { accessToken: string; refreshToken: string; accessExpiresAt: Date; sessionExpiresAt: Date }, csrf: string): string[] {
+  function sessionCookies(
+    sess: {
+      accessToken: string;
+      refreshToken: string;
+      accessExpiresAt: Date;
+      sessionExpiresAt: Date;
+    },
+    csrf: string,
+  ): string[] {
     const accessAge = Math.max(0, Math.floor((sess.accessExpiresAt.getTime() - Date.now()) / 1000));
-    const refreshAge = Math.max(0, Math.floor((sess.sessionExpiresAt.getTime() - Date.now()) / 1000));
+    const refreshAge = Math.max(
+      0,
+      Math.floor((sess.sessionExpiresAt.getTime() - Date.now()) / 1000),
+    );
     return [
       `${COOKIE_ACCESS}=${sess.accessToken}; ${flags(accessAge, "Strict")}`,
       `${COOKIE_REFRESH}=${sess.refreshToken}; ${flags(refreshAge, "Strict")}`,
@@ -160,7 +193,10 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
       const ctx = await d.directories.authenticate(req.headers.authorization);
       if (!ctx) {
         const r = scimError(401, "authentication required");
-        res.writeHead(401, { "content-type": "application/scim+json", "www-authenticate": 'Bearer realm="scim"' });
+        res.writeHead(401, {
+          "content-type": "application/scim+json",
+          "www-authenticate": 'Bearer realm="scim"',
+        });
         res.end(JSON.stringify(r.body));
         return;
       }
@@ -173,8 +209,16 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
         res.end(JSON.stringify(scimError(st, (e as Error).message, "invalidSyntax").body));
         return;
       }
-      const r = await d.scim.handle(ctx, { method, path: path.slice("/scim/v2".length), query: url.searchParams, body });
-      res.writeHead(r.status, { "content-type": "application/scim+json", "cache-control": "no-store" });
+      const r = await d.scim.handle(ctx, {
+        method,
+        path: path.slice("/scim/v2".length),
+        query: url.searchParams,
+        body,
+      });
+      res.writeHead(r.status, {
+        "content-type": "application/scim+json",
+        "cache-control": "no-store",
+      });
       res.end(r.body === undefined ? undefined : JSON.stringify(r.body));
       return;
     }
@@ -183,13 +227,23 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     if (path === "/auth/sso/start" && method === "GET") {
       const org = url.searchParams.get("org") ?? "";
       const st = await d.sso.begin(org, url.searchParams.get("return_to") ?? undefined);
-      res.writeHead(302, { location: st.redirectUrl, "set-cookie": `${COOKIE_LOGIN}=${st.cookie}; ${flags(st.cookieMaxAgeSec, "Lax")}`, "cache-control": "no-store" });
+      res.writeHead(302, {
+        location: st.redirectUrl,
+        "set-cookie": `${COOKIE_LOGIN}=${st.cookie}; ${flags(st.cookieMaxAgeSec, "Lax")}`,
+        "cache-control": "no-store",
+      });
       res.end();
       return;
     }
     if (path === "/auth/sso/callback" && method === "GET") {
       const r = await d.sso.callback(
-        { ...(url.searchParams.get("code") ? { code: url.searchParams.get("code") as string } : {}), ...(url.searchParams.get("state") ? { state: url.searchParams.get("state") as string } : {}), ...(url.searchParams.get("error") ? { error: "idp_error" } : {}) },
+        {
+          ...(url.searchParams.get("code") ? { code: url.searchParams.get("code") as string } : {}),
+          ...(url.searchParams.get("state")
+            ? { state: url.searchParams.get("state") as string }
+            : {}),
+          ...(url.searchParams.get("error") ? { error: "idp_error" } : {}),
+        },
         cookies(req.headers.cookie)[COOKIE_LOGIN],
       );
       const csrf = randomToken(24);
@@ -204,21 +258,40 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     if (path === "/auth/refresh" && method === "POST") {
       const c = cookies(req.headers.cookie);
       const body = parseJson(await readBody(req));
-      const fromBody = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["refresh_token"] : undefined;
+      const fromBody =
+        typeof body === "object" && body !== null
+          ? (body as Record<string, unknown>)["refresh_token"]
+          : undefined;
       if (typeof fromBody !== "string") {
-        if (!equalToken(c[COOKIE_CSRF], req.headers["x-axis-csrf"] as string | undefined)) throw forbidden("CSRF token missing or wrong");
+        if (!equalToken(c[COOKIE_CSRF], req.headers["x-axis-csrf"] as string | undefined))
+          throw forbidden("CSRF token missing or wrong");
       }
       const tok = typeof fromBody === "string" ? fromBody : c[COOKIE_REFRESH];
       if (!tok) throw unauthenticated();
       const sess = await d.sessions.refresh(tok);
       const csrf = c[COOKIE_CSRF] ?? randomToken(24);
-      json(res, 200, { access_token: sess.accessToken, refresh_token: sess.refreshToken, expires_at: sess.accessExpiresAt.toISOString() }, { "set-cookie": sessionCookies(sess, csrf) });
+      json(
+        res,
+        200,
+        {
+          access_token: sess.accessToken,
+          refresh_token: sess.refreshToken,
+          expires_at: sess.accessExpiresAt.toISOString(),
+        },
+        { "set-cookie": sessionCookies(sess, csrf) },
+      );
       return;
     }
     if (path === "/auth/logout" && method === "POST") {
       const p = await authenticate(req);
       if (p.sessionId) await d.sessions.revoke(p.tenantId, p.sessionId);
-      json(res, 204, undefined, { "set-cookie": [`${COOKIE_ACCESS}=; ${flags(0, "Strict")}`, `${COOKIE_REFRESH}=; ${flags(0, "Strict")}`, `${COOKIE_CSRF}=; ${flags(0, "Strict", false)}`] });
+      json(res, 204, undefined, {
+        "set-cookie": [
+          `${COOKIE_ACCESS}=; ${flags(0, "Strict")}`,
+          `${COOKIE_REFRESH}=; ${flags(0, "Strict")}`,
+          `${COOKIE_CSRF}=; ${flags(0, "Strict", false)}`,
+        ],
+      });
       return;
     }
 
@@ -251,7 +324,11 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
         region: s(b["region"], "region"),
         ...(typeof b["phi_mode"] === "boolean" ? { phiMode: b["phi_mode"] } : {}),
       });
-      json(res, 201, { tenant_id: out.tenantId, owner_member_id: out.ownerMemberId, policy_version: out.policyVersion });
+      json(res, 201, {
+        tenant_id: out.tenantId,
+        owner_member_id: out.ownerMemberId,
+        policy_version: out.policyVersion,
+      });
       return;
     }
 
@@ -262,10 +339,20 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
       if (!d.devToken || !equalToken(m?.[1], d.devToken)) throw unauthenticated();
       const b = parseJson(await readBody(req)) as Record<string, unknown> | undefined;
       const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      const member = typeof b?.["tenant_id"] === "string" && typeof b["member_id"] === "string" && uuid.test(b["tenant_id"]) && uuid.test(b["member_id"]) ? await d.store.getMember(b["tenant_id"], b["member_id"]) : undefined;
+      const member =
+        typeof b?.["tenant_id"] === "string" &&
+        typeof b["member_id"] === "string" &&
+        uuid.test(b["tenant_id"]) &&
+        uuid.test(b["member_id"])
+          ? await d.store.getMember(b["tenant_id"], b["member_id"])
+          : undefined;
       if (!member) throw new HttpError(404, "member not found", "not_found");
       const sess = await d.sessions.issue(member, "dev");
-      json(res, 201, { access_token: sess.accessToken, refresh_token: sess.refreshToken, expires_at: sess.accessExpiresAt.toISOString() });
+      json(res, 201, {
+        access_token: sess.accessToken,
+        refresh_token: sess.refreshToken,
+        expires_at: sess.accessExpiresAt.toISOString(),
+      });
       return;
     }
 
@@ -274,7 +361,11 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
       const tenant = d.runtimeAuth?.(req.headers.authorization);
       if (!tenant) throw unauthenticated();
       const b = obj(parseJson(await readBody(req)));
-      const v = await d.modelKeys.revealForRuntime(tenant, s(b["provider"], "provider"), typeof b["label"] === "string" ? b["label"] : "default");
+      const v = await d.modelKeys.revealForRuntime(
+        tenant,
+        s(b["provider"], "provider"),
+        typeof b["label"] === "string" ? b["label"] : "default",
+      );
       if (v === undefined) throw new HttpError(404, "secret not found", "not_found");
       json(res, 200, { value: v });
       return;
@@ -284,7 +375,8 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     if (path.startsWith("/admin/v1/")) {
       const p = await authenticate(req);
       const segs = path.slice("/admin/v1/".length).split("/").filter(Boolean);
-      const body = method === "GET" || method === "DELETE" ? undefined : parseJson(await readBody(req));
+      const body =
+        method === "GET" || method === "DELETE" ? undefined : parseJson(await readBody(req));
       const out = await admin(p, method, segs, url.searchParams, body);
       if (out === undefined) json(res, 204, undefined);
       else json(res, out.status ?? 200, out.body);
@@ -293,7 +385,13 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
     throw new HttpError(404, "not found", "not_found");
   }
 
-  async function admin(p: Principal, m: string, seg: string[], q: URLSearchParams, rawBody: unknown): Promise<{ status?: number; body: unknown } | undefined> {
+  async function admin(
+    p: Principal,
+    m: string,
+    seg: string[],
+    q: URLSearchParams,
+    rawBody: unknown,
+  ): Promise<{ status?: number; body: unknown } | undefined> {
     const a = d.admin;
     const [r0, r1, r2] = seg;
     const lim = q.get("limit") ? Number(q.get("limit")) : undefined;
@@ -326,7 +424,8 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
             return ok(await a.updateMemberRole(p, r1, role));
           }
           if (m === "DELETE") return void (await a.removeMember(p, r1));
-        } else if (r2 === "revoke-sessions" && m === "POST") return ok(await a.revokeMemberSessions(p, r1));
+        } else if (r2 === "revoke-sessions" && m === "POST")
+          return ok(await a.revokeMemberSessions(p, r1));
         return notFound();
       case "api-keys":
         if (!r1) {
@@ -336,8 +435,12 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
             const out = await a.createApiKey(p, {
               name: s(b["name"], "name"),
               scopes: Array.isArray(b["scopes"]) ? (b["scopes"] as string[]) : [],
-              ...(typeof b["environment"] === "string" ? { environment: b["environment"] as "dev" } : {}),
-              ...(typeof b["expires_in_days"] === "number" ? { expiresInDays: b["expires_in_days"] } : {}),
+              ...(typeof b["environment"] === "string"
+                ? { environment: b["environment"] as "dev" }
+                : {}),
+              ...(typeof b["expires_in_days"] === "number"
+                ? { expiresInDays: b["expires_in_days"] }
+                : {}),
             });
             return created({ ...out.key, secret: out.secret });
           }
@@ -348,7 +451,8 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
         return notFound();
       case "model-keys":
         if (!r1 && m === "GET") return ok({ items: await a.listModelKeys(p) });
-        if (r1 && r2 && m === "PUT") return ok(await a.putModelKey(p, r1, r2, s(body()["value"], "value")));
+        if (r1 && r2 && m === "PUT")
+          return ok(await a.putModelKey(p, r1, r2, s(body()["value"], "value")));
         if (r1 && r2 && m === "DELETE") return void (await a.deleteModelKey(p, r1, r2));
         return notFound();
       case "policies":
@@ -380,9 +484,15 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
           const b = body();
           return ok(
             await a.updateRetention(p, {
-              ...(typeof b["retention_audit_days"] === "number" ? { auditDays: b["retention_audit_days"] } : {}),
-              ...(typeof b["retention_transcript_days"] === "number" ? { transcriptDays: b["retention_transcript_days"] } : {}),
-              ...(typeof b["retention_memory_days"] === "number" ? { memoryDays: b["retention_memory_days"] } : {}),
+              ...(typeof b["retention_audit_days"] === "number"
+                ? { auditDays: b["retention_audit_days"] }
+                : {}),
+              ...(typeof b["retention_transcript_days"] === "number"
+                ? { transcriptDays: b["retention_transcript_days"] }
+                : {}),
+              ...(typeof b["retention_memory_days"] === "number"
+                ? { memoryDays: b["retention_memory_days"] }
+                : {}),
             }),
           );
         }
@@ -396,7 +506,8 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
             if (!isRole(role)) throw invalid("unknown role");
             return created(await a.createDirectory(p, s(b["name"], "name"), role));
           }
-        } else if (r2 === "rotate-token" && m === "POST") return ok(await a.rotateDirectoryToken(p, r1));
+        } else if (r2 === "rotate-token" && m === "POST")
+          return ok(await a.rotateDirectoryToken(p, r1));
         else if (r2 === "role-mappings" && m === "PUT") {
           const b = body();
           const role = b["role"] === null ? undefined : s(b["role"], "role");
@@ -415,7 +526,9 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
           return ok(
             await a.setSsoConnection(p, {
               idpOrgId: s(b["idp_org_id"], "idp_org_id"),
-              ...(typeof b["idp_connection_id"] === "string" ? { idpConnectionId: b["idp_connection_id"] } : {}),
+              ...(typeof b["idp_connection_id"] === "string"
+                ? { idpConnectionId: b["idp_connection_id"] }
+                : {}),
               connectionType: ct,
               ...(typeof b["jit_enabled"] === "boolean" ? { jitEnabled: b["jit_enabled"] } : {}),
               ...(jr ? { jitDefaultRole: jr as "viewer" } : {}),
@@ -431,11 +544,18 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
         return notFound();
       case "domains":
         if (!r1 && m === "GET") return ok({ items: await a.listDomains(p) });
-        if (!r1 && m === "POST") return created(await a.beginDomain(p, s(body()["domain"], "domain")));
+        if (!r1 && m === "POST")
+          return created(await a.beginDomain(p, s(body()["domain"], "domain")));
         if (r1 && r2 === "verify" && m === "POST") return ok(await a.verifyDomain(p, r1));
         return notFound();
       case "audit":
-        if (r1 === "events" && m === "GET") return ok({ items: await a.listAudit(p, { ...(q.get("from_seq") ? { fromSeq: Number(q.get("from_seq")) } : {}), ...(lim ? { limit: lim } : {}) }) });
+        if (r1 === "events" && m === "GET")
+          return ok({
+            items: await a.listAudit(p, {
+              ...(q.get("from_seq") ? { fromSeq: Number(q.get("from_seq")) } : {}),
+              ...(lim ? { limit: lim } : {}),
+            }),
+          });
         return notFound();
       default:
         return notFound();
@@ -454,5 +574,7 @@ export function createControlPlaneServer(d: HttpDeps): http.Server {
 }
 
 export function listenLoopback(server: http.Server, port = 0): Promise<number> {
-  return new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve((server.address() as AddressInfo).port)));
+  return new Promise((resolve) =>
+    server.listen(port, "127.0.0.1", () => resolve((server.address() as AddressInfo).port)),
+  );
 }

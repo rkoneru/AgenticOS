@@ -6,12 +6,26 @@ import { parse } from "yaml";
 import type { AdminAudit } from "./audit.js";
 import { conflict, CpError, invalid } from "./errors.js";
 import { BASELINE_PACK, compileValidator, type PackValidator } from "./policies.js";
-import { StoreConflict, type Budget, type ControlPlaneStore, type TenantSettings } from "./types.js";
+import {
+  StoreConflict,
+  type Budget,
+  type ControlPlaneStore,
+  type TenantSettings,
+} from "./types.js";
 
-export const DEFAULT_BASELINE_PACK = fileURLToPath(new URL("../../../policies/baseline-deny/pack.yaml", import.meta.url));
+export const DEFAULT_BASELINE_PACK = fileURLToPath(
+  new URL("../../../policies/baseline-deny/pack.yaml", import.meta.url),
+);
 
 export const DEFAULT_BUDGETS: Omit<Budget, "tenantId" | "id">[] = [
-  { scope: "tenant", target: "", metric: "tokens", period: "day", soft: 4_000_000, hard: 5_000_000 },
+  {
+    scope: "tenant",
+    target: "",
+    metric: "tokens",
+    period: "day",
+    soft: 4_000_000,
+    hard: 5_000_000,
+  },
   { scope: "tenant", target: "", metric: "cost_usd", period: "day", soft: 80, hard: 100 },
   { scope: "run", target: "", metric: "tokens", period: "run", soft: 200_000, hard: 250_000 },
   { scope: "run", target: "", metric: "tool_calls", period: "run", soft: 40, hard: 50 },
@@ -63,13 +77,20 @@ export class Provisioner {
     this.newId = o.newId ?? randomUUID;
   }
 
-  async signup(i: SignupInput): Promise<{ tenantId: string; ownerMemberId: string; policyVersion: string }> {
+  async signup(
+    i: SignupInput,
+  ): Promise<{ tenantId: string; ownerMemberId: string; policyVersion: string }> {
     if (!SLUG.test(i.slug)) throw invalid("slug must match ^[a-z][a-z0-9-]{1,62}$");
-    if (typeof i.name !== "string" || i.name.length < 1 || i.name.length > 120) throw invalid("name must be 1-120 characters");
+    if (typeof i.name !== "string" || i.name.length < 1 || i.name.length > 120)
+      throw invalid("name must be 1-120 characters");
     if (!EMAIL.test(i.ownerEmail)) throw invalid("a valid owner e-mail is required");
-    if (!this.o.regions.includes(i.region)) throw invalid(`unknown region; offered: ${this.o.regions.join(", ")}`);
+    if (!this.o.regions.includes(i.region))
+      throw invalid(`unknown region; offered: ${this.o.regions.join(", ")}`);
     if (i.region !== this.o.region)
-      throw new CpError("region_mismatch", `this control plane serves ${this.o.region}; sign up against the ${i.region} endpoint`);
+      throw new CpError(
+        "region_mismatch",
+        `this control plane serves ${this.o.region}; sign up against the ${i.region} endpoint`,
+      );
     const docs = this.o.defaultPacks ?? loadDefaultPacks();
     const validate = this.o.validator ?? compileValidator;
     const v = validate(docs);
@@ -78,9 +99,18 @@ export class Provisioner {
       const meta = (d as { metadata: { name: string; version: string } }).metadata;
       const one = validate([d]);
       if (!one.ok) throw new CpError("unavailable", "default policy pack does not validate");
-      return { packId: this.newId(), versionId: this.newId(), name: meta.name, version: meta.version, source: d, rego: one.rego, contentHash: sha256Hex(canonicalize(d)) };
+      return {
+        packId: this.newId(),
+        versionId: this.newId(),
+        name: meta.name,
+        version: meta.version,
+        source: d,
+        rego: one.rego,
+        contentHash: sha256Hex(canonicalize(d)),
+      };
     });
-    if (!packs.some((p) => p.name === BASELINE_PACK)) throw new CpError("unavailable", "the baseline-deny pack is required");
+    if (!packs.some((p) => p.name === BASELINE_PACK))
+      throw new CpError("unavailable", "the baseline-deny pack is required");
     const tenantId = this.newId();
     const ownerId = this.newId();
     try {
@@ -90,7 +120,12 @@ export class Provisioner {
         name: i.name,
         region: i.region,
         phiMode: i.phiMode ?? false,
-        owner: { id: ownerId, userRef: `signup:${ownerId}`, email: i.ownerEmail.toLowerCase(), ...(i.ownerName ? { displayName: i.ownerName } : {}) },
+        owner: {
+          id: ownerId,
+          userRef: `signup:${ownerId}`,
+          email: i.ownerEmail.toLowerCase(),
+          ...(i.ownerName ? { displayName: i.ownerName } : {}),
+        },
         packs,
         budgets: DEFAULT_BUDGETS,
         settings: DEFAULT_SETTINGS,

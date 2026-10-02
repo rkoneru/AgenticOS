@@ -13,7 +13,8 @@ declare module "vitest" {
 /** Creates two fresh, migrated databases per test run (the second proves dedicated-database routing). Requires PG_ADMIN_URL. */
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   const admin = process.env["PG_ADMIN_URL"];
-  if (!admin) throw new Error("PG_ADMIN_URL is required; run via `pnpm test` / infra/scripts/with-pg.sh");
+  if (!admin)
+    throw new Error("PG_ADMIN_URL is required; run via `pnpm test` / infra/scripts/with-pg.sh");
   const adminClient = new pg.Client({ connectionString: admin });
   await adminClient.connect();
   const names: string[] = [];

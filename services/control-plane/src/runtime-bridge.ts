@@ -16,7 +16,9 @@ export const HttpSecretStoreContract = {
   method: "POST",
 } as const;
 
-export function runtimeAuthFromTokens(tokens: Readonly<Record<string, string>>): (authorization: string | undefined) => string | undefined {
+export function runtimeAuthFromTokens(
+  tokens: Readonly<Record<string, string>>,
+): (authorization: string | undefined) => string | undefined {
   const byToken = new Map(Object.entries(tokens).map(([tenant, token]) => [token, tenant]));
   return (authorization) => {
     const m = /^Bearer (\S+)$/.exec(authorization ?? "");

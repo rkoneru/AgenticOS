@@ -18,10 +18,34 @@ export interface Principal {
 }
 
 export const ACTIONS = [
-  "tenant.read", "tenant.close", "members.read", "members.invite", "members.update_role", "members.remove",
-  "apikeys.read", "apikeys.create", "apikeys.rotate", "apikeys.revoke", "modelkeys.read", "modelkeys.write", "modelkeys.delete",
-  "policies.read", "policies.publish", "policies.activate", "budgets.read", "budgets.write", "settings.read", "settings.write",
-  "audit.read", "billing.read", "billing.write", "directories.read", "directories.manage", "sso.manage", "domains.manage", "sessions.revoke",
+  "tenant.read",
+  "tenant.close",
+  "members.read",
+  "members.invite",
+  "members.update_role",
+  "members.remove",
+  "apikeys.read",
+  "apikeys.create",
+  "apikeys.rotate",
+  "apikeys.revoke",
+  "modelkeys.read",
+  "modelkeys.write",
+  "modelkeys.delete",
+  "policies.read",
+  "policies.publish",
+  "policies.activate",
+  "budgets.read",
+  "budgets.write",
+  "settings.read",
+  "settings.write",
+  "audit.read",
+  "billing.read",
+  "billing.write",
+  "directories.read",
+  "directories.manage",
+  "sso.manage",
+  "domains.manage",
+  "sessions.revoke",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -61,7 +85,9 @@ const DENY = (reason: string, policyVersion: string): AuthzDecision => ({
   winners: [],
 });
 
-export const DEFAULT_PACK = fileURLToPath(new URL("../../../policies/control-plane/pack.yaml", import.meta.url));
+export const DEFAULT_PACK = fileURLToPath(
+  new URL("../../../policies/control-plane/pack.yaml", import.meta.url),
+);
 
 /** The scope an API key needs for an action: `<resource>:read|write`. A scope of `*` or `<resource>:*` also satisfies it. */
 export function requiredScope(action: string): string {
@@ -96,10 +122,16 @@ export class Authorizer {
     this.clock = o?.clock ?? (() => performance.now());
   }
 
-  static async fromPackFile(path: string = DEFAULT_PACK, opts: { timeoutMs?: number } = {}): Promise<Authorizer> {
+  static async fromPackFile(
+    path: string = DEFAULT_PACK,
+    opts: { timeoutMs?: number } = {},
+  ): Promise<Authorizer> {
     const doc = parse(readFileSync(path, "utf8")) as unknown;
     const c = compilePolicySet([doc]);
-    if (!c.ok) throw new Error(`control-plane policy does not compile: ${c.issues.map((i) => i.code).join(",")}`);
+    if (!c.ok)
+      throw new Error(
+        `control-plane policy does not compile: ${c.issues.map((i) => i.code).join(",")}`,
+      );
     const engine = await WasmPolicyEngine.fromBundle(opaBuildWasm(c.rego));
     return new Authorizer({ engine, policyVersion: c.policyVersion, ...opts });
   }
@@ -131,14 +163,16 @@ export class Authorizer {
         args: {
           same_tenant: sameTenant,
           within_ceiling: ceiling,
-          owner_is_actor: req.resource?.ownerMemberId === undefined || req.resource.ownerMemberId === p.memberId,
+          owner_is_actor:
+            req.resource?.ownerMemberId === undefined || req.resource.ownerMemberId === p.memberId,
           environment: req.resource?.environment ?? "dev",
         },
         data: { classification: req.resource?.classification ?? "internal" },
       };
       const t0 = this.clock();
       const raw = await this.o.engine.evaluate(input);
-      if (this.clock() - t0 > this.timeoutMs) return DENY("policy evaluation exceeded its time budget", version);
+      if (this.clock() - t0 > this.timeoutMs)
+        return DENY("policy evaluation exceeded its time budget", version);
       return this.interpret(raw, version);
     } catch {
       return DENY("policy evaluation error", version);
@@ -148,8 +182,20 @@ export class Authorizer {
   private interpret(raw: unknown, version: string): AuthzDecision {
     if (typeof raw !== "object" || raw === null) return DENY("malformed policy result", version);
     const r = raw as { decision?: unknown; reason?: unknown; winners?: unknown };
-    if (r.decision !== "ALLOW") return DENY(typeof r.reason === "string" ? r.reason.slice(0, 200) : "denied by policy", version);
-    const winners = Array.isArray(r.winners) ? r.winners.filter((w): w is string => typeof w === "string") : [];
-    return { allowed: true, decision: "ALLOW", reason: "allowed by policy", policyVersion: version, winners };
+    if (r.decision !== "ALLOW")
+      return DENY(
+        typeof r.reason === "string" ? r.reason.slice(0, 200) : "denied by policy",
+        version,
+      );
+    const winners = Array.isArray(r.winners)
+      ? r.winners.filter((w): w is string => typeof w === "string")
+      : [];
+    return {
+      allowed: true,
+      decision: "ALLOW",
+      reason: "allowed by policy",
+      policyVersion: version,
+      winners,
+    };
   }
 }
