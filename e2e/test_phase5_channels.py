@@ -299,7 +299,7 @@ def brain(body: dict[str, Any]) -> dict[str, Any]:
     user = [m["content"] for m in msgs if m["role"] == "user"][-1]
     rounds = sum(1 for m in msgs if m["role"] == "assistant" and m.get("tool_calls"))
     cur = FENCED.findall(user)[-1].lower()
-    hist = user.split("untrusted", 1)[0]
+    hist = user.split("New customer message", 1)[0]
     if (
         POISON.lower() in cur
     ):  # obeys the injected instruction on purpose: the gate is what must stop it
