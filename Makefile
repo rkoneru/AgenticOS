@@ -1,4 +1,4 @@
-.PHONY: sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -119,3 +119,14 @@ sdk-generate:
 # Mutation check of SDK/CLI safety logic (ADR 0043).
 sdk-mutation:
 	node scripts/mutation-sdk.mjs
+
+# Phase 7 / D: console build (with a dev-login flag), client-bundle secret scan, then the Playwright suite against
+# the mock control-plane API. Needs Playwright's Chromium (PLAYWRIGHT_BROWSERS_PATH) and nothing else.
+console-e2e:
+	pnpm --filter @axis/abl --filter @axis/contracts build
+	cd apps/console && NEXT_PUBLIC_DEV_LOGIN=1 AXIS_API_URL=http://127.0.0.1:4010 NEXT_TELEMETRY_DISABLED=1 pnpm exec next build
+	cd apps/console && AXIS_SCAN_SENTINELS=127.0.0.1:4010 node scripts/scan-bundle.mjs .next/static
+	cd apps/console && AXIS_API_URL=http://127.0.0.1:4010 pnpm exec playwright test
+
+docs-build:
+	pnpm --filter @axis/docs-site build

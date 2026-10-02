@@ -1,0 +1,91 @@
+/* Design tokens. Light by default, dark via prefers-color-scheme or [data-theme=dark]. */
+:root {
+  --axis-bg: #fafafa;
+  --axis-fg: #16181d;
+  --axis-muted: #4b5563;
+  --axis-surface: #ffffff;
+  --axis-surface-2: #f1f3f5;
+  --axis-surface-3: #e4e7eb;
+  --axis-border: #c9ced6;
+  --axis-accent: #1d4ed8;
+  --axis-accent-fg: #ffffff;
+  --axis-focus: #1d4ed8;
+  --axis-danger: #b42318;
+  --axis-danger-fg: #ffffff;
+  --axis-danger-text: #912018;
+  --axis-danger-bg: #fee4e2;
+  --axis-good: #067647;
+  --axis-good-text: #05603a;
+  --axis-good-bg: #dcfae6;
+  --axis-warn: #b54708;
+  --axis-warn-text: #93370d;
+  --axis-warn-bg: #fef0c7;
+  --axis-info-text: #175cd3;
+  --axis-info-bg: #d1e9ff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --axis-bg: #0e1116;
+    --axis-fg: #e6e8ec;
+    --axis-muted: #a3acb9;
+    --axis-surface: #161a21;
+    --axis-surface-2: #1d222b;
+    --axis-surface-3: #272d38;
+    --axis-border: #3a4150;
+    --axis-accent: #6b9bff;
+    --axis-accent-fg: #0b1220;
+    --axis-focus: #8db1ff;
+    --axis-danger: #f97066;
+    --axis-danger-fg: #0b1220;
+    --axis-danger-text: #fda29b;
+    --axis-danger-bg: #3b1512;
+    --axis-good: #47cd89;
+    --axis-good-text: #75e0a7;
+    --axis-good-bg: #0b2e1e;
+    --axis-warn: #fdb022;
+    --axis-warn-text: #fec84b;
+    --axis-warn-bg: #3a2705;
+    --axis-info-text: #84caff;
+    --axis-info-bg: #102a4c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --axis-bg: #0e1116;
+  --axis-fg: #e6e8ec;
+  --axis-muted: #a3acb9;
+  --axis-surface: #161a21;
+  --axis-surface-2: #1d222b;
+  --axis-surface-3: #272d38;
+  --axis-border: #3a4150;
+  --axis-accent: #6b9bff;
+  --axis-accent-fg: #0b1220;
+  --axis-focus: #8db1ff;
+  --axis-danger: #f97066;
+  --axis-danger-fg: #0b1220;
+  --axis-danger-text: #fda29b;
+  --axis-danger-bg: #3b1512;
+  --axis-good: #47cd89;
+  --axis-good-text: #75e0a7;
+  --axis-good-bg: #0b2e1e;
+  --axis-warn: #fdb022;
+  --axis-warn-text: #fec84b;
+  --axis-warn-bg: #3a2705;
+  --axis-info-text: #84caff;
+  --axis-info-bg: #102a4c;
+  color-scheme: dark;
+}
+
+/* Data-viz series slot 1 (validated reference palette, light/dark steps). */
+:root {
+  --axis-viz-1: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --axis-viz-1: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  --axis-viz-1: #3987e5;
+}

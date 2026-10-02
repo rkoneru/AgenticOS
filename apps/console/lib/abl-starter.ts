@@ -1,0 +1,14 @@
+export const STARTER_ABL = `apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: hello-agent
+  version: 1.0.0
+spec:
+  riskClassification:
+    level: minimal
+    rationale: Answers general product questions; no decisions about people.
+  model:
+    primary: { provider: anthropic, model: claude-sonnet-5-5 }
+  instructions:
+    system: You are a helpful assistant.
+`;
