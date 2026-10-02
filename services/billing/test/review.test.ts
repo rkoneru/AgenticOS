@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import {
+  AdjustmentApi,
   BillingService,
   DEV_PLAN,
   DEV_PRICE_BOOK,
@@ -104,5 +105,41 @@ describe("review: tenant id spelling must not change locking or identity (postgr
     const u = usage(t, { idempotencyKey: "same-key" });
     expect((await l.append(u)).status).toBe("inserted");
     expect((await l.append({ ...u, tenantId: t.toUpperCase() })).status).toBe("duplicate");
+  });
+});
+
+describe("review: an adjustment is audited only if it can be applied, and the audit comes first", () => {
+  it("refused adjustments leave no audit event; applied ones are audited before the ledger entry exists", async () => {
+    const clock = new Clock(new Date("2026-10-02T00:00:00Z"));
+    const ledger = memLedger(clock);
+    const t = randomUUID();
+    const seen: number[] = [];
+    const sink = {
+      append: async (e: never) => {
+        seen.push((await ledger.entries(t)).length);
+        return e;
+      },
+    };
+    const api = new AdjustmentApi({ ledger, audit: sink as never, now: clock.now });
+    const req = {
+      tenantId: t,
+      idempotencyKey: "adj-1",
+      meter: "tokens_in" as const,
+      quantity: -5n,
+      eventTime: new Date("2026-09-20T00:00:00Z"),
+      reason: "duplicate billed",
+      actor: "ops@axis.test",
+    };
+    await expect(api.adjust({ ...req, quantity: 0n })).rejects.toMatchObject({ code: "INVALID" });
+    await expect(api.adjust({ ...req, meter: "bogus" as never })).rejects.toMatchObject({
+      code: "INVALID",
+    });
+    await expect(api.adjust({ ...req, tenantId: "nope" })).rejects.toMatchObject({
+      code: "INVALID",
+    });
+    expect(seen).toEqual([]);
+    expect((await api.adjust(req)).status).toBe("inserted");
+    expect(seen).toEqual([0]); // audited while the ledger was still empty
+    expect(await ledger.entries(t)).toHaveLength(1);
   });
 });

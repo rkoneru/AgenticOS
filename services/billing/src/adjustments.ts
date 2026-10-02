@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { hashJson, type AuditSink } from "@axis/contracts";
 import { BillingError } from "./errors.js";
+import { validateInput } from "./types.js";
 import type { UsageLedger } from "./ledger.js";
 import type { AppendResult, Dimensions, Meter } from "./types.js";
 
@@ -38,6 +39,24 @@ export class AdjustmentApi {
     if (typeof r.actor !== "string" || r.actor === "")
       throw new BillingError("INVALID", "an adjustment needs an actor");
     const now = (this.o.now ?? (() => new Date()))();
+    // Validate BEFORE auditing: an adjustment the ledger will refuse (zero, out of range, bad meter, unknown tenant) must not leave an
+    // "ALLOW billing.usage.adjust" event in the tenant's chain for a change that never happened.
+    validateInput(
+      {
+        entryType: "adjustment",
+        tenantId: r.tenantId,
+        idempotencyKey: r.idempotencyKey,
+        meter: r.meter,
+        quantity: r.quantity,
+        eventTime: r.eventTime,
+        ...(r.dimensions ? { dimensions: r.dimensions } : {}),
+        source: "adjustment-api",
+        reason: r.reason,
+        actor: r.actor,
+        ...(r.correctsKey ? { correctsKey: r.correctsKey } : {}),
+      },
+      now,
+    );
     try {
       await this.o.audit.append({
         schema_version: 1,
