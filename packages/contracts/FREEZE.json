@@ -21,6 +21,8 @@
     "packages/db/migrations/0006_memory_service.sql": "3bc5f2641e07d3097f8d2b8e00d39ef0dc5d2b50c87d7c83cbd8e68d71f46f19",
     "packages/db/migrations/0007_channels.sql": "6a6dfd12c0791e01583f4292e686f5a3ae146d8f5bf40b47f3ede7890435fde1",
     "packages/db/migrations/0008_billing.sql": "b3fa9da76158033ed2d3761786599431d1eab35d9a8b881c8f86a2d3d0aa9608",
-    "packages/db/migrations/0009_control_plane.sql": "7f2c40037d9958cea01defb0442935fca65a5dff204256bed1248e9bdea096a9"
+    "packages/db/migrations/0009_control_plane.sql": "7f2c40037d9958cea01defb0442935fca65a5dff204256bed1248e9bdea096a9",
+    "packages/db/migrations/0010_registry.sql": "ba4d90822ad01fc24a8af19f8a8ccee79eb8308cdefe04fb1cd8d1c1c0d327e7",
+    "packages/db/migrations/0011_marketplace.sql": "11e3679e4ce51a6748e1ecdaef3153b22fdf9d87678c06bba1f7789527626229"
   }
 }

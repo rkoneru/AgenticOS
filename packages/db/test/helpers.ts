@@ -153,6 +153,39 @@ export async function seedTenant(
     "INSERT INTO memory_chunks (tenant_id, kb_id, scope, content, embedding) VALUES ($1, $2, 'kb', 'hello', $3::vector)",
     [t, kb.rows[0].id, `[${[1, ...Array<number>(1535).fill(0)].join(",")}]`],
   );
+  // registry (0010): a PRIVATE namespace with one of everything, plus a separate public namespace (public rows are readable by every tenant by design)
+  await q(
+    "INSERT INTO registry_namespaces (namespace, tenant_id, normalized, created_at, created_by) VALUES ($1, $2, $1, now(), 'seed')",
+    [`seedns-${slug}`, t],
+  );
+  await q(
+    "INSERT INTO registry_keys (namespace, key_id, tenant_id, public_key, valid_from, created_at, created_by) VALUES ($1, $2, $3, $4, now(), now(), 'seed')",
+    [`seedns-${slug}`, `k1-${H("a").slice(0, 32)}`, t, "A".repeat(43)],
+  );
+  await q(
+    "INSERT INTO registry_names (namespace, name, tenant_id, normalized, created_at) VALUES ($1, 'seed-agent', $2, 'seedagent', now())",
+    [`seedns-${slug}`, t],
+  );
+  await q(
+    "INSERT INTO registry_versions (namespace, name, version, tenant_id, abl, content_hash, risk_level, signature, provenance, published_at, published_by) VALUES ($1, 'seed-agent', '1.0.0', $2, '{}', $3, 'minimal', '{}', '{}', now(), 'seed')",
+    [`seedns-${slug}`, t, H("6")],
+  );
+  await q(
+    "INSERT INTO registry_version_events (tenant_id, namespace, name, version, kind, reason, actor, at) VALUES ($1, $2, 'seed-agent', '1.0.0', 'deprecate', 'seed reason', 'seed', now())",
+    [t, `seedns-${slug}`],
+  );
+  await q(
+    "INSERT INTO registry_namespaces (namespace, tenant_id, normalized, created_at, created_by) VALUES ($1, $2, $1, now(), 'seed')",
+    [`seedpub-${slug}`, t],
+  );
+  await q(
+    "INSERT INTO registry_public_namespaces (namespace, tenant_id, listed_at, listed_by) VALUES ($1, $2, now(), 'seed')",
+    [`seedpub-${slug}`, t],
+  );
+  await q(
+    "INSERT INTO marketplace_docs (tenant_id, coll, key, rev, data) VALUES ($1, 'publishers', 'self', 1, '{\"state\": \"pending\"}')",
+    [t],
+  );
   const mem = await q("SELECT id FROM members WHERE tenant_id = $1", [t]);
   const memberId = mem.rows[0].id as string;
   await q(

@@ -434,6 +434,40 @@ importers:
         specifier: ^4.0.0
         version: 4.10.2
 
+  services/marketplace:
+    dependencies:
+      '@axis/abl':
+        specifier: workspace:*
+        version: link:../../packages/abl
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../registry
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      fast-check:
+        specifier: ^4.0.0
+        version: 4.10.2
+
   services/memory:
     dependencies:
       '@axis/db':
@@ -449,6 +483,40 @@ importers:
       fast-check:
         specifier: ^4.0.0
         version: 4.10.2
+
+  services/registry:
+    dependencies:
+      '@axis/abl':
+        specifier: workspace:*
+        version: link:../../packages/abl
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      '@types/semver':
+        specifier: ^7.5.0
+        version: 7.8.0
+      fast-check:
+        specifier: ^4.0.0
+        version: 4.10.2
+      semver:
+        specifier: ^7.6.0
+        version: 7.8.5
 
   services/risk-kernel:
     dependencies:
@@ -1798,6 +1866,9 @@ packages:
 
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/stack-utils@2.0.3':
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
@@ -4331,6 +4402,8 @@ snapshots:
   '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
+
+  '@types/semver@7.8.0': {}
 
   '@types/stack-utils@2.0.3': {}
 

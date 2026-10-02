@@ -1,0 +1,34 @@
+{
+  "name": "@axis/registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bash ../../infra/scripts/with-pg.sh vitest run",
+    "cov": "bash ../../infra/scripts/with-pg.sh vitest run --coverage",
+    "mutation": "bash ../../infra/scripts/with-pg.sh node scripts-mutation.mjs",
+    "dev-server": "node dist/main.js"
+  },
+  "dependencies": {
+    "@axis/abl": "workspace:*",
+    "@axis/audit": "workspace:*",
+    "@axis/contracts": "workspace:*",
+    "@axis/control-plane": "workspace:*",
+    "@axis/db": "workspace:*",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "@types/semver": "^7.5.0",
+    "fast-check": "^4.0.0",
+    "semver": "^7.6.0"
+  }
+}
