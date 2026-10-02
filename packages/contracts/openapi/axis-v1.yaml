@@ -1248,22 +1248,43 @@ components:
         state: { enum: [active, deprecated, yanked] }
         state_reason: { type: [string, "null"] }
     ResolvedBlueprint:
-      allOf:
-        - { $ref: "#/components/schemas/RegistryVersion" }
-        - type: object
-          required: [abl, provenance, verification]
+      type: object
+      description: A registry version after verification, with its ABL document, provenance and what was verified
+      required:
+        [
+          namespace,
+          name,
+          version,
+          content_hash,
+          risk_level,
+          signature,
+          published_at,
+          abl,
+          provenance,
+          verification,
+        ]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        version: { type: string }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        risk_level: { enum: [minimal, limited, high] }
+        signature: { $ref: "#/components/schemas/RegistrySignature" }
+        published_at: { type: string, format: date-time }
+        published_by: { type: string }
+        state: { enum: [active, deprecated, yanked] }
+        state_reason: { type: [string, "null"] }
+        abl: { $ref: "../../abl/schema/abl-v1.schema.json" }
+        provenance: { $ref: "#/components/schemas/DsseEnvelope" }
+        verification:
+          type: object
+          description: What the registry re-verified before answering (signing key, builder, source, compiler)
+          required: [key_id]
           properties:
-            abl: { $ref: "../../abl/schema/abl-v1.schema.json" }
-            provenance: { $ref: "#/components/schemas/DsseEnvelope" }
-            verification:
-              type: object
-              description: What the registry re-verified before answering (signature key, builder, source, compiler)
-              required: [key_id]
-              properties:
-                key_id: { type: string }
-                builder: { type: string }
-                source_ref: { type: string }
-                compiler_version: { type: string }
+            key_id: { type: string }
+            builder: { type: string }
+            source_ref: { type: string }
+            compiler_version: { type: string }
     MarketplaceListing:
       type: object
       required: [namespace, name, title, summary, categories, versions]

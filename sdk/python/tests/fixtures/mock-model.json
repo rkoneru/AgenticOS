@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
-  "version": "1.1.0",
-  "inputHash": "b62c5727759355ffd9cd9e2e64f41ff0a2c77ab0fee7d70d9c2560de221f8517",
+  "version": "1.2.0",
+  "inputHash": "789e410e6791ec9f1299ad5c176e867623363f1266fab9430bc40bb2497b9989",
   "security": [
     {
       "bearerAuth": []
@@ -2103,6 +2103,15 @@
                         "created_at": {
                           "type": "string",
                           "format": "date-time"
+                        },
+                        "version_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Id to pass to activatePolicyPack"
+                        },
+                        "active": {
+                          "type": "boolean",
+                          "description": "Whether this version is the tenant's active version of the pack"
                         }
                       }
                     }
@@ -2218,6 +2227,15 @@
                   "created_at": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "version_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id to pass to activatePolicyPack"
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "description": "Whether this version is the tenant's active version of the pack"
                   }
                 }
               }
@@ -3881,6 +3899,3716 @@
                       "number",
                       "null"
                     ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getMe",
+      "method": "GET",
+      "path": "/me",
+      "idempotent": "always",
+      "parameters": [],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "The caller",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tenant",
+                  "member",
+                  "credential"
+                ],
+                "properties": {
+                  "tenant": {
+                    "type": "object",
+                    "required": [
+                      "id"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "member": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "role"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "display_name": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "enum": [
+                          "owner",
+                          "admin",
+                          "builder",
+                          "operator",
+                          "auditor",
+                          "billing",
+                          "viewer"
+                        ]
+                      }
+                    }
+                  },
+                  "credential": {
+                    "type": "object",
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "session",
+                          "api_key"
+                        ]
+                      },
+                      "scopes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getApproval",
+      "method": "GET",
+      "path": "/approvals/{approvalId}",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "approvalId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "The approval",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "status",
+                  "run_id",
+                  "requested_at",
+                  "sla_deadline"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "approved",
+                      "rejected",
+                      "expired",
+                      "escalated"
+                    ]
+                  },
+                  "run_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "pid": {
+                    "type": "string",
+                    "pattern": "^axp_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "action": {
+                    "type": "string"
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "requested_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "sla_deadline": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "decided_by": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "decided_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "comment": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "activatePolicyPack",
+      "method": "POST",
+      "path": "/policies/{versionId}/activate",
+      "idempotent": "never",
+      "parameters": [
+        {
+          "name": "versionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Activated",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "version",
+                  "created_at"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "version_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Id to pass to activatePolicyPack"
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "description": "Whether this version is the tenant's active version of the pack"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "listRegistryNamespaces",
+      "method": "GET",
+      "path": "/registry/namespaces",
+      "idempotent": "always",
+      "parameters": [],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Namespaces",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "namespace"
+                      ],
+                      "properties": {
+                        "namespace": {
+                          "type": "string"
+                        },
+                        "public": {
+                          "type": "boolean"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "claimRegistryNamespace",
+      "method": "POST",
+      "path": "/registry/namespaces",
+      "idempotent": "with-key",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": false,
+          "description": "Client-generated unique key; replays within 24 h return the original response.",
+          "schema": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "namespace"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{1,62}$"
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Claimed",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "namespace"
+                ],
+                "properties": {
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "public": {
+                    "type": "boolean"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The document failed schema or lint validation",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "title",
+                      "status"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "integer"
+                      },
+                      "code": {
+                        "enum": [
+                          "unauthenticated",
+                          "forbidden",
+                          "policy_denied",
+                          "not_found",
+                          "conflict",
+                          "validation_failed",
+                          "rate_limited",
+                          "budget_exceeded",
+                          "internal"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "trace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "errors"
+                    ],
+                    "properties": {
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "path",
+                            "message"
+                          ],
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "keyword": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "listRegistryKeys",
+      "method": "GET",
+      "path": "/registry/namespaces/{namespace}/keys",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Keys",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "key_id",
+                        "public_key",
+                        "valid_from"
+                      ],
+                      "properties": {
+                        "key_id": {
+                          "type": "string"
+                        },
+                        "public_key": {
+                          "type": "string"
+                        },
+                        "valid_from": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "valid_until": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        },
+                        "revoked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        },
+                        "revoke_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "addRegistryKey",
+      "method": "POST",
+      "path": "/registry/namespaces/{namespace}/keys",
+      "idempotent": "with-key",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": false,
+          "description": "Client-generated unique key; replays within 24 h return the original response.",
+          "schema": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "public_key"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "public_key": {
+                  "type": "string",
+                  "description": "base64url of the raw 32-byte Ed25519 public key"
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Registered",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "key_id",
+                  "public_key",
+                  "valid_from"
+                ],
+                "properties": {
+                  "key_id": {
+                    "type": "string"
+                  },
+                  "public_key": {
+                    "type": "string"
+                  },
+                  "valid_from": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "valid_until": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "revoked_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "revoke_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The document failed schema or lint validation",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "title",
+                      "status"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "integer"
+                      },
+                      "code": {
+                        "enum": [
+                          "unauthenticated",
+                          "forbidden",
+                          "policy_denied",
+                          "not_found",
+                          "conflict",
+                          "validation_failed",
+                          "rate_limited",
+                          "budget_exceeded",
+                          "internal"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "trace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "errors"
+                    ],
+                    "properties": {
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "path",
+                            "message"
+                          ],
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "keyword": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "publishRegistryBlueprint",
+      "method": "POST",
+      "path": "/registry/namespaces/{namespace}/blueprints",
+      "idempotent": "with-key",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": false,
+          "description": "Client-generated unique key; replays within 24 h return the original response.",
+          "schema": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "abl",
+                "signature",
+                "provenance"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "abl": {
+                  "type": "object",
+                  "x-external": "abl-v1.schema.json"
+                },
+                "signature": {
+                  "type": "object",
+                  "required": [
+                    "key_id",
+                    "signed_at",
+                    "sig"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "key_id": {
+                      "type": "string"
+                    },
+                    "signed_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "sig": {
+                      "type": "string",
+                      "description": "base64url Ed25519 signature over the canonical signed message"
+                    }
+                  }
+                },
+                "provenance": {
+                  "type": "object",
+                  "required": [
+                    "payloadType",
+                    "payload",
+                    "signatures"
+                  ],
+                  "properties": {
+                    "payloadType": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "string",
+                      "description": "base64 of the canonical in-toto statement"
+                    },
+                    "signatures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "keyid",
+                          "sig"
+                        ],
+                        "properties": {
+                          "keyid": {
+                            "type": "string"
+                          },
+                          "sig": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Published",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "namespace",
+                  "name",
+                  "version",
+                  "content_hash",
+                  "risk_level",
+                  "signature",
+                  "published_at"
+                ],
+                "properties": {
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "risk_level": {
+                    "enum": [
+                      "minimal",
+                      "limited",
+                      "high"
+                    ]
+                  },
+                  "signature": {
+                    "type": "object",
+                    "required": [
+                      "key_id",
+                      "signed_at",
+                      "sig"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "key_id": {
+                        "type": "string"
+                      },
+                      "signed_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "sig": {
+                        "type": "string",
+                        "description": "base64url Ed25519 signature over the canonical signed message"
+                      }
+                    }
+                  },
+                  "published_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "published_by": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "active",
+                      "deprecated",
+                      "yanked"
+                    ]
+                  },
+                  "state_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The document failed schema or lint validation",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "title",
+                      "status"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "integer"
+                      },
+                      "code": {
+                        "enum": [
+                          "unauthenticated",
+                          "forbidden",
+                          "policy_denied",
+                          "not_found",
+                          "conflict",
+                          "validation_failed",
+                          "rate_limited",
+                          "budget_exceeded",
+                          "internal"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "trace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "errors"
+                    ],
+                    "properties": {
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "path",
+                            "message"
+                          ],
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "keyword": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "listRegistryVersions",
+      "method": "GET",
+      "path": "/registry/blueprints/{namespace}/{name}/versions",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "name",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Versions",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "namespace",
+                        "name",
+                        "version",
+                        "content_hash",
+                        "risk_level",
+                        "signature",
+                        "published_at"
+                      ],
+                      "properties": {
+                        "namespace": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "risk_level": {
+                          "enum": [
+                            "minimal",
+                            "limited",
+                            "high"
+                          ]
+                        },
+                        "signature": {
+                          "type": "object",
+                          "required": [
+                            "key_id",
+                            "signed_at",
+                            "sig"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "signed_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "sig": {
+                              "type": "string",
+                              "description": "base64url Ed25519 signature over the canonical signed message"
+                            }
+                          }
+                        },
+                        "published_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "published_by": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "enum": [
+                            "active",
+                            "deprecated",
+                            "yanked"
+                          ]
+                        },
+                        "state_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "yankRegistryVersion",
+      "method": "POST",
+      "path": "/registry/blueprints/{namespace}/{name}/versions/{version}/yank",
+      "idempotent": "never",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "name",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "reason"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Yanked",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ok"
+                ],
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "resolveRegistryBlueprint",
+      "method": "GET",
+      "path": "/registry/resolve",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "ref",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "The verified blueprint",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "A registry version after verification, with its ABL document, provenance and what was verified",
+                "required": [
+                  "namespace",
+                  "name",
+                  "version",
+                  "content_hash",
+                  "risk_level",
+                  "signature",
+                  "published_at",
+                  "abl",
+                  "provenance",
+                  "verification"
+                ],
+                "properties": {
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "risk_level": {
+                    "enum": [
+                      "minimal",
+                      "limited",
+                      "high"
+                    ]
+                  },
+                  "signature": {
+                    "type": "object",
+                    "required": [
+                      "key_id",
+                      "signed_at",
+                      "sig"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "key_id": {
+                        "type": "string"
+                      },
+                      "signed_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "sig": {
+                        "type": "string",
+                        "description": "base64url Ed25519 signature over the canonical signed message"
+                      }
+                    }
+                  },
+                  "published_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "published_by": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "active",
+                      "deprecated",
+                      "yanked"
+                    ]
+                  },
+                  "state_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "abl": {
+                    "type": "object",
+                    "x-external": "abl-v1.schema.json"
+                  },
+                  "provenance": {
+                    "type": "object",
+                    "required": [
+                      "payloadType",
+                      "payload",
+                      "signatures"
+                    ],
+                    "properties": {
+                      "payloadType": {
+                        "type": "string"
+                      },
+                      "payload": {
+                        "type": "string",
+                        "description": "base64 of the canonical in-toto statement"
+                      },
+                      "signatures": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "keyid",
+                            "sig"
+                          ],
+                          "properties": {
+                            "keyid": {
+                              "type": "string"
+                            },
+                            "sig": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "verification": {
+                    "type": "object",
+                    "description": "What the registry re-verified before answering (signing key, builder, source, compiler)",
+                    "required": [
+                      "key_id"
+                    ],
+                    "properties": {
+                      "key_id": {
+                        "type": "string"
+                      },
+                      "builder": {
+                        "type": "string"
+                      },
+                      "source_ref": {
+                        "type": "string"
+                      },
+                      "compiler_version": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The document failed schema or lint validation",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "title",
+                      "status"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "integer"
+                      },
+                      "code": {
+                        "enum": [
+                          "unauthenticated",
+                          "forbidden",
+                          "policy_denied",
+                          "not_found",
+                          "conflict",
+                          "validation_failed",
+                          "rate_limited",
+                          "budget_exceeded",
+                          "internal"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "trace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "errors"
+                    ],
+                    "properties": {
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "path",
+                            "message"
+                          ],
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "keyword": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "listMarketplaceListings",
+      "method": "GET",
+      "path": "/marketplace/listings",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "q",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        {
+          "name": "category",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "maxLength": 50
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Listings",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "namespace",
+                        "name",
+                        "title",
+                        "summary",
+                        "categories",
+                        "versions"
+                      ],
+                      "properties": {
+                        "namespace": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "categories": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "publisher": {
+                          "type": "string"
+                        },
+                        "latest": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "version": {
+                              "type": "string"
+                            },
+                            "content_hash": {
+                              "type": "string"
+                            },
+                            "risk_level": {
+                              "type": "string"
+                            },
+                            "max_severity": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "versions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Approved, installable versions"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "getMarketplaceListing",
+      "method": "GET",
+      "path": "/marketplace/listings/{namespace}/{name}",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "name",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "The listing",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "namespace",
+                  "name",
+                  "title",
+                  "summary",
+                  "categories",
+                  "versions"
+                ],
+                "properties": {
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "categories": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "publisher": {
+                    "type": "string"
+                  },
+                  "latest": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string"
+                      },
+                      "content_hash": {
+                        "type": "string"
+                      },
+                      "risk_level": {
+                        "type": "string"
+                      },
+                      "max_severity": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "versions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Approved, installable versions"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "previewMarketplaceInstall",
+      "method": "POST",
+      "path": "/marketplace/installs/preview",
+      "idempotent": "never",
+      "parameters": [],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "namespace",
+                "name",
+                "range"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "namespace": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "range": {
+                  "type": "string",
+                  "maxLength": 100
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Preview",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "namespace",
+                  "name",
+                  "version",
+                  "content_hash",
+                  "risk_level",
+                  "findings",
+                  "capabilities",
+                  "diff",
+                  "consent_digest"
+                ],
+                "properties": {
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "risk_level": {
+                    "type": "string"
+                  },
+                  "max_severity": {
+                    "type": "string"
+                  },
+                  "findings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "severity",
+                        "message"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "severity": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "capabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "key",
+                        "level"
+                      ],
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "diff": {
+                    "type": "object",
+                    "description": "Requested permissions versus what your tenant has granted; `widening` means consent is required",
+                    "required": [
+                      "added",
+                      "removed",
+                      "widening"
+                    ],
+                    "properties": {
+                      "added": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "key",
+                            "change",
+                            "level"
+                          ],
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "change": {
+                              "enum": [
+                                "new",
+                                "raised"
+                              ]
+                            },
+                            "level": {
+                              "type": "number"
+                            },
+                            "previous_level": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "removed": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "key",
+                            "level"
+                          ],
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "level": {
+                              "type": "number"
+                            },
+                            "new_level": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "widening": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "consent_digest": {
+                    "type": "string",
+                    "description": "Echo it on install to prove you saw this exact diff of this exact blueprint"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The document failed schema or lint validation",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "title",
+                      "status"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "integer"
+                      },
+                      "code": {
+                        "enum": [
+                          "unauthenticated",
+                          "forbidden",
+                          "policy_denied",
+                          "not_found",
+                          "conflict",
+                          "validation_failed",
+                          "rate_limited",
+                          "budget_exceeded",
+                          "internal"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "trace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "errors"
+                    ],
+                    "properties": {
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "path",
+                            "message"
+                          ],
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "keyword": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "listMarketplaceInstalls",
+      "method": "GET",
+      "path": "/marketplace/installs",
+      "idempotent": "always",
+      "parameters": [],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Installs",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "namespace",
+                        "name",
+                        "version",
+                        "content_hash",
+                        "state",
+                        "granted"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "namespace": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "state": {
+                          "enum": [
+                            "active",
+                            "flagged",
+                            "uninstalled"
+                          ]
+                        },
+                        "granted": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "key",
+                              "level"
+                            ],
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        },
+                        "consented_by": {
+                          "type": "string"
+                        },
+                        "consented_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "flag_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "installMarketplaceListing",
+      "method": "POST",
+      "path": "/marketplace/installs",
+      "idempotent": "with-key",
+      "parameters": [
+        {
+          "name": "Idempotency-Key",
+          "in": "header",
+          "required": false,
+          "description": "Client-generated unique key; replays within 24 h return the original response.",
+          "schema": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "namespace",
+                "name",
+                "version",
+                "content_hash",
+                "consent_digest"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "namespace": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "content_hash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "consent_digest": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Installed",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "namespace",
+                  "name",
+                  "version",
+                  "content_hash",
+                  "state",
+                  "granted"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "namespace": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "content_hash": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "state": {
+                    "enum": [
+                      "active",
+                      "flagged",
+                      "uninstalled"
+                    ]
+                  },
+                  "granted": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "key",
+                        "level"
+                      ],
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "consented_by": {
+                    "type": "string"
+                  },
+                  "consented_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "flag_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "422": {
+          "description": "The document failed schema or lint validation",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "title",
+                      "status"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "integer"
+                      },
+                      "code": {
+                        "enum": [
+                          "unauthenticated",
+                          "forbidden",
+                          "policy_denied",
+                          "not_found",
+                          "conflict",
+                          "validation_failed",
+                          "rate_limited",
+                          "budget_exceeded",
+                          "internal"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "trace_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "errors"
+                    ],
+                    "properties": {
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "path",
+                            "message"
+                          ],
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "keyword": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "uninstallMarketplaceListing",
+      "method": "POST",
+      "path": "/marketplace/installs/{namespace}/{name}/uninstall",
+      "idempotent": "never",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "name",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Uninstalled",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ok"
+                ],
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
                   }
                 }
               }

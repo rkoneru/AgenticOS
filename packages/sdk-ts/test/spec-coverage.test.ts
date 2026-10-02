@@ -37,6 +37,35 @@ const ERGONOMIC: Record<OperationId, (ax: Axis) => Promise<unknown>> = {
   getUsage: (ax) =>
     ax.usage.get({ from: "2026-01-01T00:00:00Z", to: "2026-02-01T00:00:00Z", groupBy: "day" }),
   startEvalRun: (ax) => ax.evals.start({ suite: "smoke", blueprint: "agent-one@1.0.0" }),
+  getMe: (ax) => ax.me(),
+  getApproval: (ax) => ax.approvals.get("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  activatePolicyPack: (ax) => ax.policies.activate("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  listRegistryNamespaces: (ax) => ax.registry.namespaces(),
+  claimRegistryNamespace: (ax) => ax.registry.claim("acme"),
+  listRegistryKeys: (ax) => ax.registry.keys("acme"),
+  addRegistryKey: (ax) => ax.registry.addKey("acme", "k".repeat(43)),
+  publishRegistryBlueprint: (ax) =>
+    ax.registry.publish("acme", {
+      abl: { apiVersion: "abl.axis.dev/v1" } as never,
+      signature: { key_id: "k1", signed_at: "2026-01-01T00:00:00Z", sig: "s" },
+      provenance: { payloadType: "t", payload: "p", signatures: [{ keyid: "k1", sig: "s" }] },
+    }),
+  listRegistryVersions: (ax) => ax.registry.versions("acme", "agent-one"),
+  yankRegistryVersion: (ax) => ax.registry.yank("acme", "agent-one", "1.0.0", "bad"),
+  resolveRegistryBlueprint: (ax) => ax.registry.resolve("acme/agent-one@^1"),
+  listMarketplaceListings: (ax) => ax.marketplace.listings({ q: "x" }),
+  getMarketplaceListing: (ax) => ax.marketplace.listing("acme", "agent-one"),
+  previewMarketplaceInstall: (ax) => ax.marketplace.preview("acme", "agent-one", "^1"),
+  listMarketplaceInstalls: (ax) => ax.marketplace.installs(),
+  installMarketplaceListing: (ax) =>
+    ax.marketplace.install({
+      namespace: "acme",
+      name: "agent-one",
+      version: "1.0.0",
+      contentHash: "a".repeat(64),
+      consentDigest: "d",
+    }),
+  uninstallMarketplaceListing: (ax) => ax.marketplace.uninstall("acme", "agent-one"),
 };
 
 describe("coverage of the spec", () => {

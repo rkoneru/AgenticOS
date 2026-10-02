@@ -36,9 +36,7 @@ def _kwargs(op_id: str) -> dict[str, object]:
     out: dict[str, object] = {}
     for name in (*spec.path_params, *spec.query_params):
         if name in params:
-            py = {"runId": "run_id", "from": "from_"}.get(name, name)
-            if name == "approvalId":
-                py = "approval_id"
+            py = "from_" if name == "from" else snake(name)
             out[py] = params[name]
     if "body" in params:
         out["body"] = params["body"]
@@ -111,6 +109,36 @@ ERGONOMIC = {
         "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", group_by="day"
     ),
     "startEvalRun": lambda ax: ax.evals.start("smoke", "agent-one@1.0.0"),
+    "getMe": lambda ax: ax.me(),
+    "getApproval": lambda ax: ax.approvals.get(RUN),
+    "activatePolicyPack": lambda ax: ax.policies.activate(RUN),
+    "listRegistryNamespaces": lambda ax: ax.registry.namespaces(),
+    "claimRegistryNamespace": lambda ax: ax.registry.claim("acme"),
+    "listRegistryKeys": lambda ax: ax.registry.keys("acme"),
+    "addRegistryKey": lambda ax: ax.registry.add_key("acme", "k" * 43),
+    "publishRegistryBlueprint": lambda ax: ax.registry.publish(
+        "acme",
+        {
+            "abl": {"apiVersion": "abl.axis.dev/v1"},
+            "signature": {"key_id": "k1", "signed_at": "2026-01-01T00:00:00Z", "sig": "s"},
+            "provenance": {
+                "payloadType": "t",
+                "payload": "p",
+                "signatures": [{"keyid": "k1", "sig": "s"}],
+            },
+        },
+    ),
+    "listRegistryVersions": lambda ax: ax.registry.versions("acme", "agent-one"),
+    "yankRegistryVersion": lambda ax: ax.registry.yank("acme", "agent-one", "1.0.0", "bad"),
+    "resolveRegistryBlueprint": lambda ax: ax.registry.resolve("acme/agent-one@^1"),
+    "listMarketplaceListings": lambda ax: ax.marketplace.listings(q="x"),
+    "getMarketplaceListing": lambda ax: ax.marketplace.listing("acme", "agent-one"),
+    "previewMarketplaceInstall": lambda ax: ax.marketplace.preview("acme", "agent-one", "^1"),
+    "listMarketplaceInstalls": lambda ax: ax.marketplace.installs(),
+    "installMarketplaceListing": lambda ax: ax.marketplace.install(
+        "acme", "agent-one", "1.0.0", "a" * 64, "digest"
+    ),
+    "uninstallMarketplaceListing": lambda ax: ax.marketplace.uninstall("acme", "agent-one"),
 }
 
 
