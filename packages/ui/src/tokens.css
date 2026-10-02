@@ -11,6 +11,7 @@
   --axis-accent-fg: #ffffff;
   --axis-focus: #1d4ed8;
   --axis-danger: #b42318;
+  --axis-danger-fg: #ffffff;
   --axis-danger-text: #912018;
   --axis-danger-bg: #fee4e2;
   --axis-good: #067647;
@@ -36,6 +37,7 @@
     --axis-accent-fg: #0b1220;
     --axis-focus: #8db1ff;
     --axis-danger: #f97066;
+    --axis-danger-fg: #0b1220;
     --axis-danger-text: #fda29b;
     --axis-danger-bg: #3b1512;
     --axis-good: #47cd89;
@@ -61,6 +63,7 @@
   --axis-accent-fg: #0b1220;
   --axis-focus: #8db1ff;
   --axis-danger: #f97066;
+  --axis-danger-fg: #0b1220;
   --axis-danger-text: #fda29b;
   --axis-danger-bg: #3b1512;
   --axis-good: #47cd89;

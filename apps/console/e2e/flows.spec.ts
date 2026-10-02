@@ -65,7 +65,7 @@ test("publishing an existing immutable version surfaces the server's conflict", 
   await login(page, "admin", "/blueprints/new");
   await expect(page.getByTestId("abl-status")).toContainText("Valid");
   await page.getByRole("button", { name: "Publish version" }).click();
-  await expect(page.getByRole("alert")).toContainText("already published");
+  await expect(page.locator("main").getByRole("alert")).toContainText("already published");
 });
 
 test("start a run, watch it stream live, then scrub the replay", async ({ page }) => {
@@ -150,17 +150,15 @@ test("policies: run test cases, then review diff and activate", async ({ page })
   await page.getByRole("button", { name: "Run tests" }).click();
   await expect(page.getByTestId("policy-results")).toContainText("2 of 2 passed");
   // The sample policy lacks the expected apiVersion; make the case set fail to prove failures are shown.
-  await page
-    .getByLabel(/^Cases/)
-    .fill(
-      JSON.stringify([
-        {
-          name: "write is denied",
-          request: { enforcement_point: "tool_call", context: { tool: { side_effects: "write" } } },
-          expect: "ALLOW",
-        },
-      ]),
-    );
+  await page.getByLabel(/^Cases/).fill(
+    JSON.stringify([
+      {
+        name: "write is denied",
+        request: { enforcement_point: "tool_call", context: { tool: { side_effects: "write" } } },
+        expect: "ALLOW",
+      },
+    ]),
+  );
   await page.getByRole("button", { name: "Run tests" }).click();
   await expect(page.getByTestId("policy-results")).toContainText("0 of 1 passed");
   await expect(page.getByTestId("policy-results")).toContainText("fail");
@@ -179,7 +177,7 @@ test("policies: invalid documents are rejected with server detail and a builder 
   await login(page, "admin", "/policies");
   await page.getByLabel(/^Policy \(JSON/).fill("{}");
   await page.getByRole("button", { name: "Run tests" }).click();
-  await expect(page.getByRole("alert").first()).toContainText(/Policy failed validation/);
+  await expect(page.getByTestId("policy-results")).toContainText("Policy failed validation");
   await page.getByRole("button", { name: "Sign out" }).click();
   await login(page, "builder", "/policies");
   await expect(page.getByRole("button", { name: "Publish pack version" })).toHaveCount(0);
@@ -208,7 +206,7 @@ test("audit: trace filter, details and a denial explanation", async ({ page }) =
   await expect(page.getByRole("table", { name: "Audit events" }).getByRole("row")).toHaveCount(2);
   await page.getByRole("button", { name: "Details for event 3" }).click();
   await expect(page.getByTestId("audit-detail")).toContainText("Previous hash");
-  await expect(page.getByTestId("audit-detail").getByTestId("agil-panel")).toContainText("denied");
+  await expect(page.getByTestId("audit-detail").getByTestId("agil-panel")).toContainText(/deny/);
   await page.getByLabel("Trace ID").fill("nothex");
   await expect(page.getByText("32 lowercase hex")).toBeVisible();
 });
@@ -238,7 +236,7 @@ test("admin: API key secret is shown exactly once", async ({ page }) => {
 test("admin: BYO model keys are write-only", async ({ page }) => {
   await login(page, "admin", "/admin");
   await page.getByRole("tab", { name: "Model keys" }).click();
-  await page.getByLabel("Provider").fill("openai");
+  await page.getByLabel("Provider", { exact: true }).fill("openai");
   await page.getByLabel("Key value").fill("sk-live-super-secret-value-123456");
   await page.getByRole("button", { name: "Save key" }).click();
   await expect(page.getByRole("row", { name: /openai/ })).toBeVisible();
@@ -254,7 +252,7 @@ test("admin: budgets validate soft <= hard and members are managed; builder sees
   await page.getByLabel("Soft limit").fill("10");
   await page.getByLabel("Hard limit").fill("5");
   await page.getByRole("button", { name: "Add budget" }).click();
-  await expect(page.getByRole("alert")).toContainText("soft limit cannot exceed");
+  await expect(page.locator("main").getByRole("alert")).toContainText("soft limit cannot exceed");
   await page.getByLabel("Hard limit").fill("20");
   await page.getByRole("button", { name: "Add budget" }).click();
   await expect(page.getByRole("row", { name: /tenant cost_usd month 10 20/ })).toBeVisible();
@@ -263,7 +261,7 @@ test("admin: budgets validate soft <= hard and members are managed; builder sees
   await page.getByRole("button", { name: "Invite" }).click();
   await expect(page.getByRole("row", { name: /new@acme.test/ })).toBeVisible();
   await page.getByRole("tab", { name: "SSO, SCIM and region" }).click();
-  await expect(page.getByText("us-east-1")).toBeVisible();
+  await expect(page.getByText("us-east-1", { exact: true })).toBeVisible();
   await expect(page.getByText("Only the tenant owner can change SSO settings.")).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await login(page, "builder", "/admin");
@@ -415,6 +413,7 @@ for (const theme of ["light", "dark"] as const) {
 
 test("keyboard: skip link and tab order reach the main landmark", async ({ page }) => {
   await login(page, "admin", "/runs");
+  await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Enter");

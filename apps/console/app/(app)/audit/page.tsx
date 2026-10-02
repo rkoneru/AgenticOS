@@ -44,10 +44,14 @@ export default function AuditPage() {
   const verify = useAction(async () => {
     setServer(undefined);
     setLocal(undefined);
-    const sorted = sortBySeq(list.items);
+    const filtered = Boolean(trace || decision);
+    // Re-read the log so the in-browser check covers what the server holds now, not a stale page.
+    const fresh = filtered
+      ? list.items
+      : (await api.listAuditEvents({ limit: Math.max(100, list.items.length) })).items;
+    const sorted = sortBySeq(fresh);
     const from = sorted[0]?.seq;
     const to = sorted[sorted.length - 1]?.seq;
-    const filtered = Boolean(trace || decision);
     const anchorEvt =
       !filtered && from && from > 1
         ? (await api.listAuditEvents({ limit: 1, from_seq: from - 1 })).items[0]
