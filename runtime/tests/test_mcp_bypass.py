@@ -71,7 +71,12 @@ def test_mcp_grants_are_exactly_what_each_transport_needs() -> None:
     assert bs.scan_source("mcp/backend.py", "await mcp.call_tool('s', 't', {})") == []
     # and no other file got a process / net grant
     assert set(bs.EXEMPTIONS["process"]) == {"mcp/stdio.py"}
-    assert set(bs.EXEMPTIONS["net"]) == {"mcp/http_server.py"}
+    # runserver.py: the dev run service socket (ADR 0026), narrowed to start_server only
+    assert set(bs.EXEMPTIONS["net"]) == {"mcp/http_server.py", "runserver.py"}
+    assert bs.scan_source("runserver.py", "import asyncio\nasyncio.open_connection('h', 1)") != []
+    assert (
+        bs.scan_source("runserver.py", "import asyncio\nasyncio.create_subprocess_exec('/x')") != []
+    )
     assert {f for f, g in bs.IO_IMPORTS.items() if "httpx" in g} >= {"mcp/http.py"}
     assert set(bs.RESTRICTED_NAMES["call_tool"]) == {"tools.py", "actions.py", "mcp/backend.py"}
 
