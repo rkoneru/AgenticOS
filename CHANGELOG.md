@@ -21,7 +21,7 @@ provider and payment provider only.
   usage, a `dedicated_db` tenant's audit in the second database (fail-closed without a pool), kernel DENY without a bundle.
 - **Two real defects found by the e2e and fixed** (with unit regressions): runs stopped by a budget trip or kill were cancelled mid-emission and never billed;
   fractional budgets (`cost_usd: 0.001`) were refused as "audit unavailable" because the admin audit hashed with the integer-only canonicalizer.
-- `e2e/mutation_phase6.py`: 13 wiring mutants (skip tenant policy load, bill denied actions, tenant from body, skip dedupe, accept live key, ...), see the report for the result.
+- `e2e/mutation_phase6.py`: 12 wiring mutants (plus the cap-merge mutant killed by a unit test) (skip tenant policy load, bill denied actions, tenant from body, skip dedupe, accept live key, ...), see the report for the result.
 - **Honest gaps:** NEEDS #197-#205 (file-based dev bundle delivery, in-memory untimed budget ledger, static dev credentials, usage emitted once at run end with no outbox,
   accuracy covers tokens/tools/runtime only, payment fake not Stripe-shaped HTTP, operator steps in the harness, placement routes the admin audit only and moves no data,
   harness-only ops surface) plus the open parts of #179-#195 (no real WorkOS/KMS/DNS/Stripe/ClickHouse; retention not enforced). `pnpm cov` can be red once under

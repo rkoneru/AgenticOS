@@ -2,7 +2,8 @@
 
 Each mutant breaks ONE safety or accuracy property of the new wiring in the working tree, rebuilds the TS packages when a TS file
 changed, runs ``test_phase6_saas.py`` (a stateful scenario: it stops at the first failure) and requires a FAILURE of a real test
-(a stack that fails to start does not count). Sources are restored afterwards. Exit code 0 only if every mutant was killed.
+(a stack that fails to start does not count).
+The merge rule "a tenant budget can only tighten a blueprint's cap" is a unit-level property (runtime/tests/test_controlplane.py kills its mutant). Sources are restored afterwards. Exit code 0 only if every mutant was killed.
 """
 
 from __future__ import annotations
@@ -125,16 +126,6 @@ MUTANTS = [
                 "runtime/src/axis_runtime/tenant_budgets.py",
                 "        ledger.ensure_account(key, None, self.tenant_limits())\n        ledger.set_limits(\n            key, self.tenant_limits()\n        )  # the control plane's current config is authoritative\n",
                 "        ledger.ensure_account(key, None, {})\n",
-            ),
-        ),
-    ),
-    Mutant(
-        "a tenant budget can raise what the blueprint declares (merge takes the looser cap)",
-        (
-            (
-                "runtime/src/axis_runtime/tenant_budgets.py",
-                "            if lim is not None and lim.hard is not None:\n                hards.append(lim.hard)\n        hard = min(hards) if hards else None\n        soft = min(softs) if softs else None\n",
-                "            if lim is not None and lim.hard is not None:\n                hards.append(lim.hard)\n        hard = max(hards) if hards else None\n        soft = max(softs) if softs else None\n",
             ),
         ),
     ),
