@@ -68,6 +68,9 @@ const pubMember = (m: Member): PublicMember => ({
   createdAt: m.createdAt,
 });
 
+/** Audit detail is hashed canonically, which rejects NaN/Infinity: record them as text so validation (not the audit) refuses them. */
+const num = (v: unknown): unknown => (typeof v === "number" && !Number.isFinite(v) ? String(v) : (v ?? null));
+
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -365,7 +368,7 @@ export class AdminService {
   }
 
   putBudget(p: Principal, b: { scope: BudgetScope; target?: string; metric: BudgetMetric; period: BudgetPeriod; soft?: number; hard?: number }): Promise<Budget> {
-    return this.guarded(p, "budgets.write", { detail: { scope: b.scope, target: b.target ?? "", metric: b.metric, period: b.period, soft: b.soft ?? null, hard: b.hard ?? null } }, async () => {
+    return this.guarded(p, "budgets.write", { detail: { scope: b.scope, target: b.target ?? "", metric: b.metric, period: b.period, soft: num(b.soft), hard: num(b.hard) } }, async () => {
       const target = b.target ?? "";
       if (!["tenant", "agent", "run"].includes(b.scope)) throw invalid("unknown scope");
       if (!["tokens", "cost_usd", "tool_calls", "runtime_seconds"].includes(b.metric)) throw invalid("unknown metric");
