@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console, process */
 // Fails (exit 1) when built client assets contain secrets or values of server-only environment variables.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";

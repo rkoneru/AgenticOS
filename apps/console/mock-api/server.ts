@@ -822,7 +822,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         page(
           S.listings
             .filter((l) => String(l["name"]).toLowerCase().includes(q))
-            .map(({ permissions: _p, ...l }) => ({
+            .map((l) => ({
               ...l,
               installed: S.installed.has(l["id"] as string),
             })),
