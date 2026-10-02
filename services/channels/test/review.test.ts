@@ -270,3 +270,16 @@ describe("redaction cost", () => {
     );
   });
 });
+
+describe("concurrent duplicate delivery", () => {
+  it("two simultaneous deliveries of one webhook produce exactly one turn (the claim, not only the log, stops the race)", async () => {
+    const r = rig();
+    const req = slackReq({ eventId: "EvRACE", text: "once" });
+    const [a, b] = await Promise.all([
+      r.gateway.handleInbound("slack", req),
+      r.gateway.handleInbound("slack", req),
+    ]);
+    expect([a.outcomes[0]!.kind, b.outcomes[0]!.kind].sort()).toEqual(["accepted", "duplicate"]);
+    expect(r.received).toHaveLength(1);
+  });
+});

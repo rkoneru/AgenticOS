@@ -75,6 +75,16 @@ const M = [
   ["src/redact.ts", 'phi && mode === "full" ? "redacted_preview" : mode', "mode"],
   ["src/email-compose.ts", "if (/[\\u0000-\\u001f\\u007f]/.test(s))", "if (false)"],
   ["src/limits.ts", "typeAllowed(a.content_type, limits.allowedAttachmentTypes) &&", ""],
+  // adversarial review (Phase 5)
+  ["src/gateway.ts", "return keyedDigest(k, label, data);", "return String(data);"],
+  [
+    "src/gateway.ts",
+    'if (await this.d.store.hasMessage(tenant, m.channel, "in", m.idempotency_key)) {',
+    "if (false) {",
+  ],
+  ["src/adapters/email.ts", 'asObj(body["sender_auth"])?.["dmarc"] !== "pass"', "false"],
+  ["src/adapters/email.ts", "from.toLowerCase() === mailbox?.toLowerCase()", "from === mailbox"],
+  ["src/dev-server.ts", "gone.abort();", ""],
 ];
 
 let survived = 0;
