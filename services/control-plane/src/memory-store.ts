@@ -169,7 +169,7 @@ export class MemoryControlPlaneStore implements ControlPlaneStore {
   updateMember(
     t: string,
     id: string,
-    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email">>,
+    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email" | "userRef">>,
     now: Date,
   ): Promise<Member | undefined> {
     const m = this.members.get(k(t, id));

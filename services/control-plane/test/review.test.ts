@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { CpError, type PackValidator } from "../src/index.js";
-import { KINDS, cachedValidator, makeWorld, type World } from "./world.js";
+import { KINDS, cachedValidator, eventsOf, makeWorld, type World } from "./world.js";
 
 const code = async (p: Promise<unknown>): Promise<string> => {
   try {
@@ -111,3 +111,46 @@ describe.each(KINDS)(
     });
   },
 );
+
+describe.each(KINDS)("review: SSO e-mail linking binds one IdP identity (%s store)", (kind) => {
+  let w: World;
+  const ORG = "org_bind";
+  beforeAll(async () => {
+    w = await makeWorld(kind);
+  });
+  afterAll(() => w.close());
+
+  it("a second IdP identity with the same verified e-mail cannot take over a member already bound to another one", async () => {
+    const t = await w.tenant();
+    await w.cp.admin.setSsoConnection(t.owner, { idpOrgId: ORG, connectionType: "oidc" });
+    const invited = await w.cp.admin.inviteMember(t.owner, {
+      email: "carol@bind.test",
+      role: "admin",
+    });
+    const login = async (id: string) => {
+      const st = await w.cp.sso.begin(ORG);
+      const state = new URL(st.redirectUrl).searchParams.get("state")!;
+      const codeV = w.idp.complete(state, {
+        id,
+        email: "Carol@Bind.test",
+        emailVerified: true,
+        organizationId: ORG,
+        connectionType: "oidc",
+      });
+      return w.cp.sso.callback({ code: codeV, state }, st.cookie);
+    };
+    const first = await login("idp-carol-1");
+    expect(first.memberId).toBe(invited.id);
+    expect((await login("idp-carol-1")).memberId).toBe(invited.id); // same identity: still fine
+    expect(await code(login("idp-mallory"))).toBe("unauthenticated");
+    const ev = await eventsOf(w, t.tenantId);
+    expect(
+      ev.some(
+        (e) =>
+          e.action === "auth.sso_login" &&
+          e.decision === "DENY" &&
+          /identity_mismatch/.test(e.reason),
+      ),
+    ).toBe(true);
+  });
+});

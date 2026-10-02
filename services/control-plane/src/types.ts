@@ -229,7 +229,7 @@ export interface ControlPlaneStore {
   updateMember(
     tenantId: string,
     id: string,
-    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email">>,
+    patch: Partial<Pick<Member, "role" | "status" | "displayName" | "email" | "userRef">>,
     now: Date,
   ): Promise<Member | undefined>;
 
