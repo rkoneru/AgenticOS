@@ -30,7 +30,7 @@ async function lookup(table: string, settings: Record<string, string>): Promise<
   }
 }
 
-describe("0008 control plane schema", () => {
+describe("0009 control plane schema", () => {
   it("api key lookup releases a row only for the exact prefix and hash", async () => {
     const hash = "01";
     expect(await lookup("api_keys", {})).toBe(0);

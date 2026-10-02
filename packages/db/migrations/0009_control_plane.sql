@@ -1,4 +1,4 @@
--- 0008: control plane (identity, sessions, SCIM, key envelope, policy assignment, settings, placement). docs/adr/0018.
+-- 0009: control plane (identity, sessions, SCIM, key envelope, policy assignment, settings, placement). docs/adr/0020.
 -- ADDITIVE: new tables, new nullable/defaulted columns on members and api_keys, narrow lookup policies, one definer function.
 -- (Number chosen on branch p6/controlplane; the integrating branch renumbers on collision, together with the version.)
 -- Every new tenant table: tenant_id NOT NULL + FORCED RLS via axis.enable_tenant_rls; composite (tenant_id, id) references.

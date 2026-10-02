@@ -90,14 +90,34 @@ spec:
             op: in
             value:
               [
-                tenant.read, tenant.close,
-                members.read, members.invite, members.update_role, members.remove,
-                apikeys.read, apikeys.create, apikeys.rotate, apikeys.revoke,
-                modelkeys.read, modelkeys.write, modelkeys.delete,
-                policies.read, policies.publish, policies.activate,
-                budgets.read, budgets.write, settings.read, settings.write,
-                audit.read, billing.read, billing.write,
-                directories.read, directories.manage, sso.manage, domains.manage, sessions.revoke,
+                tenant.read,
+                tenant.close,
+                members.read,
+                members.invite,
+                members.update_role,
+                members.remove,
+                apikeys.read,
+                apikeys.create,
+                apikeys.rotate,
+                apikeys.revoke,
+                modelkeys.read,
+                modelkeys.write,
+                modelkeys.delete,
+                policies.read,
+                policies.publish,
+                policies.activate,
+                budgets.read,
+                budgets.write,
+                settings.read,
+                settings.write,
+                audit.read,
+                billing.read,
+                billing.write,
+                directories.read,
+                directories.manage,
+                sso.manage,
+                domains.manage,
+                sessions.revoke,
               ]
       decision: ALLOW
     - id: admin-most
@@ -110,13 +130,31 @@ spec:
             value:
               [
                 tenant.read,
-                members.read, members.invite, members.update_role, members.remove,
-                apikeys.read, apikeys.create, apikeys.rotate, apikeys.revoke,
-                modelkeys.read, modelkeys.write, modelkeys.delete,
-                policies.read, policies.publish, policies.activate,
-                budgets.read, budgets.write, settings.read, settings.write,
-                audit.read, billing.read,
-                directories.read, directories.manage, sso.manage, domains.manage, sessions.revoke,
+                members.read,
+                members.invite,
+                members.update_role,
+                members.remove,
+                apikeys.read,
+                apikeys.create,
+                apikeys.rotate,
+                apikeys.revoke,
+                modelkeys.read,
+                modelkeys.write,
+                modelkeys.delete,
+                policies.read,
+                policies.publish,
+                policies.activate,
+                budgets.read,
+                budgets.write,
+                settings.read,
+                settings.write,
+                audit.read,
+                billing.read,
+                directories.read,
+                directories.manage,
+                sso.manage,
+                domains.manage,
+                sessions.revoke,
               ]
       decision: ALLOW
     - id: builder-build
@@ -128,11 +166,19 @@ spec:
             op: in
             value:
               [
-                tenant.read, members.read,
-                apikeys.read, apikeys.create, apikeys.rotate, apikeys.revoke,
-                modelkeys.read, modelkeys.write, modelkeys.delete,
-                policies.read, policies.publish,
-                budgets.read, settings.read,
+                tenant.read,
+                members.read,
+                apikeys.read,
+                apikeys.create,
+                apikeys.rotate,
+                apikeys.revoke,
+                modelkeys.read,
+                modelkeys.write,
+                modelkeys.delete,
+                policies.read,
+                policies.publish,
+                budgets.read,
+                settings.read,
               ]
       decision: ALLOW
     - id: operator-operate
@@ -142,7 +188,16 @@ spec:
           - { field: actor.role, op: eq, value: operator }
           - field: tool.name
             op: in
-            value: [tenant.read, members.read, apikeys.read, policies.read, budgets.read, budgets.write, settings.read]
+            value:
+              [
+                tenant.read,
+                members.read,
+                apikeys.read,
+                policies.read,
+                budgets.read,
+                budgets.write,
+                settings.read,
+              ]
       decision: ALLOW
     - id: auditor-read
       enforcementPoints: [tool_call]
@@ -153,8 +208,15 @@ spec:
             op: in
             value:
               [
-                tenant.read, members.read, apikeys.read, modelkeys.read, policies.read,
-                budgets.read, settings.read, audit.read, directories.read,
+                tenant.read,
+                members.read,
+                apikeys.read,
+                modelkeys.read,
+                policies.read,
+                budgets.read,
+                settings.read,
+                audit.read,
+                directories.read,
               ]
       decision: ALLOW
     - id: billing-billing
