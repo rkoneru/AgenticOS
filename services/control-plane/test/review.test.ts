@@ -149,8 +149,44 @@ describe.each(KINDS)("review: SSO e-mail linking binds one IdP identity (%s stor
         (e) =>
           e.action === "auth.sso_login" &&
           e.decision === "DENY" &&
-          /identity_mismatch/.test(e.reason),
+          /identity_mismatch/.test(e.reason ?? ""),
       ),
     ).toBe(true);
+  });
+});
+
+describe("review: concurrent policy activations never leave the kernel on a stale bundle", () => {
+  it("the last bundle written reflects every committed activation, whatever the order of the writes", async () => {
+    const puts: { id: string; packs: string[] }[] = [];
+    let gate!: () => void;
+    const held = new Promise<void>((r) => (gate = r));
+    let first = true;
+    const w = await makeWorld("memory", {
+      bundleSink: {
+        put: async (id, b) => {
+          if (first && puts.length > 0) {
+            first = false; // the FIRST activation's write is held back while the second one completes
+            await held;
+          }
+          puts.push({ id, packs: b.packs });
+        },
+      },
+    });
+    try {
+      const t = await w.tenant(); // signup publishes the baseline (puts[0])
+      const a = await w.cp.admin.publishPolicy(t.owner, pack("race-a", 3));
+      const b = await w.cp.admin.publishPolicy(t.owner, pack("race-b", 3));
+      const p1 = w.cp.admin.activatePolicy(t.owner, a.versionId); // commits {A}, builds {A}, write held
+      await new Promise((r) => setTimeout(r, 50));
+      const p2 = w.cp.admin.activatePolicy(t.owner, b.versionId); // commits {A,B}
+      await new Promise((r) => setTimeout(r, 300));
+      gate();
+      await Promise.all([p1, p2]);
+      const mine = puts.filter((p) => p.id === t.tenantId);
+      expect(mine[mine.length - 1]?.packs.sort()).toEqual(["baseline-deny", "race-a", "race-b"]);
+    } finally {
+      gate();
+      await w.close();
+    }
   });
 });

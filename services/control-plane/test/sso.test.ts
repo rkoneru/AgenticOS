@@ -126,8 +126,10 @@ describe.each(KINDS)("SSO (%s store)", (kind) => {
       await code2(w.cp.sso.callback({ code, state: a.state, error: "access_denied" }, a.cookie)),
     ).toBe("unauthenticated");
     // tampered cookie (flip one char)
+    // (the replacement must differ from the character it replaces, or the "tampered" cookie is the original: a 1-in-64 flake)
+    const at = a.cookie.length - 2;
     const flipped =
-      a.cookie.slice(0, -2) + (a.cookie.endsWith("A") ? "B" : "A") + a.cookie.slice(-1);
+      a.cookie.slice(0, at) + (a.cookie[at] === "A" ? "B" : "A") + a.cookie.slice(at + 1);
     expect(await code2(w.cp.sso.callback({ code, state: a.state }, flipped))).toBe(
       "unauthenticated",
     );

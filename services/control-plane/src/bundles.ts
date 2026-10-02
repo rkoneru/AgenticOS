@@ -53,7 +53,30 @@ export class PolicyBundlePublisher {
     this.build = o.build ?? opaBuildWasm;
   }
 
-  async publish(tenantId: string): Promise<{ policyVersion: string; packs: string[] }> {
+  /** Publications of one tenant run one at a time (see `publish`). Entries are removed when their chain goes idle. */
+  private readonly chains = new Map<string, Promise<unknown>>();
+
+  /**
+   * Serialised per tenant: each run reads the tenant's active set only after the previous run has WRITTEN, so the last bundle
+   * written always reflects every activation committed before it started. Unserialised, an activation whose build/write is slow
+   * could land after a later one and leave the kernel on a bundle that lacks the later pack (a dropped deny rule) until the
+   * next publication.
+   */
+  publish(tenantId: string): Promise<{ policyVersion: string; packs: string[] }> {
+    const prev = this.chains.get(tenantId) ?? Promise.resolve();
+    const run = prev.then(
+      () => this.publishNow(tenantId),
+      () => this.publishNow(tenantId),
+    );
+    const tail = run.catch(() => undefined);
+    this.chains.set(tenantId, tail);
+    void tail.then(() => {
+      if (this.chains.get(tenantId) === tail) this.chains.delete(tenantId);
+    });
+    return run;
+  }
+
+  private async publishNow(tenantId: string): Promise<{ policyVersion: string; packs: string[] }> {
     try {
       const eff = await this.o.policies.effective(tenantId);
       await this.o.sink.put(tenantId, {
