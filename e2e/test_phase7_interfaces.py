@@ -821,3 +821,29 @@ def test_11_private_namespaces_approvals_and_installs_do_not_cross_tenants(world
         ).status_code
         == 404
     )
+
+
+def test_12_a_tampered_registry_version_does_not_resolve_and_cannot_be_installed(
+    world: World,
+) -> None:
+    """The registry re-verifies on EVERY read: a row changed behind its back (a compromised database, a rogue operator) is refused by
+    resolve and by the marketplace preview, with the failed check codes, and never replaced by an older version."""
+    s = world.stack
+    istack.psql(
+        s.db_url,
+        "SET session_replication_role = replica; "
+        "UPDATE registry_versions SET abl = replace(abl, 'helpful assistant', 'evil assistant!!') "
+        f"WHERE namespace = '{world.ns}'",
+    )
+    with pytest.raises(ApiFail) as e:
+        world.ca.call("registryResolve", ref=f"{world.ns}/helper-agent@^1")
+    assert e.value.status in (422, None)
+    with pytest.raises(ApiFail):
+        world.cb.call("marketPreview", namespace=world.ns, name="helper-agent", range="^1")
+    r = httpx.get(
+        f"{s.gateway}/registry/resolve",
+        params={"ref": f"{world.ns}/helper-agent@^1"},
+        headers={"x-axis-api-key": world.key_b},
+    )
+    assert r.status_code == 422
+    assert "content_hash_mismatch" in {x["keyword"] for x in r.json()["errors"]}
