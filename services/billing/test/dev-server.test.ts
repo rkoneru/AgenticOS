@@ -49,13 +49,13 @@ async function start() {
   return { port, clock, ledger, invoices, audit };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper returns loosely typed JSON
 const call = (
   port: number,
   method: string,
   path: string,
   token?: string,
   body?: unknown,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper returns loosely typed JSON
 ): Promise<{ status: number; json: any }> =>
   new Promise((resolve, reject) => {
     const text =
