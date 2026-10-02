@@ -22,6 +22,8 @@ A **channel adapter** turns provider traffic into `InboundMessage`s and `Outboun
 | sms      | `X-Twilio-Signature` = base64 HMAC-SHA1(url + sorted params), over the CONFIGURED `public_url`    | MessageSid only (no timestamp)              | `To` number                       |
 | whatsapp | `X-Hub-Signature-256: sha256=<hex HMAC>` over raw body; GET `hub.verify_token` handshake          | 24 h window + message id                    | `phone_number_id`                 |
 
+Email: the HMAC authenticates the edge, not the author. The edge must attest the sender (`sender_auth.dmarc === "pass"` in the normalised JSON) or the request is refused (`bad_signature`); a route may set `allow_unauthenticated_sender: true` for dev only. Without it `From` is spoofable and a stranger could write into, and be answered as, any other person's identity.
+
 All signature comparisons are constant time (`safeEqual` hashes both sides first).
 
 ## Tenant routing
@@ -38,7 +40,7 @@ verify, then per message: idempotency claim (replay: acknowledged, audited `chan
 
 ## Transcripts and audit
 
-Audit events (`enforcement_point` `lifecycle` inbound, `message_send` outbound): `reason` = `channel=… dir=… conv=… size=… sha256=… mode=…`, `inputs_hash`/`outputs_hash` over hashes; actor id is a hash of the external id. Raw text is never in the chain. The message log stores `content` per tenant policy (`hash_only | redacted_preview (default) | full`); PHI mode always redacts (built-in patterns + `redactionHook`; a throwing hook stores nothing) and caps `full` at a preview.
+Audit events (`enforcement_point` `lifecycle` inbound, `message_send` outbound): `reason` = `channel=… dir=… conv=… size=… hmac=… mode=…`, `inputs_hash`/`outputs_hash` over keyed digests; actor id is a keyed digest of the external id. Every digest of end-user text, end-user reference, route reference or idempotency key is an HMAC-SHA256 under a per-tenant key derived from the service secret `hashKey` (`AXIS_CHANNELS_HASH_KEY`, >= 32 bytes; `HMAC(master, "axis-digest.v1:<tenant>")`, then `HMAC(tenantKey, label || 0x00 || data)`), never a plain SHA-256, so a low-entropy value (SSN, phone number, "yes") cannot be confirmed by guessing a value and grepping the chain (NEEDS 151, ADR 0015 addendum). Voice digests are computed by the runtime as SHA-256 of the persisted text and re-keyed by the service (`label = voice-text`) before they reach the chain. Without a configured key the service uses a random per-process key (safe; digests are not comparable across restarts or instances). Raw text is never in the chain. The message log stores `content` per tenant policy (`hash_only | redacted_preview (default) | full`); PHI mode always redacts (built-in patterns + `redactionHook`; a throwing hook stores nothing) and caps `full` at a preview.
 
 ## Outbound (the perform half)
 

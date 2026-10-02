@@ -103,13 +103,33 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z' ]+", " ", text.lower()).strip()
 
 
+#: Words that turn an accept phrase around ("that is not okay"); an accept next to one is unclear.
+_NEGATIONS = frozenset(
+    {
+        "not",
+        "no",
+        "nope",
+        "nah",
+        "never",
+        "don't",
+        "dont",
+        "won't",
+        "wont",
+        "can't",
+        "cant",
+        "cannot",
+    }
+)
+
+
 def classify_consent_speech(text: str, policy: ConsentPolicy) -> str | None:
     """``accept`` / ``decline`` / None (unclear).  A sentence with both an accept and a decline
-    phrase is unclear: only an unambiguous answer grants consent."""
+    phrase, or an accept phrase next to a negation ("that is not okay"), is unclear: only an
+    unambiguous answer grants consent."""
     t = f" {_norm(text)} "
     accept = any(f" {_norm(p)} " in t for p in policy.accept_phrases)
     decline = any(f" {_norm(p)} " in t for p in policy.decline_phrases)
-    if accept and decline:
+    if accept and (decline or _NEGATIONS.intersection(t.split())):
         return None
     if decline:
         return "decline"

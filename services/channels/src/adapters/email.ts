@@ -95,6 +95,14 @@ export class EmailAdapter implements ChannelAdapter {
       return reject("bad_signature", "signature does not verify", route);
     if (!withinWindow(Number(ts) * 1000, ctx.nowMs, this.windowMs))
       return reject("stale", "timestamp outside the replay window", route);
+    // The HMAC proves the EDGE sent this; it says nothing about who wrote the mail. `From` is attacker-controlled unless the edge
+    // attests that the sending domain authenticated (DMARC pass). Without it anyone could mail the mailbox "as" a victim: the
+    // victim's identity (and conversation) would receive the attacker's text and the agent would answer the victim.
+    if (
+      route.settings["allow_unauthenticated_sender"] !== true &&
+      asObj(body["sender_auth"])?.["dmarc"] !== "pass"
+    )
+      return reject("bad_signature", "sender is not authenticated (DMARC pass required)", route);
     return { ok: true, route, payload: body };
   }
 
@@ -104,7 +112,7 @@ export class EmailAdapter implements ChannelAdapter {
     const from = extractAddress(b["from"]);
     if (!from) return [];
     const mailbox = validateAddress(v.route.provider_key);
-    if (from === mailbox) return []; // never answer ourselves
+    if (from.toLowerCase() === mailbox?.toLowerCase()) return []; // never answer ourselves (local parts are compared case-insensitively)
     const headers: Record<string, string> = {};
     for (const [k, val] of Object.entries(asObj(b["headers"]) ?? {}))
       if (typeof val === "string") headers[k.toLowerCase()] = val.slice(0, 998);
@@ -148,7 +156,8 @@ export class EmailAdapter implements ChannelAdapter {
     const to = validateAddress(msg.to);
     if (!from) throw new ChannelError("INVALID", "email route has no valid from address");
     if (!to) throw new ChannelError("INVALID", "invalid recipient address");
-    if (to === from) throw new ChannelError("INVALID", "refusing to email the route's own mailbox");
+    if (to.toLowerCase() === from.toLowerCase())
+      throw new ChannelError("INVALID", "refusing to email the route's own mailbox");
     const domain = from.slice(from.lastIndexOf("@") + 1);
     const c = composeEmail({
       from,

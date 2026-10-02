@@ -176,8 +176,19 @@ export interface SseEvent {
 /** Per-(tenant, session) SSE fan-out with a small replay buffer for `Last-Event-ID`. The key includes the tenant: sessions never cross. */
 export class WebHub {
   private readonly subs = new Map<string, Set<(e: SseEvent) => void>>();
+  /** Insertion order = recency (a publish re-inserts its key), so the first key without a subscriber is the oldest idle one. */
   private readonly buffer = new Map<string, SseEvent[]>();
   private seq = 0;
+  private readonly maxSessions: number;
+
+  /** `maxSessions` bounds the replay buffers: anonymous visitors can mint sessions without limit, so memory must not follow them. */
+  constructor(o: { maxSessions?: number } = {}) {
+    this.maxSessions = o.maxSessions ?? 10_000;
+  }
+
+  bufferedSessions(): number {
+    return this.buffer.size;
+  }
 
   private key = (tenant: string, sid: string): string => `${tenant}/${sid}`;
 
@@ -187,7 +198,13 @@ export class WebHub {
     const buf = this.buffer.get(k) ?? [];
     buf.push(ev);
     if (buf.length > 50) buf.shift();
+    this.buffer.delete(k);
     this.buffer.set(k, buf);
+    if (this.buffer.size > this.maxSessions)
+      for (const old of this.buffer.keys()) {
+        if (this.buffer.size <= this.maxSessions) break;
+        if (old !== k && !this.subs.has(old)) this.buffer.delete(old);
+      }
     for (const fn of this.subs.get(k) ?? []) fn(ev);
   }
 

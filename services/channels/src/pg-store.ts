@@ -319,6 +319,16 @@ export class PgConversationStore implements ConversationStore {
     });
   }
 
+  hasMessage(tenant: string, channel: ChannelId, direction: "in" | "out", idempotencyKey: string) {
+    return this.tx(tenant, async (c) => {
+      const { rowCount } = await c.query(
+        "SELECT 1 FROM conversation_messages WHERE tenant_id = $1 AND channel = $2 AND direction = $3 AND idempotency_key = $4",
+        [tenant, channel, direction, idempotencyKey],
+      );
+      return (rowCount ?? 0) > 0;
+    });
+  }
+
   messages(tenant: string, conversationId: string, limit = 100) {
     return this.tx(tenant, async (c) => {
       const { rows } = await c.query(

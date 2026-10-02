@@ -26,7 +26,9 @@ from axis_runtime.executor import ActionRunner, Completed, Denied, Failed, Pendi
 from axis_runtime.voice.clock import VoiceClock
 from axis_runtime.voice.gateway import CallGateway, OriginateRequest
 
-_E164 = re.compile(r"^\+[1-9]\d{6,14}$")
+#: ``fullmatch`` + ASCII digits: ``$`` also matches before a trailing newline and ``\d`` matches any
+#: Unicode digit, so a lookalike number would pass as a different destination (cool-down bypass).
+_E164 = re.compile(r"\+[1-9][0-9]{6,14}")
 
 #: Ranges where toll fraud concentrates (premium rate, international revenue share, satellite and
 #: global networks).  A starting point, not a complete list: tenants extend it.
@@ -59,6 +61,10 @@ class OutboundCallPolicy:
     window_ms: int = 3_600_000
     max_per_destination: int = 2  # per window
     max_duration_ms: int = 600_000
+    #: Caller IDs the agent may ask for (E.164). EMPTY = the agent may not choose one: only the
+    #: gateway's default for the tenant is used. ``from`` is not in the gate's view, so it is
+    #: validated here (impersonation guard).
+    allowed_from_numbers: tuple[str, ...] = ()
 
 
 @dataclass
@@ -90,12 +96,16 @@ class OutboundLimiter:
         self._clock = clock
         self._usage: dict[str, _Usage] = {}
 
-    def check_and_reserve(self, tenant_id: str, to: str) -> Reservation:
+    def check_and_reserve(self, tenant_id: str, to: str, from_number: str = "") -> Reservation:
         policy = self._policies.get(tenant_id)
         if policy is None:
             raise CallRefusedError("no_outbound_policy")
-        if not _E164.match(to):
+        if not _E164.fullmatch(to):
             raise CallRefusedError("invalid_number")
+        if from_number and (
+            not _E164.fullmatch(from_number) or from_number not in policy.allowed_from_numbers
+        ):
+            raise CallRefusedError("caller_id_not_allowed")
         denied = country_prefix(to, policy.denied_prefixes)
         if denied:
             raise CallRefusedError("destination_denied")
@@ -161,7 +171,7 @@ class OutboundCaller:
 
     async def place(self, to: str, *, purpose: str = "", from_number: str = "") -> CallPlacement:
         try:
-            reservation = self._limiter.check_and_reserve(self._tenant, to)
+            reservation = self._limiter.check_and_reserve(self._tenant, to, from_number)
         except CallRefusedError as exc:
             await self._rec.record(
                 EventType.ACTION_BLOCKED,

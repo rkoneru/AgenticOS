@@ -77,21 +77,36 @@ export class InboxQueue {
   }
 
   /** The next item of `tenant`, waiting up to `waitMs`; undefined on timeout. Only ever returns this tenant's items. */
-  take(tenant: string, waitMs: number): Promise<InboxItem | undefined> {
+  take(tenant: string, waitMs: number, signal?: AbortSignal): Promise<InboxItem | undefined> {
     const q = this.queues.get(tenant);
     const next = q?.shift();
     if (next) return Promise.resolve(next);
-    if (waitMs <= 0) return Promise.resolve(undefined);
+    if (waitMs <= 0 || signal?.aborted) return Promise.resolve(undefined);
     return new Promise((resolve) => {
+      const leave = (): void => {
+        const list = this.waiters.get(tenant) ?? [];
+        const i = list.indexOf(waiter);
+        if (i >= 0) list.splice(i, 1);
+        if (list.length === 0) this.waiters.delete(tenant);
+      };
+      const onAbort = (): void => {
+        // The poller is gone (its connection dropped): it must not be handed an item nobody will read.
+        clearTimeout(waiter.timer);
+        leave();
+        resolve(undefined);
+      };
       const waiter: Waiter = {
-        resolve,
+        resolve: (item) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve(item);
+        },
         timer: setTimeout(() => {
-          const list = this.waiters.get(tenant) ?? [];
-          const i = list.indexOf(waiter);
-          if (i >= 0) list.splice(i, 1);
+          signal?.removeEventListener("abort", onAbort);
+          leave();
           resolve(undefined);
         }, waitMs),
       };
+      signal?.addEventListener("abort", onAbort, { once: true });
       this.waiters.set(tenant, [...(this.waiters.get(tenant) ?? []), waiter]);
     });
   }

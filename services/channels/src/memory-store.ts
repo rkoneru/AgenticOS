@@ -213,6 +213,15 @@ export class MemoryConversationStore implements ConversationStore {
     return { inserted: true, message: structuredClone(stored) };
   }
 
+  async hasMessage(
+    tenant: string,
+    channel: ChannelId,
+    direction: "in" | "out",
+    idempotencyKey: string,
+  ) {
+    return this.t(tenant).dedupe.has(`${channel}\u0000${direction}\u0000${idempotencyKey}`);
+  }
+
   async messages(tenant: string, conversationId: string, limit = 100) {
     return structuredClone((this.t(tenant).messages.get(conversationId) ?? []).slice(-limit));
   }

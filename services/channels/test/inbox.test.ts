@@ -8,7 +8,7 @@ import {
   staticTokenAuthenticator,
   type InboxItem,
 } from "../src/index.js";
-import { AGENT, T1, T2, rig, slackReq, smsReq } from "./helpers.js";
+import { AGENT, T1, T2, digestOf, rig, slackReq, smsReq } from "./helpers.js";
 
 const item = (tenant: string, text = "x"): InboxItem => ({
   id: `i-${text}`,
@@ -215,7 +215,8 @@ describe("transcript events", () => {
       ["message_send", "voice.turn.agent", "ALLOW"],
     ]);
     expect(new Set(rows.map((e) => e.trace_id))).toEqual(new Set(["b".repeat(32)]));
-    expect(rows[2]?.reason).toContain(`sha256=${sha}`);
+    expect(rows[2]?.reason).toContain(`hmac=${digestOf(T1, "voice-text", sha)}`);
+    expect(rows[2]?.reason).not.toContain(sha);
     expect(rows[2]?.reason).toContain("dir=in");
     expect(rows[3]?.reason).toContain("dir=out");
     expect(await r.audit.events(T2)).toEqual([]);

@@ -27,6 +27,18 @@ export const verifyHmacSha256Hex = (
   return safeEqual(hmacSha256Hex(secret, data), provided.toLowerCase());
 };
 
+/**
+ * Per-tenant key for every digest that is written to the audit chain or the message log (docs/adr/0015 addendum). A plain SHA-256
+ * of low-entropy text (a lone SSN, a phone number, "yes") can be confirmed by guessing; an HMAC under a key the chain reader does
+ * not hold cannot. `master` is the service's configured secret; the tenant key is derived so one tenant's digests never match
+ * another's, and `label` separates the uses of the key (text, user reference, route, voice).
+ */
+export const tenantDigestKey = (master: Buffer, tenant: string): Buffer =>
+  createHmac("sha256", master).update(`axis-digest.v1:${tenant}`).digest();
+
+export const keyedDigest = (tenantKey: Buffer, label: string, data: string | Buffer): string =>
+  createHmac("sha256", tenantKey).update(`${label}\u0000`).update(data).digest("hex");
+
 export const sha256Hex = (s: string | Buffer): string => sha256(s).toString("hex");
 
 export const randomToken = (nBytes = 24): string => randomBytes(nBytes).toString("base64url");

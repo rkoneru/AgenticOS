@@ -76,7 +76,7 @@ user's conversation (NEEDS #148).
 
 ## Outbound calls and toll fraud
 
-`OutboundCaller.place` -> `OutboundLimiter` (pre-gate) -> gated `VoiceCall` -> `GatewayDialer`. See ADR 0016 #3-#4.
+`OutboundCaller.place` -> `OutboundLimiter` (pre-gate) -> gated `VoiceCall` -> `GatewayDialer`. See ADR 0016 #3-#4. Numbers must `fullmatch` ASCII E.164 (a trailing newline or a Unicode-digit lookalike is `invalid_number`, never a distinct destination). The agent's `from` (caller ID) is not in the gate's view, so the limiter refuses any value not in the tenant's `allowed_from_numbers` (empty = the agent cannot choose one; `caller_id_not_allowed`).
 
 ## Threat model
 

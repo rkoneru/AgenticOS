@@ -77,7 +77,7 @@ MUTANTS = [
     (
         "outbound call skips the pre-gate limiter",
         "outbound.py",
-        "            reservation = self._limiter.check_and_reserve(self._tenant, to)",
+        "            reservation = self._limiter.check_and_reserve(self._tenant, to, from_number)",
         "            reservation = Reservation(self._tenant, to, {})",
     ),
     (
@@ -85,6 +85,18 @@ MUTANTS = [
         "outbound.py",
         "        if not allowed:\n            raise CallRefusedError",
         "        if False:\n            raise CallRefusedError",
+    ),
+    (
+        "outbound number validator accepts a trailing newline (review)",
+        "outbound.py",
+        "if not _E164.fullmatch(to):",
+        "if not re.match(r'^\\+[1-9]\\d{6,14}$', to):",
+    ),
+    (
+        "agent-chosen caller ID not checked (review)",
+        "outbound.py",
+        "        if from_number and (",
+        "        if False and (",
     ),
     (
         "DTMF digits persisted raw",

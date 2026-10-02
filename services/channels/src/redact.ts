@@ -4,10 +4,10 @@ import type { TranscriptMode } from "./types.js";
 export type RedactionHook = (text: string) => string;
 
 const PATTERNS: [RegExp, string][] = [
-  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]"],
+  [/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,}/g, "[email]"], // bounded: an unbounded run made this quadratic on long text
   [/\b\d{3}[-\s.]?\d{2}[-\s.]?\d{4}\b/g, "[ssn]"],
   [/\b(?:\d[ -]?){13,19}\b/g, "[card]"],
-  [/(?<![\w])\+?\d[\d\s().-]{8,}\d\b/g, "[phone]"],
+  [/(?<![\w])\+?\d[\d\s().-]{8,30}\d\b/g, "[phone]"],
   [/<@[A-Z0-9]+>/g, "[mention]"],
   [/(?<![\w])@[A-Za-z0-9._-]{2,}/g, "[mention]"],
 ];

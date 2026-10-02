@@ -92,6 +92,26 @@ def test_speech_consent_classification(text: str, verdict: str | None) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "that is not okay",
+        "I am not okay with that",
+        "ok but don't record me",
+        "yes... actually never mind, I won't",
+        "sure, I cannot agree",
+        "okay no",
+        "yes I can't",
+    ],
+)
+def test_a_negated_accept_is_never_consent(text: str) -> None:
+    """Review: 'that is not okay' contains the accept word 'okay' and no decline phrase, so it granted consent."""
+    assert (
+        classify_consent_speech(text, ConsentPolicy(mode=ConsentMode.SPEECH, notice="x"))
+        != "accept"
+    )
+
+
 # ---- session: notice mode -----------------------------------------------------------------------
 
 

@@ -237,6 +237,10 @@ export function storeContract(
       ]);
       expect(await store.messages(t1, c.id, 2)).toHaveLength(2);
       expect(await store.messages(t2, c.id)).toEqual([]);
+      expect(await store.hasMessage(t1, "slack", "in", "k2")).toBe(true);
+      expect(await store.hasMessage(t1, "slack", "in", "nope")).toBe(false);
+      expect(await store.hasMessage(t1, "sms", "out", "k2")).toBe(false); // direction and channel are part of the key
+      expect(await store.hasMessage(t2, "slack", "in", "k2")).toBe(false); // never across tenants
       await expect(store.appendMessage(t2, msg(c.id, "x"))).rejects.toMatchObject({
         code: "NOT_FOUND",
       });

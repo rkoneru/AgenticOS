@@ -69,6 +69,7 @@ const gateway = new ChannelGateway({
   http: fakeHttp,
   email: fakeEmail,
   onMessage: inbox.handler,
+  hashKey: cfg.hash_key,
   // A request that names NO known route is audited under the platform tenant.
   systemAudit: { sink: audit, tenant_id: cfg.system_tenant },
 });

@@ -271,7 +271,14 @@ export function createDevServer(deps: DevServerDeps): http.Server {
       if (!deps.inbox) return json(res, 404, { error: "not found" });
       const wait =
         typeof b["wait_ms"] === "number" ? Math.min(Math.max(b["wait_ms"], 0), 30_000) : 0;
-      return json(res, 200, { item: (await deps.inbox.take(svc.tenantId, wait)) ?? null });
+      // A runner whose connection drops mid-poll must not leave a waiter behind that swallows the next message.
+      const gone = new AbortController();
+      res.on("close", () => {
+        if (!res.writableEnded) gone.abort();
+      });
+      return json(res, 200, {
+        item: (await deps.inbox.take(svc.tenantId, wait, gone.signal)) ?? null,
+      });
     }
     const channel = str(b["channel"], "channel", 32) as ChannelId;
     if (!CHANNELS.includes(channel)) throw new ChannelError("INVALID", "unknown channel");

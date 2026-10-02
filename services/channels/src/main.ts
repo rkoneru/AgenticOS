@@ -2,6 +2,8 @@
    AXIS_CHANNELS_DATABASE_URL  Postgres URL (omit for the in-memory store)
    AXIS_CHANNELS_ROLE          e.g. axis_app when connecting as a superuser in dev
    AXIS_CHANNELS_TOKENS        JSON {"<token>": {"tenantId": "<uuid>"}} for the runtime's outbound client
+   AXIS_CHANNELS_HASH_KEY      secret (>= 32 chars) keying every digest written to the audit chain / message log (NEEDS 151);
+                               omitted: a random per-process key (digests are not comparable across restarts)
    AXIS_CHANNELS_ROUTES        JSON array of RouteConfig (secrets inline: dev only)
    Audit: PgAuditLog on the same pool when a database URL is set, otherwise an in-memory log.
    Inbound messages are queued per tenant for the runtime's ChannelAgentRunner (POST /v1/channels/inbox/next; docs/adr/0017).
@@ -67,6 +69,10 @@ const gateway = new ChannelGateway({
   limiter,
   hub,
   onMessage: inbox.handler,
+  ...(process.env["AXIS_CHANNELS_HASH_KEY"]
+    ? { hashKey: process.env["AXIS_CHANNELS_HASH_KEY"] }
+    : {}),
+  logger: { info() {}, warn: (m) => console.error(m), error: (m) => console.error(m) },
   http: new GuardedHttpTransport(new FetchTransport(), [
     ...PROVIDER_HOSTS.slack,
     ...PROVIDER_HOSTS.twilio,
