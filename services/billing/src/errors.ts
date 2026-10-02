@@ -6,6 +6,7 @@ export type BillingErrorCode =
   | "PERIOD_NOT_SEALED"
   | "LIVE_KEY_REFUSED"
   | "PROVIDER_ERROR"
+  | "AUDIT_FAILED"
   | "SIGNATURE_INVALID"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
