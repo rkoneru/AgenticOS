@@ -586,6 +586,23 @@ describe.each(makes)("registry service (%s store)", (_n, make) => {
       await expect(
         h.svc.resolve({ tenantId: a.p.tenantId }, "helper-agent@^1.0.0"),
       ).rejects.toMatchObject({ code: "invalid" });
+      // visible to the publisher but NOT public: a public namespace must not depend on it
+      const priv = `own-${rid(6)}`;
+      await h.svc.claimNamespace(a.p, priv);
+      const privKey = generatePublisherKey();
+      await h.svc.addKey(a.p, priv, {
+        publicKey: privKey.publicKey,
+        validFrom: new Date(h.clock.t.getTime() - 1000),
+      });
+      const pp = new Publisher(h, a.p, priv);
+      pp.key = privKey;
+      await pp.publish(ablDoc("inner-agent", "1.0.0"));
+      await expect(
+        a.publish({
+          ...dep(`${priv}/inner-agent@^1.0.0`),
+          metadata: { name: "consumer-z", version: "1.0.0" },
+        }),
+      ).rejects.toMatchObject({ message: expect.stringContaining("public namespace") });
       expect(() => parseRef("ab/cd@^1.0.0")).not.toThrow();
       expect(() => parseRef("Bad/ns@^1.0.0")).toThrow();
       expect(() => parseRef("ns/name@junk")).toThrow();

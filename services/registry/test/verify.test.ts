@@ -483,3 +483,39 @@ describe("provenance helpers", () => {
     });
   });
 });
+
+describe("lying records signed by the real key", () => {
+  it("a record whose version/name differ from the ABL it carries is refused even when freshly signed", async () => {
+    const { rec, keys, pub } = await fixture();
+    const t = clone(rec);
+    t.version = "9.9.9";
+    t.signature = signBlueprint(
+      {
+        namespace: "acme",
+        name: t.name,
+        version: "9.9.9",
+        riskLevel: t.riskLevel,
+        contentHash: t.contentHash,
+      },
+      pub.key,
+      rec.publishedAt,
+    );
+    t.provenance = signStatement(
+      buildStatement(
+        {
+          namespace: "acme",
+          name: t.name,
+          version: "9.9.9",
+          abl: JSON.parse(rec.abl),
+          builderId: "b",
+          sourceRef: "s",
+          now: rec.publishedAt,
+        },
+        t.contentHash,
+      ),
+      pub.key,
+    );
+    const v = verifyVersion(t, keys);
+    expect(v).toMatchObject({ ok: false, failures: ["version_mismatch"] });
+  });
+});

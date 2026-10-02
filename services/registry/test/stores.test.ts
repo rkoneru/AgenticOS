@@ -87,7 +87,13 @@ describe("Postgres RLS, directly", () => {
     ).rejects.toThrow();
     // an unlisted namespace never leaks, whatever the query
     expect((await as(b, `SELECT * FROM registry_keys WHERE namespace = '${ns}'`)).rowCount).toBe(0);
+    // even the table owner / superuser cannot rewrite or delete a published version (trigger, not just missing grants)
+    await expect(
+      admin.query(`UPDATE registry_versions SET abl = '{"evil":1}' WHERE namespace = '${ns}'`),
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      admin.query(`DELETE FROM registry_versions WHERE namespace = '${ns}'`),
+    ).rejects.toThrow(/append-only/);
     await admin.end();
-    expect(true).toBe(true);
   });
 });
