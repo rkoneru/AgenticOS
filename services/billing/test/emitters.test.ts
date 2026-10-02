@@ -341,3 +341,30 @@ describe("emitter edge cases", () => {
     expect(r.skipped.map((s) => s.reason)).toEqual(["not a tool execution"]);
   });
 });
+
+describe("wire contract with the Python UsageEmitter", () => {
+  it("maps the golden projection written by runtime/tests/test_usage.py", async () => {
+    const { readFileSync } = await import("node:fs");
+    const events = JSON.parse(
+      readFileSync(new URL("./fixtures/run-projection.json", import.meta.url), "utf8"),
+    ) as RunEventLite[];
+    const r = mapRunEvents(events, { tenantId: T });
+    expect(r.skipped).toEqual([]);
+    expect(
+      r.records.map((x) => [
+        x.meter,
+        x.quantity,
+        x.dimensions?.["tool_kind"] ?? x.dimensions?.["provider"],
+      ]),
+    ).toEqual([
+      ["tool_executions", 1n, "memory_write"],
+      ["tokens_in", 10n, "anthropic"],
+      ["tokens_out", 5n, "anthropic"],
+    ]);
+    expect(
+      r.records.every(
+        (x) => x.dimensions?.["agent"] === "a@1" && x.dimensions?.["run"] === "run_1",
+      ),
+    ).toBe(true);
+  });
+});

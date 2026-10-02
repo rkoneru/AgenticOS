@@ -1,0 +1,109 @@
+[
+  {
+    "data": {
+      "tenant_id": "11111111-1111-4111-8111-111111111111"
+    },
+    "pid": null,
+    "run_id": "run_1",
+    "seq": 1,
+    "ts": "2026-01-01T00:00:00.001Z",
+    "type": "run_started"
+  },
+  {
+    "data": {
+      "agent": "a@1"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 2,
+    "ts": "2026-01-01T00:00:00.002Z",
+    "type": "process_spawned"
+  },
+  {
+    "data": {
+      "from": "spawn",
+      "to": "ready",
+      "trigger": "init_complete"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 3,
+    "ts": "2026-01-01T00:00:00.003Z",
+    "type": "process_transition"
+  },
+  {
+    "data": {
+      "from": "ready",
+      "to": "running",
+      "trigger": "scheduled"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 4,
+    "ts": "2026-01-01T00:00:00.004Z",
+    "type": "process_transition"
+  },
+  {
+    "data": {
+      "action_id": "act_000001",
+      "decision": "ALLOW",
+      "enforcement_point": "memory_write"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 5,
+    "ts": "2026-01-01T00:00:00.005Z",
+    "type": "gate_decision"
+  },
+  {
+    "data": {
+      "action_id": "act_000001",
+      "enforcement_point": "memory_write",
+      "ok": true
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 6,
+    "ts": "2026-01-01T00:00:00.006Z",
+    "type": "tool_call_result"
+  },
+  {
+    "data": {
+      "action_id": "act_000002",
+      "decision": "DENY",
+      "enforcement_point": "memory_write"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 7,
+    "ts": "2026-01-01T00:00:00.007Z",
+    "type": "gate_decision"
+  },
+  {
+    "data": {
+      "action_id": "a-model",
+      "decision": "ALLOW",
+      "enforcement_point": "model_call"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 8,
+    "ts": "2026-01-01T00:00:00.008Z",
+    "type": "gate_decision"
+  },
+  {
+    "data": {
+      "action_id": "a-model",
+      "cached_tokens": 0,
+      "input_tokens": 10,
+      "model": "m",
+      "output_tokens": 5,
+      "provider": "anthropic"
+    },
+    "pid": "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "run_id": "run_1",
+    "seq": 9,
+    "ts": "2026-01-01T00:00:00.009Z",
+    "type": "model_call"
+  }
+]
