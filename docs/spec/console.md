@@ -1,7 +1,7 @@
 # Console and docs site (Phase 7 / D)
 
 `apps/console` (Next.js 16 App Router, TypeScript, Tailwind 4), `packages/ui` (component kit), `apps/docs-site` (static docs). Status: **Prototype**.
-Tested against a **mock API** (`apps/console/mock-api`, 59 Playwright flows incl. axe) AND against the REAL stack (`apps/console/e2e-real`, 14 Playwright tests in
+Tested against a **mock API** (`apps/console/mock-api`, 60 Playwright flows incl. axe) AND against the REAL stack (`apps/console/e2e-real`, 14 Playwright tests in
 `make console-e2e`: SSO through the control plane, the gateway, Risk Kernel, run service, AGIL, registry, marketplace, XSS, CSRF, cross-tenant). Admin pages are mock-verified only
 (NEEDS #277). ADRs 0050-0054, 0053 (OpenAPI 1.2.0). Gaps: `docs/NEEDS.md` #242-#258, #272-#283.
 
@@ -68,7 +68,7 @@ Automated axe (WCAG 2.0/2.1 A+AA) runs on **every page in light and dark** in th
 | UI kit         | `pnpm --filter @axis/ui cov`        | 16 tests incl. axe; thresholds 85/80                                                                                              |
 | Console logic  | `pnpm --filter @axis/console cov`   | 78 tests; `lib/` ~99% lines (threshold 85)                                                                                        |
 | Docs site      | `pnpm --filter @axis/docs-site cov` | 10 tests incl. a real offline, deterministic build and link check                                                                 |
-| Playwright e2e | `make console-e2e`                  | builds the console, scans the bundle, runs 59 mock-API flows, then 14 real-stack tests (Chromium from `PLAYWRIGHT_BROWSERS_PATH`) |
+| Playwright e2e | `make console-e2e`                  | builds the console, scans the bundle, runs 60 mock-API flows, then 14 real-stack tests (Chromium from `PLAYWRIGHT_BROWSERS_PATH`) |
 | Docs build     | `make docs-build`                   | `apps/docs-site/dist` (67 files)                                                                                                  |
 
 Dev: `pnpm --filter @axis/console mock-api` (port 4010) and `NEXT_PUBLIC_DEV_LOGIN=1 pnpm --filter @axis/console dev` (port 3100). Config: `AXIS_API_URL` (server-only),

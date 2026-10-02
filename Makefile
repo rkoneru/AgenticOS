@@ -130,7 +130,7 @@ sdk-generate:
 sdk-mutation:
 	node scripts/mutation-sdk.mjs
 
-# Phase 7 console e2e: build the console (with the dev-login flag), scan the CLIENT bundle for secrets, run the 59 mock-API Playwright flows
+# Phase 7 console e2e: build the console (with the dev-login flag), scan the CLIENT bundle for secrets, run the 60 mock-API Playwright flows
 # (axe on every page, light and dark), then the REAL-STACK suite: SSO through the control plane, the real gateway, Risk Kernel, run service,
 # AGIL, registry and marketplace (no mock), plus XSS, CSRF and cross-tenant checks from the browser. Needs Playwright's Chromium
 # (PLAYWRIGHT_BROWSERS_PATH) and, for the real-stack part, the same prerequisites as e2e-core (Postgres 16, opa, node, uv).

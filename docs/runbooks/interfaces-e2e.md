@@ -8,7 +8,7 @@ plus Playwright's Chromium (`PLAYWRIGHT_BROWSERS_PATH`) for the console.
 
 ```bash
 make e2e-phase7      # pnpm build; 36 pytest tests (12 steps x 3 clients) on the real stack; then the bypass guard
-make console-e2e     # build console; bundle secret scan; 59 mock-API flows; then 14 real-stack Playwright tests
+make console-e2e     # build console; bundle secret scan; 60 mock-API flows; then 14 real-stack Playwright tests
 make e2e             # both
 uv run python e2e/mutation_phase7.py [substring ...]   # by hand: 6 wiring mutants, each must be KILLED
 # a stack for poking at: boots everything, writes its description, runs your command, tears down
