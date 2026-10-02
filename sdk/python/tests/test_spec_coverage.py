@@ -101,6 +101,8 @@ ERGONOMIC = {
     "testPolicy": lambda ax: ax.policies.test(
         {}, {"enforcement_point": "tool_call", "context": {}}
     ),
+    "explainRun": lambda ax: ax.runs.explain(RUN),
+    "explainAuditEvent": lambda ax: ax.audit.explain_event(7),
     "listAuditEvents": lambda ax: ax.audit.events(from_seq=1),
     "verifyAuditChain": lambda ax: ax.audit.verify(from_seq=1, to_seq=9),
     "listKillSwitches": lambda ax: ax.kill_switches.list(),

@@ -228,7 +228,10 @@ class MockServer:
         names = re.findall(r"\{([^}]+)\}", op["path"])
         for name, raw in zip(names, m.groups(), strict=True):
             p = next((x for x in op["parameters"] if x["in"] == "path" and x["name"] == name), None)
-            if p is None or validate(p["schema"], unquote(raw)):
+            pv: Any = unquote(raw)
+            if p is not None and p["schema"].get("type") == "integer" and pv.isdigit():
+                pv = int(pv)
+            if p is None or validate(p["schema"], pv):
                 bad(f"path param {name} invalid")
         declared = {p["name"] for p in op["parameters"] if p["in"] == "query"}
         for p in op["parameters"]:

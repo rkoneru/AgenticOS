@@ -149,7 +149,8 @@ export class HttpTransport implements Transport {
   #url(op: OperationSpec, params: Record<string, unknown>): URL {
     let path = op.path;
     for (const name of op.pathParams) {
-      const v = params[name];
+      const raw = params[name];
+      const v = typeof raw === "number" && Number.isSafeInteger(raw) ? String(raw) : raw;
       if (typeof v !== "string" || v === "")
         throw new TypeError(`${op.id}: missing path parameter "${name}"`);
       path = path.replace(`{${name}}`, encodeURIComponent(v));

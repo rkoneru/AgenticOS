@@ -191,6 +191,10 @@ class Runs:
             run_id=run_id, after_sequence=after_sequence, limit=limit, options=options
         )
 
+    def explain(self, run_id: str, *, options: RequestOptions | None = None) -> Any:
+        """AGIL explanation of a run (read-only, deterministic, derived from the audit trail)."""
+        return self._ax.api.explain_run(run_id=run_id, options=options)
+
     def all_events(
         self, run_id: str, *, options: RequestOptions | None = None
     ) -> Iterator[RunEvent]:
@@ -463,6 +467,10 @@ class Audit:
             max_items,
         )
 
+    def explain_event(self, seq: int, *, options: RequestOptions | None = None) -> Any:
+        """AGIL explanation of one audited decision or approval step."""
+        return self._ax.api.explain_audit_event(seq=seq, options=options)
+
     def verify(
         self,
         *,
@@ -707,6 +715,10 @@ class AsyncRuns:
         return await self._ax.api.list_run_events(
             run_id=run_id, after_sequence=after_sequence, limit=limit, options=options
         )
+
+    async def explain(self, run_id: str, *, options: RequestOptions | None = None) -> Any:
+        """AGIL explanation of a run (read-only, deterministic, derived from the audit trail)."""
+        return await self._ax.api.explain_run(run_id=run_id, options=options)
 
     async def all_events(
         self, run_id: str, *, options: RequestOptions | None = None
@@ -980,6 +992,10 @@ class AsyncAudit:
             )
 
         return apaginate(page, max_items)
+
+    async def explain_event(self, seq: int, *, options: RequestOptions | None = None) -> Any:
+        """AGIL explanation of one audited decision or approval step."""
+        return await self._ax.api.explain_audit_event(seq=seq, options=options)
 
     async def verify(
         self,

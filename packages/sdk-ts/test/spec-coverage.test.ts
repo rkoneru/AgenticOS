@@ -28,6 +28,8 @@ const ERGONOMIC: Record<OperationId, (ax: Axis) => Promise<unknown>> = {
   listPolicyPacks: (ax) => ax.policies.list(),
   publishPolicyPack: (ax) => ax.policies.publish({ policy_version: "1" }),
   testPolicy: (ax) => ax.policies.test({}, { enforcement_point: "tool_call", context: {} }),
+  explainRun: (ax) => ax.runs.explain("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  explainAuditEvent: (ax) => ax.audit.explainEvent(7),
   listAuditEvents: (ax) => ax.audit.events({ from_seq: 1 }),
   verifyAuditChain: (ax) => ax.audit.verify({ from_seq: 1, to_seq: 9 }),
   listKillSwitches: (ax) => ax.killSwitches.list(),

@@ -184,6 +184,11 @@ export class Runs {
     );
   }
 
+  /** AGIL explanation of a run (read-only, deterministic, derived from the audit trail). */
+  explain(runId: string, options?: Opts) {
+    return this.ax.api.explainRun({ runId }, options);
+  }
+
   /** Every event in sequence order (non-streaming), following `next_cursor`. */
   async *allEvents(runId: string, options?: Opts): AsyncGenerator<RunEvent> {
     let after = 0;
@@ -379,6 +384,10 @@ export class Audit {
   ): AsyncGenerator<AuditEvent> {
     const { maxItems, ...rest } = args;
     return paginate((cursor) => this.events(pick({ ...rest, cursor }), options), maxItems);
+  }
+  /** AGIL explanation of one audited decision or approval step. */
+  explainEvent(seq: number, options?: Opts) {
+    return this.ax.api.explainAuditEvent({ seq }, options);
   }
   verify(args: { from_seq?: number; to_seq?: number } = {}, options?: Opts) {
     return this.ax.api.verifyAuditChain(

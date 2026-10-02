@@ -140,6 +140,8 @@ class _Core:
         rel = op.path
         for name in op.path_params:
             v = path.get(name)
+            if isinstance(v, int) and not isinstance(v, bool):
+                v = str(v)
             if not isinstance(v, str) or v == "":
                 raise TypeError(f'{op.id}: missing path parameter "{name}"')
             rel = rel.replace("{" + name + "}", quote(v, safe=""))

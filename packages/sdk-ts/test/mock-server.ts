@@ -191,8 +191,10 @@ export function createMockServer(opts: MockOptions = {}) {
     // parameters
     route.names.forEach((name, i) => {
       const p = op.parameters.find((x) => x.in === "path" && x.name === name);
-      const v = decodeURIComponent(match[i + 1] as string);
-      if (!p || !ajv.validate(p.schema, v)) bad(`path param ${name}=${v} invalid`);
+      const rawV = decodeURIComponent(match[i + 1] as string);
+      const pt = (p?.schema as { type?: string } | undefined)?.type;
+      const v = pt === "integer" && /^\d+$/.test(rawV) ? Number(rawV) : rawV;
+      if (!p || !ajv.validate(p.schema, v)) bad(`path param ${name}=${rawV} invalid`);
     });
     for (const p of op.parameters) {
       if (p.in === "query") {
