@@ -267,3 +267,13 @@ export function sampleParams(operationId: string): Record<string, unknown> {
   if (bodySchema) out["body"] = synthesize(bodySchema);
   return out;
 }
+
+/** The error a promise rejects with (fails the test when it resolves). */
+export async function rejected<E extends Error>(p: Promise<unknown>): Promise<E> {
+  try {
+    await p;
+  } catch (e) {
+    return e as E;
+  }
+  throw new Error("expected the promise to reject");
+}

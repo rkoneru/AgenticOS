@@ -54,7 +54,7 @@ describe("coverage of the spec", () => {
       expect(server.violations).toEqual([]);
       expect(server.calls.map((c) => c.operationId)).toEqual([id]);
       expect(OPERATIONS[id].method).toBe(server.calls[0]?.method);
-      if (OPERATIONS[id].successStatus !== 204) expect(out).toBeDefined();
+      expect(out).toBeDefined();
     },
   );
 

@@ -137,6 +137,15 @@ export class HttpTransport implements Transport {
     return redactText(text, this.#secrets());
   }
 
+  /** A copy of an underlying error that cannot carry a credential (its message is scrubbed, its stack dropped). */
+  #cause(err: unknown): Error | undefined {
+    if (!(err instanceof Error)) return undefined;
+    const safe = new Error(this.#scrub(err.message));
+    safe.name = err.name;
+    delete safe.stack;
+    return safe;
+  }
+
   #url(op: OperationSpec, params: Record<string, unknown>): URL {
     let path = op.path;
     for (const name of op.pathParams) {
@@ -290,14 +299,16 @@ export class HttpTransport implements Transport {
         );
       } catch (err) {
         if (options.signal?.aborted)
-          throw new AxisAbortError("request aborted by caller", { cause: err });
+          throw new AxisAbortError("request aborted by caller", { cause: this.#cause(err) });
         const failure = timeoutSignal.aborted
-          ? new AxisTimeoutError(`${op.id}: timed out after ${timeoutMs} ms`, { cause: err })
+          ? new AxisTimeoutError(`${op.id}: timed out after ${timeoutMs} ms`, {
+              cause: this.#cause(err),
+            })
           : err instanceof AxisError
             ? err
             : new AxisConnectionError(
                 this.#scrub(`${op.id}: ${(err as Error)?.message ?? "network error"}`),
-                { cause: err },
+                { cause: this.#cause(err) },
               );
         if (retriable && attempt < maxRetries && !(err instanceof AxisError)) {
           await this.#sleep(this.#backoff(attempt, undefined), options.signal);

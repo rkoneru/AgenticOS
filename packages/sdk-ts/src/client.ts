@@ -1,4 +1,11 @@
-import { AxisAbortError, AxisApiError, AxisError, AxisWaitTimeoutError } from "./errors.js";
+import {
+  AxisAbortError,
+  AxisApiError,
+  AxisConnectionError,
+  AxisError,
+  AxisWaitTimeoutError,
+} from "./errors.js";
+import { redactText } from "./redact.js";
 import { GeneratedApi } from "./generated/client.js";
 import { DEFAULT_BASE_URL, OPERATIONS } from "./generated/operations.js";
 import type {
@@ -29,7 +36,7 @@ import type {
 import { paginate, type Page } from "./pagination.js";
 import { HttpTransport, type RequestOptions, type TransportConfig } from "./transport.js";
 import { defaultSleep } from "./transport.js";
-import { readSse, SseParser } from "./sse.js";
+import { readSse, SseParser, type SseEvent } from "./sse.js";
 
 export interface AxisOptions {
   /** API key (sent as X-Axis-Api-Key). Defaults to the AXIS_API_KEY environment variable. */
@@ -82,6 +89,18 @@ export interface WaitOptions extends Opts {
   /** Give up after this many ms (default 300 000). */
   timeoutMs?: number;
   pollIntervalMs?: number;
+}
+
+/** A body read that fails mid-stream is a dropped connection, not a programming error. */
+async function* guarded(src: AsyncGenerator<SseEvent>): AsyncGenerator<SseEvent> {
+  try {
+    yield* src;
+  } catch (err) {
+    if (err instanceof AxisError) throw err;
+    throw new AxisConnectionError(
+      `event stream interrupted: ${err instanceof Error ? redactText(err.message) : "unknown error"}`,
+    );
+  }
 }
 
 export class Runs {
@@ -220,7 +239,7 @@ export class Runs {
           },
         );
         if (!res.body) throw new AxisApiError("event stream had no body", { status: res.status });
-        for await (const ev of readSse(res.body, parser)) {
+        for await (const ev of guarded(readSse(res.body, parser))) {
           if (ev.event !== "message" && ev.event !== "run_event") continue;
           let parsed: RunEvent;
           try {

@@ -19,6 +19,7 @@ export class SseParser {
   retry: number | undefined;
   #buf = "";
   #started = false;
+  #skipLf = false;
   #data: string[] = [];
   #event = "";
   #pendingId: string | undefined;
@@ -34,11 +35,17 @@ export class SseParser {
     let start = 0;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
+      if (this.#skipLf) {
+        this.#skipLf = false;
+        if (c === "\n") {
+          start = i + 1; // the LF half of a CRLF whose CR ended the previous line
+          continue;
+        }
+      }
       if (c !== "\n" && c !== "\r") continue;
-      if (c === "\r" && i === text.length - 1) break; // may be the first half of CRLF: wait for more
       const line = text.slice(start, i);
-      if (c === "\r" && text[i + 1] === "\n") i++;
       start = i + 1;
+      if (c === "\r") this.#skipLf = true;
       const ev = this.#line(line);
       if (ev) out.push(ev);
     }
@@ -49,6 +56,7 @@ export class SseParser {
   /** End of stream: an unterminated final event is discarded, per the specification. */
   end(): void {
     this.#buf = "";
+    this.#skipLf = false;
     this.#data = [];
     this.#event = "";
     this.#pendingId = undefined;
