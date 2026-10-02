@@ -289,6 +289,18 @@ describe("credential safety", () => {
     expect(server.calls[0]?.headers.get("authorization")).toBe("Bearer tok_abc_123456");
     expect(server.calls[0]?.headers.get("x-axis-api-key")).toBeNull();
   });
+  it("when both a key and a token are given only the API key header is sent", async () => {
+    const server = createMockServer();
+    const ax = new Axis({
+      apiKey: KEY,
+      token: "tok_abc_123456",
+      baseUrl: server.baseUrl,
+      fetch: server.fetch,
+    });
+    await ax.runs.get(RUN);
+    expect(server.calls[0]?.headers.get("authorization")).toBeNull();
+    expect(server.calls[0]?.headers.get("x-axis-api-key")).toBe(KEY);
+  });
   it("REFUSES to follow a redirect to another origin (no credential leak)", async () => {
     const seen: string[] = [];
     const ax = new Axis({
@@ -369,7 +381,9 @@ describe("credential safety", () => {
   });
   it("never takes the tenant from arguments or headers", async () => {
     for (const k of ["tenant", "tenantId", "tenant_id"]) {
-      expect(() => new Axis({ apiKey: KEY, baseUrl: BASE, [k]: "t-1" } as never)).toThrow(/tenant/);
+      expect(() => new Axis({ apiKey: KEY, baseUrl: BASE, [k]: "t-1" } as never)).toThrow(
+        /derived from the credential/,
+      );
     }
     const { ax } = setup();
     for (const h of [

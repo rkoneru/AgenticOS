@@ -371,7 +371,7 @@ def test_same_origin_redirects_are_followed_303_becomes_get_and_loops_are_capped
 
 def test_tenant_is_never_a_client_input() -> None:
     for k in ("tenant", "tenant_id", "tenantId"):
-        with pytest.raises(TypeError, match="tenant"):
+        with pytest.raises(TypeError, match="derived from the credential"):
             Axis(KEY, base_url=BASE, **{k: "t-1"})
     ax, _ = make(MockServer())
     for h in (
