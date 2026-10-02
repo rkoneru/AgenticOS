@@ -12,4 +12,4 @@ A ~300-line TypeScript pipeline (`marked` for markdown) instead of a Next static
 
 ## Consequences
 
-No search, versioning or syntax highlighting (NEEDS #1313). Links from docs to files outside `docs/` are not resolvable in the site and would be reported by the build (currently 0).
+No search, versioning or syntax highlighting (NEEDS #255). Links from docs to files outside `docs/` are not resolvable in the site and would be reported by the build (currently 0).

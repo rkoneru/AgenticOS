@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
-  "version": "1.0.0",
-  "inputHash": "a05f9267a286f318acafaf4066d1ac67de2a1c30992fdba6908c880729ccf840",
+  "version": "1.1.0",
+  "inputHash": "b62c5727759355ffd9cd9e2e64f41ff0a2c77ab0fee7d70d9c2560de221f8517",
   "security": [
     {
       "bearerAuth": []
@@ -2642,6 +2642,616 @@
                       "string",
                       "null"
                     ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "explainRun",
+      "method": "GET",
+      "path": "/runs/{runId}/explanation",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Structured explanation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "summary",
+                  "steps",
+                  "decision_refs",
+                  "remediation"
+                ],
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Plain-language summary derived from the audit rows"
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "n",
+                        "kind",
+                        "text"
+                      ],
+                      "properties": {
+                        "n": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "kind": {
+                          "enum": [
+                            "request",
+                            "evaluation",
+                            "outcome",
+                            "context",
+                            "run"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "audit_event_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "seq": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  },
+                  "decision_refs": {
+                    "type": "array",
+                    "description": "The audited decisions the explanation rests on",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "audit_event_id",
+                        "seq",
+                        "decision",
+                        "enforcement_point",
+                        "action",
+                        "policy_version",
+                        "gate",
+                        "rule_ids",
+                        "reason"
+                      ],
+                      "properties": {
+                        "audit_event_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "seq": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "ts": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "decision": {
+                          "enum": [
+                            "ALLOW",
+                            "DENY",
+                            "REQUIRE_APPROVAL",
+                            "ALLOW_WITH_REDACTION"
+                          ]
+                        },
+                        "enforcement_point": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "policy_version": {
+                          "type": "string"
+                        },
+                        "policy_packs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gate": {
+                          "enum": [
+                            "kill_switch",
+                            "policy_rule",
+                            "default_deny",
+                            "amount_cap",
+                            "target_cap",
+                            "budget",
+                            "rate_limit",
+                            "staleness",
+                            "approval",
+                            "audit_unavailable",
+                            "invalid_request",
+                            "evaluation_failure",
+                            "admin",
+                            "other"
+                          ]
+                        },
+                        "rule_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gate_id": {
+                          "type": "string"
+                        },
+                        "kill_switch_scope": {
+                          "enum": [
+                            "global",
+                            "tenant",
+                            "agent",
+                            "tool"
+                          ]
+                        },
+                        "approval_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "remediation": {
+                    "type": "array",
+                    "description": "What would allow the action; derived from the audit reason and the tenant's own policy metadata",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "text"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "release_kill_switch",
+                            "add_policy_rule",
+                            "review_policy_rule",
+                            "adjust_request",
+                            "raise_limit",
+                            "wait",
+                            "decide_approval",
+                            "retry",
+                            "contact_operator",
+                            "inspect"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "hint": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "narrative": {
+                    "type": "string",
+                    "description": "Optional model-written prose; present only when the operator enabled the narrator"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "explainAuditEvent",
+      "method": "GET",
+      "path": "/audit/events/{seq}/explanation",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "seq",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Structured explanation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "summary",
+                  "steps",
+                  "decision_refs",
+                  "remediation"
+                ],
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "description": "Plain-language summary derived from the audit rows"
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "n",
+                        "kind",
+                        "text"
+                      ],
+                      "properties": {
+                        "n": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "kind": {
+                          "enum": [
+                            "request",
+                            "evaluation",
+                            "outcome",
+                            "context",
+                            "run"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "audit_event_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "seq": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  },
+                  "decision_refs": {
+                    "type": "array",
+                    "description": "The audited decisions the explanation rests on",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "audit_event_id",
+                        "seq",
+                        "decision",
+                        "enforcement_point",
+                        "action",
+                        "policy_version",
+                        "gate",
+                        "rule_ids",
+                        "reason"
+                      ],
+                      "properties": {
+                        "audit_event_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "seq": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "ts": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "decision": {
+                          "enum": [
+                            "ALLOW",
+                            "DENY",
+                            "REQUIRE_APPROVAL",
+                            "ALLOW_WITH_REDACTION"
+                          ]
+                        },
+                        "enforcement_point": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "policy_version": {
+                          "type": "string"
+                        },
+                        "policy_packs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gate": {
+                          "enum": [
+                            "kill_switch",
+                            "policy_rule",
+                            "default_deny",
+                            "amount_cap",
+                            "target_cap",
+                            "budget",
+                            "rate_limit",
+                            "staleness",
+                            "approval",
+                            "audit_unavailable",
+                            "invalid_request",
+                            "evaluation_failure",
+                            "admin",
+                            "other"
+                          ]
+                        },
+                        "rule_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gate_id": {
+                          "type": "string"
+                        },
+                        "kill_switch_scope": {
+                          "enum": [
+                            "global",
+                            "tenant",
+                            "agent",
+                            "tool"
+                          ]
+                        },
+                        "approval_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "remediation": {
+                    "type": "array",
+                    "description": "What would allow the action; derived from the audit reason and the tenant's own policy metadata",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "text"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "release_kill_switch",
+                            "add_policy_rule",
+                            "review_policy_rule",
+                            "adjust_request",
+                            "raise_limit",
+                            "wait",
+                            "decide_approval",
+                            "retry",
+                            "contact_operator",
+                            "inspect"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "hint": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "narrative": {
+                    "type": "string",
+                    "description": "Optional model-written prose; present only when the operator enabled the narrator"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
                   }
                 }
               }

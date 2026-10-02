@@ -1,0 +1,38 @@
+{
+  "name": "@axis/api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage",
+    "mutation": "node scripts-mutation.mjs",
+    "dev-server": "node dist/main.js"
+  },
+  "dependencies": {
+    "@axis/abl": "workspace:*",
+    "@axis/agil": "workspace:*",
+    "@axis/approvals": "workspace:*",
+    "@axis/audit": "workspace:*",
+    "@axis/billing": "workspace:*",
+    "@axis/contracts": "workspace:*",
+    "@axis/control-plane": "workspace:*",
+    "@axis/policy": "workspace:*",
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@axis/risk-kernel": "workspace:*"
+  }
+}

@@ -178,6 +178,9 @@ EXEMPTIONS: dict[str, dict[str, str]] = {
     "net": {
         "mcp/http_server.py": "inbound MCP server socket (asyncio.start_server): authenticated, "
         "size-capped, every tools/call runs through the executor and gate.",
+        "runserver.py": "dev run service socket (asyncio.start_server): bearer-authenticated per "
+        "tenant, size- and time-limited, called only by the API gateway; it performs no action "
+        "itself (every action of a run it starts goes through the executor and the kernel gate).",
     },
     "process": {
         "mcp/stdio.py": "MCP stdio transport spawns ONLY operator-allowlisted commands with a "
@@ -245,6 +248,7 @@ EXEMPTION_DETAILS: dict[tuple[str, str], frozenset[str]] = {
         {".open() for writing or with an unprovable mode", "uses os.open"}
     ),
     ("net", "mcp/http_server.py"): frozenset({"uses .start_server"}),
+    ("net", "runserver.py"): frozenset({"uses .start_server"}),
     ("process", "mcp/stdio.py"): frozenset({"uses .create_subprocess_exec"}),
     ("dns", "models/adapters/base.py"): frozenset({"uses .getaddrinfo"}),
     ("thread-escape", "sandbox/backends/local.py"): frozenset({"uses .run_in_executor"}),

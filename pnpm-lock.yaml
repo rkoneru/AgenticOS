@@ -60,6 +60,52 @@ importers:
         specifier: ^2.9.1
         version: 2.9.1
 
+  apps/api-gateway:
+    dependencies:
+      '@axis/abl':
+        specifier: workspace:*
+        version: link:../../packages/abl
+      '@axis/agil':
+        specifier: workspace:*
+        version: link:../../services/agil
+      '@axis/approvals':
+        specifier: workspace:*
+        version: link:../../services/approvals
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../../services/audit
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../../services/billing
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../../services/control-plane
+      '@axis/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
+      '@grpc/grpc-js':
+        specifier: ^1.14.5
+        version: 1.14.5
+      '@grpc/proto-loader':
+        specifier: ^0.8.1
+        version: 0.8.1
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.20.0)
+      yaml:
+        specifier: ^2.5.0
+        version: 2.9.1
+    devDependencies:
+      '@axis/risk-kernel':
+        specifier: workspace:*
+        version: link:../../services/risk-kernel
+
   apps/cli:
     dependencies:
       '@axis/abl':
@@ -277,6 +323,15 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
+
+  services/agil:
+    dependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
 
   services/approvals:
     dependencies:

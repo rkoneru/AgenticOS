@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AXIS Control Plane API
-  version: 1.0.0
+  version: 1.1.0
   summary: Governed agent runtime — REST API v1
   description: |
     Source of truth for the public `/v1` API. SDKs and server route schemas are generated from this file.
@@ -31,6 +31,7 @@ tags:
   - { name: Kill switches, description: Emergency stops by scope }
   - { name: Usage, description: Metered usage }
   - { name: Evals, description: Eval Hub runs }
+  - { name: Explanations, description: Read-only AGIL explanations of runs and audited decisions }
 paths:
   /blueprints:
     get:
@@ -345,6 +346,35 @@ paths:
                 properties:
                   items: { type: array, items: { $ref: "../schemas/audit-event-v1.schema.json" } }
                   next_cursor: { type: [string, "null"] }
+        default: { $ref: "#/components/responses/Problem" }
+  /runs/{runId}/explanation:
+    get:
+      tags: [Explanations]
+      operationId: explainRun
+      summary: Explain a run from its audit trail (AGIL; read-only, deterministic)
+      parameters: [{ $ref: "#/components/parameters/RunId" }]
+      responses:
+        "200":
+          description: Structured explanation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Explanation" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /audit/events/{seq}/explanation:
+    get:
+      tags: [Explanations]
+      operationId: explainAuditEvent
+      summary: Explain one audited decision or approval step (AGIL; read-only, deterministic)
+      parameters:
+        - { name: seq, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Structured explanation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Explanation" }
+        "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
   /audit/verify:
     post:
@@ -674,3 +704,94 @@ components:
         status: { enum: [queued, running, passed, failed, errored] }
         score: { type: [number, "null"] }
         threshold: { type: [number, "null"] }
+    Explanation:
+      type: object
+      required: [summary, steps, decision_refs, remediation]
+      properties:
+        summary: { type: string, description: Plain-language summary derived from the audit rows }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [n, kind, text]
+            properties:
+              n: { type: integer, minimum: 1 }
+              kind: { enum: [request, evaluation, outcome, context, run] }
+              text: { type: string }
+              audit_event_id: { type: string, format: uuid }
+              seq: { type: integer, minimum: 1 }
+        decision_refs:
+          type: array
+          description: The audited decisions the explanation rests on
+          items:
+            type: object
+            required:
+              [
+                audit_event_id,
+                seq,
+                decision,
+                enforcement_point,
+                action,
+                policy_version,
+                gate,
+                rule_ids,
+                reason,
+              ]
+            properties:
+              audit_event_id: { type: string, format: uuid }
+              seq: { type: integer, minimum: 1 }
+              ts: { type: string, format: date-time }
+              decision: { $ref: "#/components/schemas/Decision" }
+              enforcement_point: { type: string }
+              action: { type: string }
+              policy_version: { type: string }
+              policy_packs: { type: array, items: { type: string } }
+              gate:
+                enum:
+                  [
+                    kill_switch,
+                    policy_rule,
+                    default_deny,
+                    amount_cap,
+                    target_cap,
+                    budget,
+                    rate_limit,
+                    staleness,
+                    approval,
+                    audit_unavailable,
+                    invalid_request,
+                    evaluation_failure,
+                    admin,
+                    other,
+                  ]
+              rule_ids: { type: array, items: { type: string } }
+              gate_id: { type: string }
+              kill_switch_scope: { enum: [global, tenant, agent, tool] }
+              approval_id: { type: string, format: uuid }
+              reason: { type: string }
+        remediation:
+          type: array
+          description: What would allow the action; derived from the audit reason and the tenant's own policy metadata
+          items:
+            type: object
+            required: [kind, text]
+            properties:
+              kind:
+                enum:
+                  [
+                    release_kill_switch,
+                    add_policy_rule,
+                    review_policy_rule,
+                    adjust_request,
+                    raise_limit,
+                    wait,
+                    decide_approval,
+                    retry,
+                    contact_operator,
+                    inspect,
+                  ]
+              text: { type: string }
+              hint: { type: string }
+        narrative:
+          type: string
+          description: Optional model-written prose; present only when the operator enabled the narrator

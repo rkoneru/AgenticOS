@@ -2,7 +2,7 @@
 
 ## Phase 7 - Console and docs site (component D, `make console-e2e`)
 
-**No frozen contract changed.** Status: Prototype, proven against a mock API (NEEDS #1300-#1316; ADRs 0050-0052; `docs/spec/console.md`).
+**No frozen contract changed.** Status: Prototype, proven against a mock API (NEEDS #242-#258; ADRs 0050-0052; `docs/spec/console.md`).
 
 - `packages/ui`: accessible component kit (Button, fields, Table, Dialog, Tabs, Badge, Toast, CodeEditor, Timeline, DiffView, EmptyState, ErrorBoundary), light/dark tokens, jest-axe tests.
 - `apps/console` (Next.js 16): blueprints with live ABL diagnostics (line/column), runs with SSE timeline, replay scrubber and budget gauges, approvals (evidence, SLA, confirm, self-approval refused), policies (test panel, diff-gated activation), audit explorer with server plus in-browser hash-chain verification, usage (SVG), admin (one-time key reveal, write-only BYO keys, budgets, SSO/region), marketplace with permission-diff consent, AGIL explanation panel; same-origin BFF with CSRF and path allow-list, nonce CSP, role-aware UI, dark mode, responsive.

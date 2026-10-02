@@ -1,6 +1,6 @@
 # AXIS SDKs (TypeScript and Python)
 
-Status: **Prototype**. Both SDKs are generated from the frozen OpenAPI (`packages/contracts/openapi/axis-v1.yaml`) plus a hand-written ergonomic layer; tested against a mock server derived from the spec, not yet against the real gateway (Phase 7 e2e; `docs/NEEDS.md` #1204). Design: ADR 0040 (generator), 0041 (transport safety), 0043 (mutation checks).
+Status: **Prototype**. Both SDKs are generated from the frozen OpenAPI (`packages/contracts/openapi/axis-v1.yaml`) plus a hand-written ergonomic layer; tested against a mock server derived from the spec, not yet against the real gateway (Phase 7 e2e; `docs/NEEDS.md` #239). Design: ADR 0040 (generator), 0041 (transport safety), 0043 (mutation checks).
 
 |                 | TypeScript                                                                            | Python                                                                    |
 | --------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |

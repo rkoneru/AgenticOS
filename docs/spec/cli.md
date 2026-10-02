@@ -15,7 +15,7 @@ Credentials:
 - `AXIS_API_KEY` (and optionally `AXIS_BASE_URL`, `AXIS_PROFILE`) win over the stored profile.
 - `axis login` verifies the key (one authenticated read), then stores it in `$XDG_CONFIG_HOME/axis/config.json` (default `~/.config/axis/config.json`), file mode `0600` in a `0700` directory. A config file readable by group or others is refused (exit 3), like ssh does for private keys.
 - There is deliberately **no `--api-key` flag** (shell history, process lists) and **no tenant flag**: the tenant is derived from the credential by the server.
-- `axis login --device` is a stub: the v1 API has no device-authorization endpoint (NEEDS #1201).
+- `axis login --device` is a stub: the v1 API has no device-authorization endpoint (NEEDS #236).
 
 ## Global options
 

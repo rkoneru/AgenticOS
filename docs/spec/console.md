@@ -2,7 +2,7 @@
 
 `apps/console` (Next.js 16 App Router, TypeScript, Tailwind 4), `packages/ui` (component kit), `apps/docs-site` (static docs). Status: **Prototype**.
 Built and tested against a **mock control-plane API** (`apps/console/mock-api`) that follows the frozen `/v1` OpenAPI; it has not been run against
-the real gateway (NEEDS #1300). ADRs 0050-0052. Gaps: `docs/NEEDS.md` #1300-#1316.
+the real gateway (NEEDS #242). ADRs 0050-0052. Gaps: `docs/NEEDS.md` #242-#258.
 
 ## 1. Architecture
 
@@ -58,7 +58,7 @@ as text. It never composes or infers explanation content; when the endpoint is a
 
 Skip link, landmarks, labelled controls, focus-visible rings, keyboard-operable dialogs/tabs (Radix), `aria-live` for validation/verification results, `role=meter` gauges with text values,
 tables with captions, reduced-motion, light/dark (tokens redefined for both; theme toggle persisted), responsive nav (menu button on phones, no horizontal scroll).
-Automated axe (WCAG 2.0/2.1 A+AA) runs on **every page in light and dark** in the e2e, and on the component kit in jest-axe. Not done: manual screen-reader passes (NEEDS #1311).
+Automated axe (WCAG 2.0/2.1 A+AA) runs on **every page in light and dark** in the e2e, and on the component kit in jest-axe. Not done: manual screen-reader passes (NEEDS #253).
 
 ## 5. Tests and how to run
 
@@ -80,7 +80,7 @@ The mock API enforces what the console relies on the server for (cookie session,
 
 `GET /auth/me` ({member, tenant}); `GET /v1/{runs|approvals}/{id}/explanation` and `GET /v1/audit/events/{id}/explanation` (AGIL shape above);
 `GET /v1/evals/runs` (list); `/v1/marketplace/listings[/{id}[/install]]`; optional fields `requested_by`, `args_hash`, `policy_reason`, `matched_rule_ids` on `Approval`;
-`policy`, `active`, `version_id` on `PolicyPack`; `/admin/v1` response shapes (snake_case, see `lib/api.ts`); `PUT /admin/v1/budgets` taking `{items}`. Each degrades to a message when the server answers 404/405/501. NEEDS #1301.
+`policy`, `active`, `version_id` on `PolicyPack`; `/admin/v1` response shapes (snake_case, see `lib/api.ts`); `PUT /admin/v1/budgets` taking `{items}`. Each degrades to a message when the server answers 404/405/501. NEEDS #243.
 
 ## 7. packages/ui
 

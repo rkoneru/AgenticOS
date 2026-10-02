@@ -235,3 +235,125 @@ spec:
           - { field: actor.role, op: eq, value: viewer }
           - { field: tool.name, op: in, value: [tenant.read, policies.read, budgets.read] }
       decision: ALLOW
+
+    # ---- Public API (`api` namespace, ADR 0024): the same roles, decided here for the API gateway. API keys may use these (scope
+    # `<resource>:read|write` is enforced by the Authorizer before this pack is asked); none of them is session-only.
+    - id: api-owner-admin
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: in, value: [owner, admin] }
+          - field: tool.name
+            op: in
+            value:
+              [
+                api.blueprints.read,
+                api.blueprints.publish,
+                api.runs.read,
+                api.runs.start,
+                api.runs.signal,
+                api.events.read,
+                api.approvals.read,
+                api.approvals.decide,
+                api.policies.read,
+                api.policies.publish,
+                api.policies.test,
+                api.audit.read,
+                api.audit.verify,
+                api.killswitch.read,
+                api.killswitch.write,
+                api.usage.read,
+                api.evals.run,
+                api.explanations.read,
+              ]
+      decision: ALLOW
+    - id: api-builder
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: builder }
+          - field: tool.name
+            op: in
+            value:
+              [
+                api.blueprints.read,
+                api.blueprints.publish,
+                api.runs.read,
+                api.runs.start,
+                api.runs.signal,
+                api.events.read,
+                api.policies.read,
+                api.policies.publish,
+                api.policies.test,
+                api.usage.read,
+                api.evals.run,
+                api.explanations.read,
+              ]
+      decision: ALLOW
+    - id: api-operator
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: operator }
+          - field: tool.name
+            op: in
+            value:
+              [
+                api.blueprints.read,
+                api.runs.read,
+                api.runs.start,
+                api.runs.signal,
+                api.events.read,
+                api.approvals.read,
+                api.approvals.decide,
+                api.policies.read,
+                api.killswitch.read,
+                api.killswitch.write,
+                api.usage.read,
+                api.explanations.read,
+              ]
+      decision: ALLOW
+    - id: api-auditor
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: auditor }
+          - field: tool.name
+            op: in
+            value:
+              [
+                api.blueprints.read,
+                api.runs.read,
+                api.events.read,
+                api.approvals.read,
+                api.policies.read,
+                api.audit.read,
+                api.audit.verify,
+                api.killswitch.read,
+                api.usage.read,
+                api.explanations.read,
+              ]
+      decision: ALLOW
+    - id: api-billing
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: billing }
+          - { field: tool.name, op: in, value: [api.usage.read] }
+      decision: ALLOW
+    - id: api-viewer
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: viewer }
+          - field: tool.name
+            op: in
+            value:
+              [
+                api.blueprints.read,
+                api.runs.read,
+                api.events.read,
+                api.policies.read,
+                api.explanations.read,
+              ]
+      decision: ALLOW

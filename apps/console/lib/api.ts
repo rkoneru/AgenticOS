@@ -2,7 +2,7 @@
  * The console's one data layer. Every network call the UI makes goes through this module, so the
  * typed SDK can replace it later without touching pages. Types mirror
  * `packages/contracts/openapi/axis-v1.yaml` (frozen /v1). Anything marked ADDITIVE is not in the
- * frozen spec (see docs/NEEDS.md #1300 block) and degrades gracefully when the server says 404/501.
+ * frozen spec (see docs/NEEDS.md #242 block) and degrades gracefully when the server says 404/501.
  *
  * The browser talks to the console's own origin (`/api/axis/...`, the BFF route), never to the
  * control plane directly, so cookies stay same-site and CSRF is enforced in one place.

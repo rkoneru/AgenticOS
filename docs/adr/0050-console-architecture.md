@@ -18,4 +18,4 @@ The console must use the control plane's cookie session, keep secrets out of the
 
 ## Consequences
 
-Console tests prove UI behaviour against the spec, not against the real gateway (NEEDS #1300). The BFF adds one hop (SSE passes through it). The mock is a second implementation of the API that must be kept honest by the spec contract test and by `make e2e-phase7` (component E).
+Console tests prove UI behaviour against the spec, not against the real gateway (NEEDS #242). The BFF adds one hop (SSE passes through it). The mock is a second implementation of the API that must be kept honest by the spec contract test and by `make e2e-phase7` (component E).
