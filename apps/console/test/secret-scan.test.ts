@@ -1,3 +1,7 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { scanText } from "@/lib/secret-scan";
 
@@ -34,5 +38,33 @@ describe("secret scan", () => {
   });
   it("passes clean text", () => {
     expect(scanText("a.js", "const a = 1; // axk_ prefix documented")).toEqual([]);
+  });
+});
+
+describe("the build gate (scripts/scan-bundle.mjs) is the tested scanner, not a second list", () => {
+  const gate = (text: string, env: Record<string, string> = {}) => {
+    const dir = mkdtempSync(join(tmpdir(), "axis-bundle-"));
+    writeFileSync(join(dir, "app.js"), text);
+    return spawnSync(process.execPath, ["scripts/scan-bundle.mjs", dir], {
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+    });
+  };
+  it("fails on every shape the unit-tested scanner knows, including OpenAI-style keys and bearer literals", () => {
+    for (const leak of [
+      `k="axk_0123456789abcdef_${"A".repeat(43)}"`,
+      `k="axs_0123456789abcdef_${"x".repeat(30)}"`,
+      `k="sk-ant-${"b".repeat(30)}"`,
+      `k="sk-${"a".repeat(40)}"`,
+      `k="AKIAABCDEFGHIJKLMNOP"`,
+      "-----BEGIN PRIVATE KEY-----",
+      `h="Bearer ${"t".repeat(40)}"`,
+    ]) {
+      expect(gate(leak).status, leak.slice(0, 20)).toBe(1);
+    }
+  });
+  it("passes clean assets and fails a server-only sentinel", () => {
+    expect(gate("const a = 1;").status).toBe(0);
+    expect(gate("host=127.0.0.1:4010", { AXIS_SCAN_SENTINELS: "127.0.0.1:4010" }).status).toBe(1);
   });
 });
