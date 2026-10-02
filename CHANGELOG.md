@@ -1,5 +1,32 @@
 # Changelog
 
+## Phase 6 - SaaS platform integration (component C, `make e2e-phase6`)
+
+Wires the control plane (A) and billing (B) into one path with the Risk Kernel and the runtime (ADR 0022). **No frozen contract changed**
+(no migration, proto, OpenAPI or audit event type). Status: Prototype wiring, proven by an e2e that uses fakes at the IdP, KMS, DNS, model
+provider and payment provider only.
+
+- **A tenant signs up via SSO and runs its own policy.** Platform signup, SSO login through the fake IdP, admin calls over `/admin/v1`: BYO model key,
+  policy pack (validated and compiled by the policy toolchain), budget. The tenant's active packs are compiled and written as a per-tenant bundle
+  (`PolicyBundlePublisher`/`FileBundleSink`); the kernel dev process serves each tenant its own (`TenantBundleEngine`) and DENIES one whose bundle
+  is missing or corrupt. The e2e shows the same agent denied under baseline-deny alone, allowed after the tenant activates a pack, and the tenant's
+  own priority DENY enforced; audit rows carry the activated policy version.
+- **BYO key and budgets reach the run.** `HttpSecretStore` (the provider is called with the key the admin configured) and `TenantBudgets` (the control
+  plane's tenant token/cost hard caps stop runs through the TKI ledger; blueprint caps can only be tightened). Closes the budget half of NEEDS #191 and the client half of #186.
+- **Metering wired.** `RunDeps.usage` forwards each run's billing projection; denied actions are not billed, a cache hit bills zero tokens; the ledger equals
+  totals recomputed from the model provider's counts, the audit chain and the run logs; period close, seal verification, invoice vs independent rating,
+  clean reconciliation against the Stripe fake, and injected duplicate/dropped/altered provider records reported with nothing repaired.
+- **Negative paths** (21 scenarios in `e2e/test_phase6_saas.py`): viewer/builder/billing RBAC, tenant B admin against tenant A (404s, never data), API key
+  scope/rotate/revoke/expiry, SCIM deprovision revoking sessions and keys, region-pinned writes (421), live Stripe keys refused, replayed/conflicting/forged
+  usage, a `dedicated_db` tenant's audit in the second database (fail-closed without a pool), kernel DENY without a bundle.
+- **Two real defects found by the e2e and fixed** (with unit regressions): runs stopped by a budget trip or kill were cancelled mid-emission and never billed;
+  fractional budgets (`cost_usd: 0.001`) were refused as "audit unavailable" because the admin audit hashed with the integer-only canonicalizer.
+- `e2e/mutation_phase6.py`: 13 wiring mutants (skip tenant policy load, bill denied actions, tenant from body, skip dedupe, accept live key, ...), see the report for the result.
+- **Honest gaps:** NEEDS #197-#205 (file-based dev bundle delivery, in-memory untimed budget ledger, static dev credentials, usage emitted once at run end with no outbox,
+  accuracy covers tokens/tools/runtime only, payment fake not Stripe-shaped HTTP, operator steps in the harness, placement routes the admin audit only and moves no data,
+  harness-only ops surface) plus the open parts of #179-#195 (no real WorkOS/KMS/DNS/Stripe/ClickHouse; retention not enforced). `pnpm cov` can be red once under
+  full-parallel load (#196).
+
 ## Phase 6 - Billing and usage ledger (component B, `services/billing`)
 
 Additive migration `0008_billing.sql` (ADR 0018; contracts otherwise frozen; the integrating branch renumbers on collision) and an

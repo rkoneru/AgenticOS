@@ -24,7 +24,7 @@ import subprocess
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -613,17 +613,19 @@ def provider_tokens(*providers: Provider) -> tuple[int, int]:
 
 def running_ms(events_: list[Any]) -> int:
     """Independent recomputation of runtime: milliseconds each process spent RUNNING, from the run log's transitions."""
-    since: dict[str, float] = {}
-    total = 0.0
+    since: dict[str, datetime] = {}
+    total = 0
     for e in events_:
         if e.type != EventType.PROCESS_TRANSITION or e.pid is None:
             continue
-        ts = datetime.fromisoformat(e.ts).timestamp() * 1000
+        ts = datetime.fromisoformat(e.ts)
         if e.pid in since:
-            total += ts - since.pop(e.pid)
+            total += (ts - since.pop(e.pid)) // timedelta(
+                milliseconds=1
+            )  # exact integer arithmetic
         if e.data.get("to") == "running":
             since[e.pid] = ts
-    return int(total)
+    return total
 
 
 # ---- shared scenario state -----------------------------------------------------------------------------------------
@@ -1074,6 +1076,41 @@ async def test_11_replayed_conflicting_and_forged_usage_cannot_change_the_ledger
         )
     ).status_code == 403
     assert (await post(None, {"run_id": full.run_id, "events": proj})).status_code == 401
+    # a log that CLAIMS results for actions the gate denied is billed nothing (the service joins every result to an ALLOW decision)
+    stamp = datetime.now(UTC).isoformat()
+
+    def synthetic(tenant: str, run: str, decision: str) -> list[dict[str, Any]]:
+        def ev(seq: int, typ: str, data: dict[str, Any], pid: str | None = "p1") -> dict[str, Any]:
+            return {"run_id": run, "seq": seq, "ts": stamp, "type": typ, "pid": pid, "data": data}
+
+        return [
+            ev(1, "run_started", {"tenant_id": tenant}, None),
+            ev(2, "process_spawned", {"agent": "claims"}),
+            ev(3, "gate_decision", {"action_id": "x1", "decision": decision, "enforcement_point": "model_call"}),
+            ev(4, "model_call", {"action_id": "x1", "provider": "openai", "model": "gpt-4o", "input_tokens": 1000, "output_tokens": 1000, "cached_tokens": 0}),
+            ev(5, "gate_decision", {"action_id": "x2", "decision": decision, "enforcement_point": "tool_call"}),
+            ev(6, "tool_call_result", {"action_id": "x2", "enforcement_point": "tool_call", "ok": True}),
+        ]  # fmt: skip
+
+    denied = await post(
+        a.ingest_token,
+        {"run_id": "run-denied-claims", "events": synthetic(a.id, "run-denied-claims", "DENY")},
+    )
+    assert (
+        denied.status_code == 200
+        and denied.json()["records"] == 0
+        and len(denied.json()["skipped"]) == 2
+    )
+    # and a whole log forged for tenant B, posted with A's credential and naming B in the body, bills nobody
+    r = await post(
+        a.ingest_token,
+        {
+            "tenant_id": b.id,
+            "run_id": "run-forged-b",
+            "events": synthetic(b.id, "run-forged-b", "ALLOW"),
+        },
+    )
+    assert r.status_code == 403
     # none of it changed anything
     assert (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"] == before
     assert (await stack.ops("billing/totals", tenant_id=b.id, period=period))["totals"] == []
