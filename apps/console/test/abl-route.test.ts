@@ -20,7 +20,7 @@ function req(
     },
     body,
     ...(duplex ? { duplex: "half" } : {}),
-  } as RequestInit);
+  } as ConstructorParameters<typeof NextRequest>[1]);
 }
 
 describe("POST /api/abl/validate", () => {
