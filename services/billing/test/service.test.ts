@@ -465,6 +465,15 @@ describe("adjustments", () => {
     expect((await ledger.totals(T, "2026-09"))[0]?.quantity).toBe(500n);
   });
 
+  it("accepts an adjustment without dimensions or a corrected key", async () => {
+    const { api } = setup();
+    const { dimensions: _d, ...bare } = req;
+    void _d;
+    expect(
+      (await api.adjust({ ...bare, meter: "voice_minutes", idempotencyKey: "bare" })).status,
+    ).toBe("inserted");
+  });
+
   it("requires a reason and an actor, and applies nothing when the audit append fails", async () => {
     const { ledger, api } = setup();
     await expect(api.adjust({ ...req, reason: " " })).rejects.toBeInstanceOf(BillingError);

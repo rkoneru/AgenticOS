@@ -308,6 +308,29 @@ describe("stripe adapter requests", () => {
     ).rejects.toThrow(/out of range/);
   });
 
+  it("reads an invoice that has no lines or description", async () => {
+    const { p } = mk(() =>
+      ok({
+        id: "in_9",
+        customer: CUS,
+        currency: "usd",
+        total: 0,
+        lines: { data: [{ amount: 0 }] },
+      }),
+    );
+    expect(await p.getInvoice("in_9")).toEqual({
+      id: "in_9",
+      customerId: CUS,
+      periodId: "",
+      status: "draft",
+      currency: "usd",
+      totalMinor: 0n,
+      lines: [{ description: "", amountMinor: 0n }],
+    });
+    const { p: p2 } = mk(() => ok({ id: "in_8", customer: CUS, currency: "usd", total: 0 }));
+    expect((await p2.getInvoice("in_8")).lines).toEqual([]);
+  });
+
   it("maps provider errors and garbage to PROVIDER_ERROR without leaking the body", async () => {
     const { p } = mk(() => ({
       status: 402,

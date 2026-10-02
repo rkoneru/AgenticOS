@@ -308,3 +308,36 @@ describe("analytics fanout", () => {
     expect((await quiet.append(usage(T))).status).toBe("inserted");
   });
 });
+
+describe("emitter edge cases", () => {
+  it("bills events without a pid or agent, a missing cached count, and a result without an enforcement point", () => {
+    const events = [
+      ...start(),
+      ev("voice_call", { call_id: "c9", phase: "ended", duration_ms: 1000 }, { pid: null }),
+      gate("a1", "ALLOW"),
+      ev("model_call", {
+        action_id: "a1",
+        provider: "p",
+        model: "m",
+        input_tokens: 10,
+        output_tokens: 0,
+      }),
+      ev("tool_call_result", { action_id: "a1", ok: true }),
+      ev("process_spawned", { agent: "x" }, { pid: "p9" }),
+      gate("a2", "ALLOW"),
+      ev(
+        "model_call",
+        { action_id: "a2", provider: "p", model: "m", input_tokens: 1, output_tokens: 1 },
+        { pid: "p-unknown" },
+      ),
+    ];
+    const r = mapRunEvents(events, { tenantId: T });
+    expect(r.records.map((x) => [x.meter, x.quantity, x.dimensions?.["agent"]])).toEqual([
+      ["voice_minutes", 1000n, undefined],
+      ["tokens_in", 10n, "support"],
+      ["tokens_in", 1n, undefined],
+      ["tokens_out", 1n, undefined],
+    ]);
+    expect(r.skipped.map((s) => s.reason)).toEqual(["not a tool execution"]);
+  });
+});
