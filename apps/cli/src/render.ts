@@ -25,9 +25,10 @@ export function paint(style: Style, kind: keyof Omit<typeof ANSI, "reset">, text
 }
 
 // C0/C1 controls (ESC, BEL, CSI 0x9b, ...), line/paragraph separators, soft hyphen, zero-width and bidi-control characters.
-// eslint-disable-next-line no-control-regex
+/* eslint-disable no-control-regex */
 const UNSAFE_TEXT =
   /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u206f\ufeff]/g;
+/* eslint-enable no-control-regex */
 
 /**
  * Text that came from the server (a publisher's listing title, an error detail, an event type) shown in a terminal. Escape sequences

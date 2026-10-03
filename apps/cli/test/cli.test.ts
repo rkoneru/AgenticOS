@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- the inert-text tests look for control characters on purpose */
 import {
   chmodSync,
   existsSync,
@@ -599,7 +600,6 @@ describe("commands", () => {
     for (const r of [show, search]) {
       expect(r.code).toBe(0);
       // no control character other than the newline that separates rows, no bidi override, no zero-width character
-      // eslint-disable-next-line no-control-regex
       expect(r.out.replace(/\n/g, "")).not.toMatch(
         /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/,
       );
@@ -613,7 +613,6 @@ describe("commands", () => {
         },
       },
     });
-    // eslint-disable-next-line no-control-regex
     expect(bad.err).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
   });
   it("a signing key readable by group or others is refused, like ssh", async () => {
