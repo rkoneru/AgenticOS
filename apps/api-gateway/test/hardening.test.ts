@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OpaCliPolicyTester } from "../src/index.js";
 import { clientAddress } from "../src/limits.js";
-import { POLICY, call, makeWorld } from "./world.js";
+import { LISTED_ABL, POLICY, call, makeWorld, seedListing, signedBundle } from "./world.js";
 import { FakeRuns } from "./fakes.js";
 import type { RunDto, StartRun } from "../src/index.js";
 
@@ -199,6 +199,48 @@ describe("an Idempotency-Key survives a gateway timeout", () => {
     expect(replay.status, replay.text).toBe(202);
     expect(replay.headers.get("idempotent-replayed")).toBe("true");
     expect(runs.starts).toHaveLength(1);
+    await w.close();
+  });
+});
+
+describe("a listed namespace publishes the reviewed version, not the publisher's other work", () => {
+  it("another tenant cannot read a never-submitted blueprint, or a version published after the review, of a public namespace", async () => {
+    const w = await makeWorld({
+      rate: { burst: 1e6, perSecond: 1e6 },
+      unauthRate: { burst: 1e6, perSecond: 1e6 },
+    });
+    const l = await seedListing(w);
+    const publish = async (name: string, version: string, prompt: string) => {
+      const abl = LISTED_ABL(name, version) as { spec: { instructions: { system: string } } };
+      abl.spec.instructions.system = prompt;
+      const b = signedBundle(l.publisher, abl as never);
+      const sig = b.signature as { key_id: string; signed_at: string; sig: string };
+      await w.registry.publish(l.publisher.admin, l.publisher.namespace, {
+        abl: b.abl,
+        signature: { keyId: sig.key_id, signedAt: sig.signed_at, sig: sig.sig },
+        provenance: b.provenance as never,
+      });
+    };
+    await publish("secret-agent", "1.0.0", "INTERNAL ONLY: proprietary prompt");
+    await publish(l.name, "1.1.0", "unreviewed update");
+    const other = await w.tenant();
+    const ref = (n: string, r: string) =>
+      `/registry/resolve?ref=${encodeURIComponent(`${l.namespace}/${n}@${r}`)}`;
+    expect((await call(w, "GET", ref("secret-agent", "^1"), { token: other.token })).status).toBe(
+      404,
+    );
+    const v = await call(w, "GET", `/registry/blueprints/${l.namespace}/secret-agent/versions`, {
+      token: other.token,
+    });
+    expect(v.body.items).toEqual([]);
+    // the reviewed 1.0.0 resolves; the newer unreviewed 1.1.0 is not what ^1 gives
+    const ok = await call(w, "GET", ref(l.name, "^1"), { token: other.token });
+    expect(ok.status, ok.text).toBe(200);
+    expect(ok.body.version).toBe("1.0.0");
+    const owner = await call(w, "GET", `/registry/blueprints/${l.namespace}/${l.name}/versions`, {
+      token: other.token,
+    });
+    expect(owner.body.items.map((i: { version: string }) => i.version)).toEqual(["1.0.0"]);
     await w.close();
   });
 });

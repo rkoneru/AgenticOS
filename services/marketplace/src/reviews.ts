@@ -300,7 +300,8 @@ export class ReviewService {
   /** Mirrors the approval into the listing (pinned by hash) and makes the namespace publicly readable. Idempotent. */
   private async afterApproval(rv: ReviewRecord): Promise<void> {
     const hash = rv.approvedHash as string;
-    await this.registry().setNamespacePublic(MARKETPLACE_SERVICE, rv.namespace);
+    // Only the reviewed version is released; the namespace's other blueprints and versions stay private (ADR 0055).
+    await this.registry().setVersionPublic(MARKETPLACE_SERVICE, rv.namespace, rv.name, rv.version);
     const lk = `${rv.namespace}/${rv.name}`;
     const l = await this.c.docs.get<ListingRecord>(PLATFORM, rv.publisherTenantId, "listings", lk);
     if (!l) return; // the publisher has not created a listing yet; createListing() lists approved versions then

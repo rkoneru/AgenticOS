@@ -430,9 +430,33 @@ describe.each(makes)("registry service (%s store)", (_n, make) => {
         code: "not_found",
       });
       await h.svc.setNamespacePublic(platform, a.namespace);
+      // the namespace alone releases no blueprint
+      await expect(
+        h.svc.resolve({ tenantId: bTenant }, `${a.namespace}/helper-agent@^1.0.0`),
+      ).rejects.toMatchObject({ code: "not_found" });
+      await a.publish(ablDoc("helper-agent", "1.1.0"));
+      await a.publish(ablDoc("private-agent", "1.0.0"));
+      await expect(
+        h.svc.setVersionPublic(
+          { ...platform, service: "other" } as never,
+          a.namespace,
+          "helper-agent",
+          "1.0.0",
+        ),
+      ).rejects.toMatchObject({ code: "forbidden" });
+      await expect(
+        h.svc.setVersionPublic(a.p as never, a.namespace, "helper-agent", "1.0.0"),
+      ).rejects.toMatchObject({ code: "forbidden" });
+      await expect(
+        h.svc.setVersionPublic(platform, a.namespace, "helper-agent", "9.9.9"),
+      ).rejects.toMatchObject({ code: "not_found" });
+      await h.svc.setVersionPublic(platform, a.namespace, "helper-agent", "1.0.0");
       expect(
         (await h.svc.resolve({ tenantId: bTenant }, `${a.namespace}/helper-agent@^1.0.0`)).version,
-      ).toBe("1.0.0");
+      ).toBe("1.0.0"); // 1.1.0 is newer but was never released
+      await expect(
+        h.svc.resolve({ tenantId: bTenant }, `${a.namespace}/private-agent@^1.0.0`),
+      ).rejects.toMatchObject({ code: "not_found" });
       expect(
         (await h.svc.resolve({ tenantId: null }, `${a.namespace}/helper-agent@^1.0.0`)).version,
       ).toBe("1.0.0");
@@ -580,7 +604,7 @@ describe.each(makes)("registry service (%s store)", (_n, make) => {
       await expect(a.publish(dep(`${other.namespace}/secret-agent@^1.0.0`))).rejects.toMatchObject({
         code: "invalid",
       }); // not visible to A
-      await h.svc.setNamespacePublic(platform, other.namespace);
+      await h.svc.setVersionPublic(platform, other.namespace, "secret-agent", "1.0.0");
       await h.svc.setNamespacePublic(platform, a.namespace);
       await a.publish(dep(`${other.namespace}/secret-agent@^1.0.0`)); // other is public now: fine
       await expect(

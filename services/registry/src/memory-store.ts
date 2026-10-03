@@ -16,6 +16,7 @@ const k = (...p: string[]): string => p.join("\u0000");
 export class MemoryRegistryStore implements RegistryStore {
   private ns = new Map<string, NamespaceRecord>();
   private pub = new Set<string>();
+  private pubVersions = new Set<string>(); // ns\0name\0version
   private keys = new Map<string, PublisherKey>();
   private names = new Map<string, { tenantId: string; normalized: string }>(); // ns\0name
   private versions = new Map<string, VersionRecord>();
@@ -23,6 +24,12 @@ export class MemoryRegistryStore implements RegistryStore {
 
   private visible(viewer: Viewer, namespace: string, owner: string): boolean {
     return this.pub.has(namespace) || (viewer.tenantId !== null && viewer.tenantId === owner);
+  }
+  private versionVisible(viewer: Viewer, r: VersionRecord): boolean {
+    return (
+      (viewer.tenantId !== null && viewer.tenantId === r.tenantId) ||
+      this.pubVersions.has(k(r.namespace, r.name, r.version))
+    );
   }
   private nsOf(namespace: string): NamespaceRecord | undefined {
     const n = this.ns.get(namespace);
@@ -60,6 +67,18 @@ export class MemoryRegistryStore implements RegistryStore {
     if (!n || n.tenantId !== tenantId)
       return Promise.reject(new StoreForbidden("not the namespace owner"));
     this.pub.add(namespace);
+    return Promise.resolve();
+  }
+  setVersionPublic(
+    tenantId: string,
+    namespace: string,
+    name: string,
+    version: string,
+  ): Promise<void> {
+    const rec = this.versions.get(k(namespace, name, version));
+    if (!rec || rec.tenantId !== tenantId)
+      return Promise.reject(new StoreForbidden("not the version owner"));
+    this.pubVersions.add(k(namespace, name, version));
     return Promise.resolve();
   }
   listPublicNamespaces(): Promise<NamespaceRecord[]> {
@@ -144,16 +163,12 @@ export class MemoryRegistryStore implements RegistryStore {
     version: string,
   ): Promise<VersionRow | undefined> {
     const rec = this.versions.get(k(ns, name, version));
-    return Promise.resolve(
-      rec && this.visible(viewer, ns, rec.tenantId) ? this.row(rec) : undefined,
-    );
+    return Promise.resolve(rec && this.versionVisible(viewer, rec) ? this.row(rec) : undefined);
   }
   listVersions(viewer: Viewer, ns: string, name: string): Promise<VersionRow[]> {
     return Promise.resolve(
       [...this.versions.values()]
-        .filter(
-          (r) => r.namespace === ns && r.name === name && this.visible(viewer, ns, r.tenantId),
-        )
+        .filter((r) => r.namespace === ns && r.name === name && this.versionVisible(viewer, r))
         .map((r) => this.row(r)),
     );
   }
@@ -161,7 +176,9 @@ export class MemoryRegistryStore implements RegistryStore {
     const out: string[] = [];
     for (const [key, v] of this.names) {
       const [n, name] = key.split("\u0000") as [string, string];
-      if (n === ns && this.visible(viewer, ns, v.tenantId)) out.push(name);
+      const released = [...this.pubVersions].some((p) => p.startsWith(`${ns}\u0000${name}\u0000`));
+      if (n === ns && ((viewer.tenantId !== null && viewer.tenantId === v.tenantId) || released))
+        out.push(name);
     }
     return Promise.resolve(out.sort());
   }
@@ -174,7 +191,7 @@ export class MemoryRegistryStore implements RegistryStore {
   }
   events(viewer: Viewer, ns: string, name: string, version: string): Promise<VersionEvent[]> {
     const rec = this.versions.get(k(ns, name, version));
-    if (!rec || !this.visible(viewer, ns, rec.tenantId)) return Promise.resolve([]);
+    if (!rec || !this.versionVisible(viewer, rec)) return Promise.resolve([]);
     return Promise.resolve(
       this.evs.filter((e) => e.namespace === ns && e.name === name && e.version === version),
     );

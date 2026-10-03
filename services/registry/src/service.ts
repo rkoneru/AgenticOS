@@ -240,6 +240,31 @@ export class RegistryService {
     );
   }
 
+  /**
+   * Marketplace only: one reviewed version becomes readable by every tenant (and the namespace, with its keys, so a reader can verify
+   * it). Nothing else in the namespace is released: other blueprints and later versions stay private until they are released too.
+   */
+  async setVersionPublic(
+    p: PlatformPrincipal,
+    namespace: string,
+    name: string,
+    version: string,
+  ): Promise<void> {
+    requirePlatform(p);
+    const owner = await this.store.ownerOf(namespace);
+    if (!owner) throw notFound("namespace not found");
+    if (!(await this.store.getVersion({ tenantId: owner }, namespace, name, version)))
+      throw notFound("version not found");
+    await this.setNamespacePublic(p, namespace);
+    await this.mutate(
+      owner,
+      p.subject,
+      "registry.version.publish",
+      { namespace, name, version },
+      () => this.store.setVersionPublic(owner, namespace, name, version, p.subject, this.now()),
+    );
+  }
+
   // ---------------------------------------------------------------- keys
   private async ownedNamespace(p: TenantPrincipal, namespace: string): Promise<NamespaceRecord> {
     const ns = await this.store.getNamespace({ tenantId: p.tenantId }, namespace);
@@ -529,8 +554,10 @@ export class RegistryService {
       throw e;
     }
     if (needPublic) {
-      const n = await this.store.getNamespace({ tenantId: null }, dep.namespace);
-      if (!n?.public) throw invalid(`dependency ${key} is not in a public namespace`);
+      // What an anonymous reader would resolve for this range must be the very version the publisher resolved (a released one).
+      const anon = await this.resolve({ tenantId: null }, dep).catch(() => undefined);
+      if (anon?.version !== res.version)
+        throw invalid(`dependency ${key} is not in a public namespace (no released version)`);
     }
     for (const r of collectReferences(res.abl))
       if (r.registry) await this.walk(viewer, parseRef(r.ref), needPublic, self, seen, depth + 1);

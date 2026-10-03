@@ -149,8 +149,13 @@ export class ListingService {
             ),
           "listing",
         );
-        if (approved.length)
-          await this.c.registry.setNamespacePublic(MARKETPLACE_SERVICE, input.namespace);
+        for (const a of approved)
+          await this.c.registry.setVersionPublic(
+            MARKETPLACE_SERVICE,
+            input.namespace,
+            input.name,
+            a.version,
+          );
         return rec;
       },
     );

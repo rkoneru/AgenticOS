@@ -185,6 +185,31 @@ export class PgRegistryStore implements RegistryStore {
       PgRegistryStore.rls(err);
     }
   }
+  async setVersionPublic(
+    tenantId: string,
+    namespace: string,
+    name: string,
+    version: string,
+    listedBy: string,
+    at: Date,
+  ): Promise<void> {
+    try {
+      await this.tx(tenantId, async (c) => {
+        const own = await c.query(
+          "SELECT 1 FROM registry_versions WHERE namespace = $1 AND name = $2 AND version = $3 AND tenant_id = $4",
+          [namespace, name, version, tenantId],
+        );
+        if (own.rowCount === 0) throw new StoreForbidden("not the version owner");
+        await c.query(
+          "INSERT INTO registry_public_versions (namespace, name, version, tenant_id, listed_at, listed_by) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING",
+          [namespace, name, version, tenantId, at, listedBy],
+        );
+      });
+    } catch (err) {
+      if (err instanceof StoreForbidden) throw err;
+      PgRegistryStore.rls(err);
+    }
+  }
   async listPublicNamespaces(): Promise<NamespaceRecord[]> {
     const r = await this.tx(null, (c) =>
       c.query<NsRow>(

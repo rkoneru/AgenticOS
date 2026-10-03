@@ -27,6 +27,7 @@ describe("migration runner", () => {
       "0009_control_plane",
       "0010_registry",
       "0011_marketplace",
+      "0012_registry_public_versions",
     ]);
     for (const x of m) expect(x.checksum).toMatch(/^[0-9a-f]{64}$/);
   });

@@ -35,6 +35,18 @@ export interface RegistryStore {
   /** Idempotent. Only the owner tenant's context may do this; the SERVICE restricts it to the marketplace. */
   setPublic(tenantId: string, namespace: string, listedBy: string, at: Date): Promise<void>;
   listPublicNamespaces(): Promise<NamespaceRecord[]>;
+  /**
+   * Releases ONE version (name, versions and events included) to every reader. Idempotent; owner context only. A namespace that is
+   * public publishes its record and keys, never its blueprints: a non-owner sees only released versions (ADR 0055).
+   */
+  setVersionPublic(
+    tenantId: string,
+    namespace: string,
+    name: string,
+    version: string,
+    listedBy: string,
+    at: Date,
+  ): Promise<void>;
 
   addKey(key: PublisherKey): Promise<void>;
   getKeys(viewer: Viewer, namespace: string): Promise<PublisherKey[]>;
