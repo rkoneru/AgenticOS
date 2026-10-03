@@ -1120,7 +1120,9 @@ async def test_11_replayed_conflicting_and_forged_usage_cannot_change_the_ledger
     assert r.status_code == 403
     # none of it changed anything
     assert (await stack.ops("billing/totals", tenant_id=a.id, period=period))["totals"] == before
-    assert only_runtime((await stack.ops("billing/totals", tenant_id=b.id, period=period))["totals"])
+    assert only_runtime(
+        (await stack.ops("billing/totals", tenant_id=b.id, period=period))["totals"]
+    )
 
 
 def next_month_start() -> datetime:
