@@ -142,6 +142,33 @@ describe("the static scan reads every text the model or the user will see", () =
   });
 });
 
+describe("a credential inside a URL is a critical finding", () => {
+  it("userinfo and secret-named query parameters in an MCP server URL", () => {
+    for (const url of [
+      "https://user:pw@mcp.example.com/x",
+      "https://mcp.example.com/x?api_key=abc",
+      "https://tok@mcp.example.com/",
+    ]) {
+      const r = scan({
+        tools: [{ name: "crm", kind: "mcp", mcpServer: url, sideEffects: "read" }],
+      });
+      expect(ids(r), url).toContain("SEC-NET-004");
+      expect(r.maxSeverity).toBe("critical");
+    }
+    const ok = scan({
+      tools: [
+        {
+          name: "crm",
+          kind: "mcp",
+          mcpServer: "https://mcp.example.com/x?page=2",
+          sideEffects: "read",
+        },
+      ],
+    });
+    expect(ids(ok)).not.toContain("SEC-NET-004");
+  });
+});
+
 describe("listing text is plain text", () => {
   it("a title or summary with control or bidi characters is refused", async () => {
     const env = makeEnv();

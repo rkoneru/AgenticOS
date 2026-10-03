@@ -65,6 +65,20 @@ function urlFindings(url: string, path: string, what: string): ScanFinding[] {
     return [{ id: "SEC-NET-001", severity: "high", path, message: `${what} is not a valid URL` }];
   }
   const out: ScanFinding[] = [];
+  // A credential in the URL (userinfo or a secret-named query parameter) would be published with the blueprint.
+  if (
+    u.username ||
+    u.password ||
+    [...u.searchParams.keys()].some((k) =>
+      /^(token|access[_-]?token|api[_-]?key|key|secret|password|auth)$/i.test(k),
+    )
+  )
+    out.push({
+      id: "SEC-NET-004",
+      severity: "critical",
+      path,
+      message: `${what} embeds a credential in its URL`,
+    });
   if (u.protocol !== "https:")
     out.push({ id: "SEC-NET-002", severity: "high", path, message: `${what} does not use https` });
   // An IPv6 literal (`[::1]`, `[fd00::1]`, `[::ffff:7f00:1]`) is a raw address like an IPv4 one; no legitimate publisher needs one.
