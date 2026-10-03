@@ -32,7 +32,7 @@ Scan finding ids (stable): `SEC-LINT-*`, `SEC-TOOL-001/002` (external/write side
 
 Decision rules: reviewer is staff and not the submitter / a member of the publisher tenant / anyone who acted for the publisher; note of 10-2000
 characters; approve needs: no critical finding, all high finding ids in `acknowledged`, publisher still verified, registry version re-verified
-and its content hash equal to the reviewed hash. On approval the namespace becomes public in the registry and the version is added to the listing's
+and its content hash equal to the reviewed hash. On approval that one version is released in the registry (the namespace record and keys become public, nothing else in it) and the version is added to the listing's
 `approved[]` pinned to that hash.
 
 ## 4. Listings and the catalog
