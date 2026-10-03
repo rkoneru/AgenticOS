@@ -5,7 +5,7 @@ import {
   generateKeyPairSync,
   type KeyObject,
 } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { compileAbl, formatFindings, formatIssues } from "@axis/abl";
 import { ablContentHash, buildStatement, signBlueprint, signStatement } from "@axis/registry";
 import type { InstallPreview, SignedBundle } from "@axis/sdk";
@@ -28,6 +28,18 @@ function emit(ctx: Ctx, data: unknown, human: () => string): void {
   ctx.out(ctx.format === "table" ? human() : JSON.stringify(data, null, 2));
 }
 
+/** Like ssh: a signing key other users can read is refused (it signs for the whole namespace). */
+function refuseSharedKeyFile(path: string): void {
+  if (process.platform === "win32") return;
+  const mode = statSync(path).mode & 0o777;
+  if ((mode & 0o077) !== 0)
+    throw new CliError(
+      `key file ${path} is accessible by other users (mode ${mode.toString(8)})`,
+      EXIT.AUTH,
+      [`run: chmod 600 ${path}`],
+    );
+}
+
 function readPemKey(path: string): KeyObject {
   let text: string;
   try {
@@ -38,8 +50,10 @@ function readPemKey(path: string): KeyObject {
   try {
     const k = createPrivateKey(text);
     if (k.asymmetricKeyType !== "ed25519") throw new Error("not ed25519");
+    refuseSharedKeyFile(path);
     return k;
-  } catch {
+  } catch (e) {
+    if (e instanceof CliError) throw e;
     // never echo key material: say what is wrong with the FILE, not what is in it
     throw new CliError(`${path} is not an Ed25519 private key in PEM (PKCS#8) form`);
   }

@@ -616,6 +616,28 @@ describe("commands", () => {
     // eslint-disable-next-line no-control-regex
     expect(bad.err).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
   });
+  it("a signing key readable by group or others is refused, like ssh", async () => {
+    const dir = tmp();
+    const keyFile = join(dir, "pub.pem");
+    expect((await axis(["registry", "keygen", "--out", keyFile])).code).toBe(0);
+    const abl = join(dir, "agent.yaml");
+    writeFileSync(
+      abl,
+      readFileSync(
+        new URL("../../../packages/abl/examples/valid/minimal.yaml", import.meta.url),
+        "utf8",
+      ),
+    );
+    chmodSync(keyFile, 0o644);
+    const r = await axis(["registry", "sign", abl, "--namespace", "acme", "--key", keyFile]);
+    expect(r.code).toBe(EXIT.AUTH);
+    expect(r.err).toContain("accessible by other users");
+    expect(r.err).toContain("chmod 600");
+    chmodSync(keyFile, 0o600);
+    expect(
+      (await axis(["registry", "sign", abl, "--namespace", "acme", "--key", keyFile])).code,
+    ).toBe(0);
+  });
   it("registry keygen/sign/publish: the private key stays in its 0600 file, never in output", async () => {
     const dir = tmp();
     const keyFile = join(dir, "pub.pem");
