@@ -112,8 +112,6 @@ export const timeout = (): ApiError =>
     "internal",
     "the request exceeded its time budget",
   );
-export const notImplemented = (detail: string): ApiError =>
-  new ApiError(501, "not_implemented", "Not implemented", undefined, detail);
 export const internal = (): ApiError =>
   new ApiError(500, "internal", "Internal error", "internal", "internal error");
 
