@@ -139,7 +139,7 @@ rows:
     mechanism: >-
       The AI system inventory records purpose, owner, risk level, data categories and stakeholders per system and version; blueprints
       declare data and residency; the audit chain records what ran.
-    code: [services/compliance/src/records/inventory.ts, packages/db/migrations/0016_compliance.sql]
+    code: [services/compliance/src/records/inventory.ts, packages/db/migrations/0014_compliance.sql]
     config: []
     evidence:
       - { kind: test, ref: services/compliance/test/records.test.ts }

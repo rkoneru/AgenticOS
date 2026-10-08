@@ -166,7 +166,7 @@ rows:
       Versioned impact assessment records with affected groups, risks, mitigations, a review date, an independent approver and
       overdue detection; each mutation is in the audit chain.
     code:
-      [services/compliance/src/records/assessments.ts, packages/db/migrations/0016_compliance.sql]
+      [services/compliance/src/records/assessments.ts, packages/db/migrations/0014_compliance.sql]
     config: []
     evidence:
       - { kind: make, ref: e2e-compliance }
