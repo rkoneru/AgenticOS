@@ -872,6 +872,192 @@ Uninstall a listing (admin)
 axis marketplace uninstall <namespace>/<name> [options]
 ```
 
+### `axis compliance systems list`
+
+List AI systems (latest version of each)
+
+```
+axis compliance systems list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--risk-level <level>` | Only this risk level |
+| `--stage <stage>` | Only this lifecycle stage |
+
+### `axis compliance systems get`
+
+Show one AI system record
+
+```
+axis compliance systems get <system-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--revision <n>` | An earlier version (default: the latest) |
+
+### `axis compliance systems create`
+
+Register an AI system
+
+```
+axis compliance systems create [options]
+```
+
+The file holds name, purpose, owner, risk_level and optionally system_id, lifecycle_stage, blueprints, data_categories, stakeholders.
+
+| Option | Description |
+| --- | --- |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis compliance systems update`
+
+Change an AI system (a new version; nothing is deleted)
+
+```
+axis compliance systems update <system-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--expected-version <n>` | The version you read; a stale one is a conflict (exit 1) |
+
+### `axis compliance assessments list`
+
+List impact assessments (latest version of each)
+
+```
+axis compliance assessments list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--system <system-id>` | Only this system |
+| `--state <state>` | Only this state |
+| `--overdue` | Only assessments that are overdue |
+
+### `axis compliance assessments get`
+
+Show one impact assessment
+
+```
+axis compliance assessments get <assessment-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--revision <n>` | An earlier version (default: the latest) |
+
+### `axis compliance assessments create`
+
+Start an impact assessment (a draft)
+
+```
+axis compliance assessments create [options]
+```
+
+The file holds system_id, title, risk_rating, intended_use, review_due (YYYY-MM-DD) and optionally blueprints, affected_groups, risks, stakeholders.
+
+| Option | Description |
+| --- | --- |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis compliance assessments revise`
+
+Edit the draft, or start the next version of a reviewed assessment
+
+```
+axis compliance assessments revise <assessment-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--expected-version <n>` | The version you read; a stale one is a conflict (exit 1) |
+
+### `axis compliance assessments submit`
+
+Submit a draft for review
+
+```
+axis compliance assessments submit <assessment-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--expected-version <n>` | The version you read; a stale one is a conflict (exit 1) |
+
+### `axis compliance assessments withdraw`
+
+Take a submitted assessment back to draft
+
+```
+axis compliance assessments withdraw <assessment-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--expected-version <n>` | The version you read; a stale one is a conflict (exit 1) |
+
+### `axis compliance assessments review`
+
+Approve or reject a submitted assessment (never your own work)
+
+```
+axis compliance assessments review <assessment-id> [options]
+```
+
+The reviewer is never the author, a contributor or the member who submitted the version. A rejection needs a comment.
+
+| Option | Description |
+| --- | --- |
+| `--expected-version <n>` | The version you read; a stale one is a conflict (exit 1) |
+| `--decision <decision>` | approve or reject |
+| `--comment <text>` | Review comment |
+
+### `axis compliance documents generate`
+
+Assemble and seal the technical documentation of a blueprint version
+
+```
+axis compliance documents generate <name@version> [options]
+```
+
+Reads this tenant's records only. What cannot be read is listed in the document as a gap. Unchanged sources return the latest version.
+
+| Option | Description |
+| --- | --- |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis compliance documents list`
+
+List generated documents
+
+```
+axis compliance documents list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--blueprint <name[@version]>` | Only this blueprint |
+
+### `axis compliance documents get`
+
+Show a document and verify its hash, Markdown and seal (exit 1 if they do not verify)
+
+```
+axis compliance documents get <document-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--markdown` | Print (or write) the Markdown rendering |
+| `--out <path>` | Write the document to a file |
+
 ### `axis api`
 
 Call any API operation by operationId
