@@ -357,3 +357,31 @@ def scored(grader: GraderSpec, passed: bool, detail: str = "") -> Grade:
 
 def errored(grader: GraderSpec, detail: str) -> Grade:
     return Grade(grader.id, grader.kind, "error", 0.0, detail)
+
+
+@dataclass(frozen=True)
+class OnlineConfig:
+    """Online sampling configuration: ``{blueprint, suite, rate, max_per_hour, redaction}``."""
+
+    blueprint: str
+    suite_ref: str
+    rate: float
+    max_per_hour: int
+    redaction: str = "phi"  # phi: redact when the blueprint/run is PHI; always: redact everything
+
+    @classmethod
+    def from_wire(cls, raw: object) -> OnlineConfig:
+        o = _obj(raw, "online")
+        max_per_hour = o.get("max_per_hour")
+        if isinstance(max_per_hour, bool) or not isinstance(max_per_hour, int) or max_per_hour < 0:
+            raise WireError("online.max_per_hour: expected a non-negative integer")
+        redaction = o.get("redaction", "phi")
+        if redaction not in ("phi", "always"):
+            raise WireError("online.redaction: expected phi or always")
+        return cls(
+            blueprint=_str(o, "blueprint", "online"),
+            suite_ref=_str(o, "suite_ref", "online", pattern=REF_RE),
+            rate=_unit(o, "rate", "online"),
+            max_per_hour=max_per_hour,
+            redaction=redaction,
+        )

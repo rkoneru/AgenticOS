@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from axis_runtime.evals.types import (
     CaseTrace,
@@ -94,3 +95,40 @@ def trace_from_events(events: Sequence[RunEvent], *, trace_id: str = "") -> Case
 def _meta_trace_id(events: Sequence[RunEvent]) -> str:
     first = events[0].data.get("trace_id") if events else None
     return first if isinstance(first, str) else ""
+
+
+def trace_wire(t: CaseTrace) -> dict[str, Any]:
+    return {
+        "run_id": t.run_id,
+        "trace_id": t.trace_id,
+        "exit_reason": t.exit_reason,
+        "events_hash": t.events_hash,
+        "event_count": t.event_count,
+        "latency_ms": t.latency_ms,
+        "tokens": t.tokens,
+        "cost_usd": t.cost_usd,
+        "tool_calls": [
+            {"name": c.name, "ok": c.ok, "result_sha256": c.result_sha256, "error": c.error}
+            for c in t.tool_calls
+        ],
+        "gate_decisions": [
+            {
+                "action": d.action,
+                "enforcement_point": d.enforcement_point,
+                "decision": d.decision,
+                "reason": d.reason,
+            }
+            for d in t.gate_decisions
+        ],
+        "model_calls": [
+            {
+                "provider": m.provider,
+                "model": m.model,
+                "input_tokens": m.input_tokens,
+                "output_tokens": m.output_tokens,
+                "cost_micro_usd": m.cost_micro_usd,
+                "latency_ms": m.latency_ms,
+            }
+            for m in t.model_calls
+        ],
+    }

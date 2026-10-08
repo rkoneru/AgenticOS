@@ -39,7 +39,7 @@ from typing import Any
 
 from axis_runtime.evals.jsonschema_lite import SchemaError, validate
 from axis_runtime.evals.types import CaseTrace, EvalCase, Grade, GraderSpec, errored, scored
-from axis_runtime.nexus.rules import UnsafePatternError, compile_safe
+from axis_runtime.regex_guard import UnsafePatternError, compile_safe
 
 MAX_MATCH_CHARS = 100_000
 _NUMBER = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")

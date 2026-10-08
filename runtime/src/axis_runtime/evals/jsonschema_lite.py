@@ -12,7 +12,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from axis_runtime.nexus.rules import UnsafePatternError, compile_safe
+from axis_runtime.regex_guard import UnsafePatternError, compile_safe
 
 MAX_DEPTH = 24
 MAX_ERRORS = 10

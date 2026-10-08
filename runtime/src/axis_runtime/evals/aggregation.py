@@ -8,13 +8,15 @@ bit-identical results:
 * cases are visited in ascending case id (ASCII, see ``types.ID_RE``), graders in suite order;
 * a grade that is not ``scored`` (ungraded, error, missing) counts as 0.0 (fail closed), never as
   "excluded": a judge that cannot answer must not raise the mean by shrinking the denominator;
+* a case whose run never produced a trace (infrastructure failure after retries) is listed in
+  ``errored``: it scores 0 everywhere AND the run cannot pass (``errored_cases`` failure);
 * ``pending`` (a human grade is outstanding) makes the whole aggregate ``pending_human``;
 * outputs are rounded half-up to 6 decimals with ``floor(x * 1e6 + 0.5) / 1e6``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -70,6 +72,7 @@ def aggregate(
     *,
     pass_threshold: float,
     min_case_score: float | None = None,
+    errored: Collection[str] = frozenset(),
 ) -> Aggregate:
     """``grades[case_id][grader_id]`` -> ``Aggregate``.
 
@@ -87,6 +90,8 @@ def aggregate(
         if unknown:
             raise AggregationError("grade for a grader the suite does not declare")
     case_ids = sorted(grades)
+    if not set(errored) <= set(grades):
+        raise AggregationError("errored case is not in the results")
 
     if any(row[g].status == "pending" for row in grades.values() for g in row):
         return Aggregate("pending_human", None)
@@ -132,6 +137,8 @@ def aggregate(
     for g in graders:
         if g.min_mean is not None and per_grader[g.id] < g.min_mean:
             failures.append(f"grader_min_mean:{g.id}")
+    if errored:
+        failures.append(f"errored_cases:{','.join(sorted(errored)[:5])}")
     return Aggregate(
         "complete", overall, per_grader, per_case, not failures, tuple(failures), ungraded
     )
