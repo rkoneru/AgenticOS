@@ -1,4 +1,4 @@
-.PHONY: e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -108,8 +108,26 @@ e2e-phase7:
 # Everything Phase 7 adds on top of the core loops: the three non-browser clients, then the console (Playwright) on the real stack.
 e2e: e2e-phase7 console-e2e
 
+# Phase 8 exit (evals): blueprint releases are BLOCKED when evals regress and eval history is visible per version, on the REAL stack: Postgres 16,
+# the real Risk Kernel over gRPC (it gates every model call and tool call of an eval, the judge included), the control plane, the registry and
+# marketplace, the Python run service, the API gateway hosting the Eval Hub, and a REAL eval runner process per tenant; the model is a
+# scripted provider (the only fake on the model path). Clients: TS SDK, Python SDK and the `axis` CLI. Same prerequisites as e2e-phase7.
+# The console's evals pages run in `make console-e2e`.
+e2e-phase8:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase8_evals.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
+
+# Eval Hub suites with their CI thresholds, WITHOUT the stack or a live model (the fast subset; `make e2e-phase8` is the end-to-end proof):
+#   - the hub service (services/eval-hub): scoring, gate, integrity, baselines, reviews, runs at >= 95% lines and branches, Postgres stores;
+#   - the runner, graders, judge hardening, online sampler and their architecture tests (runtime/tests/test_evals_*.py) at >= 95%
+#     on axis_runtime/evals, with the shared aggregation and canonical-JSON vectors the hub's tests load too;
+#   - the policy golden cases of the shipped eval-judge pack.
+# Scores come only from executed graders; nothing here calls a model provider.
 evals:
-	@echo "(planned) Phase 8: Eval Hub suites"; exit 1
+	pnpm --filter @axis/eval-hub cov
+	uv run pytest runtime/tests/test_evals_aggregation.py runtime/tests/test_evals_canonical.py runtime/tests/test_evals_edges.py runtime/tests/test_evals_graders.py runtime/tests/test_evals_judge.py runtime/tests/test_evals_runner.py runtime/tests/test_evals_sampler.py runtime/tests/test_evals_sources.py runtime/tests/test_evals_suite.py -q -p no:cacheprovider -o addopts="" --cov=axis_runtime.evals --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=95
+	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../policies/eval-judge
 
 # Compiles policies/**, checks Rego (opa check --strict), proves Wasm builds, runs generated `opa test` cases. Needs `opa` (>= 0.70) on PATH.
 policy-test:

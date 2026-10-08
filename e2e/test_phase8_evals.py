@@ -846,7 +846,7 @@ def test_12_a_tampered_or_replayed_result_is_rejected_by_the_hub(world: World) -
         "evalsRunnersRegister", id="runner-evil", description="a registered runner that lies"
     )
     hub = world.hub("runner-evil")
-    v121, v120 = world.state["v121"], world.state["v120"]
+    v121 = world.state["v121"]
     legit = world.owner.call("evalsRunGet", id=world.state["run121"]["id"])
     gate_before = world.owner.call("evalsGate", blueprint=bp_dict(world, v121))
 
@@ -948,7 +948,6 @@ def test_12_a_tampered_or_replayed_result_is_rejected_by_the_hub(world: World) -
         == 200
     )
     assert world.owner.call("evalsRunGet", id=r1["id"])["status"] == "errored"
-    assert world.owner.call("evalsGate", blueprint=bp_dict(world, v121))["allowed"] is False or True
     world.state["evil_open_run"] = r2["id"]
 
 
