@@ -1,5 +1,5 @@
 import type { Hold } from "./store.js";
-import type { DataClass, Identifier, Protection } from "./types.js";
+import type { DataClass, Identifier } from "./types.js";
 
 export interface SealedGroups {
   groups: Identifier[][];
@@ -35,7 +35,3 @@ export const sameIdentifier = (a: Identifier, b: Identifier): boolean =>
 /** Do two identifier sets describe overlapping people? */
 export const overlaps = (a: readonly Identifier[], b: readonly Identifier[]): boolean =>
   a.some((x) => b.some((y) => sameIdentifier(x, y)));
-
-export function toProtection(groups: Identifier[][]): Protection {
-  return { subjects: groups };
-}

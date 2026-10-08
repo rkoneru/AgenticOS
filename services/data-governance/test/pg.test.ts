@@ -474,6 +474,28 @@ describe("retention purge over real stores", () => {
   });
 });
 
+describe("eval-hub retention purge", () => {
+  it("purges old finished runs, protects runs over held subjects' datasets", async () => {
+    const t = await newTenant(admin);
+    await seedTenant(admin, t);
+    await admin.query("SET session_replication_role = replica"); // owner-only backdating (bypasses the immutability trigger)
+    await admin.query(
+      "UPDATE eval_hub_docs SET data = jsonb_set(data, '{created_at}', to_jsonb((now() - interval '2000 days')::text)) WHERE tenant_id=$1 AND coll='runs'",
+      [t],
+    );
+    await admin.query("SET session_replication_role = origin");
+    const g = build();
+    const p = officer(t);
+    await g.holds.placeHold(p, { scope: "subject", reason: "dispute", groups: [[{ kind: "subject_key", value: BOB.subjectKey }]] });
+    const dry = await g.retention.run(p, { dryRun: true, classes: ["eval_data"] });
+    expect(dry.classes[0]).toMatchObject({ status: "dry_run", matched: 2, purged: 0, protectedByHold: 1 });
+    const rep = await g.retention.run(p, { classes: ["eval_data"] });
+    expect(rep.classes[0]).toMatchObject({ status: "purged", matched: 2, purged: 1, protectedByHold: 1 });
+    const left = (await admin.query("SELECT key FROM eval_hub_docs WHERE tenant_id=$1 AND coll='runs'", [t])).rows.map((r) => r.key);
+    expect(left).toEqual(["run-bob"]);
+  });
+});
+
 describe("PgGovernanceStore contract", () => {
   it("round-trips requests, steps, holds, policies and runs under RLS", async () => {
     const t1 = await newTenant(admin);
