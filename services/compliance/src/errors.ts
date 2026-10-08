@@ -1,10 +1,5 @@
 export type ComplianceErrorCode =
-  | "unauthenticated"
-  | "forbidden"
-  | "not_found"
-  | "conflict"
-  | "invalid"
-  | "unavailable";
+  "unauthenticated" | "forbidden" | "not_found" | "conflict" | "invalid" | "unavailable";
 
 export const HTTP_STATUS: Record<ComplianceErrorCode, number> = {
   unauthenticated: 401,

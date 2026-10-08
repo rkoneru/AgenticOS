@@ -16,3 +16,11 @@ docs/spec/cli.md
 test-results
 playwright-report
 .next
+
+# generated from docs/compliance/matrix/*.yaml by `make compliance-check ARGS=--write`
+docs/compliance/soc2.md
+docs/compliance/gdpr.md
+docs/compliance/hipaa.md
+docs/compliance/euaiact.md
+docs/compliance/iso42001.md
+docs/compliance/summary.md

@@ -72,9 +72,12 @@ export class DocumentService {
   private parseRef(ref: unknown): BlueprintRef {
     const pr = new Problems();
     const o = (typeof ref === "object" && ref !== null ? ref : {}) as Record<string, unknown>;
-    const name = typeof o["name"] === "string" && NAME.test(o["name"]) ? o["name"] : (pr.add("/name"), "");
+    const name =
+      typeof o["name"] === "string" && NAME.test(o["name"]) ? o["name"] : (pr.add("/name"), "");
     const version =
-      typeof o["version"] === "string" && SEMVER.test(o["version"]) ? o["version"] : (pr.add("/version"), "");
+      typeof o["version"] === "string" && SEMVER.test(o["version"])
+        ? o["version"]
+        : (pr.add("/version"), "");
     pr.done("document request");
     return { name, version };
   }
@@ -103,7 +106,11 @@ export class DocumentService {
           ? await safely("evals", () =>
               this.ports.evals.evidence(
                 t,
-                { ...r, content_hash: (blueprint as { ok: true; value: { content_hash: string } }).value.content_hash },
+                {
+                  ...r,
+                  content_hash: (blueprint as { ok: true; value: { content_hash: string } }).value
+                    .content_hash,
+                },
                 declared.map((s) => ({ ref: s.ref, threshold: s.threshold })),
               ),
             )
@@ -164,7 +171,10 @@ export class DocumentService {
     requireRole(p, "compliance.read");
     const d = await this.c.docs.get<StoredDocument>(p.tenantId, "documents", id);
     if (!d) throw notFound("document not found");
-    return { document: d.data.document, verification: verifyDocument(d.data.document, this.keys()) };
+    return {
+      document: d.data.document,
+      verification: verifyDocument(d.data.document, this.keys()),
+    };
   }
 
   async list(
@@ -182,8 +192,16 @@ export class DocumentService {
       .map((d) => d.data)
       .sort(
         (a, b) =>
-          (a.blueprint_name < b.blueprint_name ? -1 : a.blueprint_name > b.blueprint_name ? 1 : 0) ||
-          (a.blueprint_version < b.blueprint_version ? -1 : a.blueprint_version > b.blueprint_version ? 1 : 0) ||
+          (a.blueprint_name < b.blueprint_name
+            ? -1
+            : a.blueprint_name > b.blueprint_name
+              ? 1
+              : 0) ||
+          (a.blueprint_version < b.blueprint_version
+            ? -1
+            : a.blueprint_version > b.blueprint_version
+              ? 1
+              : 0) ||
           a.doc_version - b.doc_version,
       )
       .map((d) => ({

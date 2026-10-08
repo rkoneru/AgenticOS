@@ -86,6 +86,8 @@ export class MemoryDocStore implements DocStore {
   }
   insert<T>(tenantId: string, coll: string, key: string, data: T): Promise<Doc<T>> {
     if (!COLLECTIONS.has(coll)) return Promise.reject(new DocForbidden("unknown collection"));
+    if (coll === "assessments" && !reviewerIndependent(data as Record<string, unknown>))
+      return Promise.reject(new DocForbidden("reviewer must differ from the author"));
     const id = this.k(tenantId, coll, key);
     if (this.rows.has(id)) return Promise.reject(new DocConflict("document exists"));
     const d: Doc = {
@@ -194,6 +196,7 @@ export class PgDocStore implements DocStore {
       if (r.rows[0]) return toDoc<T>(r.rows[0]);
     } catch (err) {
       if (pgCode(err) === "42501") throw new DocForbidden(`${coll} document is immutable`);
+      if (pgCode(err) === "23514") throw new DocForbidden("reviewer must differ from the author");
       throw err;
     }
     const exists = await this.get(tenantId, coll, key);

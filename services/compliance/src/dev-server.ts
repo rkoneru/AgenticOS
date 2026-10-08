@@ -101,7 +101,8 @@ export function createComplianceDevServer(deps: ComplianceDevServerDeps): http.S
     body: Record<string, unknown>,
   ): Promise<[number, unknown]> => {
     const s = seg(url);
-    if (s[0] !== "v1" || s[1] !== "compliance") throw new ComplianceError("not_found", "no such route");
+    if (s[0] !== "v1" || s[1] !== "compliance")
+      throw new ComplianceError("not_found", "no such route");
     if (url.searchParams.has("tenant_id") && url.searchParams.get("tenant_id") !== p.tenantId)
       throw new ComplianceError("forbidden", "forbidden");
     if (body["tenant_id"] !== undefined && body["tenant_id"] !== p.tenantId)
@@ -118,13 +119,19 @@ export function createComplianceDevServer(deps: ComplianceDevServerDeps): http.S
 
     switch (r[0]) {
       case "systems": {
-        if (r.length === 1 && method === "POST") return [201, await c.systems.create(p, fields as never)];
+        if (r.length === 1 && method === "POST")
+          return [201, await c.systems.create(p, fields as never)];
         if (r.length === 1 && method === "GET") {
           const rl = q(url, "risk_level") as RiskLevel | undefined;
           const ls = q(url, "lifecycle_stage") as LifecycleStage | undefined;
           return [
             200,
-            { items: await c.systems.list(p, { ...(rl ? { risk_level: rl } : {}), ...(ls ? { lifecycle_stage: ls } : {}) }) },
+            {
+              items: await c.systems.list(p, {
+                ...(rl ? { risk_level: rl } : {}),
+                ...(ls ? { lifecycle_stage: ls } : {}),
+              }),
+            },
           ];
         }
         if (r.length === 2 && method === "GET") {
@@ -184,10 +191,16 @@ export function createComplianceDevServer(deps: ComplianceDevServerDeps): http.S
           const bv = q(url, "blueprint_version");
           return [
             200,
-            { items: await c.documents.list(p, { ...(bn ? { blueprint_name: bn } : {}), ...(bv ? { blueprint_version: bv } : {}) }) },
+            {
+              items: await c.documents.list(p, {
+                ...(bn ? { blueprint_name: bn } : {}),
+                ...(bv ? { blueprint_version: bv } : {}),
+              }),
+            },
           ];
         }
-        if (r.length === 2 && method === "GET") return [200, await c.documents.get(p, r[1] as string)];
+        if (r.length === 2 && method === "GET")
+          return [200, await c.documents.get(p, r[1] as string)];
         break;
       }
       default:
@@ -201,7 +214,13 @@ export function createComplianceDevServer(deps: ComplianceDevServerDeps): http.S
         const p = auth(req.headers.authorization);
         if (!p) return sendJson(res, 401, { error: { code: "unauthenticated" } });
         const wait = limiter.check(`${p.tenantId}:${p.subject}`);
-        if (wait > 0) return sendJson(res, 429, { error: { code: "rate_limited" } }, { "retry-after": String(Math.ceil(wait / 1000)) });
+        if (wait > 0)
+          return sendJson(
+            res,
+            429,
+            { error: { code: "rate_limited" } },
+            { "retry-after": String(Math.ceil(wait / 1000)) },
+          );
         const url = new URL(req.url ?? "/", "http://localhost");
         const body = req.method === "GET" ? {} : await readJson(req);
         const [status, json] = await handle(req.method ?? "GET", url, p, body);

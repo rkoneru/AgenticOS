@@ -1,7 +1,8 @@
 import type { DocBody } from "./assemble.js";
 import { SECTION_KEYS } from "./assemble.js";
 
-const esc = (s: string): string => s.replaceAll("|", "\\|").replaceAll("\n", " ").replaceAll("\r", " ");
+const esc = (s: string): string =>
+  s.replaceAll("|", "\\|").replaceAll("\n", " ").replaceAll("\r", " ");
 
 const isPrim = (v: unknown): v is string | number | boolean | null =>
   v === null || ["string", "number", "boolean"].includes(typeof v);
@@ -11,7 +12,10 @@ const cell = (v: unknown): string => (v === null ? "-" : esc(String(v)));
 const isFlatRows = (v: unknown): v is Record<string, string | number | boolean | null>[] =>
   Array.isArray(v) &&
   v.length > 0 &&
-  v.every((r) => typeof r === "object" && r !== null && !Array.isArray(r) && Object.values(r).every(isPrim));
+  v.every(
+    (r) =>
+      typeof r === "object" && r !== null && !Array.isArray(r) && Object.values(r).every(isPrim),
+  );
 
 function lines(value: unknown, indent: string): string[] {
   if (isPrim(value)) return [`${indent}${cell(value)}`];
@@ -28,7 +32,9 @@ function lines(value: unknown, indent: string): string[] {
       ];
     }
     return value.flatMap((v, i) =>
-      isPrim(v) ? [`${indent}- ${cell(v)}`] : [`${indent}- item ${i + 1}`, ...lines(v, `${indent}  `)],
+      isPrim(v)
+        ? [`${indent}- ${cell(v)}`]
+        : [`${indent}- item ${i + 1}`, ...lines(v, `${indent}  `)],
     );
   }
   const o = value as Record<string, unknown>;
@@ -76,7 +82,9 @@ export function renderMarkdown(body: DocBody, meta: RenderMeta): string {
   out.push("| point | title | section | status | note |");
   out.push("| --- | --- | --- | --- | --- |");
   for (const c of body.annex_iv_coverage)
-    out.push(`| ${c.point} | ${esc(c.title)} | ${c.section ?? "-"} | ${c.status} | ${cell(c.note)} |`);
+    out.push(
+      `| ${c.point} | ${esc(c.title)} | ${c.section ?? "-"} | ${c.status} | ${cell(c.note)} |`,
+    );
   out.push("");
   for (const k of SECTION_KEYS) {
     const s = body.sections[k];

@@ -1,0 +1,532 @@
+framework: soc2
+title: SOC 2 Trust Services Criteria control matrix
+version: 1
+scope: >-
+  Maps the Trust Services Criteria that apply to a multi-tenant SaaS (Common Criteria CC1-CC9, Availability, Confidentiality, Processing
+  Integrity, Privacy) to AXIS technical mechanisms and to evidence that exists in this repository. AXIS is designed for and
+  evidence-ready toward a SOC 2 examination; no examination has been performed and no report exists. Organisational criteria that no
+  code can satisfy (hiring, training, board oversight) are listed as gaps.
+rows:
+  - id: SOC2-CC1.1
+    requirement: The entity demonstrates a commitment to integrity and ethical values that guide how the system is built and run.
+    mechanism: >-
+      Engineering invariants (fail-closed, tenant isolation, auditability, honest status labels) are written down and enforced by tests; every
+      architectural decision is an ADR.
+    code: [CLAUDE.md]
+    config: []
+    evidence:
+      - { kind: doc, ref: docs/adr/0001-record-architecture-decisions.md }
+    status: Designed
+    notes: Written invariants and an ADR habit are not a code of conduct, ethics training or sanctions process; none exists in the repository.
+  - id: SOC2-CC1.2
+    requirement: Oversight of internal control is exercised by a body independent of management.
+    mechanism: None in the product. Governance of the company is outside the platform.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No board, audit committee or independent oversight is represented in this repository; it is an organisational control to be supplied by the operator.
+  - id: SOC2-CC2.1
+    requirement: The entity obtains and uses relevant, quality information to support internal control.
+    mechanism: >-
+      Every decision is written to an append-only, hash-chained audit log with trace ids; AGIL derives explanations only from those rows;
+      Eval Hub keeps immutable, hashed run records.
+    code:
+      [
+        services/audit/src/chain.ts,
+        services/agil/src/explain.ts,
+        services/eval-hub/src/integrity.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/pg.test.ts }
+      - { kind: test, ref: services/agil/test/architecture.test.ts }
+    status: Built
+    notes: The audit service is a library with no network surface in this tree; tenants read their chain through the gateway composition only.
+  - id: SOC2-CC2.2
+    requirement: Internal control information and responsibilities are communicated within the entity.
+    mechanism: Runbooks per service, specs per component and a CLAUDE.md working memory describe responsibilities and procedures.
+    code: []
+    config: []
+    evidence:
+      - { kind: doc, ref: docs/runbooks/audit.md }
+      - { kind: doc, ref: docs/spec/audit-log.md }
+    status: Designed
+    notes: Documents exist; there is no evidence of their communication to staff or of acknowledgement.
+  - id: SOC2-CC2.3
+    requirement: The entity communicates with external parties about matters affecting internal control.
+    mechanism: The documentation site is built from the specs, ADRs and the OpenAPI reference; the public API is versioned and frozen.
+    code: [apps/docs-site]
+    config: []
+    evidence:
+      - { kind: make, ref: docs-build }
+    status: Prototype
+    notes: The site is static and offline; nothing is published, and there is no customer-facing status page or security contact process.
+  - id: SOC2-CC3.1
+    requirement: Objectives are specified clearly enough to identify and assess risks to them.
+    mechanism: The master prompt, phase plans and component status table state objectives and gate each phase on evidence.
+    code: []
+    config: []
+    evidence:
+      - { kind: doc, ref: PHASE_PLAN.md }
+    status: Designed
+    notes: Objectives are engineering objectives; business and service-level objectives for customers are not defined in the repository.
+  - id: SOC2-CC3.2
+    requirement: Risks to the achievement of objectives are identified and analysed, including threats from outside the entity.
+    mechanism: Per-service STRIDE-style threat models list threats, mitigations and the tests that cover them.
+    code: []
+    config: []
+    evidence:
+      - { kind: doc, ref: docs/security/risk-kernel-threat-model.md }
+      - { kind: doc, ref: docs/security/control-plane-threat-model.md }
+    status: Designed
+    notes: Threat models exist for eight components as documents; the remaining services are scheduled in Phase 9 and have none yet, and no risk register or periodic review is recorded.
+  - id: SOC2-CC3.4
+    requirement: The entity identifies and assesses changes that could significantly affect internal control.
+    mechanism: >-
+      Contract changes after the freeze need an ADR and regenerate a frozen manifest; a drift test fails when the OpenAPI, SDKs or schemas
+      change without it.
+    code: [packages/contracts/FREEZE.json, packages/contracts/scripts/freeze.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: packages/contracts/test/freeze.test.ts }
+      - { kind: test, ref: packages/contracts/test/drift.test.ts }
+    status: Built
+    notes: Covers API and schema contracts only, not changes to infrastructure or to people and process.
+  - id: SOC2-CC4.1
+    requirement: The entity selects and performs ongoing evaluations to confirm that controls are present and functioning.
+    mechanism: >-
+      Unit, integration and end-to-end suites run on a real Postgres and a real Risk Kernel; safety-critical logic is mutation checked; the
+      Eval Hub gates releases of blueprints on evaluation results.
+    code: [services/eval-hub/src/gate.ts, e2e/mutation_phase8.py]
+    config: [.github/workflows/ci.yml]
+    evidence:
+      - { kind: make, ref: e2e-phase8 }
+      - { kind: test, ref: services/eval-hub/test/gate.test.ts }
+    status: Prototype
+    notes: The CI workflow has not run on a remote runner (see the status table in CLAUDE.md); mutation checks are not part of CI.
+  - id: SOC2-CC4.2
+    requirement: Control deficiencies are evaluated and communicated to those responsible for corrective action.
+    mechanism: Gaps and limitations are recorded as numbered items in NEEDS.md with the file that carries them; fixes are tracked to the entry.
+    code: []
+    config: []
+    evidence:
+      - { kind: doc, ref: docs/NEEDS.md }
+    status: Designed
+    notes: A register is not a remediation workflow; there are no owners, due dates or escalation.
+  - id: SOC2-CC5.1
+    requirement: Control activities that mitigate risks are selected and developed.
+    mechanism: >-
+      The Risk Kernel is the single decision point for tools, MCP, browser, code, memory writes and outbound messages; the default is DENY
+      and any error, timeout or missing policy is a DENY.
+    code:
+      [
+        services/risk-kernel/src/kernel.ts,
+        services/risk-kernel/src/gates.ts,
+        runtime/src/axis_runtime/gate.py,
+      ]
+    config: [policies/baseline-deny/pack.yaml]
+    evidence:
+      - { kind: test, ref: services/risk-kernel/test/kernel.test.ts }
+      - { kind: test, ref: runtime/tests/test_gate.py }
+      - { kind: make, ref: e2e-core }
+    status: Built
+    notes: Kernel state (kill switches, counters) is in memory on a single instance; cross-instance propagation is not built.
+  - id: SOC2-CC5.2
+    requirement: The entity selects and develops general technology controls to support achievement of objectives.
+    mechanism: >-
+      A bypass guard fails the build when runtime code performs a governed action without the gate, and an audit hook test checks the
+      same at run time.
+    code: [runtime/tests/bypass_scan.py]
+    config: []
+    evidence:
+      - { kind: test, ref: runtime/tests/test_bypass.py }
+      - { kind: test, ref: runtime/tests/test_audit_hook.py }
+    status: Built
+    notes: The guard is an allowlist scanner and a heuristic; it is a regression net, not proof or isolation.
+  - id: SOC2-CC5.3
+    requirement: Control activities are deployed through policies that establish expectations and procedures that put them into action.
+    mechanism: >-
+      Policies are written in a DSL, compiled to Rego and Wasm, checked against golden cases with a real OPA, and activated per tenant
+      through the control plane.
+    code: [packages/policy/src/compile.ts, services/control-plane/src/policies.ts]
+    config: [policies/baseline-deny/baseline-deny.cases.yaml]
+    evidence:
+      - { kind: make, ref: policy-test }
+      - { kind: test, ref: packages/policy/test/compile.test.ts }
+    status: Built
+    notes: Policy authors are tenant members with the policies.publish permission; there is no four-eyes approval on activation.
+  - id: SOC2-CC6.1
+    requirement: Logical access security measures protect information assets from unauthorised access.
+    mechanism: >-
+      Tenant isolation is enforced in the database with forced row-level security on every tenant table; the tenant comes from the
+      credential only; API keys carry scopes; roles are decided by a policy pack.
+    code: [packages/db/migrations/0001_tenancy_and_rls.sql, services/control-plane/src/authz.ts]
+    config: [policies/control-plane/pack.yaml]
+    evidence:
+      - { kind: test, ref: packages/db/test/tenancy.test.ts }
+      - { kind: test, ref: services/control-plane/test/authz.test.ts }
+      - { kind: test, ref: apps/api-gateway/test/security.test.ts }
+    status: Built
+    notes: Authentication in tests uses a fake identity provider; WorkOS is not connected and no production IdP has been exercised.
+  - id: SOC2-CC6.2
+    requirement: New users are registered and authorised before credentials are issued, and access is removed when no longer needed.
+    mechanism: >-
+      SSO sign-in with just-in-time provisioning, SCIM provisioning and deprovisioning, session revocation and API key revocation, all
+      audited in the tenant chain.
+    code:
+      [
+        services/control-plane/src/sso.ts,
+        services/control-plane/src/scim.ts,
+        services/control-plane/src/sessions.ts,
+        services/control-plane/src/apikeys.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/control-plane/test/scim.test.ts }
+      - { kind: test, ref: services/control-plane/test/sessions.test.ts }
+      - { kind: test, ref: services/control-plane/test/apikeys.test.ts }
+    status: Prototype
+    notes: Exercised against a fake IdP only; there is no periodic access review report.
+  - id: SOC2-CC6.3
+    requirement: Access is granted, modified and removed based on roles and the principle of least privilege and segregation of duties.
+    mechanism: >-
+      Seven roles with a ceiling rule (no one grants above their own rank); API actions are decided by the same pack; approvers cannot
+      approve their own requests; reviewers are independent of authors.
+    code:
+      [
+        services/control-plane/src/roles.ts,
+        policies/control-plane/pack.yaml,
+        services/approvals/src/service.ts,
+      ]
+    config: [policies/control-plane/authz.cases.yaml]
+    evidence:
+      - { kind: test, ref: services/control-plane/test/api-authz.test.ts }
+      - { kind: test, ref: services/approvals/test/service.test.ts }
+      - { kind: make, ref: policy-test }
+    status: Built
+    notes: Roles are fixed; tenants cannot define custom roles.
+  - id: SOC2-CC6.4
+    requirement: Physical access to facilities and protected information assets is restricted.
+    mechanism: None in the product; the platform runs on a cloud provider's facilities.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No cloud account is used and nothing has been deployed; the provider's physical controls would be inherited and must be evidenced by the provider's own reports.
+  - id: SOC2-CC6.5
+    requirement: Logical and physical protections are applied when assets are disposed of.
+    mechanism: Nothing is deleted in the audit, registry or eval stores by design; tenant data deletion and crypto-shredding are not implemented.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Retention settings are stored per tenant but no job purges data; disposal procedures for media belong to the infrastructure provider.
+  - id: SOC2-CC6.6
+    requirement: Logical access security measures protect against threats from sources outside the system boundaries.
+    mechanism: >-
+      The API gateway authenticates every call, rate limits per tenant and per remote address, bounds body sizes, validates responses
+      against the OpenAPI, and applies SSRF guards on provider endpoints and browser egress.
+    code:
+      [
+        apps/api-gateway/src/limits.ts,
+        apps/api-gateway/src/server.ts,
+        runtime/src/axis_runtime/browser,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: apps/api-gateway/test/hardening.test.ts }
+      - { kind: test, ref: runtime/tests/test_browser_redirects.py }
+    status: Prototype
+    notes: The gateway is a dev composition on a loopback port; there is no WAF, DDoS protection or network segmentation in the repository.
+  - id: SOC2-CC6.7
+    requirement: The transmission, movement and removal of information is restricted to authorised parties and protected in transit.
+    mechanism: >-
+      The gateway can send HSTS behind TLS termination, webhooks are signature checked and replay protected, and the console BFF sets a
+      strict CSP, CSRF checks and secure cookies.
+    code: [apps/console/proxy.ts, services/channels/src/crypto.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: apps/console/test/bff-security.test.ts }
+      - { kind: test, ref: services/channels/test/crypto.test.ts }
+    status: Prototype
+    notes: TLS termination, certificates and service-to-service mTLS are not part of the repository; internal HTTP surfaces are loopback dev servers.
+  - id: SOC2-CC6.8
+    requirement: Controls prevent or detect the introduction of unauthorised or malicious software.
+    mechanism: >-
+      Marketplace submissions are scanned and need digest-bound consent; blueprints are signed and verified on resolve; generated code
+      runs in a namespace sandbox with the gate in front.
+    code:
+      [
+        services/marketplace/src/scan.ts,
+        services/registry/src/verify.ts,
+        runtime/src/axis_runtime/sandbox,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/marketplace/test/hardening.test.ts }
+      - { kind: test, ref: services/registry/test/verify.test.ts }
+      - { kind: test, ref: runtime/tests/test_sandbox_local.py }
+    status: Prototype
+    notes: The sandbox is process-level isolation on one kernel, not a security boundary; there is no software composition analysis of dependencies.
+  - id: SOC2-CC7.1
+    requirement: Detection and monitoring procedures identify configuration changes and newly introduced vulnerabilities.
+    mechanism: Lint, type checks, secret scanning of the console bundle, and a frozen-contract drift test run in the test suites.
+    code: [apps/console/lib/secret-scan.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: apps/console/test/secret-scan.test.ts }
+    status: Prototype
+    notes: No dependency vulnerability scanning, container scanning or penetration test exists; the Phase 9 red-team suite is separate work.
+  - id: SOC2-CC7.2
+    requirement: The entity monitors system components for anomalies that indicate malicious acts, errors or failures.
+    mechanism: >-
+      Denials, kill-switch actions and failed verifications are audit events; AGIL explains denials from the chain; OpenTelemetry
+      collectors are configured in the compose stack.
+    code: [services/agil/src/classify.ts, infra/compose/otel]
+    config: [infra/compose/docker-compose.yml]
+    evidence:
+      - { kind: test, ref: services/agil/test/classify.test.ts }
+    status: Prototype
+    notes: No alert rules, paging or dashboards beyond the compose Grafana stub are defined; the compose stack was never started.
+  - id: SOC2-CC7.3
+    requirement: Security events are evaluated to determine whether they are incidents.
+    mechanism: Runbooks describe how to read the audit chain and verify it; the audit export produces a verifiable bundle.
+    code: [services/audit/src/export.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/export.test.ts }
+      - { kind: doc, ref: docs/runbooks/audit.md }
+    status: Prototype
+    notes: There is no incident classification procedure or on-call process.
+  - id: SOC2-CC7.4
+    requirement: The entity responds to identified security incidents through a defined programme.
+    mechanism: >-
+      Kill switches stop an agent, tenant or tool at the next gate decision; approvals can be denied or expired; the chain is verified
+      after the event.
+    code: [services/risk-kernel/src/stores.ts, apps/api-gateway/src/routes.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/risk-kernel/test/kernel.test.ts }
+      - { kind: doc, ref: docs/runbooks/risk-kernel.md }
+    status: Prototype
+    notes: Kill-switch state is per kernel instance; no breach communication, forensics or post-incident review process exists.
+  - id: SOC2-CC7.5
+    requirement: The entity identifies, develops and implements activities to recover from security incidents.
+    mechanism: None yet; backup, restore and disaster recovery are planned in Phase 9 and not present in this tree.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No backup or restore procedure has been exercised; RPO and RTO have never been measured.
+  - id: SOC2-CC8.1
+    requirement: Changes to infrastructure, data, software and procedures are authorised, designed, tested, approved and implemented.
+    mechanism: >-
+      Small conventional commits, ADRs for decisions, frozen contracts, additive-only migrations with checksum verification, and CI that
+      runs lint, typecheck, coverage and the policy tests.
+    code: [packages/db/src/index.ts, .github/workflows/ci.yml]
+    config: [packages/contracts/FREEZE.json]
+    evidence:
+      - { kind: test, ref: packages/db/test/migrate.test.ts }
+      - { kind: test, ref: packages/contracts/test/freeze.test.ts }
+    status: Built
+    notes: No branch protection or required reviewers are configured in the repository; the CI workflow has not run remotely.
+  - id: SOC2-CC9.1
+    requirement: The entity identifies, selects and develops risk mitigation activities for business disruptions.
+    mechanism: None in the product beyond fail-closed behaviour; business continuity planning is not represented.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Fail-closed denial protects safety but reduces availability when the kernel or audit log is down; no continuity plan exists.
+  - id: SOC2-CC9.2
+    requirement: The entity assesses and manages risks associated with vendors and business partners.
+    mechanism: >-
+      Only the ModelGateway talks to model providers, with bring-your-own keys per tenant held sealed under a KMS interface; the
+      marketplace review and consent flow governs third-party blueprints.
+    code: [services/control-plane/src/modelkeys.ts, services/marketplace/src/reviews.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/control-plane/test/modelkeys.test.ts }
+      - { kind: test, ref: services/marketplace/test/flows.test.ts }
+    status: Prototype
+    notes: No vendor inventory, due diligence or contract review exists; the KMS is a local fake and no live provider call has been made.
+  - id: SOC2-A1.1
+    requirement: The entity maintains, monitors and evaluates current processing capacity and use of system components.
+    mechanism: Per-tenant rate limits and TKI budgets bound consumption; capacity targets and load tests are planned in Phase 9.
+    code: [apps/api-gateway/src/limits.ts, runtime/src/axis_runtime/tki]
+    config: []
+    evidence:
+      - { kind: test, ref: runtime/tests/test_tki_budget.py }
+    status: Prototype
+    notes: No service-level objectives, load test or capacity monitoring exist yet.
+  - id: SOC2-A1.2
+    requirement: Environmental protections, software, data backup processes and recovery infrastructure are designed and operated.
+    mechanism: None yet; Terraform, Helm and k3s directories are empty placeholders.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No infrastructure as code or backup configuration exists, and applying any is a hard stop that needs the owner.
+  - id: SOC2-A1.3
+    requirement: Recovery plan procedures supporting system recovery are tested.
+    mechanism: None yet.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: A tested restore with audit-chain verification is planned in Phase 9; no test has been run.
+  - id: SOC2-C1.1
+    requirement: Confidential information is identified and maintained to meet confidentiality objectives.
+    mechanism: >-
+      Data classifications travel with decisions; the PHI flag in a blueprint forces redaction before persistence and requires a
+      residency declaration; secrets are never printed by SDKs or stored in ABL.
+    code: [services/memory/src/redact.ts, packages/abl/src/lint.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/memory/test/redact.test.ts }
+      - { kind: test, ref: packages/abl/test/lint.test.ts }
+    status: Prototype
+    notes: Redaction is pattern based; a cross-store canary test is planned in Phase 9 and is not in this tree.
+  - id: SOC2-C1.2
+    requirement: Confidential information is disposed of to meet confidentiality objectives.
+    mechanism: None; see CC6.5.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Retention days are stored per tenant, but no job enforces them and nothing deletes data.
+  - id: SOC2-PI1.1
+    requirement: The entity obtains or generates relevant, quality information about processing definitions and objectives.
+    mechanism: Blueprints are validated against a frozen schema; unknown fields are errors; the compiled manifest is deterministic and hashed.
+    code: [packages/abl/src/validate.ts, packages/abl/src/manifest.ts]
+    config: [packages/abl/schema/abl-v1.schema.json]
+    evidence:
+      - { kind: test, ref: packages/abl/test/compile.test.ts }
+    status: Built
+    notes: Covers agent definitions only, not customer business process definitions.
+  - id: SOC2-PI1.2
+    requirement: System inputs are complete, accurate and timely, with controls over input validation.
+    mechanism: >-
+      The gateway validates every request and response against the OpenAPI document; ABL, policy DSL and audit events have JSON schemas;
+      eval results are recomputed by the hub before acceptance.
+    code: [apps/api-gateway/src/server.ts, services/eval-hub/src/integrity.ts]
+    config: [packages/contracts/openapi/axis-v1.yaml]
+    evidence:
+      - { kind: test, ref: apps/api-gateway/test/contract.test.ts }
+      - { kind: test, ref: services/eval-hub/test/runs.test.ts }
+    status: Built
+    notes: Runner-side grading is trusted for raw grades (the hub recomputes aggregates only).
+  - id: SOC2-PI1.3
+    requirement: System processing is complete, accurate, timely and authorised.
+    mechanism: >-
+      Usage metering is reconciled against an independent recomputation from the audit and run logs; billing periods are sealed; the
+      Phase 6 end-to-end test requires ledger equality.
+    code: [services/billing/src/reconcile.ts, services/billing/src/seal.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/billing/test/service.test.ts }
+      - { kind: make, ref: e2e-phase6 }
+    status: Prototype
+    notes: Against a Stripe fake only; no live payment processor, ClickHouse store or tax handling.
+  - id: SOC2-PI1.4
+    requirement: System output is complete, accurate and distributed only to intended recipients.
+    mechanism: >-
+      Every outbound message and call is a gated action with a decision row; replies are routed by linked identity; cross-tenant
+      routing is impossible by construction.
+    code: [services/channels/src/gateway.ts, runtime/src/axis_runtime/channel_runner.py]
+    config: []
+    evidence:
+      - { kind: make, ref: e2e-phase5 }
+      - { kind: test, ref: services/channels/test/gateway.test.ts }
+    status: Prototype
+    notes: Provider transports are fakes; no live channel provider has been used.
+  - id: SOC2-PI1.5
+    requirement: Stored data is complete and accurate and protected from unauthorised modification.
+    mechanism: >-
+      Audit, registry versions, eval runs and billing seals are append-only or immutable by database triggers; the audit chain is hash
+      linked with signed checkpoints.
+    code: [packages/db/migrations/0005_audit_checkpoints.sql, services/audit/src/checkpoint.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/checkpoint.test.ts }
+      - { kind: test, ref: packages/db/test/hardening.test.ts }
+    status: Built
+    notes: The checkpoint signer is a local Ed25519 key; a KMS signer and WORM object storage are not built.
+  - id: SOC2-P1.1
+    requirement: The entity provides notice about its privacy practices to data subjects.
+    mechanism: >-
+      Blueprints at limited or high risk must carry a transparency notice; a voice session plays its notice first; the lint warns when
+      voice has none.
+    code: [packages/abl/src/lint.ts, runtime/src/axis_runtime/voice]
+    config: []
+    evidence:
+      - { kind: test, ref: runtime/tests/test_voice_compliance.py }
+      - { kind: test, ref: packages/abl/test/lint.test.ts }
+    status: Prototype
+    notes: A privacy notice for the SaaS itself (as controller or processor) is not in the repository.
+  - id: SOC2-P2.1
+    requirement: The entity communicates choices to data subjects and obtains consent where required.
+    mechanism: A voice session requires consent or a played notice before speech reaches the agent; channel identities are linked only with an explicit step.
+    code: [runtime/src/axis_runtime/voice, services/channels/src/identity.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: runtime/tests/test_voice_compliance.py }
+      - { kind: test, ref: services/channels/test/identity.test.ts }
+    status: Prototype
+    notes: There is no consent store, withdrawal flow or consent receipt for other processing.
+  - id: SOC2-P3.1
+    requirement: Personal information is collected consistent with the entity's objectives and notice.
+    mechanism: Minimal collection by design; PHI mode redacts before persistence; memory scopes (run, session, long term) are explicit opt-in.
+    code: [services/memory/src/store.ts, services/memory/src/acl.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/memory/test/isolation.test.ts }
+    status: Prototype
+    notes: No data inventory of personal data fields per store exists apart from the new AI system inventory records.
+  - id: SOC2-P4.1
+    requirement: Personal information is used, retained and disposed of consistent with the entity's objectives.
+    mechanism: Retention days exist as tenant settings, and the audit retention can only be lengthened; enforcement jobs do not exist.
+    code: [services/control-plane/src/admin.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/control-plane/test/admin.test.ts }
+    status: Prototype
+    notes: Settings are validated and audited, but no purge job, legal hold or disposal evidence exists.
+  - id: SOC2-P5.1
+    requirement: Data subjects can access their personal information and request corrections.
+    mechanism: None yet; subject access export and correction are planned in Phase 9 and are not present in this tree.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No data subject request tooling exists in any store.
+  - id: SOC2-P6.1
+    requirement: Personal information is disclosed to third parties only as authorised, and disclosures are recorded.
+    mechanism: >-
+      Egress for tools and browser workers is allowlisted and gated; model calls go through one gateway that records the provider and
+      model per call; PHI-flagged runs refuse providers outside the declared residency.
+    code: [runtime/src/axis_runtime/models, runtime/src/axis_runtime/browser]
+    config: []
+    evidence:
+      - { kind: test, ref: runtime/tests/test_browser_redirects.py }
+      - { kind: test, ref: runtime/tests/test_endpoints.py }
+    status: Prototype
+    notes: Provider region constraints are not enforced on write paths; data processing agreements with providers do not exist.
+  - id: SOC2-P7.1
+    requirement: Personal information is accurate, complete and relevant for the purposes for which it is used.
+    mechanism: None specific; memory entries carry provenance and ACLs, but there is no correction workflow.
+    code: [services/memory/src/types.ts]
+    config: []
+    evidence: []
+    status: Gap
+    notes: Depends on the data subject request tooling that does not exist yet.
+  - id: SOC2-P8.1
+    requirement: The entity monitors compliance with privacy commitments and handles inquiries and complaints.
+    mechanism: Audit events and the new compliance inventory record privacy-relevant decisions; no complaint handling exists.
+    code: [services/compliance/src/records/assessments.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+    status: Prototype
+    notes: Monitoring of privacy commitments is limited to impact assessment review dates; there is no complaint or inquiry process.

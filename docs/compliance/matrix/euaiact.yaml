@@ -1,0 +1,199 @@
+framework: euaiact
+title: EU AI Act high-risk obligations control matrix
+version: 1
+scope: >-
+  Maps the obligations of Regulation (EU) 2024/1689 that fall on providers of high-risk AI systems (Articles 9 to 15), on deployers
+  (Articles 26 and 27), on transparency (Articles 13 and 50) and on post-market monitoring and incident reporting (Articles 72
+  and 73) to AXIS mechanisms and to evidence in this repository. AXIS is designed for and evidence-ready toward these obligations.
+  It does not classify a customer's use case, does not perform a conformity assessment and is not legal advice; classification and
+  conformity remain the responsibility of the provider and deployer.
+rows:
+  - id: EUAIACT-Art9
+    requirement: A risk management system is established, documented and maintained across the lifecycle of a high-risk system.
+    mechanism: >-
+      Risk classification is mandatory in every blueprint with a rationale; a prohibited level cannot be expressed; high risk requires
+      evals and human oversight (lint ABL004); AI impact assessments record risks, mitigations and review dates.
+    code:
+      [
+        packages/abl/schema/abl-v1.schema.json,
+        packages/abl/src/lint.ts,
+        services/compliance/src/records/assessments.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: packages/abl/test/lint.test.ts }
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+    status: Prototype
+    notes: A risk management process is more than records; testing against prior defined metrics and residual risk acceptance are the provider's.
+  - id: EUAIACT-Art10
+    requirement: Training, validation and testing data meet quality and governance criteria, including examination for bias.
+    mechanism: >-
+      Eval datasets are immutable, hashed and versioned; PHI datasets are redacted; blueprints declare data and residency. Training
+      data governance of third-party models is outside the platform.
+    code: [services/eval-hub/src/catalog.ts, services/eval-hub/src/canonical.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/eval-hub/test/catalog.test.ts }
+    status: Prototype
+    notes: Dataset quality and bias are not judged (NEEDS records the gap); foundation model training data is not visible to AXIS.
+  - id: EUAIACT-Art11
+    requirement: Technical documentation per Annex IV is drawn up before placing on the market and kept up to date.
+    mechanism: >-
+      The Annex IV generator assembles a versioned, hash-sealed document per blueprint version from the ABL manifest, registry
+      provenance and verification, eval runs, attestations and gate verdicts, active policy packs, human oversight configuration and
+      audit statistics. Sources that are missing are listed as gaps; nothing is invented.
+    code:
+      [
+        services/compliance/src/docgen/assemble.ts,
+        services/compliance/src/docgen/documents.ts,
+        services/compliance/src/docgen/verify.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/docgen.test.ts }
+      - { kind: test, ref: services/compliance/test/properties.test.ts }
+    status: Built
+    notes: >-
+      The generator documents what the platform can evidence. Hardware, harmonised standards applied and the declaration of
+      conformity are always listed as gaps; the provider must complete the documentation.
+  - id: EUAIACT-Art12
+    requirement: High-risk systems technically allow automatic recording of events over their lifetime.
+    mechanism: >-
+      Append-only, hash-chained audit events with trace ids for every decision and administrative action; runs are replayable from
+      event-sourced logs; chain verification and export.
+    code: [services/audit/src/chain.ts, runtime/src/axis_runtime/events.py]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/pg.test.ts }
+      - { kind: test, ref: runtime/tests/test_events.py }
+      - { kind: make, ref: e2e-core }
+    status: Built
+    notes: Log retention periods are tenant settings that no job enforces; the audit service has no network surface of its own in this tree.
+  - id: EUAIACT-Art13
+    requirement: Systems are transparent enough for deployers to interpret output and use it appropriately, with instructions for use.
+    mechanism: >-
+      The technical documentation lists capabilities, limits, evaluation results and known limitations; AGIL explains runs and denials
+      from audit rows; blueprints carry intended purpose and transparency notices.
+    code: [services/agil/src/explain.ts, services/compliance/src/docgen/limitations.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/agil/test/explain.test.ts }
+      - { kind: test, ref: services/compliance/test/docgen.test.ts }
+    status: Prototype
+    notes: Instructions for use for deployers are not generated; the explainer is deterministic and does not describe model internals.
+  - id: EUAIACT-Art14
+    requirement: High-risk systems can be effectively overseen by natural people, including the ability to intervene or stop the system.
+    mechanism: >-
+      High-risk blueprints must declare required human oversight with approver roles; the Risk Kernel routes to approval and the run
+      waits; approvers cannot approve their own requests; kill switches stop an agent, tool or tenant.
+    code:
+      [
+        packages/abl/schema/abl-v1.schema.json,
+        services/approvals/src/service.ts,
+        services/risk-kernel/src/approvals.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/approvals/test/service.test.ts }
+      - { kind: test, ref: services/risk-kernel/test/approvals.test.ts }
+      - { kind: make, ref: e2e-phase3 }
+    status: Built
+    notes: Automation bias and operator competence are not measured; approvals use an in-memory store and a dev-only loopback bridge.
+  - id: EUAIACT-Art15
+    requirement: Systems reach an appropriate level of accuracy, robustness and cybersecurity and perform consistently.
+    mechanism: >-
+      Eval Hub suites with thresholds, regression and significance checks gate release; signed attestations bind results to a blueprint
+      hash; the kernel, sandbox, SSRF guards and bypass guard address cybersecurity; a red-team suite is planned in Phase 9.
+    code:
+      [
+        services/eval-hub/src/gate.ts,
+        services/eval-hub/src/scoring.ts,
+        services/eval-hub/src/attest.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/eval-hub/test/gate.test.ts }
+      - { kind: test, ref: services/eval-hub/test/scoring.test.ts }
+      - { kind: make, ref: e2e-phase8 }
+    status: Prototype
+    notes: No live model has been evaluated; the red-team and robustness suites required for cybersecurity evidence do not exist yet.
+  - id: EUAIACT-Art17
+    requirement: Providers operate a quality management system covering design, testing, data, risk management and post-market monitoring.
+    mechanism: None as a system. ADRs, phase plans and review subagents are engineering practice, not a quality management system.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Policies, roles, procedures and records for a QMS are the provider's organisational responsibility.
+  - id: EUAIACT-Art26
+    requirement: Deployers use systems per the instructions, assign human oversight, monitor operation, keep logs and inform affected persons.
+    mechanism: >-
+      Tenant-scoped audit with verification supports log keeping and monitoring; approver roles assign oversight; transparency notices
+      inform affected persons on supported channels.
+    code:
+      [services/audit/src/export.ts, services/approvals/src/service.ts, packages/abl/src/lint.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/export.test.ts }
+      - { kind: test, ref: packages/abl/test/lint.test.ts }
+    status: Prototype
+    notes: >-
+      Six-month minimum log retention is not enforced; no workplace notification tooling; duties to cooperate with authorities are
+      organisational.
+  - id: EUAIACT-Art27
+    requirement: Certain deployers assess the impact on fundamental rights before first use of a high-risk system.
+    mechanism: >-
+      AI impact assessment records capture the intended use, affected groups, risks, mitigations, stakeholders and review date, with
+      versioning and independent approval; the console lists them read-only.
+    code: [services/compliance/src/records/assessments.ts, apps/console/app]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+      - { kind: test, ref: services/compliance/test/properties.test.ts }
+    status: Prototype
+    notes: Notification of the market surveillance authority and the official template are not modelled.
+  - id: EUAIACT-Art43
+    requirement: High-risk systems undergo the applicable conformity assessment procedure before being placed on the market.
+    mechanism: None. The platform supplies evidence only.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Conformity assessment, CE marking and registration in the EU database are the provider's.
+  - id: EUAIACT-Art50
+    requirement: People are told they are interacting with an AI system, and synthetic content is marked, unless obvious.
+    mechanism: >-
+      Limited and high risk blueprints must have a transparency notice (schema rule); a voice session plays its notice before anything
+      else; the lint warns on voice without a notice.
+    code:
+      [
+        packages/abl/schema/abl-v1.schema.json,
+        packages/abl/src/lint.ts,
+        runtime/src/axis_runtime/voice,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: packages/abl/test/compile.test.ts }
+      - { kind: test, ref: runtime/tests/test_voice_compliance.py }
+    status: Prototype
+    notes: Machine-readable marking of generated content is not implemented.
+  - id: EUAIACT-Art72
+    requirement: Providers establish a post-market monitoring system proportionate to the risk and collect and analyse relevant data.
+    mechanism: >-
+      Eval Hub online sampling runs production traffic through graders with human review of pending items; the Annex IV document
+      reports sampling configurations; run logs are exposed through a read-only reader.
+    code: [services/eval-hub/src/online.ts, services/eval-hub/src/reviews.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/eval-hub/test/online.test.ts }
+      - { kind: make, ref: e2e-phase8 }
+    status: Prototype
+    notes: No plan template, no aggregated analysis across deployers and no live production traffic has been sampled.
+  - id: EUAIACT-Art73
+    requirement: Serious incidents are reported to the market surveillance authorities within the set deadlines.
+    mechanism: None beyond the audit trail that supports an investigation.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No incident classification, deadline tracking or reporting template exists.

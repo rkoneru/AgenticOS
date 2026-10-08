@@ -69,9 +69,9 @@ describe("assemble", () => {
     expect((dev["system_instructions"] as { sha256: string }).sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(body)).not.toContain("Never state coverage decisions");
     expect(dev["compiled_manifest_sha256"]).toMatch(/^[0-9a-f]{64}$/);
-    expect((body.sections["oversight"]?.data as Record<string, unknown>)["approver_roles"]).toEqual([
-      "claims-adjuster",
-    ]);
+    expect((body.sections["oversight"]?.data as Record<string, unknown>)["approver_roles"]).toEqual(
+      ["claims-adjuster"],
+    );
     const rm = body.sections["risk_management"]?.data as Record<string, unknown>;
     expect(rm["level"]).toBe("high");
   });
@@ -93,20 +93,34 @@ describe("assemble", () => {
     expect(body.sections["record_keeping"]?.data).toBeNull();
     expect(body.sections["limitations"]?.data).toBeNull();
     expect(body.gaps.map((g) => g.reason)).toEqual(
-      expect.arrayContaining(["registry down", "hub down", "policy store down", "audit down", "no needs file"]),
+      expect.arrayContaining([
+        "registry down",
+        "hub down",
+        "policy store down",
+        "audit down",
+        "no needs file",
+      ]),
     );
     expect(body.annex_iv_coverage.every((c) => c.status === "gap")).toBe(true);
   });
 
   it("reports a failed audit chain verification as a gap, not as success", () => {
     const i = full();
-    i.audit = sourced({ ...STATS, chain: { verified: false, checked_through_seq: 7, reason: "hash mismatch at 8" } });
+    i.audit = sourced({
+      ...STATS,
+      chain: { verified: false, checked_through_seq: 7, reason: "hash mismatch at 8" },
+    });
     const body = assemble(i);
     expect(body.sections["record_keeping"]?.status).toBe("partial");
     expect(body.gaps.some((g) => g.item === "audit_chain" && /FAILED/.test(g.reason))).toBe(true);
     const j = full();
-    j.audit = sourced({ ...STATS, chain: { verified: false, checked_through_seq: 0, reason: null } });
-    expect(assemble(j).gaps.some((g) => g.item === "audit_chain" && !/:/.test(g.reason))).toBe(true);
+    j.audit = sourced({
+      ...STATS,
+      chain: { verified: false, checked_through_seq: 0, reason: null },
+    });
+    expect(assemble(j).gaps.some((g) => g.item === "audit_chain" && !/:/.test(g.reason))).toBe(
+      true,
+    );
   });
 
   it("flags a tenant-local blueprint (no provenance) and a failed registry verification", () => {
@@ -145,7 +159,9 @@ describe("assemble", () => {
       }),
     );
     const items = assemble(i).gaps.map((g) => g.item);
-    expect(items).toEqual(expect.arrayContaining(["intended_purpose", "provider_owner", "human_oversight"]));
+    expect(items).toEqual(
+      expect.arrayContaining(["intended_purpose", "provider_owner", "human_oversight"]),
+    );
 
     const bad = full();
     bad.blueprint = sourced(
@@ -164,8 +180,17 @@ describe("assemble", () => {
     const i = full();
     i.evals = sourced({
       runs: [{ ...EVIDENCE.runs[0]!, status: "failed" }],
-      attestations: [{ run_id: "run-1", suite_ref: "claims-regression@1.0.0", overall: 0.5, verified: false }],
-      gate: [{ suite_ref: "claims-regression@1.0.0", threshold: 0.92, pass: false, reasons: ["below", "age"] }],
+      attestations: [
+        { run_id: "run-1", suite_ref: "claims-regression@1.0.0", overall: 0.5, verified: false },
+      ],
+      gate: [
+        {
+          suite_ref: "claims-regression@1.0.0",
+          threshold: 0.92,
+          pass: false,
+          reasons: ["below", "age"],
+        },
+      ],
       online: [{ id: "x", suite_ref: "s", rate: 0.1, enabled: false }],
     });
     const items = assemble(i).gaps.map((g) => g.item);
@@ -179,7 +204,9 @@ describe("assemble", () => {
     );
     const j = full();
     j.evals = sourced({ ...EVIDENCE, online: null });
-    expect(assemble(j).gaps.find((g) => g.item === "online_sampling")?.reason).toMatch(/cannot report/);
+    expect(assemble(j).gaps.find((g) => g.item === "online_sampling")?.reason).toMatch(
+      /cannot report/,
+    );
   });
 
   it("renders gaps only for what is missing (no gaps for a minimal, fully documented system)", () => {
@@ -200,7 +227,12 @@ describe("assemble", () => {
 });
 
 describe("markdown", () => {
-  const meta = { document_id: "cdoc-x", doc_version: 1, generated_at: "2026-03-01T10:00:00.000Z", content_hash: "h" };
+  const meta = {
+    document_id: "cdoc-x",
+    doc_version: 1,
+    generated_at: "2026-03-01T10:00:00.000Z",
+    content_hash: "h",
+  };
   it("is deterministic and mentions every section and every gap", () => {
     const body = assemble(full());
     const md = renderMarkdown(body, meta);
@@ -275,7 +307,9 @@ describe("seal and verification", () => {
 
     const hash = structuredClone(d);
     hash.content_hash = "0".repeat(64);
-    expect(verifyDocument(hash, [sealer]).failed).toEqual(expect.arrayContaining(["markdown", "seal_signature"]));
+    expect(verifyDocument(hash, [sealer]).failed).toEqual(
+      expect.arrayContaining(["markdown", "seal_signature"]),
+    );
 
     expect(verifyDocument(d, [Ed25519Sealer.generate("k1")]).failed).toEqual(["seal_signature"]);
     expect(verifyDocument(d, [Ed25519Sealer.generate("other")]).failed).toEqual(["seal_key"]);
@@ -289,7 +323,9 @@ describe("seal and verification", () => {
     const bad2 = { ...d, meta: { ...d.meta, evil: undefined } } as unknown as SealedDocument;
     expect(verifyDocument(bad2, [sealer]).failed).toContain("seal_signature");
     const bad3 = { ...d, body: null } as unknown as SealedDocument;
-    expect(verifyDocument(bad3, [sealer]).failed).toEqual(expect.arrayContaining(["content_hash", "markdown"]));
+    expect(verifyDocument(bad3, [sealer]).failed).toEqual(
+      expect.arrayContaining(["content_hash", "markdown"]),
+    );
     expect(sealPayload("h", d.meta)).toContain('"content_hash":"h"');
   });
 
@@ -297,14 +333,20 @@ describe("seal and verification", () => {
     const e = Ed25519Sealer.generate();
     expect(e.keyId).toMatch(/^ed25519:[0-9a-f]{16}$/);
     const verifyOnly = Ed25519Sealer.fromPublicPem(
-      (e as unknown as { pub: { export(o: object): string } }).pub.export({ type: "spki", format: "pem" }),
+      (e as unknown as { pub: { export(o: object): string } }).pub.export({
+        type: "spki",
+        format: "pem",
+      }),
     );
     expect(verifyOnly.keyId).toBe(e.keyId);
     expect(verifyOnly.verify("m", e.sign("m"))).toBe(true);
     expect(() => verifyOnly.sign("m")).toThrow(/cannot sign/);
     expect(e.verify("m", "not base64 sig")).toBe(false);
     expect(e.verify("m", 5 as unknown as string)).toBe(false);
-    const pem = (e as unknown as { priv: { export(o: object): string } }).priv.export({ type: "pkcs8", format: "pem" });
+    const pem = (e as unknown as { priv: { export(o: object): string } }).priv.export({
+      type: "pkcs8",
+      format: "pem",
+    });
     expect(Ed25519Sealer.fromPrivatePem(pem, "x").verify("m", e.sign("m"))).toBe(true);
     expect(() => new HmacSealer(Buffer.from("short"))).toThrow();
     const h = new HmacSealer(Buffer.from("0123456789abcdef"));
@@ -338,7 +380,8 @@ describe("DocumentService", () => {
     const w = world({
       sources: {
         audit: {
-          statistics: () => Promise.resolve(sourced({ ...STATS, event_count: events, head_seq: events })),
+          statistics: () =>
+            Promise.resolve(sourced({ ...STATS, event_count: events, head_seq: events })),
         },
       },
     });
@@ -347,11 +390,16 @@ describe("DocumentService", () => {
     const second = await w.svc.documents.generate(admin, REF);
     expect(second.created).toBe(true);
     expect(second.document.meta.doc_version).toBe(2);
-    const list = await w.svc.documents.list(admin, { blueprint_name: "claims-triage", blueprint_version: "2.3.1" });
+    const list = await w.svc.documents.list(admin, {
+      blueprint_name: "claims-triage",
+      blueprint_version: "2.3.1",
+    });
     expect(list.map((x) => x.doc_version)).toEqual([1, 2]);
     expect(list[0]?.seal.alg).toBe("ed25519");
     expect(await w.svc.documents.list(admin, { blueprint_name: "other" })).toEqual([]);
-    await expect(w.svc.documents.list(admin, { blueprint_version: "1.0.0" })).rejects.toMatchObject({ code: "invalid" });
+    await expect(w.svc.documents.list(admin, { blueprint_version: "1.0.0" })).rejects.toMatchObject(
+      { code: "invalid" },
+    );
   });
 
   it("a source that fails or throws becomes a gap; an unknown blueprint gets a gap-only document", async () => {
@@ -382,7 +430,9 @@ describe("DocumentService", () => {
     const w = world();
     const r = await w.svc.documents.generate(admin, REF);
     const other = user(T2, "admin", "mallory");
-    await expect(w.svc.documents.get(other, r.document.meta.document_id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(w.svc.documents.get(other, r.document.meta.document_id)).rejects.toMatchObject({
+      code: "not_found",
+    });
     expect(await w.svc.documents.list(other)).toEqual([]);
     // the same blueprint in the other tenant is a separate document line
     const mine = await w.svc.documents.generate(other, REF);
@@ -392,14 +442,24 @@ describe("DocumentService", () => {
 
   it("enforces roles and validates the request", async () => {
     const w = world();
-    await expect(w.svc.documents.generate(user(T1, "viewer"), REF)).rejects.toMatchObject({ code: "forbidden" });
-    await expect(w.svc.documents.generate(user(T1, "auditor"), REF)).rejects.toMatchObject({ code: "forbidden" });
-    await expect(w.svc.documents.get(user(T1, "billing"), "x")).rejects.toMatchObject({ code: "forbidden" });
-    await expect(w.svc.documents.generate(admin, { name: "Bad Name", version: "x" })).rejects.toMatchObject({
+    await expect(w.svc.documents.generate(user(T1, "viewer"), REF)).rejects.toMatchObject({
+      code: "forbidden",
+    });
+    await expect(w.svc.documents.generate(user(T1, "auditor"), REF)).rejects.toMatchObject({
+      code: "forbidden",
+    });
+    await expect(w.svc.documents.get(user(T1, "billing"), "x")).rejects.toMatchObject({
+      code: "forbidden",
+    });
+    await expect(
+      w.svc.documents.generate(admin, { name: "Bad Name", version: "x" }),
+    ).rejects.toMatchObject({
       code: "invalid",
       checks: ["/name", "/version"],
     });
-    await expect(w.svc.documents.generate(admin, undefined as never)).rejects.toMatchObject({ code: "invalid" });
+    await expect(w.svc.documents.generate(admin, undefined as never)).rejects.toMatchObject({
+      code: "invalid",
+    });
     expect((await w.svc.documents.list(user(T1, "viewer"))).length).toBe(0);
   });
 
@@ -414,8 +474,11 @@ describe("DocumentService", () => {
       "compliance.document.generate:DENY",
     ]);
     const broken = world();
-    (broken.log as unknown as { append: () => Promise<never> }).append = () => Promise.reject(new Error("down"));
-    await expect(broken.svc.documents.generate(admin, REF)).rejects.toMatchObject({ code: "unavailable" });
+    (broken.log as unknown as { append: () => Promise<never> }).append = () =>
+      Promise.reject(new Error("down"));
+    await expect(broken.svc.documents.generate(admin, REF)).rejects.toMatchObject({
+      code: "unavailable",
+    });
     expect(await broken.svc.documents.list(admin)).toEqual([]);
   });
 
@@ -428,7 +491,8 @@ describe("DocumentService", () => {
     (bad.document.body.sections["general"] as { status: string }).status = "complete";
     // The memory store hands out clones; mutate through the private map for this tamper test.
     const rows = (w.docs as unknown as { rows: Map<string, { data: unknown }> }).rows;
-    for (const v of rows.values()) if ((v.data as { document_id?: string }).document_id === id) v.data = bad;
+    for (const v of rows.values())
+      if ((v.data as { document_id?: string }).document_id === id) v.data = bad;
     const got = await w.svc.documents.get(admin, id);
     expect(got.verification.ok).toBe(false);
     expect(got.verification.failed).toContain("content_hash");
@@ -447,7 +511,9 @@ describe("DocumentService", () => {
       sealer: Ed25519Sealer.generate("new"),
       trustedSealers: [old],
     });
-    expect((await svc2.documents.get(admin, r.document.meta.document_id)).verification.ok).toBe(true);
+    expect((await svc2.documents.get(admin, r.document.meta.document_id)).verification.ok).toBe(
+      true,
+    );
   });
 });
 
@@ -474,8 +540,15 @@ describe("NeedsLimitations", () => {
     const run = (f: () => string | undefined) => new NeedsLimitations(f).list(T1, REF);
     expect(await run(() => text)).toMatchObject({ ok: true });
     expect(await run(() => undefined)).toMatchObject({ ok: false });
-    expect(await run(() => { throw new Error("x"); })).toMatchObject({ ok: false });
-    expect(await run(() => "nothing")).toMatchObject({ ok: false, reason: expect.stringContaining("no limitations") });
+    expect(
+      await run(() => {
+        throw new Error("x");
+      }),
+    ).toMatchObject({ ok: false });
+    expect(await run(() => "nothing")).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("no limitations"),
+    });
   });
 });
 
@@ -484,5 +557,103 @@ describe("types", () => {
     const body: DocBody = assemble(full());
     expect(JSON.parse(JSON.stringify(body))).toEqual(body);
     expect(fakeSources()).toBeTruthy();
+  });
+});
+
+describe("assemble with a minimal blueprint (every optional field absent)", () => {
+  const minimal = () =>
+    ablDoc((d) => {
+      d.metadata = { name: "minimal-agent", version: "1.0.0" };
+      d.spec = {
+        riskClassification: { level: "minimal", rationale: "internal helper" },
+        model: { primary: { provider: "anthropic", model: "m" } },
+        instructions: { system: "Help." },
+      };
+    });
+  const run = (over: Partial<AssembleInput> = {}) =>
+    assemble({
+      ref: { name: "minimal-agent", version: "1.0.0" },
+      blueprint: sourced(
+        snapshot({ abl: minimal(), registry: null, origin: "tenant", versions: [] }),
+      ),
+      evals: sourced({ runs: [], attestations: [], gate: [], online: [] }),
+      policies: sourced([]),
+      audit: sourced(STATS),
+      limitations: sourced([]),
+      ...over,
+    });
+
+  it("applies the compiler's defaults and states the absent facts as gaps, not as invented values", () => {
+    const body = run();
+    const g = body.sections["general"]?.data as Record<string, unknown>;
+    expect(g).toMatchObject({
+      description: null,
+      owner: null,
+      intended_purpose: null,
+      channels: [],
+      transparency_notice: null,
+    });
+    const dev = body.sections["development"]?.data as Record<string, unknown>;
+    expect(dev["tools"]).toEqual([]);
+    expect(dev["routing_stages"]).toEqual(["llm"]);
+    expect(dev["memory"]).toEqual({
+      run: true,
+      session: false,
+      long_term: false,
+      knowledge_bases: [],
+    });
+    expect(dev["registry"]).toBeNull();
+    expect(dev["budgets"]).toBeNull();
+    expect(dev["process"]).toBeNull();
+    const o = body.sections["oversight"]?.data as Record<string, unknown>;
+    expect(o).toMatchObject({ human_oversight_required: false, approver_roles: [] });
+    const dg = body.sections["data_governance"]?.data as Record<string, unknown>;
+    expect(dg).toMatchObject({ phi: false, residency: null });
+    expect(body.sections["lifecycle"]?.data).toMatchObject({ versions: [] });
+    expect(body.gaps.some((x) => x.item === "online_sampling")).toBe(true);
+    expect(body.gaps.some((x) => x.item === "registry_provenance")).toBe(true);
+    expect(body.sections["performance"]?.status).toBe("complete");
+  });
+
+  it("describes models with fallbacks and custom endpoints without leaking the endpoint", () => {
+    const abl = ablDoc((d) => {
+      d.spec.model.fallbacks = [
+        {
+          provider: "azure-openai",
+          model: "x",
+          endpoint: "https://secret.example/v1",
+          params: { temperature: 0.2 },
+        },
+      ];
+    });
+    const body = run({ blueprint: sourced(snapshot({ abl })) });
+    const models = (body.sections["general"]?.data as { models: Record<string, unknown>[] }).models;
+    expect(models.map((m) => m["role"])).toEqual(["primary", "fallback"]);
+    expect(models[1]).toMatchObject({ custom_endpoint: true, params: { temperature: 0.2 } });
+    expect(JSON.stringify(body)).not.toContain("secret.example");
+  });
+
+  it("a schema-invalid blueprint is a gap in the manifest and keeps the rest of the document", () => {
+    const abl = ablDoc((d) => {
+      (d.spec as unknown as Record<string, unknown>)["unknownField"] = 1;
+    });
+    const body = run({ blueprint: sourced(snapshot({ abl })) });
+    expect(body.gaps.find((x) => x.item === "compiled_manifest")?.reason).toMatch(/schema issue/);
+    expect(
+      (body.sections["development"]?.data as Record<string, unknown>)["compiled_manifest_sha256"],
+    ).toBeNull();
+  });
+
+  it("high risk without evals on the eval side: declared suites with no runs are listed", () => {
+    const body = assemble({
+      ref: REF,
+      blueprint: sourced(snapshot()),
+      evals: sourced({ runs: [], attestations: [], gate: [], online: [] }),
+      policies: sourced([]),
+      audit: sourced(STATS),
+      limitations: sourced([]),
+    });
+    expect(body.gaps.filter((g) => g.item.startsWith("suite:")).length).toBe(1);
+    expect(body.annex_iv_coverage.find((c) => c.point === "2(g)")?.status).toBe("partial");
   });
 });

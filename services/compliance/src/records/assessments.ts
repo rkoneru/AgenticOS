@@ -61,10 +61,7 @@ export class AssessmentService {
   }
 
   /** The latest version together with the revision the update must be conditional on. */
-  private async latest(
-    tenantId: string,
-    id: string,
-  ): Promise<AssessmentRecord & { _rev: number }> {
+  private async latest(tenantId: string, id: string): Promise<AssessmentRecord & { _rev: number }> {
     const all = await this.docs(tenantId, id);
     const last = all[all.length - 1];
     if (!last) throw notFound("assessment not found");
@@ -153,7 +150,8 @@ export class AssessmentService {
     }
     const { _rev: rev, ...cur } = await this.latest(p.tenantId, id);
     if (cur.version !== expectedVersion) throw conflict("assessment changed since it was read");
-    if (cur.state === "in_review") throw conflict("assessment is waiting for review; withdraw it first");
+    if (cur.state === "in_review")
+      throw conflict("assessment is waiting for review; withdraw it first");
     const f = this.parse({ ...cur, ...patch, system_id: cur.system_id });
     const at = iso(this.c.now());
     const fresh = isFinal(cur.state);
@@ -189,7 +187,8 @@ export class AssessmentService {
       { assessment_id: id, version: next.version },
       () =>
         guarded(async () => {
-          if (fresh) await this.c.docs.insert(p.tenantId, "assessments", key(id, next.version), next);
+          if (fresh)
+            await this.c.docs.insert(p.tenantId, "assessments", key(id, next.version), next);
           else {
             await this.c.docs.update(p.tenantId, "assessments", key(id, cur.version), rev, next);
           }
@@ -273,16 +272,11 @@ export class AssessmentService {
       reviewed_at: at,
       review_comment: note === "" ? null : note,
     };
-    return mutate(
-      this.c,
-      p,
-      action,
-      { assessment_id: id, version: cur.version, decision },
-      () =>
-        guarded(async () => {
-          await this.c.docs.update(p.tenantId, "assessments", key(id, cur.version), rev, next);
-          return this.view(next, next.version);
-        }, "assessment"),
+    return mutate(this.c, p, action, { assessment_id: id, version: cur.version, decision }, () =>
+      guarded(async () => {
+        await this.c.docs.update(p.tenantId, "assessments", key(id, cur.version), rev, next);
+        return this.view(next, next.version);
+      }, "assessment"),
     );
   }
 
@@ -314,7 +308,8 @@ export class AssessmentService {
       })
     ).map((d) => d.data);
     const latest = new Map<string, number>();
-    for (const a of rows) latest.set(a.assessment_id, Math.max(latest.get(a.assessment_id) ?? 0, a.version));
+    for (const a of rows)
+      latest.set(a.assessment_id, Math.max(latest.get(a.assessment_id) ?? 0, a.version));
     // The latest version is computed over ALL versions of the tenant's assessments of the system (not only the filtered state).
     return rows
       .filter((a) => a.version === latest.get(a.assessment_id))

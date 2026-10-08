@@ -1,5 +1,5 @@
 import { compileAbl, type AblDocument } from "@axis/abl";
-import { hashOf, sha256Hex } from "../canonical.js";
+import { canonicalJson, hashOf, sha256Hex } from "../canonical.js";
 import type { BlueprintRef } from "../types.js";
 import type {
   AuditStats,
@@ -84,8 +84,12 @@ function oneLine<T>(s: Sourced<T>): Sourced<T> {
 
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
+/** Sorts by `key`; items with the same key are ordered by their canonical JSON, so the order never depends on the input order. */
 function sortedBy<T>(xs: readonly T[], key: (x: T) => string): T[] {
-  return [...xs].sort((a, b) => cmp(key(a), key(b)));
+  return [...xs]
+    .map((x) => ({ x, k: key(x), j: canonicalJson(x) }))
+    .sort((a, b) => cmp(a.k, b.k) || cmp(a.j, b.j))
+    .map((e) => e.x);
 }
 
 function sortedRecord(r: Record<string, number>): Record<string, number> {
@@ -186,10 +190,14 @@ export function assemble(input: AssembleInput): DocBody {
         reason: "the blueprint does not declare riskClassification.intendedPurpose",
       });
     if (abl.metadata.owner === undefined)
-      gaps.push({ item: "provider_owner", reason: "the blueprint does not declare metadata.owner" });
+      gaps.push({
+        item: "provider_owner",
+        reason: "the blueprint does not declare metadata.owner",
+      });
     gaps.push({
       item: "hardware_and_deployer_instructions",
-      reason: "hardware description and instructions for use are not produced by the platform; the provider supplies them",
+      reason:
+        "hardware description and instructions for use are not produced by the platform; the provider supplies them",
     });
     b.section(
       "general",
@@ -210,7 +218,14 @@ export function assemble(input: AssembleInput): DocBody {
       },
       gaps,
     );
-  } else b.section("general", "General description of the AI system", ["1(a)", "1(b)", "1(c)", "1(d)", "1(g)"], null, bpGaps);
+  } else
+    b.section(
+      "general",
+      "General description of the AI system",
+      ["1(a)", "1(b)", "1(c)", "1(d)", "1(g)"],
+      null,
+      bpGaps,
+    );
 
   // ---- 2. Elements and development process (Annex IV 2)
   if (abl && spec && bp) {
@@ -219,7 +234,8 @@ export function assemble(input: AssembleInput): DocBody {
     if (bp.registry === null)
       gaps.push({
         item: "registry_provenance",
-        reason: "the blueprint is not published in the registry; there is no signature or provenance to verify",
+        reason:
+          "the blueprint is not published in the registry; there is no signature or provenance to verify",
       });
     else if (!bp.registry.verification.ok)
       gaps.push({
@@ -272,14 +288,24 @@ export function assemble(input: AssembleInput): DocBody {
       },
       gaps,
     );
-  } else b.section("development", "Elements of the system and its development process", ["2(a)", "2(b)", "2(c)", "2(g)", "2(h)"], null, bpGaps);
+  } else
+    b.section(
+      "development",
+      "Elements of the system and its development process",
+      ["2(a)", "2(b)", "2(c)", "2(g)", "2(h)"],
+      null,
+      bpGaps,
+    );
 
   // ---- Human oversight and control (Annex IV 2(e), 3; Art. 14)
   if (spec) {
     const hv = spec.riskClassification.humanOversight;
     const gaps: { item: string; reason: string }[] = [];
     if (spec.riskClassification.level === "high" && !(hv?.required === true))
-      gaps.push({ item: "human_oversight", reason: "a high-risk blueprint without required human oversight" });
+      gaps.push({
+        item: "human_oversight",
+        reason: "a high-risk blueprint without required human oversight",
+      });
     if (!i.policies.ok) gaps.push({ item: "active_policy_packs", reason: i.policies.reason });
     b.section(
       "oversight",
@@ -288,14 +314,16 @@ export function assemble(input: AssembleInput): DocBody {
       {
         human_oversight_required: hv?.required ?? false,
         approver_roles: sortedBy(hv?.approverRoles ?? [], (x) => x),
-        enforcement: "every tool, memory-write and outbound action is decided by the Risk Kernel (fail-closed); REQUIRE_APPROVAL routes to the approvals service",
+        enforcement:
+          "every tool, memory-write and outbound action is decided by the Risk Kernel (fail-closed); REQUIRE_APPROVAL routes to the approvals service",
         active_policy_packs: i.policies.ok
           ? sortedBy(i.policies.value, (p) => `${p.id}@${p.version}`)
           : null,
       },
       gaps,
     );
-  } else b.section("oversight", "Human oversight and control measures", ["2(e)", "3"], null, bpGaps);
+  } else
+    b.section("oversight", "Human oversight and control measures", ["2(e)", "3"], null, bpGaps);
 
   // ---- 5. Risk management (Annex IV 5; Art. 9)
   if (spec) {
@@ -354,11 +382,19 @@ export function assemble(input: AssembleInput): DocBody {
       const declared = sortedBy(spec?.evals?.suites ?? [], (s) => s.ref);
       for (const d of declared)
         if (!ev.runs.some((r) => r.declared_ref === d.ref && r.status === "passed"))
-          gaps.push({ item: `suite:${d.ref}`, reason: "no passing run of this declared suite for this blueprint content" });
+          gaps.push({
+            item: `suite:${d.ref}`,
+            reason: "no passing run of this declared suite for this blueprint content",
+          });
       for (const g of ev.gate)
-        if (!g.pass) gaps.push({ item: `gate:${g.suite_ref}`, reason: `gate verdict is not a pass (${[...g.reasons].sort(cmp).join(",")})` });
+        if (!g.pass)
+          gaps.push({
+            item: `gate:${g.suite_ref}`,
+            reason: `gate verdict is not a pass (${[...g.reasons].sort(cmp).join(",")})`,
+          });
       for (const a of ev.attestations)
-        if (!a.verified) gaps.push({ item: `attestation:${a.run_id}`, reason: "attestation did not verify" });
+        if (!a.verified)
+          gaps.push({ item: `attestation:${a.run_id}`, reason: "attestation did not verify" });
       data = {
         declared_suites: declared,
         runs: sortedBy(ev.runs, (r) => `${r.suite_ref}\u0000${r.run_id}`),
@@ -379,7 +415,10 @@ export function assemble(input: AssembleInput): DocBody {
   if (bp) {
     const gaps: { item: string; reason: string }[] = [];
     if (bp.versions === null)
-      gaps.push({ item: "version_history", reason: "the source cannot list other versions of this blueprint" });
+      gaps.push({
+        item: "version_history",
+        reason: "the source cannot list other versions of this blueprint",
+      });
     b.section(
       "lifecycle",
       "Changes through the lifecycle",
@@ -432,9 +471,15 @@ export function assemble(input: AssembleInput): DocBody {
     if (i.evals.ok) {
       const online = i.evals.value.online;
       if (online === null)
-        gaps.push({ item: "online_sampling", reason: "the source cannot report production sampling" });
+        gaps.push({
+          item: "online_sampling",
+          reason: "the source cannot report production sampling",
+        });
       else if (online.filter((o) => o.enabled).length === 0)
-        gaps.push({ item: "online_sampling", reason: "no enabled production sampling configuration" });
+        gaps.push({
+          item: "online_sampling",
+          reason: "no enabled production sampling configuration",
+        });
       data = {
         online_sampling: online ? sortedBy(online, (o) => o.id) : null,
         plan: "the post-market monitoring plan is a provider document; this section lists the platform's monitoring facts only",
@@ -475,28 +520,75 @@ export function assemble(input: AssembleInput): DocBody {
 }
 
 /** Annex IV points -> the sections that carry them. Points the platform never produces are always gaps. */
-const POINTS: { point: string; title: string; section: SectionKey | null; note: string | null }[] = [
-  { point: "1", title: "General description of the AI system", section: "general", note: null },
-  { point: "2(a)-(c)", title: "Methods, design specifications, architecture", section: "development", note: null },
-  { point: "2(d)", title: "Data requirements and datasheets", section: "data_governance", note: null },
-  { point: "2(e)", title: "Human oversight measures", section: "oversight", note: null },
-  { point: "2(g)", title: "Validation and testing, test logs", section: "performance", note: null },
-  { point: "2(h)", title: "Cybersecurity measures", section: "development", note: "see docs/security for the per-service threat models" },
-  { point: "3", title: "Monitoring, functioning and control; limitations", section: "limitations", note: null },
-  { point: "4", title: "Appropriateness of performance metrics", section: "performance", note: null },
-  { point: "5", title: "Risk management system", section: "risk_management", note: null },
-  { point: "6", title: "Relevant changes through the lifecycle", section: "lifecycle", note: null },
-  { point: "7", title: "Harmonised standards applied", section: null, note: "not produced by the platform" },
-  { point: "8", title: "EU declaration of conformity", section: null, note: "issued by the provider after its own conformity assessment" },
-  { point: "9", title: "Post-market monitoring system", section: "post_market", note: null },
-];
+const POINTS: { point: string; title: string; section: SectionKey | null; note: string | null }[] =
+  [
+    { point: "1", title: "General description of the AI system", section: "general", note: null },
+    {
+      point: "2(a)-(c)",
+      title: "Methods, design specifications, architecture",
+      section: "development",
+      note: null,
+    },
+    {
+      point: "2(d)",
+      title: "Data requirements and datasheets",
+      section: "data_governance",
+      note: null,
+    },
+    { point: "2(e)", title: "Human oversight measures", section: "oversight", note: null },
+    {
+      point: "2(g)",
+      title: "Validation and testing, test logs",
+      section: "performance",
+      note: null,
+    },
+    {
+      point: "2(h)",
+      title: "Cybersecurity measures",
+      section: "development",
+      note: "see docs/security for the per-service threat models",
+    },
+    {
+      point: "3",
+      title: "Monitoring, functioning and control; limitations",
+      section: "limitations",
+      note: null,
+    },
+    {
+      point: "4",
+      title: "Appropriateness of performance metrics",
+      section: "performance",
+      note: null,
+    },
+    { point: "5", title: "Risk management system", section: "risk_management", note: null },
+    {
+      point: "6",
+      title: "Relevant changes through the lifecycle",
+      section: "lifecycle",
+      note: null,
+    },
+    {
+      point: "7",
+      title: "Harmonised standards applied",
+      section: null,
+      note: "not produced by the platform",
+    },
+    {
+      point: "8",
+      title: "EU declaration of conformity",
+      section: null,
+      note: "issued by the provider after its own conformity assessment",
+    },
+    { point: "9", title: "Post-market monitoring system", section: "post_market", note: null },
+  ];
 
 function coverage(sections: Record<string, Section>): CoveragePoint[] {
   return POINTS.map((p) => {
     if (p.section === null)
       return { point: p.point, title: p.title, section: null, status: "gap", note: p.note };
     const s = sections[p.section] as Section;
-    const status = s.status === "complete" ? "evidenced" : s.status === "partial" ? "partial" : "gap";
+    const status =
+      s.status === "complete" ? "evidenced" : s.status === "partial" ? "partial" : "gap";
     return { point: p.point, title: p.title, section: p.section, status, note: p.note };
   });
 }

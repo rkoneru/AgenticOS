@@ -76,7 +76,8 @@ export function parseFramework(
     return { framework: null, problems };
   }
   for (const k of Object.keys(raw))
-    if (!["framework", "title", "version", "scope", "rows"].includes(k)) add(null, `unknown key ${k}`);
+    if (!["framework", "title", "version", "scope", "rows"].includes(k))
+      add(null, `unknown key ${k}`);
   const str = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
   if (!str(raw["framework"])) add(null, "framework must be a non-empty string");
   if (!str(raw["title"])) add(null, "title must be a non-empty string");
@@ -119,7 +120,8 @@ export function parseFramework(
           add(id, `evidence #${j} must be {kind: ${EVIDENCE_KINDS.join("|")}, ref: string}`);
           return;
         }
-        for (const k of Object.keys(e)) if (k !== "kind" && k !== "ref") add(id, `evidence #${j}: unknown key ${k}`);
+        for (const k of Object.keys(e))
+          if (k !== "kind" && k !== "ref") add(id, `evidence #${j}: unknown key ${k}`);
         evidence.push({ kind: e["kind"] as EvidenceKind, ref: e["ref"] as string });
       });
     if (!(STATUSES as readonly string[]).includes(r["status"] as string))

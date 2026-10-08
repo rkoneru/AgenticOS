@@ -54,7 +54,11 @@ export function sealDocument(i: SealInput, sealer: DocSealer): SealedDocument {
     content_hash,
     meta,
     markdown,
-    seal: { alg: sealer.alg, key_id: sealer.keyId, sig: sealer.sign(sealPayload(content_hash, meta)) },
+    seal: {
+      alg: sealer.alg,
+      key_id: sealer.keyId,
+      sig: sealer.sign(sealPayload(content_hash, meta)),
+    },
   };
 }
 

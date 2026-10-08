@@ -1,0 +1,237 @@
+framework: hipaa
+title: HIPAA Security Rule and Privacy Rule control matrix
+version: 1
+scope: >-
+  Maps the administrative, physical and technical safeguards of the HIPAA Security Rule, and the Privacy Rule requirements that
+  affect a platform which may handle protected health information, to AXIS mechanisms and to evidence in this repository. AXIS is
+  designed for and evidence-ready toward use by a covered entity or business associate. No business associate agreement has been
+  signed with anyone, no PHI has been processed, and no assessment has been performed; PHI mode is a technical control, not an
+  authorisation to process PHI.
+rows:
+  - id: HIPAA-164.308a1
+    requirement: A security management process includes risk analysis, risk management, sanction policy and review of information system activity.
+    mechanism: >-
+      Per-service threat models record risks and mitigations; the audit chain and AGIL support activity review; sanctions are an
+      organisational matter.
+    code: [services/agil/src/explain.ts]
+    config: []
+    evidence:
+      - { kind: doc, ref: docs/security/risk-kernel-threat-model.md }
+      - { kind: test, ref: services/agil/test/explain.test.ts }
+    status: Prototype
+    notes: No formal risk analysis of an operator's PHI environment exists, and there is no sanction policy or activity review schedule.
+  - id: HIPAA-164.308a2
+    requirement: A security official is identified and responsible for the security programme.
+    mechanism: None in the product.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: An organisational designation by the operator.
+  - id: HIPAA-164.308a3
+    requirement: Workforce access to ePHI is authorised, supervised and terminated appropriately.
+    mechanism: >-
+      Role-based membership with SCIM deprovisioning, session and key revocation, and tenant-scoped audit of membership changes.
+    code:
+      [
+        services/control-plane/src/scim.ts,
+        services/control-plane/src/sessions.ts,
+        services/control-plane/src/admin.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/control-plane/test/scim.test.ts }
+      - { kind: test, ref: services/control-plane/test/admin.test.ts }
+    status: Prototype
+    notes: Workforce clearance procedures and supervision are not modelled; tested against a fake IdP only.
+  - id: HIPAA-164.308a4
+    requirement: Information access management restricts access to ePHI to authorised persons and applications.
+    mechanism: >-
+      Roles decided by a policy pack, API key scopes, memory ACLs, PHI deny rules in policy, and tenant isolation in the database.
+    code:
+      [
+        policies/phi-redaction/pack.yaml,
+        services/memory/src/acl.ts,
+        services/control-plane/src/authz.ts,
+      ]
+    config: [policies/phi-redaction/composition.cases.yaml]
+    evidence:
+      - { kind: test, ref: services/memory/test/isolation.test.ts }
+      - { kind: test, ref: services/control-plane/test/api-authz.test.ts }
+      - { kind: make, ref: policy-test }
+    status: Built
+    notes: Access to ePHI outside the platform (the operator's own systems) is out of scope.
+  - id: HIPAA-164.308a5
+    requirement: A security awareness and training programme exists for the workforce.
+    mechanism: None in the product.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: An organisational control for the operator.
+  - id: HIPAA-164.308a6
+    requirement: Security incidents are identified, responded to, mitigated and documented.
+    mechanism: >-
+      Kill switches, the append-only audit chain and the export for forensics give technical means; the response procedure is not
+      written.
+    code: [services/risk-kernel/src/stores.ts, services/audit/src/export.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/export.test.ts }
+      - { kind: doc, ref: docs/runbooks/risk-kernel.md }
+    status: Designed
+    notes: No incident response plan, roles or tabletop exercise exists.
+  - id: HIPAA-164.308a7
+    requirement: A contingency plan covers data backup, disaster recovery and emergency mode operation, and is tested.
+    mechanism: None yet; backup and tested restore are planned in Phase 9.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No backup has been taken or restored; fail-closed behaviour is the only emergency-mode property.
+  - id: HIPAA-164.308a8
+    requirement: Periodic technical and non-technical evaluation of the security programme is performed.
+    mechanism: >-
+      End-to-end suites, mutation checks of safety logic and eval gates are run per phase; a separate review audits each phase exit.
+    code: [e2e/mutation_phase8.py]
+    config: []
+    evidence:
+      - { kind: make, ref: e2e-phase6 }
+      - { kind: make, ref: e2e-phase4 }
+    status: Prototype
+    notes: Internal evaluations only; no independent assessment or penetration test.
+  - id: HIPAA-164.308b
+    requirement: A business associate contract is in place before a business associate creates, receives, maintains or transmits ePHI.
+    mechanism: None in the product. Technical controls support the obligations a BAA would impose.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: >-
+      No BAA exists with any party, including model providers, channel providers and cloud providers. PHI must not be sent to a
+      model provider or a channel provider without one; the platform cannot check that a BAA exists.
+  - id: HIPAA-164.310a
+    requirement: Facility access controls limit physical access to systems that hold ePHI.
+    mechanism: None in the product; inherited from the hosting provider.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Nothing is hosted yet.
+  - id: HIPAA-164.310bc
+    requirement: Workstation use and security are specified and implemented.
+    mechanism: None in the product.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: An organisational control for the operator's workforce.
+  - id: HIPAA-164.310d
+    requirement: Hardware and media containing ePHI are controlled on receipt, movement, re-use and disposal.
+    mechanism: None in the product.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Inherited from the hosting provider; no disposal procedure is represented.
+  - id: HIPAA-164.312a1
+    requirement: Technical access control allows only authorised persons and software to access ePHI, with unique user identification, emergency access, automatic logoff and encryption.
+    mechanism: >-
+      Unique member identity per session or key, sessions that expire and can be revoked, tenant row-level security, and sealed storage
+      of tenant secrets.
+    code:
+      [
+        services/control-plane/src/sessions.ts,
+        services/control-plane/src/crypto.ts,
+        packages/db/migrations/0001_tenancy_and_rls.sql,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/control-plane/test/sessions.test.ts }
+      - { kind: test, ref: packages/db/test/tenancy.test.ts }
+    status: Prototype
+    notes: No emergency access procedure; encryption at rest of the database is not configured by the repository and key management is a fake KMS.
+  - id: HIPAA-164.312b
+    requirement: Audit controls record and examine activity in systems that contain or use ePHI.
+    mechanism: >-
+      Every governed action has a decision row in an append-only, hash-chained log with trace ids; the chain can be verified and
+      exported; runs are replayable from events.
+    code:
+      [
+        services/audit/src/chain.ts,
+        services/audit/src/export.ts,
+        packages/contracts/src/audit-chain.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/pg.test.ts }
+      - { kind: test, ref: packages/contracts/test/audit-chain.test.ts }
+      - { kind: make, ref: e2e-core }
+    status: Built
+    notes: Inputs and outputs are stored as hashes; the log proves what was decided, not the PHI itself. KMS signing and WORM export are not built.
+  - id: HIPAA-164.312c
+    requirement: Policies protect ePHI from improper alteration or destruction, and mechanisms authenticate ePHI.
+    mechanism: >-
+      Append-only tables with database triggers, hash-chained events with signed checkpoints, signed blueprints and verified provenance,
+      content hashes on eval runs.
+    code: [packages/db/migrations/0005_audit_checkpoints.sql, services/audit/src/checkpoint.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/audit/test/checkpoint.test.ts }
+      - { kind: test, ref: packages/db/test/hardening.test.ts }
+    status: Built
+    notes: Protects the platform's records; integrity of the operator's source systems is out of scope.
+  - id: HIPAA-164.312d
+    requirement: Persons or entities seeking access to ePHI are authenticated.
+    mechanism: SSO with verified assertions, session tokens stored as hashes, API keys stored as hashes, signed webhooks for channels.
+    code:
+      [
+        services/control-plane/src/sso.ts,
+        services/control-plane/src/apikeys.ts,
+        services/channels/src/jwt.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/control-plane/test/sso.test.ts }
+      - { kind: test, ref: services/channels/test/jwt.test.ts }
+    status: Prototype
+    notes: Fake IdP only; no multi-factor requirement is enforced by the platform.
+  - id: HIPAA-164.312e
+    requirement: Transmission security guards ePHI against unauthorised access in transit, including integrity controls and encryption.
+    mechanism: >-
+      Webhook signatures and replay protection, HSTS support in the gateway behind TLS termination, strict CSP and CSRF checks in the
+      console. TLS termination itself is not in the repository.
+    code: [apps/api-gateway/src/server.ts, services/channels/src/crypto.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: apps/api-gateway/test/hardening.test.ts }
+      - { kind: test, ref: services/channels/test/crypto.test.ts }
+    status: Designed
+    notes: Internal service links are loopback HTTP or gRPC without TLS in the dev composition; encryption in transit between services is not designed for production yet.
+  - id: HIPAA-164.514d
+    requirement: Uses and disclosures of PHI are limited to the minimum necessary, with redaction and role-based limits.
+    mechanism: >-
+      PHI mode redacts before persistence in memory and channels, PHI-flagged datasets are redacted by the Eval Hub, policy rules deny
+      PHI to disallowed destinations, and ABL requires a residency declaration for PHI blueprints.
+    code:
+      [
+        services/memory/src/redact.ts,
+        services/channels/src/redact.ts,
+        services/eval-hub/src/redact.ts,
+        policies/phi-redaction/pack.yaml,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/memory/test/redact.test.ts }
+      - { kind: test, ref: runtime/tests/test_redaction_tools.py }
+      - { kind: make, ref: e2e-phase5 }
+    status: Prototype
+    notes: Redaction is pattern based and has false negatives; a cross-store PHI canary test is planned in Phase 9 and is not in this tree.
+  - id: HIPAA-164.404-408
+    requirement: Breaches of unsecured PHI are notified to individuals, the regulator and in some cases the media, without unreasonable delay.
+    mechanism: None in the product beyond the audit trail that supports the investigation.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: No breach risk assessment, register or notification templates exist.

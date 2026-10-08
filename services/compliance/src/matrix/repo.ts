@@ -1,6 +1,12 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { checkMatrix, makeTargetsOf, type CheckResult, type Finding, type RepoFs } from "./check.js";
+import {
+  checkMatrix,
+  makeTargetsOf,
+  type CheckResult,
+  type Finding,
+  type RepoFs,
+} from "./check.js";
 import { renderFramework, renderSummary } from "./render.js";
 import { REQUIRED_ROWS } from "./required.js";
 
@@ -26,15 +32,20 @@ export function loadAndCheck(root: string, required = REQUIRED_ROWS): RepoCheck 
   const dir = join(resolve(root), MATRIX_DIR);
   const files: Record<string, string> = {};
   if (existsSync(dir))
-    for (const f of readdirSync(dir).filter((x) => x.endsWith(".yaml")).sort())
+    for (const f of readdirSync(dir)
+      .filter((x) => x.endsWith(".yaml"))
+      .sort())
       files[f] = readFileSync(join(dir, f), "utf8");
   const fs = nodeFs(root);
-  const makeTargets = fs.exists("Makefile") ? makeTargetsOf(fs.read("Makefile")) : new Set<string>();
+  const makeTargets = fs.exists("Makefile")
+    ? makeTargetsOf(fs.read("Makefile"))
+    : new Set<string>();
   const res = checkMatrix({ files, fs, makeTargets, required });
   const rendered: Record<string, string> = {};
   const names: Record<string, string> = {};
   for (const fw of res.frameworks) {
-    const src = Object.keys(files).find((f) => f === `${fw.framework}.yaml`) ?? `${fw.framework}.yaml`;
+    const src =
+      Object.keys(files).find((f) => f === `${fw.framework}.yaml`) ?? `${fw.framework}.yaml`;
     const out = `${fw.framework}.md`;
     names[fw.framework] = out;
     rendered[`${RENDER_DIR}/${out}`] = renderFramework(fw, `${MATRIX_DIR}/${src}`);
@@ -48,13 +59,20 @@ export function driftFindings(root: string, rendered: Record<string, string>): F
   const out: Finding[] = [];
   for (const [path, text] of Object.entries(rendered)) {
     const abs = join(resolve(root), path);
-    if (!existsSync(abs)) out.push({ framework: path, row: null, code: "M040", message: "rendered file is missing" });
+    if (!existsSync(abs))
+      out.push({ framework: path, row: null, code: "M040", message: "rendered file is missing" });
     else if (readFileSync(abs, "utf8") !== text)
-      out.push({ framework: path, row: null, code: "M040", message: "rendered file is out of date with the YAML" });
+      out.push({
+        framework: path,
+        row: null,
+        code: "M040",
+        message: "rendered file is out of date with the YAML",
+      });
   }
   return out;
 }
 
 export function writeRendered(root: string, rendered: Record<string, string>): void {
-  for (const [path, text] of Object.entries(rendered)) writeFileSync(join(resolve(root), path), text);
+  for (const [path, text] of Object.entries(rendered))
+    writeFileSync(join(resolve(root), path), text);
 }

@@ -22,7 +22,12 @@ export class Problems {
 }
 
 export const RISK_LEVELS: readonly RiskLevel[] = ["minimal", "limited", "high"];
-export const LIFECYCLE_STAGES: readonly LifecycleStage[] = ["design", "development", "deployed", "retired"];
+export const LIFECYCLE_STAGES: readonly LifecycleStage[] = [
+  "design",
+  "development",
+  "deployed",
+  "retired",
+];
 export const RATINGS: readonly RiskRating[] = ["low", "medium", "high", "critical"];
 export const LEVELS: readonly Level3[] = ["low", "medium", "high"];
 
@@ -40,8 +45,9 @@ export function text(
   max = MAX_TEXT,
   required = true,
 ): string {
+  if (!required && (v === undefined || v === "")) return "";
   if (typeof v !== "string" || v.trim() === "" || v.length > max) {
-    if (required || v !== undefined) pr.add(path);
+    pr.add(path);
     return "";
   }
   return v.trim();

@@ -62,7 +62,8 @@ export class InventoryService {
     const raw = (input as { system_id?: unknown }).system_id;
     if (raw !== undefined && (typeof raw !== "string" || !SYSTEM_ID.test(raw)))
       throw invalid("system: invalid fields", ["/system_id"]);
-    const id = (raw as string | undefined) ?? `sys-${this.c.newId().replaceAll("-", "").slice(0, 12)}`;
+    const id =
+      (raw as string | undefined) ?? `sys-${this.c.newId().replaceAll("-", "").slice(-12)}`;
     const at = iso(this.c.now());
     const rec: SystemRecord = {
       system_id: id,
@@ -114,7 +115,12 @@ export class InventoryService {
       () =>
         guarded(async () => {
           await this.c.docs.update(p.tenantId, "systems", systemId, head.rev, next);
-          await this.c.docs.insert(p.tenantId, "system_versions", `${systemId}@${next.version}`, next);
+          await this.c.docs.insert(
+            p.tenantId,
+            "system_versions",
+            `${systemId}@${next.version}`,
+            next,
+          );
           return next;
         }, "system"),
     );
@@ -125,7 +131,11 @@ export class InventoryService {
     const d =
       version === undefined
         ? await this.c.docs.get<SystemRecord>(p.tenantId, "systems", systemId)
-        : await this.c.docs.get<SystemRecord>(p.tenantId, "system_versions", `${systemId}@${version}`);
+        : await this.c.docs.get<SystemRecord>(
+            p.tenantId,
+            "system_versions",
+            `${systemId}@${version}`,
+          );
     if (!d) throw notFound("system not found");
     return d.data;
   }

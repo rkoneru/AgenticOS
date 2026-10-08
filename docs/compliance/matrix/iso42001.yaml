@@ -1,0 +1,251 @@
+framework: iso42001
+title: ISO/IEC 42001 AI management system control matrix
+version: 1
+scope: >-
+  Maps the clauses 4 to 10 of the ISO/IEC 42001:2023 management system standard and the control objectives of its Annex A to AXIS
+  mechanisms and to evidence in this repository. AXIS is designed for and evidence-ready toward an AI management system; it does not
+  constitute one, because a management system is an organisation's own set of policies, roles and reviews. Control numbers follow the
+  Annex A grouping of the 2023 edition and must be checked against the purchased standard before use in an audit.
+rows:
+  - id: ISO42001-4.1-4.4
+    requirement: The organisation determines its context, interested parties, the scope of the AI management system and establishes the system.
+    mechanism: The AI system inventory records each system with owner, purpose, stakeholders and data categories; scope itself is a management decision.
+    code: [services/compliance/src/records/inventory.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+    status: Prototype
+    notes: The inventory supports defining scope; context analysis and interested-party requirements are not modelled.
+  - id: ISO42001-5.1-5.3
+    requirement: Top management shows leadership, establishes an AI policy and assigns roles, responsibilities and authorities.
+    mechanism: Roles and their authorities are enforced technically (seven tenant roles, reviewer independence); policy and leadership are organisational.
+    code: [services/control-plane/src/roles.ts, services/compliance/src/authz.ts]
+    config: [policies/control-plane/pack.yaml]
+    evidence:
+      - { kind: test, ref: services/control-plane/test/api-authz.test.ts }
+    status: Prototype
+    notes: There is no AI policy document or management commitment record in the repository.
+  - id: ISO42001-6.1
+    requirement: Risks and opportunities are planned for, including an AI risk assessment, risk treatment and AI system impact assessment.
+    mechanism: >-
+      Mandatory risk classification per blueprint; AI impact assessment records with risk ratings, mitigations, residual risk, review
+      dates and an independent reviewer; threat models per component.
+    code: [services/compliance/src/records/assessments.ts, packages/abl/src/lint.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+      - { kind: test, ref: packages/abl/test/lint.test.ts }
+    status: Prototype
+    notes: No organisation-level risk register or risk acceptance criteria; treatment plans exist only as mitigation text in assessments.
+  - id: ISO42001-6.2-6.3
+    requirement: AI objectives are set with plans to achieve them, and changes to the management system are planned.
+    mechanism: Evaluation suites with thresholds express objectives per blueprint; contract freezes and ADRs control change.
+    code: [services/eval-hub/src/gate.ts, packages/contracts/scripts/freeze.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/eval-hub/test/gate.test.ts }
+      - { kind: test, ref: packages/contracts/test/freeze.test.ts }
+    status: Prototype
+    notes: Objectives at organisation level are not represented.
+  - id: ISO42001-7.1-7.3
+    requirement: Resources, competence and awareness needed for the AI management system are determined and provided.
+    mechanism: None in the product.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Competence records and training are organisational.
+  - id: ISO42001-7.4
+    requirement: Internal and external communication relevant to the AI management system is determined.
+    mechanism: Specs, runbooks, an API reference and generated technical documentation exist; a communications plan does not.
+    code: [apps/docs-site]
+    config: []
+    evidence:
+      - { kind: make, ref: docs-build }
+    status: Designed
+    notes: Nothing is published and there is no external reporting channel.
+  - id: ISO42001-7.5
+    requirement: Documented information is created, updated and controlled.
+    mechanism: >-
+      Documents are versioned in the repository; generated technical documentation is hash-sealed and versioned; the compliance matrix
+      is checked against the repository by a make target.
+    code: [services/compliance/src/matrix/check.ts, services/compliance/src/docgen/verify.ts]
+    config: []
+    evidence:
+      - { kind: make, ref: compliance-check }
+      - { kind: test, ref: services/compliance/test/matrix.test.ts }
+    status: Built
+    notes: Document approval and distribution control beyond version control are not modelled.
+  - id: ISO42001-8.1-8.2
+    requirement: Operational processes are planned and controlled, and AI risk assessments are performed at planned intervals or on change.
+    mechanism: >-
+      Every governed action passes the Risk Kernel; review dates and overdue detection on impact assessments trigger reassessment; eval
+      gates run on each blueprint version.
+    code: [services/risk-kernel/src/kernel.ts, services/compliance/src/records/states.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/risk-kernel/test/kernel.test.ts }
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+    status: Prototype
+    notes: Overdue assessments are reported on read; no notification or scheduling is built.
+  - id: ISO42001-8.3-8.4
+    requirement: AI risk treatment is implemented and AI system impact assessments are carried out.
+    mechanism: Mitigations are controls in the kernel, policy packs and approvals; assessments record them and link blueprint versions.
+    code: [services/compliance/src/records/assessments.ts, services/approvals/src/service.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+    status: Prototype
+    notes: Linking a mitigation text to the control that implements it is manual.
+  - id: ISO42001-9.1
+    requirement: Monitoring, measurement, analysis and evaluation of the AI management system are performed.
+    mechanism: Eval Hub offline and online evaluations, usage metering, audit statistics in the technical documentation.
+    code: [services/eval-hub/src/online.ts, services/compliance/src/docgen/assemble.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/eval-hub/test/online.test.ts }
+    status: Prototype
+    notes: No management-level indicators or dashboards.
+  - id: ISO42001-9.2
+    requirement: Internal audits of the management system are conducted at planned intervals.
+    mechanism: A separate review subagent audits each phase exit; the matrix checker verifies evidence references.
+    code: [services/compliance/src/matrix/run.ts]
+    config: []
+    evidence:
+      - { kind: make, ref: compliance-check }
+    status: Designed
+    notes: These are engineering reviews, not an internal audit programme with independent auditors.
+  - id: ISO42001-9.3
+    requirement: Top management reviews the management system at planned intervals.
+    mechanism: None in the product.
+    code: []
+    config: []
+    evidence: []
+    status: Gap
+    notes: Management review minutes and inputs are organisational.
+  - id: ISO42001-10.1-10.2
+    requirement: The organisation continually improves and handles nonconformities with corrective action.
+    mechanism: Numbered entries in the needs register record deficiencies and their status, and mutation checks surface untested safety logic.
+    code: []
+    config: []
+    evidence:
+      - { kind: doc, ref: docs/NEEDS.md }
+    status: Designed
+    notes: No owner, due date or corrective action verification is tracked.
+  - id: ISO42001-A.2
+    requirement: Policies related to AI exist, are aligned with other policies and are reviewed.
+    mechanism: Tenant policy packs express AI-use rules and are compiled, tested against golden cases and activated through the control plane.
+    code: [packages/policy/src/compile.ts, services/control-plane/src/policies.ts]
+    config: [policies/baseline-deny/pack.yaml]
+    evidence:
+      - { kind: make, ref: policy-test }
+    status: Prototype
+    notes: Technical policy packs are not the organisational AI policy the control asks for.
+  - id: ISO42001-A.3
+    requirement: Internal organisation is set up with roles, responsibilities and a way to report concerns about AI systems.
+    mechanism: Role-based access, approver roles in blueprints and independent review of impact assessments.
+    code: [services/compliance/src/authz.ts, services/compliance/src/records/states.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+    status: Prototype
+    notes: There is no channel for reporting concerns.
+  - id: ISO42001-A.4
+    requirement: Resources for AI systems (data, tooling, computing, people) are identified and documented.
+    mechanism: Blueprints declare models, tools, memory, knowledge bases and budgets; the technical documentation lists them.
+    code: [packages/abl/src/manifest.ts, services/compliance/src/docgen/assemble.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: packages/abl/test/compile.test.ts }
+      - { kind: test, ref: services/compliance/test/docgen.test.ts }
+    status: Built
+    notes: Human resources and computing infrastructure are not described.
+  - id: ISO42001-A.5
+    requirement: The impact of AI systems on individuals, groups and society is assessed and the assessments are documented.
+    mechanism: >-
+      Versioned impact assessment records with affected groups, risks, mitigations, a review date, an independent approver and
+      overdue detection; each mutation is in the audit chain.
+    code:
+      [services/compliance/src/records/assessments.ts, packages/db/migrations/0016_compliance.sql]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/records.test.ts }
+      - { kind: test, ref: services/compliance/test/stores.test.ts }
+      - { kind: test, ref: services/compliance/test/properties.test.ts }
+    status: Built
+    notes: Societal impact is free text; there is no structured methodology or template mapping to a specific standard.
+  - id: ISO42001-A.6.1
+    requirement: Objectives and processes for responsible design and development of AI systems are defined.
+    mechanism: A frozen blueprint language with mandatory risk classification, lint rules for oversight, evals, residency and budgets.
+    code: [packages/abl/src/lint.ts, packages/abl/schema/abl-v1.schema.json]
+    config: []
+    evidence:
+      - { kind: test, ref: packages/abl/test/lint.test.ts }
+    status: Built
+    notes: Applies to blueprints authored for AXIS, not to the foundation models themselves.
+  - id: ISO42001-A.6.2
+    requirement: >-
+      Requirements, design documentation, verification and validation, deployment, operation and monitoring, technical documentation
+      and event logs exist across the AI system lifecycle.
+    mechanism: >-
+      Signed, immutable registry versions; eval gates before release; kill switches and kernel gating in operation; sealed Annex IV
+      documentation; append-only event logs.
+    code:
+      [
+        services/registry/src/service.ts,
+        services/eval-hub/src/gate.ts,
+        services/compliance/src/docgen/documents.ts,
+        services/audit/src/chain.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/registry/test/service.test.ts }
+      - { kind: test, ref: services/eval-hub/test/gate.test.ts }
+      - { kind: test, ref: services/compliance/test/docgen.test.ts }
+      - { kind: make, ref: e2e-phase8 }
+    status: Prototype
+    notes: Spans five components of mixed maturity; the weakest link (single-instance kernel state, fake provers) bounds this row.
+  - id: ISO42001-A.7
+    requirement: Data for AI systems is managed for acquisition, quality, provenance and preparation.
+    mechanism: Eval datasets are immutable and hashed; memory and knowledge bases are scoped and access controlled; PHI is redacted before storage.
+    code: [services/eval-hub/src/catalog.ts, services/memory/src/store.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/eval-hub/test/catalog.test.ts }
+      - { kind: test, ref: services/memory/test/store.test.ts }
+    status: Prototype
+    notes: Data quality and provenance of memory content are not scored; no data lineage beyond hashes.
+  - id: ISO42001-A.8
+    requirement: Information is provided to users and interested parties, including incident communication and external reporting.
+    mechanism: Technical documentation for each blueprint version, transparency notices, AGIL explanations; no incident communication.
+    code: [services/compliance/src/docgen/render.ts, services/agil/src/explain.ts]
+    config: []
+    evidence:
+      - { kind: test, ref: services/compliance/test/docgen.test.ts }
+    status: Prototype
+    notes: External reporting and incident communication are not designed.
+  - id: ISO42001-A.9
+    requirement: AI systems are used responsibly, within their intended use, with defined objectives.
+    mechanism: Intended purpose is declared per blueprint; the kernel denies actions outside the declared tools and policy; budgets cap usage.
+    code: [services/risk-kernel/src/kernel.ts, runtime/src/axis_runtime/tki]
+    config: []
+    evidence:
+      - { kind: test, ref: services/risk-kernel/test/kernel.test.ts }
+      - { kind: test, ref: runtime/tests/test_tki_budget.py }
+    status: Prototype
+    notes: Misuse by authorised users within policy is not detected.
+  - id: ISO42001-A.10
+    requirement: Responsibilities are allocated with suppliers and customers, and third-party relationships are managed.
+    mechanism: Provider-neutral model gateway with per-tenant keys; marketplace review, consent and signed provenance for third-party blueprints.
+    code:
+      [
+        services/marketplace/src/reviews.ts,
+        services/registry/src/verify.ts,
+        services/control-plane/src/modelkeys.ts,
+      ]
+    config: []
+    evidence:
+      - { kind: test, ref: services/marketplace/test/flows.test.ts }
+      - { kind: test, ref: services/registry/test/verify.test.ts }
+    status: Prototype
+    notes: No supplier assessments or contractual allocation of responsibilities exist.

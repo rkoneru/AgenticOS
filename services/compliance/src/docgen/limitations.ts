@@ -1,5 +1,11 @@
 import type { BlueprintRef } from "../types.js";
-import { missing, sourced, type Limitation, type LimitationsSourcePort, type Sourced } from "./ports.js";
+import {
+  missing,
+  sourced,
+  type Limitation,
+  type LimitationsSourcePort,
+  type Sourced,
+} from "./ports.js";
 
 /**
  * Parses the "known limitations" table of docs/NEEDS.md style files: `| # | title | detail | evidence |` rows whose first cell is a
@@ -38,7 +44,8 @@ export class NeedsLimitations implements LimitationsSourcePort {
     } catch {
       text = undefined;
     }
-    if (text === undefined) return Promise.resolve(missing("docs/NEEDS.md is not available to this deployment"));
+    if (text === undefined)
+      return Promise.resolve(missing("docs/NEEDS.md is not available to this deployment"));
     const items = parseNeeds(text);
     return Promise.resolve(
       items.length === 0 ? missing("docs/NEEDS.md lists no limitations") : sourced(items),

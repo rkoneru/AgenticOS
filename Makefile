@@ -1,4 +1,4 @@
-.PHONY: e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: compliance-check e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -161,3 +161,10 @@ console-e2e:
 
 docs-build:
 	pnpm --filter @axis/docs-site build
+
+# Compliance control matrix (docs/compliance/matrix/*.yaml): FAILS if a row cites a file, test or make target that does not exist,
+# a `Built` row has no test / make / audit-query evidence, the labelling rules are broken, or the rendered Markdown is stale.
+# `make compliance-check ARGS=--write` re-renders the Markdown from the YAML first.
+compliance-check:
+	pnpm --filter @axis/compliance build
+	node services/compliance/dist/cli.js check $(ARGS)

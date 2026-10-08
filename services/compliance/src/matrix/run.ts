@@ -26,7 +26,8 @@ export function runCheck(argv: readonly string[], io: RunIo, defaultRoot = proce
     }
   }
   const res = loadAndCheck(root);
-  if (write && res.findings.filter((f) => f.code !== "M040").length === 0) writeRendered(root, res.rendered);
+  if (write && res.findings.filter((f) => f.code !== "M040").length === 0)
+    writeRendered(root, res.rendered);
   const findings: Finding[] = [...res.findings, ...driftFindings(root, res.rendered)];
   for (const f of findings)
     io.err(`${f.code} ${f.framework}${f.row ? ` ${f.row}` : ""}: ${f.message}`);
@@ -36,6 +37,10 @@ export function runCheck(argv: readonly string[], io: RunIo, defaultRoot = proce
         .map(([s, n]) => `${s} ${n}`)
         .join(", ")}`,
     );
-  io.out(findings.length === 0 ? "compliance matrix: OK" : `compliance matrix: ${findings.length} finding(s)`);
+  io.out(
+    findings.length === 0
+      ? "compliance matrix: OK"
+      : `compliance matrix: ${findings.length} finding(s)`,
+  );
   return findings.length === 0 ? 0 : 1;
 }

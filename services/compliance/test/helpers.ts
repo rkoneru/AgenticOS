@@ -51,7 +51,11 @@ export async function newTenantRow(admin: pg.Client): Promise<string> {
 export const T1 = "11111111-1111-4111-8111-111111111111";
 export const T2 = "22222222-2222-4222-8222-222222222222";
 
-export const user = (tenantId: string, role = "admin", subject = `user-${role}`): ComplianceActor => ({
+export const user = (
+  tenantId: string,
+  role = "admin",
+  subject = `user-${role}`,
+): ComplianceActor => ({
   tenantId,
   subject,
   role,
@@ -84,8 +88,18 @@ export function snapshot(over: Partial<BlueprintSnapshot> = {}): BlueprintSnapsh
       provenance_attached: true,
     },
     versions: [
-      { version: "2.3.1", content_hash: HASH_A, published_at: "2026-01-01T00:00:01.000Z", state: "active" },
-      { version: "2.3.0", content_hash: "b".repeat(64), published_at: "2025-12-01T00:00:00.000Z", state: "deprecated" },
+      {
+        version: "2.3.1",
+        content_hash: HASH_A,
+        published_at: "2026-01-01T00:00:01.000Z",
+        state: "active",
+      },
+      {
+        version: "2.3.0",
+        content_hash: "b".repeat(64),
+        published_at: "2025-12-01T00:00:00.000Z",
+        state: "deprecated",
+      },
     ],
     ...over,
   };
@@ -105,7 +119,9 @@ export const EVIDENCE: EvalEvidence = {
       finished_at: "2026-01-02T00:00:00.000Z",
     },
   ],
-  attestations: [{ run_id: "run-1", suite_ref: "claims-regression@1.0.0", overall: 0.95, verified: true }],
+  attestations: [
+    { run_id: "run-1", suite_ref: "claims-regression@1.0.0", overall: 0.95, verified: true },
+  ],
   gate: [{ suite_ref: "claims-regression@1.0.0", threshold: 0.92, pass: true, reasons: [] }],
   online: [{ id: "prod", suite_ref: "claims-regression@1.0.0", rate: 0.1, enabled: true }],
 };
@@ -145,7 +161,12 @@ export function fakeSources(over: Partial<SourcePorts> = {}, calls: string[] = [
         calls.push(`policies:${t}`);
         return Promise.resolve(
           sourced([
-            { id: "baseline-deny", version: "1.0.0", hash: "d".repeat(64), active_since: "2026-01-01T00:00:00.000Z" },
+            {
+              id: "baseline-deny",
+              version: "1.0.0",
+              hash: "d".repeat(64),
+              active_since: "2026-01-01T00:00:00.000Z",
+            },
           ]),
         );
       },
@@ -177,7 +198,9 @@ export interface World {
   calls: string[];
 }
 
-export function world(o: { docs?: DocStore; sources?: Partial<SourcePorts>; sealer?: Ed25519Sealer } = {}): World {
+export function world(
+  o: { docs?: DocStore; sources?: Partial<SourcePorts>; sealer?: Ed25519Sealer } = {},
+): World {
   const log = new MemoryAuditLog();
   const clock = new Clock(new Date("2026-03-01T10:00:00.000Z"));
   const docs = o.docs ?? new MemoryDocStore();
