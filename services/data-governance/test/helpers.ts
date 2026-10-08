@@ -13,7 +13,6 @@ import {
   ResidencyPolicy,
   RetentionEngine,
   Sealer,
-  StaticRegionResolver,
   type CountResult,
   type DsarDeps,
   type EraseResult,

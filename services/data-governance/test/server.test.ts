@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type J = any;
 import type http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAdminServer, listenLoopback, staticTokenAuthenticator } from "../src/index.js";
@@ -36,7 +38,7 @@ const call = async (method: string, path: string, token: string | null, body?: u
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-  return { status: res.status, json: (await res.json()) as Record<string, any> };
+  return { status: res.status, json: (await res.json()) as Record<string, J> };
 };
 
 describe("admin dev server", () => {
