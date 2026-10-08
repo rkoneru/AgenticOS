@@ -59,6 +59,20 @@ def parse_blueprint_ref(ref: BlueprintRef) -> Any:
     return {"name": name, "version": version}
 
 
+_EVAL_FINAL = frozenset({"passed", "failed", "errored"})
+
+
+def parse_eval_blueprint(ref: BlueprintRef) -> Any:
+    """``"name@version"``, ``"namespace/name@version"`` or a dict to the wire blueprint."""
+    if not isinstance(ref, str):
+        out = {"name": ref["name"], "version": ref["version"]}
+        return {"namespace": ref["namespace"], **out} if ref.get("namespace") else out
+    namespace, slash, rest = ref.partition("/")
+    if not slash:
+        return parse_blueprint_ref(ref)
+    return {"namespace": namespace, **parse_blueprint_ref(rest)}
+
+
 def _drop_none(**kw: Any) -> dict[str, Any]:
     return {k: v for k, v in kw.items() if v is not None}
 
@@ -548,23 +562,309 @@ class Usage:
         return self._ax.api.get_usage(from_=from_, to=to, group_by=group_by, options=options)
 
 
+class EvalDatasets:
+    """Datasets: immutable numbered versions; PHI datasets are redacted before storage."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(self, *, name: str | None = None, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_eval_datasets(name=name, options=options)
+
+    def create(
+        self,
+        name: str,
+        cases: list[dict[str, Any]],
+        *,
+        description: str | None = None,
+        phi: bool | None = None,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        body = _drop_none(name=name, cases=cases, description=description, phi=phi)
+        return self._ax.api.create_eval_dataset(
+            body=body, idempotency_key=idempotency_key, options=options
+        )
+
+    def get(
+        self,
+        name: str,
+        version: int | Literal["latest"] = "latest",
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.get_eval_dataset_version(
+            name=name, version=str(version), options=options
+        )
+
+
+class EvalSuites:
+    """Suites: immutable ``name@major.minor.patch`` definitions pinned to a dataset version."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(self, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_eval_suites(options=options)
+
+    def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.create_eval_suite(
+            body=body, idempotency_key=idempotency_key, options=options
+        )
+
+    def get(self, ref: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.get_eval_suite(suite=ref, options=options)
+
+
+class EvalBaselines:
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(self, blueprint: str, suite: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_eval_baselines(blueprint=blueprint, suite=suite, options=options)
+
+    def set(
+        self,
+        run_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Admin: make a finished, passed, intact run the baseline of its blueprint and suite."""
+        return self._ax.api.set_eval_baseline(
+            body={"run_id": run_id}, idempotency_key=idempotency_key, options=options
+        )
+
+
+class EvalReview:
+    """Human review. A blueprint's publisher and a run's starter never get its tasks."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def tasks(
+        self,
+        *,
+        state: Literal["open", "claimed", "needs_adjudication", "resolved"] | None = None,
+        run_id: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_eval_review_tasks(state=state, run_id=run_id, options=options)
+
+    def claim(self, task_id: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.claim_eval_review_task(task_id=task_id, options=options)
+
+    def grade(
+        self, task_id: str, *, score: float, comment: str, options: RequestOptions | None = None
+    ) -> Any:
+        return self._ax.api.grade_eval_review_task(
+            task_id=task_id, body={"score": score, "comment": comment}, options=options
+        )
+
+    def skip(self, task_id: str, reason: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.skip_eval_review_task(
+            task_id=task_id, body={"reason": reason}, options=options
+        )
+
+
+class EvalSampling:
+    """Online sampling of production runs: alerts and history, never a release gate."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(self, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_eval_sampling_configs(options=options)
+
+    def put(
+        self,
+        sampling_id: str,
+        *,
+        blueprint: str,
+        suite: str,
+        rate: float,
+        max_per_hour: int,
+        redaction: Literal["phi", "always"] | None = None,
+        enabled: bool | None = None,
+        alert_threshold: float | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        body = _drop_none(
+            blueprint=blueprint,
+            suite=suite,
+            rate=rate,
+            max_per_hour=max_per_hour,
+            redaction=redaction,
+            enabled=enabled,
+            alert_threshold=alert_threshold,
+        )
+        return self._ax.api.put_eval_sampling_config(
+            sampling_id=sampling_id, body=body, options=options
+        )
+
+    def summary(
+        self,
+        *,
+        blueprint: str | None = None,
+        suite: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.get_eval_online_summary(
+            blueprint=blueprint, suite=suite, options=options
+        )
+
+
+class EvalRunners:
+    """Runners: only runs of a registered, un-revoked runner count toward a gate."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(self, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.list_eval_runners(options=options)
+
+    def register(
+        self,
+        runner_id: str,
+        description: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        body = None if description is None else {"description": description}
+        return self._ax.api.register_eval_runner(runner_id=runner_id, body=body, options=options)
+
+    def revoke(self, runner_id: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.revoke_eval_runner(runner_id=runner_id, options=options)
+
+
 class Evals:
     def __init__(self, ax: Axis) -> None:
         self._ax = ax
+        self.datasets = EvalDatasets(ax)
+        self.suites = EvalSuites(ax)
+        self.baselines = EvalBaselines(ax)
+        self.review = EvalReview(ax)
+        self.sampling = EvalSampling(ax)
+        self.runners = EvalRunners(ax)
 
     def start(
         self,
         suite: str,
         blueprint: BlueprintRef,
         *,
+        mode: Literal["ci", "manual"] | None = None,
         idempotency_key: str | None = None,
         options: RequestOptions | None = None,
     ) -> EvalRun:
+        """Queue a run of ``suite`` against a blueprint version (``"name@version"`` or
+        ``"namespace/name@version"``); a registered runner executes it and the hub binds it to the
+        version's content hash."""
+        body = _drop_none(suite=suite, mode=mode, blueprint=parse_eval_blueprint(blueprint))
         return self._ax.api.start_eval_run(
-            body={"suite": suite, "blueprint": parse_blueprint_ref(blueprint)},
-            idempotency_key=idempotency_key,
+            body=body, idempotency_key=idempotency_key, options=options
+        )
+
+    def get(self, eval_run_id: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.get_eval_run(eval_run_id=eval_run_id, options=options)
+
+    def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        suite: str | None = None,
+        blueprint: str | None = None,
+        content_hash: str | None = None,
+        status: Literal["queued", "running", "passed", "failed", "errored"] | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_eval_runs(
+            limit=limit,
+            cursor=cursor,
+            suite=suite,
+            blueprint=blueprint,
+            content_hash=content_hash,
+            status=status,
             options=options,
         )
+
+    def wait(
+        self,
+        eval_run_id: str,
+        *,
+        timeout: float = 300.0,
+        poll_interval: float = 1.0,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Poll until passed, failed or errored (AxisWaitTimeoutError after ``timeout`` s)."""
+        started = self._ax._clock()
+        while True:
+            run = self.get(eval_run_id, options=options)
+            if run["status"] in _EVAL_FINAL:
+                return run
+            remaining = timeout - (self._ax._clock() - started)
+            if remaining <= 0:
+                raise AxisWaitTimeoutError(
+                    f"eval run {eval_run_id} still {run['status']} after {timeout} s"
+                )
+            self._ax._sleep(min(poll_interval, remaining))
+
+    def comparison(self, eval_run_id: str, *, options: RequestOptions | None = None) -> Any:
+        """The comparison with the blueprint's baseline, or ``None`` when there is no baseline."""
+        out = self._ax.api.get_eval_run_comparison(eval_run_id=eval_run_id, options=options)
+        return out.get("comparison")
+
+    def gate(
+        self,
+        blueprint: dict[str, Any],
+        suites: list[dict[str, Any]] | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Ask the release gate (fail-closed). ``allowed`` needs a fresh, intact, passing run of
+        this exact content hash by a registered runner and no regression against the baseline;
+        ``reasons`` explains every block."""
+        body = _drop_none(blueprint=blueprint, suites=suites)
+        return self._ax.api.gate_eval_release(body=body, options=options)
+
+    def iterate(
+        self,
+        *,
+        suite: str | None = None,
+        blueprint: str | None = None,
+        content_hash: str | None = None,
+        status: Literal["queued", "running", "passed", "failed", "errored"] | None = None,
+        limit: int = 50,
+        max_items: int = 1000,
+        options: RequestOptions | None = None,
+    ) -> Iterator[Any]:
+        """Every run, following the cursor (bounded by ``max_items``)."""
+        cursor: str | None = None
+        n = 0
+        while True:
+            page = self.list(
+                limit=limit,
+                cursor=cursor,
+                suite=suite,
+                blueprint=blueprint,
+                content_hash=content_hash,
+                status=status,
+                options=options,
+            )
+            for item in page["items"]:
+                if n >= max_items:
+                    return
+                n += 1
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
 
 
 class Registry:
@@ -1251,23 +1551,319 @@ class AsyncUsage:
         return await self._ax.api.get_usage(from_=from_, to=to, group_by=group_by, options=options)
 
 
+class AsyncEvalDatasets:
+    """Datasets: immutable numbered versions; PHI datasets are redacted before storage."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(self, *, name: str | None = None, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_eval_datasets(name=name, options=options)
+
+    async def create(
+        self,
+        name: str,
+        cases: list[dict[str, Any]],
+        *,
+        description: str | None = None,
+        phi: bool | None = None,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        body = _drop_none(name=name, cases=cases, description=description, phi=phi)
+        return await self._ax.api.create_eval_dataset(
+            body=body, idempotency_key=idempotency_key, options=options
+        )
+
+    async def get(
+        self,
+        name: str,
+        version: int | Literal["latest"] = "latest",
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.get_eval_dataset_version(
+            name=name, version=str(version), options=options
+        )
+
+
+class AsyncEvalSuites:
+    """Suites: immutable ``name@major.minor.patch`` definitions pinned to a dataset version."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(self, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_eval_suites(options=options)
+
+    async def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.create_eval_suite(
+            body=body, idempotency_key=idempotency_key, options=options
+        )
+
+    async def get(self, ref: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.get_eval_suite(suite=ref, options=options)
+
+
+class AsyncEvalBaselines:
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(
+        self, blueprint: str, suite: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.list_eval_baselines(
+            blueprint=blueprint, suite=suite, options=options
+        )
+
+    async def set(
+        self,
+        run_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Admin: make a finished, passed, intact run the baseline of its blueprint and suite."""
+        return await self._ax.api.set_eval_baseline(
+            body={"run_id": run_id}, idempotency_key=idempotency_key, options=options
+        )
+
+
+class AsyncEvalReview:
+    """Human review. A blueprint's publisher and a run's starter never get its tasks."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def tasks(
+        self,
+        *,
+        state: Literal["open", "claimed", "needs_adjudication", "resolved"] | None = None,
+        run_id: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_eval_review_tasks(
+            state=state, run_id=run_id, options=options
+        )
+
+    async def claim(self, task_id: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.claim_eval_review_task(task_id=task_id, options=options)
+
+    async def grade(
+        self, task_id: str, *, score: float, comment: str, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.grade_eval_review_task(
+            task_id=task_id, body={"score": score, "comment": comment}, options=options
+        )
+
+    async def skip(
+        self, task_id: str, reason: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.skip_eval_review_task(
+            task_id=task_id, body={"reason": reason}, options=options
+        )
+
+
+class AsyncEvalSampling:
+    """Online sampling of production runs: alerts and history, never a release gate."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(self, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_eval_sampling_configs(options=options)
+
+    async def put(
+        self,
+        sampling_id: str,
+        *,
+        blueprint: str,
+        suite: str,
+        rate: float,
+        max_per_hour: int,
+        redaction: Literal["phi", "always"] | None = None,
+        enabled: bool | None = None,
+        alert_threshold: float | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        body = _drop_none(
+            blueprint=blueprint,
+            suite=suite,
+            rate=rate,
+            max_per_hour=max_per_hour,
+            redaction=redaction,
+            enabled=enabled,
+            alert_threshold=alert_threshold,
+        )
+        return await self._ax.api.put_eval_sampling_config(
+            sampling_id=sampling_id, body=body, options=options
+        )
+
+    async def summary(
+        self,
+        *,
+        blueprint: str | None = None,
+        suite: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.get_eval_online_summary(
+            blueprint=blueprint, suite=suite, options=options
+        )
+
+
+class AsyncEvalRunners:
+    """Runners: only runs of a registered, un-revoked runner count toward a gate."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(self, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.list_eval_runners(options=options)
+
+    async def register(
+        self,
+        runner_id: str,
+        description: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        body = None if description is None else {"description": description}
+        return await self._ax.api.register_eval_runner(
+            runner_id=runner_id, body=body, options=options
+        )
+
+    async def revoke(self, runner_id: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.revoke_eval_runner(runner_id=runner_id, options=options)
+
+
 class AsyncEvals:
     def __init__(self, ax: AsyncAxis) -> None:
         self._ax = ax
+        self.datasets = AsyncEvalDatasets(ax)
+        self.suites = AsyncEvalSuites(ax)
+        self.baselines = AsyncEvalBaselines(ax)
+        self.review = AsyncEvalReview(ax)
+        self.sampling = AsyncEvalSampling(ax)
+        self.runners = AsyncEvalRunners(ax)
 
     async def start(
         self,
         suite: str,
         blueprint: BlueprintRef,
         *,
+        mode: Literal["ci", "manual"] | None = None,
         idempotency_key: str | None = None,
         options: RequestOptions | None = None,
     ) -> EvalRun:
+        """Queue a run of ``suite`` against a blueprint version (``"name@version"`` or
+        ``"namespace/name@version"``); a registered runner executes it and the hub binds it to the
+        version's content hash."""
+        body = _drop_none(suite=suite, mode=mode, blueprint=parse_eval_blueprint(blueprint))
         return await self._ax.api.start_eval_run(
-            body={"suite": suite, "blueprint": parse_blueprint_ref(blueprint)},
-            idempotency_key=idempotency_key,
+            body=body, idempotency_key=idempotency_key, options=options
+        )
+
+    async def get(self, eval_run_id: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.get_eval_run(eval_run_id=eval_run_id, options=options)
+
+    async def list(
+        self,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+        suite: str | None = None,
+        blueprint: str | None = None,
+        content_hash: str | None = None,
+        status: Literal["queued", "running", "passed", "failed", "errored"] | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_eval_runs(
+            limit=limit,
+            cursor=cursor,
+            suite=suite,
+            blueprint=blueprint,
+            content_hash=content_hash,
+            status=status,
             options=options,
         )
+
+    async def wait(
+        self,
+        eval_run_id: str,
+        *,
+        timeout: float = 300.0,  # noqa: ASYNC109 - a deadline in seconds, not asyncio.timeout
+        poll_interval: float = 1.0,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Poll until passed, failed or errored (AxisWaitTimeoutError after ``timeout`` s)."""
+        started = self._ax._clock()
+        while True:
+            run = await self.get(eval_run_id, options=options)
+            if run["status"] in _EVAL_FINAL:
+                return run
+            remaining = timeout - (self._ax._clock() - started)
+            if remaining <= 0:
+                raise AxisWaitTimeoutError(
+                    f"eval run {eval_run_id} still {run['status']} after {timeout} s"
+                )
+            await self._ax._sleep(min(poll_interval, remaining))
+
+    async def comparison(self, eval_run_id: str, *, options: RequestOptions | None = None) -> Any:
+        """The comparison with the blueprint's baseline, or ``None`` when there is no baseline."""
+        out = await self._ax.api.get_eval_run_comparison(eval_run_id=eval_run_id, options=options)
+        return out.get("comparison")
+
+    async def gate(
+        self,
+        blueprint: dict[str, Any],
+        suites: list[dict[str, Any]] | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Ask the release gate (fail-closed). ``allowed`` needs a fresh, intact, passing run of
+        this exact content hash by a registered runner and no regression against the baseline;
+        ``reasons`` explains every block."""
+        body = _drop_none(blueprint=blueprint, suites=suites)
+        return await self._ax.api.gate_eval_release(body=body, options=options)
+
+    async def iterate(
+        self,
+        *,
+        suite: str | None = None,
+        blueprint: str | None = None,
+        content_hash: str | None = None,
+        status: Literal["queued", "running", "passed", "failed", "errored"] | None = None,
+        limit: int = 50,
+        max_items: int = 1000,
+        options: RequestOptions | None = None,
+    ) -> AsyncIterator[Any]:
+        """Every run, following the cursor (bounded by ``max_items``)."""
+        cursor: str | None = None
+        n = 0
+        while True:
+            page = await self.list(
+                limit=limit,
+                cursor=cursor,
+                suite=suite,
+                blueprint=blueprint,
+                content_hash=content_hash,
+                status=status,
+                options=options,
+            )
+            for item in page["items"]:
+                if n >= max_items:
+                    return
+                n += 1
+                yield item
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
 
 
 class AsyncRegistry:
