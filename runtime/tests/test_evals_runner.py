@@ -27,11 +27,25 @@ from axis_runtime.evals.types import EvalCase
 from axis_runtime.gate import EnforcementPoint, EvaluateRequest, GateDecision
 from axis_runtime.run import RunDeps
 from axis_runtime.tools import ToolRegistry
-from conftest import TENANT, FakeClock, ScriptedGate, allow, deny, make_gateway, openai_body, tool_turn_body
+from conftest import (
+    TENANT,
+    FakeClock,
+    ScriptedGate,
+    allow,
+    deny,
+    make_gateway,
+    openai_body,
+    tool_turn_body,
+)
 from evals_helpers import FnTransport, SeqIds, make_base_deps, make_manifest, text_body, user_text
 
 LOOKUP = {"name": "lookup_claim", "kind": "function", "side_effects": "read", "timeout_seconds": 60}
-EMAIL = {"name": "send_email", "kind": "function", "side_effects": "external", "timeout_seconds": 60}
+EMAIL = {
+    "name": "send_email",
+    "kind": "function",
+    "side_effects": "external",
+    "timeout_seconds": 60,
+}
 CODE = {"name": "run_python", "kind": "code", "side_effects": "external", "timeout_seconds": 5}
 
 
@@ -100,20 +114,31 @@ async def test_a_case_runs_through_the_real_run_path_and_the_gate() -> None:
 async def test_function_tools_are_served_from_the_cases_fixtures() -> None:
     real_calls: list[Any] = []
     r, _, _ = runner()
-    meta = {"tool_fixtures": {"lookup_claim": {"responses": [{"when": {"id": "C-1"}, "result": {"status": "open"}}]}}}
-    out = await r.run_case(mf(), EvalCase("c1", "please lookup", metadata=meta), run_seed=1, eval_run_id="e")
+    meta = {
+        "tool_fixtures": {
+            "lookup_claim": {"responses": [{"when": {"id": "C-1"}, "result": {"status": "open"}}]}
+        }
+    }
+    out = await r.run_case(
+        mf(), EvalCase("c1", "please lookup", metadata=meta), run_seed=1, eval_run_id="e"
+    )
     assert out.status == "completed" and out.trace
     assert out.trace.output == 'result: {"status": "open"}'
     assert [(c.name, c.ok) for c in out.trace.tool_calls] == [("lookup_claim", True)]
     assert real_calls == []
 
 
-async def test_a_tool_without_a_fixture_is_an_error_not_a_real_call_and_dry_run_is_declared() -> None:
+async def test_a_tool_without_a_fixture_is_an_error_not_a_real_call_and_dry_run_is_declared() -> (
+    None
+):
     r, _, _ = runner()
     out = await r.run_case(mf(), EvalCase("c1", "please lookup"), run_seed=1, eval_run_id="e")
     assert out.trace and [(c.name, c.ok) for c in out.trace.tool_calls] == [("lookup_claim", False)]
     out = await r.run_case(
-        mf(), EvalCase("c2", "please lookup", metadata={"dry_run": True}), run_seed=1, eval_run_id="e"
+        mf(),
+        EvalCase("c2", "please lookup", metadata={"dry_run": True}),
+        run_seed=1,
+        eval_run_id="e",
     )
     assert out.trace and out.trace.tool_calls[0].ok is True
     assert "dry_run" in (out.trace.output or "")
@@ -124,7 +149,15 @@ def test_fixture_tool_matching_and_registry_contents() -> None:
     case = EvalCase(
         "c",
         "x",
-        metadata={"tool_fixtures": {"send_email": {"description": "d", "input_schema": {"type": "object"}, "responses": [{"error": "mailbox full"}]}}},
+        metadata={
+            "tool_fixtures": {
+                "send_email": {
+                    "description": "d",
+                    "input_schema": {"type": "object"},
+                    "responses": [{"error": "mailbox full"}],
+                }
+            }
+        },
     )
     reg, tools = build_tool_registry(manifest, case)
     assert set(tools) == {"lookup_claim", "send_email"}  # function tools only: never the code tool
@@ -143,7 +176,11 @@ def test_fixture_tool_matching_and_registry_contents() -> None:
 
 async def test_cases_share_nothing() -> None:
     r, transport, _ = runner()
-    cases = [EvalCase("c1", "first-secret-A"), EvalCase("c2", "second-B"), EvalCase("c3", "third-C")]
+    cases = [
+        EvalCase("c1", "first-secret-A"),
+        EvalCase("c2", "second-B"),
+        EvalCase("c3", "third-C"),
+    ]
     outs = await r.run_all(mf(), cases, run_seed=3, eval_run_id="e")
     assert [o.case.id for o in outs] == ["c1", "c2", "c3"]
     run_ids = {o.trace.run_id for o in outs if o.trace}
@@ -170,7 +207,9 @@ async def test_a_declared_session_runs_in_order_and_everything_else_is_independe
         spans.append(("end", who))
 
     transport = FnTransport(agent, delay)
-    r, _, _ = runner(transport=transport, config=RunnerConfig(concurrency=4, case_timeout_seconds=5))
+    r, _, _ = runner(
+        transport=transport, config=RunnerConfig(concurrency=4, case_timeout_seconds=5)
+    )
     cases = [
         EvalCase("s1", "step-1", metadata={"session": "S"}),
         EvalCase("x1", "solo-1"),
@@ -180,7 +219,14 @@ async def test_a_declared_session_runs_in_order_and_everything_else_is_independe
     outs = await r.run_all(mf(), cases, run_seed=1, eval_run_id="e")
     assert all(o.status == "completed" for o in outs)
     steps = [(k, w) for k, w in spans if w.startswith("step")]
-    assert steps == [("start", "step-1"), ("end", "step-1"), ("start", "step-2"), ("end", "step-2"), ("start", "step-3"), ("end", "step-3")]
+    assert steps == [
+        ("start", "step-1"),
+        ("end", "step-1"),
+        ("start", "step-2"),
+        ("end", "step-2"),
+        ("start", "step-3"),
+        ("end", "step-3"),
+    ]
 
 
 def test_lockdown_removes_everything_that_could_leak_or_cache() -> None:
@@ -207,7 +253,9 @@ def test_lockdown_removes_everything_that_could_leak_or_cache() -> None:
     assert (d.backends, d.browser, d.channels, d.reply, d.approvals, d.nexus_factory) == (None,) * 6
     assert (d.runner_factory, d.child_spawner, d.memory, d.session_id) == (None,) * 4
     assert d.run_id == "r" and d.trace_id == "t" and d.tools is reg and d.log is not base.log
-    d2 = lockdown_deps(base, tenant_id=TENANT, run_id="r", trace_id="t", tools=reg, gate=base.gate, session_id="s")
+    d2 = lockdown_deps(
+        base, tenant_id=TENANT, run_id="r", trace_id="t", tools=reg, gate=base.gate, session_id="s"
+    )
     assert d2.session_id == "s" and d2.memory is sentinel  # memory only for a declared session
     with pytest.raises(ValueError, match="another tenant"):
         lockdown_deps(base, tenant_id="other", run_id="r", trace_id="t", tools=reg, gate=base.gate)
@@ -225,9 +273,17 @@ async def test_deps_of_another_tenant_are_refused_and_not_retried() -> None:
 
 def request(point: EnforcementPoint, action: str, kind: str = "function") -> EvaluateRequest:
     return EvaluateRequest(
-        tenant_id=TENANT, trace_id="t", span_id="s", actor_type=__import__("axis_runtime.gate", fromlist=["ActorType"]).ActorType.AGENT,
-        actor_id="a", pid="p", blueprint_name="b", blueprint_version="1", enforcement_point=point,
-        action=action, context={"tool": {"name": action, "kind": kind, "side_effects": "external"}},
+        tenant_id=TENANT,
+        trace_id="t",
+        span_id="s",
+        actor_type=__import__("axis_runtime.gate", fromlist=["ActorType"]).ActorType.AGENT,
+        actor_id="a",
+        pid="p",
+        blueprint_name="b",
+        blueprint_version="1",
+        enforcement_point=point,
+        action=action,
+        context={"tool": {"name": action, "kind": kind, "side_effects": "external"}},
     )
 
 
@@ -263,7 +319,11 @@ async def test_a_suite_can_allow_a_named_sandboxed_target_but_the_kernel_still_d
     inner = ScriptedGate(deny("tenant policy says no"))
     gate = EvalModeGate(inner, EvalModePolicy(frozenset({"run_python"})))
     d = await gate.evaluate(request(EnforcementPoint.CODE_EXEC, "run_python", "code"))
-    assert d.decision is Decision.DENY and d.reason == "tenant policy says no" and len(inner.requests) == 1
+    assert (
+        d.decision is Decision.DENY
+        and d.reason == "tenant policy says no"
+        and len(inner.requests) == 1
+    )
     other = await gate.evaluate(request(EnforcementPoint.CODE_EXEC, "run_ruby", "code"))
     assert other.reason.startswith("eval_mode_side_effect_denied")
 
@@ -273,7 +333,9 @@ async def test_a_code_tool_in_an_eval_run_is_denied_and_never_performed() -> Non
     out = await r.run_case(mf(), EvalCase("c1", "run some code"), run_seed=1, eval_run_id="e")
     assert out.trace and out.status == "completed"
     denied = [d for d in out.trace.gate_decisions if d.action == "run_python"]
-    assert [(d.decision, d.reason.split(":")[0]) for d in denied] == [("DENY", "eval_mode_side_effect_denied")]
+    assert [(d.decision, d.reason.split(":")[0]) for d in denied] == [
+        ("DENY", "eval_mode_side_effect_denied")
+    ]
     assert not any(q.enforcement_point is EnforcementPoint.CODE_EXEC for q in gate.requests)
     assert out.trace.tool_calls == ()
 
@@ -314,22 +376,34 @@ async def test_a_require_approval_does_not_wait_for_a_human() -> None:
 
 
 def test_caps_tighten_but_never_loosen_the_blueprints_own() -> None:
-    base = mf(budgets={"tokens": {"soft": None, "hard": 100}, "tool_calls": {"soft": None, "hard": 2}})
-    case = EvalCase("c", "x", metadata={"budget": {"max_tokens": 50, "max_tool_calls": 9}, "timeout_seconds": 7})
+    base = mf(
+        budgets={"tokens": {"soft": None, "hard": 100}, "tool_calls": {"soft": None, "hard": 2}}
+    )
+    case = EvalCase(
+        "c", "x", metadata={"budget": {"max_tokens": 50, "max_tool_calls": 9}, "timeout_seconds": 7}
+    )
     m = prepare_manifest(base, RunnerConfig(max_tokens=80, case_timeout_seconds=30), case, 5)
     assert m.budgets.tokens.hard == 50 and m.budgets.tool_calls.hard == 2
     assert m.process.timeout_seconds == 7 and m.budgets.runtime_seconds.hard == 7
     assert m.primary.params["seed"] == 5
     loose = prepare_manifest(base, RunnerConfig(max_tokens=10_000), EvalCase("c", "x"), 5)
     assert loose.budgets.tokens.hard == 100
-    capped_soft = prepare_manifest(mf(budgets={"tokens": {"soft": 90, "hard": 100}}), RunnerConfig(max_tokens=40), EvalCase("c", "x"), 1)
+    capped_soft = prepare_manifest(
+        mf(budgets={"tokens": {"soft": 90, "hard": 100}}),
+        RunnerConfig(max_tokens=40),
+        EvalCase("c", "x"),
+        1,
+    )
     assert capped_soft.budgets.tokens.soft == 40 and capped_soft.budgets.tokens.hard == 40
 
 
 async def test_a_budget_cap_stops_the_case() -> None:
     r, _, _ = runner()
     out = await r.run_case(
-        mf(), EvalCase("c1", "hello", metadata={"budget": {"max_tokens": 5}}), run_seed=1, eval_run_id="e"
+        mf(),
+        EvalCase("c1", "hello", metadata={"budget": {"max_tokens": 5}}),
+        run_seed=1,
+        eval_run_id="e",
     )
     assert out.status == "budget_exceeded" and out.attempts == 1  # not retried
 
@@ -338,8 +412,12 @@ async def test_a_slow_case_times_out_and_is_not_retried() -> None:
     async def slow(messages: list[dict[str, Any]]) -> None:
         await asyncio.sleep(30)
 
-    r, transport, _ = runner(transport=FnTransport(agent, slow), config=RunnerConfig(case_timeout_seconds=0.2))
-    out = await asyncio.wait_for(r.run_case(mf(), EvalCase("c1", "hello"), run_seed=1, eval_run_id="e"), timeout=10)
+    r, transport, _ = runner(
+        transport=FnTransport(agent, slow), config=RunnerConfig(case_timeout_seconds=0.2)
+    )
+    out = await asyncio.wait_for(
+        r.run_case(mf(), EvalCase("c1", "hello"), run_seed=1, eval_run_id="e"), timeout=10
+    )
     assert out.status == "timeout" and out.attempts == 1 and out.trace is not None
     assert len(transport.calls) == 1
 
@@ -387,20 +465,31 @@ async def test_persistent_infrastructure_failure_is_an_error_case_with_no_trace(
 
 
 async def test_a_provider_outage_is_infrastructure_but_a_bad_key_is_not() -> None:
-    r, transport, _ = runner(lambda m, n: (500, {"error": "boom"}), config=RunnerConfig(case_timeout_seconds=5, max_infra_retries=1))
+    r, transport, _ = runner(
+        lambda m, n: (500, {"error": "boom"}),
+        config=RunnerConfig(case_timeout_seconds=5, max_infra_retries=1),
+    )
     out = await r.run_case(mf(), EvalCase("c1", "hello"), run_seed=1, eval_run_id="e")
     assert out.status == "error" and out.attempts == 2
     calls_after_outage = len(transport.calls)
     assert calls_after_outage >= 2
-    r2, transport2, _ = runner(lambda m, n: (401, {"error": "bad key"}), config=RunnerConfig(case_timeout_seconds=5, max_infra_retries=3))
+    r2, transport2, _ = runner(
+        lambda m, n: (401, {"error": "bad key"}),
+        config=RunnerConfig(case_timeout_seconds=5, max_infra_retries=3),
+    )
     out2 = await r2.run_case(mf(), EvalCase("c1", "hello"), run_seed=1, eval_run_id="e")
     assert out2.status == "failed" and out2.attempts == 1 and len(transport2.calls) == 1
 
 
 async def test_a_wrong_answer_is_never_rerun() -> None:
     """The runner cannot see scores; a completed case is final whatever it said."""
-    r, transport, _ = runner(lambda m, n: text_body("completely wrong"), config=RunnerConfig(case_timeout_seconds=5, max_infra_retries=5))
-    out = await r.run_case(mf(), EvalCase("c1", "hello", expected="right"), run_seed=1, eval_run_id="e")
+    r, transport, _ = runner(
+        lambda m, n: text_body("completely wrong"),
+        config=RunnerConfig(case_timeout_seconds=5, max_infra_retries=5),
+    )
+    out = await r.run_case(
+        mf(), EvalCase("c1", "hello", expected="right"), run_seed=1, eval_run_id="e"
+    )
     assert out.status == "completed" and out.attempts == 1 and len(transport.calls) == 1
 
 
@@ -411,14 +500,26 @@ def test_is_infra_failure_classification() -> None:
 
     def res(reason: ExitReason | None, detail: str) -> Any:
         info = SimpleNamespace(exit_detail=detail)
-        return SimpleNamespace(exit_reason=reason, pid="p", state=SimpleNamespace(processes={"p": info}))
+        return SimpleNamespace(
+            exit_reason=reason, pid="p", state=SimpleNamespace(processes={"p": info})
+        )
 
-    for detail in ("model call denied: gate_timeout", "model call denied: gate_error:RuntimeError", "model call denied: gate_rpc_error:UNAVAILABLE"):
+    for detail in (
+        "model call denied: gate_timeout",
+        "model call denied: gate_error:RuntimeError",
+        "model call denied: gate_rpc_error:UNAVAILABLE",
+    ):
         assert is_infra_failure(res(ExitReason.POLICY_DENIED, detail))
     assert not is_infra_failure(res(ExitReason.POLICY_DENIED, "model call denied: tenant policy"))
-    assert is_infra_failure(res(ExitReason.FAILED, "model call failed: ModelError: openai: server: 500"))
-    assert is_infra_failure(res(ExitReason.FAILED, "model call failed: ModelError: openai: circuit_open"))
-    assert not is_infra_failure(res(ExitReason.FAILED, "model call failed: ModelError: openai: auth"))
+    assert is_infra_failure(
+        res(ExitReason.FAILED, "model call failed: ModelError: openai: server: 500")
+    )
+    assert is_infra_failure(
+        res(ExitReason.FAILED, "model call failed: ModelError: openai: circuit_open")
+    )
+    assert not is_infra_failure(
+        res(ExitReason.FAILED, "model call failed: ModelError: openai: auth")
+    )
     assert not is_infra_failure(res(ExitReason.FAILED, "max_steps (16) reached"))
     assert not is_infra_failure(res(ExitReason.COMPLETED, "gate_timeout"))
     assert not is_infra_failure(res(ExitReason.BUDGET_EXCEEDED, "gate_error"))
@@ -439,10 +540,17 @@ async def test_same_seed_same_results_and_the_seed_reaches_the_model() -> None:
     second = runner()
     a = await first[0].run_all(mf(), cases, run_seed=42, eval_run_id="e")
     b = await second[0].run_all(mf(), cases, run_seed=42, eval_run_id="e")
-    proj = lambda outs: [(o.case.id, o.status, o.seed, o.trace.output if o.trace else None) for o in outs]  # noqa: E731
+
+    def proj(outs: list[Any]) -> list[Any]:
+        return [(o.case.id, o.status, o.seed, o.trace.output if o.trace else None) for o in outs]
+
     assert proj(a) == proj(b)
     seeds_a = sorted(body["seed"] for body in first[1].bodies)
-    assert seeds_a == sorted(case_seed(42, c.id) for c in cases) == sorted(body["seed"] for body in second[1].bodies)
+    assert (
+        seeds_a
+        == sorted(case_seed(42, c.id) for c in cases)
+        == sorted(body["seed"] for body in second[1].bodies)
+    )
     third = runner()
     await third[0].run_all(mf(), cases, run_seed=43, eval_run_id="e")
     assert sorted(body["seed"] for body in third[1].bodies) != seeds_a
@@ -458,8 +566,13 @@ async def test_concurrency_is_bounded() -> None:
         await asyncio.sleep(0.02)
         live -= 1
 
-    r, _, _ = runner(transport=FnTransport(agent, delay), config=RunnerConfig(concurrency=2, case_timeout_seconds=5))
-    outs = await r.run_all(mf(), [EvalCase(f"c{i}", f"q{i}") for i in range(7)], run_seed=1, eval_run_id="e")
+    r, _, _ = runner(
+        transport=FnTransport(agent, delay),
+        config=RunnerConfig(concurrency=2, case_timeout_seconds=5),
+    )
+    outs = await r.run_all(
+        mf(), [EvalCase(f"c{i}", f"q{i}") for i in range(7)], run_seed=1, eval_run_id="e"
+    )
     assert all(o.status == "completed" for o in outs) and peak == 2
 
 

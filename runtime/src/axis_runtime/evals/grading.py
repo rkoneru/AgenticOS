@@ -13,7 +13,7 @@ from typing import Any, Protocol
 
 from axis_runtime.evals.graders import grade_deterministic
 from axis_runtime.evals.judge import JudgeGrader, with_phi
-from axis_runtime.evals.redact import redact_text, redact_value
+from axis_runtime.evals.redact import names_in, redact_text, redact_value
 from axis_runtime.evals.types import CaseTrace, EvalCase, Grade, GraderSpec
 
 
@@ -55,13 +55,16 @@ class ReviewTask:
 
 def review_task(spec: GraderSpec, case: EvalCase, trace: CaseTrace, *, phi: bool) -> ReviewTask:
     cfg = spec.config
+    names = names_in(case.input_text) if phi else []
     return ReviewTask(
         case_id=case.id,
         grader_id=spec.id,
         rubric=redact_text(str(cfg.get("rubric", "")), phi=phi),
-        input=redact_value(case.input, phi=phi),
-        output=None if trace.output is None else redact_text(trace.output, phi=phi),
-        expected=redact_value(case.expected, phi=phi) if cfg.get("include_expected") else None,
+        input=redact_value(case.input, phi=phi, names=names),
+        output=None if trace.output is None else redact_text(trace.output, phi=phi, names=names),
+        expected=redact_value(case.expected, phi=phi, names=names)
+        if cfg.get("include_expected")
+        else None,
     )
 
 

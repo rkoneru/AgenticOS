@@ -26,7 +26,7 @@ from typing import Any, Protocol
 
 from axis_runtime.evals.aggregation import aggregate
 from axis_runtime.evals.grading import CaseGrader, pending_tasks
-from axis_runtime.evals.redact import redact_text, redact_value
+from axis_runtime.evals.redact import names_in, redact_text, redact_value
 from axis_runtime.evals.trace import trace_from_events, trace_wire
 from axis_runtime.evals.types import (
     ID_RE,
@@ -163,12 +163,15 @@ class OnlineSampler:
     def redacted(self, run: CompletedRun) -> tuple[CaseTrace, EvalCase]:
         phi = self._phi(run)
         out = run.trace.output
+        names = names_in(run.input_text or "") if phi else []
         trace = dataclasses.replace(
-            run.trace, output=None if out is None else redact_text(out, phi=phi)
+            run.trace, output=None if out is None else redact_text(out, phi=phi, names=names)
         )
         case = EvalCase(
             id=run.run_id,
-            input=redact_value(run.input_text, phi=phi) if run.input_text is not None else "",
+            input=redact_value(run.input_text, phi=phi, names=names)
+            if run.input_text is not None
+            else "",
             metadata={"source": "online"},
         )
         return trace, case

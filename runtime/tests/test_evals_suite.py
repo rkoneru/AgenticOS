@@ -30,8 +30,16 @@ from axis_runtime.evals.types import (
     dataset_content_hash,
 )
 from axis_runtime.evals.worker import EvalWorker, OnlineWorker, WorkerConfig
-from conftest import TENANT, ScriptedGate, allow
-from evals_helpers import FakeHub, FnTransport, SeqIds, det, make_base_deps, make_manifest, text_body, user_text
+from conftest import TENANT, ScriptedGate
+from evals_helpers import (
+    FakeHub,
+    FnTransport,
+    SeqIds,
+    make_base_deps,
+    make_manifest,
+    text_body,
+    user_text,
+)
 
 WIRE = json.loads((Path(__file__).parent / "fixtures" / "eval-hub-wire-examples.json").read_text())
 IDENT = RunnerIdentity("runner-1", "tok-secret-1")
@@ -63,7 +71,9 @@ def refund_agent(answers: dict[str, str]) -> Any:
         text = user_text(messages)
         if system == JUDGE_SYSTEM_PROMPT:  # the judge: polite & mentions amount -> 1, else 0
             body = text.split("<<<BEGIN_UNTRUSTED_OUTPUT")[1]
-            return text_body('{"score": %s, "rationale": "graded"}' % ("1.0" if "$5" in body else "0.0"))
+            return text_body(
+                '{"score": %s, "rationale": "graded"}' % ("1.0" if "$5" in body else "0.0")
+            )
         for key, answer in answers.items():
             if key in text:
                 return text_body(answer)
@@ -72,7 +82,9 @@ def refund_agent(answers: dict[str, str]) -> Any:
     return fn
 
 
-def executor(fn: Any, gate: ScriptedGate | None = None, *, judge: bool = True) -> tuple[SuiteExecutor, FnTransport]:
+def executor(
+    fn: Any, gate: ScriptedGate | None = None, *, judge: bool = True
+) -> tuple[SuiteExecutor, FnTransport]:
     transport = FnTransport(fn)
     base = make_base_deps(transport, gate)
     return (
@@ -80,7 +92,9 @@ def executor(fn: Any, gate: ScriptedGate | None = None, *, judge: bool = True) -
             base_deps=base,
             tenant_id=TENANT,
             identity=IDENT,
-            judge_backend=RunPathJudgeBackend(base, tenant_id=TENANT, ids=SeqIds()) if judge else None,
+            judge_backend=RunPathJudgeBackend(base, tenant_id=TENANT, ids=SeqIds())
+            if judge
+            else None,
             ids=SeqIds(),
             nonce=lambda: "n0nce1234567890a",
         ),
@@ -98,47 +112,75 @@ GRADERS = (
     GraderSpec("amount", "deterministic", 2.0, {"type": "contains"}),
     GraderSpec("tone", "model", 1.0, RUBRIC),
 )
-MANIFEST = make_manifest(blueprint={"name": "claims-triage", "version": "1.0.0", "content_hash": HASH})
+MANIFEST = make_manifest(
+    blueprint={"name": "claims-triage", "version": "1.0.0", "content_hash": HASH}
+)
 
 
 async def test_scores_come_only_from_executed_graders() -> None:
-    ex, _ = executor(refund_agent({"order 7": "It is $5.", "order 8": "It is $5.", "order 9": "no idea"}))
+    ex, _ = executor(
+        refund_agent({"order 7": "It is $5.", "order 8": "It is $5.", "order 9": "no idea"})
+    )
     res = await ex.execute(queued(), suite(*GRADERS), dataset(CASES), MANIFEST)
     # c1: $5 expected, $5 given -> contains 1, judge 1; c2: expects $9, got $5 -> contains 0, judge 1; c3: 0, 0
     assert res.aggregate.per_grader == {"amount": 0.333333, "tone": 0.666667}
     assert res.aggregate.per_case == {"c1": 1.0, "c2": 0.333333, "c3": 0.0}
     assert res.aggregate.overall == 0.444444 and res.aggregate.passed is False
     # the same suite against a better agent gets a better score: nothing is canned
-    ex2, _ = executor(refund_agent({"order 7": "It is $5.", "order 8": "It is $9", "order 9": "It is $5 sir"}))
+    ex2, _ = executor(
+        refund_agent({"order 7": "It is $5.", "order 8": "It is $9", "order 9": "It is $5 sir"})
+    )
     res2 = await ex2.execute(queued(), suite(*GRADERS), dataset(CASES), MANIFEST)
     assert res2.aggregate.per_grader["amount"] == 1.0
     assert res2.aggregate.overall > res.aggregate.overall
 
 
 async def test_payload_shape_provenance_and_hub_recompute() -> None:
-    ex, _ = executor(refund_agent({"order 7": "It is $5.", "order 8": "It is $5.", "order 9": "no idea"}))
+    ex, _ = executor(
+        refund_agent({"order 7": "It is $5.", "order 8": "It is $5.", "order 9": "no idea"})
+    )
     s, ds = suite(*GRADERS), dataset(CASES)
     res = await ex.execute(queued(), s, ds, MANIFEST)
     p = res.payload
     ex_keys = WIRE["results_request"]
     assert sorted(p) == ex_keys["body_keys"] and sorted(p["scores"]) == ex_keys["scores_keys"]
-    assert sorted(p["cost"]) == ex_keys["cost_keys"] and sorted(p["provenance"]) == ex_keys["provenance_keys"]
+    assert (
+        sorted(p["cost"]) == ex_keys["cost_keys"]
+        and sorted(p["provenance"]) == ex_keys["provenance_keys"]
+    )
     cr = p["case_results"][0]
-    assert sorted(cr) == ex_keys["case_result_keys"] and sorted(cr["trace"]) == ex_keys["trace_keys"]
+    assert (
+        sorted(cr) == ex_keys["case_result_keys"] and sorted(cr["trace"]) == ex_keys["trace_keys"]
+    )
     assert sorted(cr["grades"][0]) == ex_keys["grade_keys"]
     prov = p["provenance"]
-    assert prov["seed"] == 7 and prov["runner_version"] == "1.0.0" and prov["runner_id"] == "runner-1"
-    assert prov["blueprint_content_hash"] == HASH and prov["dataset_version_hash"] == ds.version_hash
-    assert prov["suite_ref"] == "refunds@1.0.0" and prov["model_ids"] == ["openai/gpt-4o-2024-08-06"]
+    assert (
+        prov["seed"] == 7 and prov["runner_version"] == "1.0.0" and prov["runner_id"] == "runner-1"
+    )
+    assert (
+        prov["blueprint_content_hash"] == HASH and prov["dataset_version_hash"] == ds.version_hash
+    )
+    assert prov["suite_ref"] == "refunds@1.0.0" and prov["model_ids"] == [
+        "openai/gpt-4o-2024-08-06"
+    ]
     assert prov["judges"]["tone"]["prompt_sha256"] and prov["aggregation_version"] == 1
     assert p["status"] == "completed" and p["mode"] == "ci" and p["started_at"] <= p["finished_at"]
-    assert float(p["cost"]["total_usd"]) > 0 and p["cost"]["tokens"] > 0 and p["cost"]["judge_tokens"] > 0
+    assert (
+        float(p["cost"]["total_usd"]) > 0
+        and p["cost"]["tokens"] > 0
+        and p["cost"]["judge_tokens"] > 0
+    )
     # the hub recomputes the scores from the per-case grades and must get the same numbers
     grades = {
-        c["case_id"]: {g["grader_id"]: Grade(g["grader_id"], g["kind"], g["status"], g["score"]) for g in c["grades"]}
+        c["case_id"]: {
+            g["grader_id"]: Grade(g["grader_id"], g["kind"], g["status"], g["score"])
+            for g in c["grades"]
+        }
         for c in p["case_results"]
     }
-    again = aggregate(s.graders, grades, pass_threshold=s.pass_threshold, min_case_score=s.min_case_score)
+    again = aggregate(
+        s.graders, grades, pass_threshold=s.pass_threshold, min_case_score=s.min_case_score
+    )
     assert again.to_wire() == p["scores"]
     json.dumps(p)  # JSON-serialisable
 
@@ -146,7 +188,9 @@ async def test_payload_shape_provenance_and_hub_recompute() -> None:
 async def test_a_run_is_refused_when_its_inputs_are_not_what_was_queued() -> None:
     ex, transport = executor(refund_agent({}))
     s, ds = suite(*GRADERS), dataset(CASES)
-    stale = make_manifest(blueprint={"name": "claims-triage", "version": "1.0.0", "content_hash": "b" * 64})
+    stale = make_manifest(
+        blueprint={"name": "claims-triage", "version": "1.0.0", "content_hash": "b" * 64}
+    )
     with pytest.raises(RunRefused, match="blueprint_hash_mismatch"):
         await ex.execute(queued(), s, ds, stale)
     with pytest.raises(RunRefused, match="blueprint_mismatch"):
@@ -183,21 +227,35 @@ async def test_phi_datasets_are_redacted_before_persisting_and_before_the_judge(
 
 
 async def test_human_graders_leave_the_run_pending_and_produce_review_tasks() -> None:
-    human = GraderSpec("review", "human", 1.0, {"rubric": "Is the tone ok?", "include_expected": True})
+    human = GraderSpec(
+        "review", "human", 1.0, {"rubric": "Is the tone ok?", "include_expected": True}
+    )
     ex, _ = executor(refund_agent({"order": "It is $5."}), judge=False)
-    ds = dataset([EvalCase("c1", "order 1 refund?", {"output": "$5"}), EvalCase("c2", "order 2 refund?")])
+    ds = dataset(
+        [EvalCase("c1", "order 1 refund?", {"output": "$5"}), EvalCase("c2", "order 2 refund?")]
+    )
     res = await ex.execute(queued(), suite(GRADERS[0], human), ds, MANIFEST)
     assert res.payload["status"] == "pending_human"
-    assert res.payload["scores"]["status"] == "pending_human" and res.payload["scores"]["overall"] is None
+    assert (
+        res.payload["scores"]["status"] == "pending_human"
+        and res.payload["scores"]["overall"] is None
+    )
     assert res.payload["scores"]["passed"] is None
-    assert [(t.case_id, t.grader_id) for t in res.review_tasks] == [("c1", "review"), ("c2", "review")]
+    assert [(t.case_id, t.grader_id) for t in res.review_tasks] == [
+        ("c1", "review"),
+        ("c2", "review"),
+    ]
     assert res.review_tasks[0].expected == {"output": "$5"} and res.review_tasks[1].expected is None
 
 
 async def test_model_graders_without_a_judge_backend_are_ungraded() -> None:
     ex, _ = executor(refund_agent({"order": "It is $5."}), judge=False)
     res = await ex.execute(queued(), suite(GRADERS[1]), dataset(CASES[:1]), MANIFEST)
-    assert res.aggregate.overall == 0.0 and res.aggregate.ungraded == 1 and res.aggregate.passed is False
+    assert (
+        res.aggregate.overall == 0.0
+        and res.aggregate.ungraded == 1
+        and res.aggregate.passed is False
+    )
 
 
 async def test_an_infrastructure_error_case_cannot_pass_the_run() -> None:
@@ -207,27 +265,50 @@ async def test_an_infrastructure_error_case_cannot_pass_the_run() -> None:
 
     ex, _ = executor(refund_agent({}), Dead(), judge=False)  # type: ignore[arg-type]
     res = await ex.execute(queued(), suite(GRADERS[0], threshold=0.0), dataset(CASES[:1]), MANIFEST)
-    assert res.payload["case_results"][0]["status"] == "error" and res.payload["case_results"][0]["trace"] is None
+    assert (
+        res.payload["case_results"][0]["status"] == "error"
+        and res.payload["case_results"][0]["trace"] is None
+    )
     assert res.aggregate.passed is False and "errored_cases:c1" in res.aggregate.failures
 
 
 async def test_suite_settings_drive_the_runner_and_the_eval_policy() -> None:
-    s = suite(GRADERS[0], settings={"concurrency": 1, "case_timeout_seconds": 9, "max_tokens": 50, "allow_sandboxed_targets": ["run_python", 3]})
+    s = suite(
+        GRADERS[0],
+        settings={
+            "concurrency": 1,
+            "case_timeout_seconds": 9,
+            "max_tokens": 50,
+            "allow_sandboxed_targets": ["run_python", 3],
+        },
+    )
     cfg = runner_config(s)
     assert (cfg.concurrency, cfg.case_timeout_seconds, cfg.max_tokens) == (1, 9.0, 50)
     assert eval_policy(s).allow_sandboxed == frozenset({"run_python"})
     weird = suite(GRADERS[0], settings={"concurrency": True, "allow_sandboxed_targets": "all"})
-    assert runner_config(weird).concurrency == 4 and eval_policy(weird).allow_sandboxed == frozenset()
+    assert (
+        runner_config(weird).concurrency == 4 and eval_policy(weird).allow_sandboxed == frozenset()
+    )
 
 
 async def test_same_seed_same_scores_end_to_end() -> None:
     answers = {"order 7": "It is $5.", "order 8": "It is $5.", "order 9": "no idea"}
-    r1 = await executor(refund_agent(answers))[0].execute(queued(), suite(*GRADERS), dataset(CASES), MANIFEST)
-    r2 = await executor(refund_agent(answers))[0].execute(queued(), suite(*GRADERS), dataset(CASES), MANIFEST)
+    r1 = await executor(refund_agent(answers))[0].execute(
+        queued(), suite(*GRADERS), dataset(CASES), MANIFEST
+    )
+    r2 = await executor(refund_agent(answers))[0].execute(
+        queued(), suite(*GRADERS), dataset(CASES), MANIFEST
+    )
     assert r1.payload["scores"] == r2.payload["scores"]
-    assert [c["seed"] for c in r1.payload["case_results"]] == [c["seed"] for c in r2.payload["case_results"]]
-    r3 = await executor(refund_agent(answers))[0].execute(queued(seed=8), suite(*GRADERS), dataset(CASES), MANIFEST)
-    assert [c["seed"] for c in r3.payload["case_results"]] != [c["seed"] for c in r1.payload["case_results"]]
+    assert [c["seed"] for c in r1.payload["case_results"]] == [
+        c["seed"] for c in r2.payload["case_results"]
+    ]
+    r3 = await executor(refund_agent(answers))[0].execute(
+        queued(seed=8), suite(*GRADERS), dataset(CASES), MANIFEST
+    )
+    assert [c["seed"] for c in r3.payload["case_results"]] != [
+        c["seed"] for c in r1.payload["case_results"]
+    ]
 
 
 # ---- worker ---------------------------------------------------------------------------------------
@@ -258,7 +339,14 @@ def worker(hub: FakeHub, fn: Any = None, manifests: Any = None, **kw: Any) -> Ev
     async def nosleep(s: float) -> None:
         sleeps.append(s)
 
-    w = EvalWorker(hub, ex, manifests or Manifests(), WorkerConfig(TENANT, poll_interval=0.01), sleep=nosleep, **kw)
+    w = EvalWorker(
+        hub,
+        ex,
+        manifests or Manifests(),
+        WorkerConfig(TENANT, poll_interval=0.01),
+        sleep=nosleep,
+        **kw,
+    )
     w.sleeps = sleeps  # type: ignore[attr-defined]
     return w
 
@@ -268,7 +356,11 @@ async def test_worker_claims_executes_and_submits() -> None:
     w = worker(hub)
     assert await w.run_once() is True
     ((run_id, payload),) = hub.submissions
-    assert run_id == "evr_01" and payload["status"] == "completed" and payload["scores"]["overall"] is not None
+    assert (
+        run_id == "evr_01"
+        and payload["status"] == "completed"
+        and payload["scores"]["overall"] is not None
+    )
     assert await w.run_once() is False  # queue empty
 
 
@@ -278,11 +370,17 @@ async def test_worker_hands_human_work_to_the_hub() -> None:
     await worker(hub).run_once()
     assert hub.submissions[0][1]["status"] == "pending_human"
     ((rid, tasks),) = hub.tasks
-    assert rid == "evr_01" and sorted(tasks[0]) == WIRE["review_tasks_request"]["task_keys"] and len(tasks) == 3
+    assert (
+        rid == "evr_01"
+        and sorted(tasks[0]) == WIRE["review_tasks_request"]["task_keys"]
+        and len(tasks) == 3
+    )
 
 
 async def test_worker_reports_a_refused_run_as_failed_without_scores() -> None:
-    stale = make_manifest(blueprint={"name": "claims-triage", "version": "1.0.0", "content_hash": "c" * 64})
+    stale = make_manifest(
+        blueprint={"name": "claims-triage", "version": "1.0.0", "content_hash": "c" * 64}
+    )
     hub = hub_with(queued())
     await worker(hub, manifests=Manifests(stale)).run_once()
     ((_, payload),) = hub.submissions
@@ -360,7 +458,9 @@ async def test_review_task_handoff_failure_is_logged_not_fatal() -> None:
 
 def test_wire_examples_parse_and_hash() -> None:
     s = Suite.from_wire(WIRE["suite"])
-    assert [g.kind for g in s.graders] == ["deterministic", "model"] and s.graders[1].min_mean == 0.5
+    assert [g.kind for g in s.graders] == ["deterministic", "model"] and s.graders[
+        1
+    ].min_mean == 0.5
     d = Dataset.from_wire(WIRE["dataset"])
     assert d.computed_hash() == d.version_hash
     r = QueuedRun.from_wire(WIRE["claim_response"]["run"])
@@ -406,10 +506,20 @@ def test_malformed_datasets_and_runs_are_refused() -> None:
         with pytest.raises(WireError):
             Dataset.from_wire(bad)
     run = WIRE["claim_response"]["run"]
-    for bad in ({**run, "mode": "x"}, {**run, "seed": -1}, {**run, "seed": True}, {**run, "blueprint": {"name": "x"}}, {**run, "id": ""}):
+    for bad in (
+        {**run, "mode": "x"},
+        {**run, "seed": -1},
+        {**run, "seed": True},
+        {**run, "blueprint": {"name": "x"}},
+        {**run, "id": ""},
+    ):
         with pytest.raises(WireError):
             QueuedRun.from_wire(bad)
-    for bad in ({"blueprint": "b", "suite_ref": "s@1", "rate": 0.1, "max_per_hour": -1}, {"blueprint": "b", "suite_ref": "s@1", "rate": 2, "max_per_hour": 1}, {"blueprint": "b", "suite_ref": "s@1", "rate": 0.1, "max_per_hour": 1, "redaction": "none"}):
+    for bad in (
+        {"blueprint": "b", "suite_ref": "s@1", "rate": 0.1, "max_per_hour": -1},
+        {"blueprint": "b", "suite_ref": "s@1", "rate": 2, "max_per_hour": 1},
+        {"blueprint": "b", "suite_ref": "s@1", "rate": 0.1, "max_per_hour": 1, "redaction": "none"},
+    ):
         with pytest.raises(WireError):
             OnlineConfig.from_wire(bad)
     assert EvalCase.from_wire({"id": "a", "input": {"k": 1}}).input_text == '{"k":1}'
@@ -425,7 +535,9 @@ def http_client(handler: Any) -> tuple[HttpEvalHubClient, list[httpx.Request]]:
         seen.append(req)
         return handler(req)
 
-    client = HttpEvalHubClient("http://hub.test/", IDENT, client=httpx.AsyncClient(transport=httpx.MockTransport(wrapped)))
+    client = HttpEvalHubClient(
+        "http://hub.test/", IDENT, client=httpx.AsyncClient(transport=httpx.MockTransport(wrapped))
+    )
     return client, seen
 
 
@@ -435,16 +547,28 @@ async def test_http_client_authenticates_and_signs_the_exact_body() -> None:
     await client.submit_results("evr_01", payload)
     (req,) = seen
     assert req.url.path == "/v1/evals/runs/evr_01/results" and req.method == "POST"
-    assert req.headers["authorization"] == "Bearer tok-secret-1" and req.headers["x-axis-runner-id"] == "runner-1"
+    assert (
+        req.headers["authorization"] == "Bearer tok-secret-1"
+        and req.headers["x-axis-runner-id"] == "runner-1"
+    )
     expected = "v1=" + hmac.new(b"tok-secret-1", req.content, hashlib.sha256).hexdigest()
     assert req.headers["x-axis-runner-signature"] == expected
     assert json.loads(req.content) == payload
     assert sorted(WIRE["results_request"]["headers"]) == sorted(
-        ["authorization", "x-axis-runner-id", "x-axis-runner-version", "x-axis-runner-signature", "content-type"]
+        [
+            "authorization",
+            "x-axis-runner-id",
+            "x-axis-runner-version",
+            "x-axis-runner-signature",
+            "content-type",
+        ]
     )
     assert all(h in req.headers for h in WIRE["results_request"]["headers"])
     keyed = RunnerIdentity("r", "tok", b"separate-signing-key")
-    assert keyed.sign(b"x") == "v1=" + hmac.new(b"separate-signing-key", b"x", hashlib.sha256).hexdigest()
+    assert (
+        keyed.sign(b"x")
+        == "v1=" + hmac.new(b"separate-signing-key", b"x", hashlib.sha256).hexdigest()
+    )
     await client.aclose()
 
 

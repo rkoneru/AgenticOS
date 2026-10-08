@@ -19,7 +19,7 @@ from axis_runtime.evals.grading import GradingEngine, ReviewTask, pending_tasks
 from axis_runtime.evals.hubclient import RunnerIdentity
 from axis_runtime.evals.isolation import EvalModePolicy, IdSource
 from axis_runtime.evals.judge import JudgeBackend, JudgeGrader
-from axis_runtime.evals.redact import redact_text
+from axis_runtime.evals.redact import names_in, redact_text
 from axis_runtime.evals.runner import CaseOutcome, CaseRunner, RunnerConfig
 from axis_runtime.evals.trace import trace_wire
 from axis_runtime.evals.types import (
@@ -212,7 +212,11 @@ class SuiteExecutor:
                     "score": agg.per_case.get(o.case.id),
                     "output": None
                     if t is None or t.output is None
-                    else redact_text(t.output, phi=dataset.phi)[:MAX_PERSISTED_OUTPUT_CHARS],
+                    else redact_text(
+                        t.output,
+                        phi=dataset.phi,
+                        names=names_in(o.case.input_text) if dataset.phi else (),
+                    )[:MAX_PERSISTED_OUTPUT_CHARS],
                     "grades": [g.to_wire() for g in grades[o.case.id]],
                     "trace": None if t is None else trace_wire(t),
                 }

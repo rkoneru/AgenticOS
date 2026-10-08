@@ -9,9 +9,10 @@ configuration asking for it). ``redact_value`` walks JSON so a structured input 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Any
 
-from axis_runtime.voice.phi import REDACTED, redact_transcript
+from axis_runtime.voice.phi import REDACTED, learn_names, redact_transcript
 
 _SECRETS = tuple(
     re.compile(p)
@@ -32,18 +33,24 @@ def scrub_secrets(text: str) -> str:
     return text
 
 
-def redact_text(text: str, *, phi: bool) -> str:
-    """Credentials always; PHI patterns when ``phi``."""
+def names_in(*texts: str) -> list[str]:
+    """Name tokens a person introduced themselves with in ``texts`` ("my name is Jane Doe"). An
+    agent's answer repeats them ("Thanks, Jane"), so they are removed wherever they appear."""
+    return [n for t in texts for n in learn_names(t)]
+
+
+def redact_text(text: str, *, phi: bool, names: Iterable[str] = ()) -> str:
+    """Credentials always; PHI patterns (and ``names``) when ``phi``."""
     out = scrub_secrets(text)
-    return redact_transcript(out) if phi else out
+    return redact_transcript(out, names) if phi else out
 
 
-def redact_value(value: Any, *, phi: bool) -> Any:
+def redact_value(value: Any, *, phi: bool, names: Iterable[str] = ()) -> Any:
     """``value`` with every string redacted (dict keys are kept: they are schema, not data)."""
     if isinstance(value, str):
-        return redact_text(value, phi=phi)
+        return redact_text(value, phi=phi, names=names)
     if isinstance(value, list):
-        return [redact_value(v, phi=phi) for v in value]
+        return [redact_value(v, phi=phi, names=names) for v in value]
     if isinstance(value, dict):
-        return {k: redact_value(v, phi=phi) for k, v in value.items()}
+        return {k: redact_value(v, phi=phi, names=names) for k, v in value.items()}
     return value

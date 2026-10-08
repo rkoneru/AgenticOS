@@ -122,7 +122,11 @@ def test_malformed_result_sets_are_refused() -> None:
     with pytest.raises(AggregationError):
         aggregate([g, g], ok, pass_threshold=0.5)
     with pytest.raises(AggregationError):
-        aggregate([g], {"a": {"other": Grade("other", "deterministic", "scored", 1.0)}}, pass_threshold=0.5)
+        aggregate(
+            [g],
+            {"a": {"other": Grade("other", "deterministic", "scored", 1.0)}},
+            pass_threshold=0.5,
+        )
     with pytest.raises(AggregationError):
         aggregate([g], {"bad id!": {}}, pass_threshold=0.5)
     with pytest.raises(AggregationError):

@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from axis_runtime.evals.graders import parse_json
-from axis_runtime.evals.redact import redact_text, redact_value
+from axis_runtime.evals.redact import names_in, redact_text, redact_value
 from axis_runtime.evals.types import CaseTrace, EvalCase, Grade, GraderSpec, canonical
 from axis_runtime.manifest import Budget, Budgets, ModelSpec, ProcessConfig, RuntimeManifest
 from axis_runtime.untrusted import defang_fence
@@ -367,9 +367,10 @@ class JudgeGrader:
         if drift is not None:
             return Grade(spec.id, "model", "ungraded", 0.0, drift, base)
         phi = config.phi
-        out = redact_text(trace.output, phi=phi)
-        inp = redact_text(case.input_text, phi=phi) if config.include_input else None
-        exp = redact_value(case.expected, phi=phi) if config.include_expected else None
+        names = names_in(case.input_text) if phi else []
+        out = redact_text(trace.output, phi=phi, names=names)
+        inp = redact_text(case.input_text, phi=phi, names=names) if config.include_input else None
+        exp = redact_value(case.expected, phi=phi, names=names) if config.include_expected else None
         score, why, replies = await self._vote(config, out, inp, exp, seed)
         prov: dict[str, Any] = {
             "judge": {

@@ -70,7 +70,9 @@ def text_body(text: str) -> dict[str, Any]:
 
 def make_manifest(**over: Any) -> RuntimeManifest:
     over.setdefault("tools", [])
-    over.setdefault("memory", {"run": False, "session": False, "long_term": False, "knowledge_bases": []})
+    over.setdefault(
+        "memory", {"run": False, "session": False, "long_term": False, "knowledge_bases": []}
+    )
     return RuntimeManifest.from_dict(manifest_dict(**over))
 
 

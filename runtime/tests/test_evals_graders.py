@@ -45,7 +45,9 @@ def case(expected: Any = None) -> EvalCase:
     return EvalCase("c1", "q", expected)
 
 
-def score(spec: GraderSpec, c: EvalCase | None = None, t: CaseTrace | None = None) -> tuple[str, float]:
+def score(
+    spec: GraderSpec, c: EvalCase | None = None, t: CaseTrace | None = None
+) -> tuple[str, float]:
     g = grade_deterministic(spec, c or case(), t or trace())
     return g.status, g.score
 
@@ -60,7 +62,17 @@ def test_exact() -> None:
     assert score(det("g", "exact", value="hello")) == FAIL
     assert score(det("g", "exact"), case("hello world")) == PASS
     assert score(det("g", "exact"), case({"output": "hello world"})) == PASS
-    assert score(det("g", "exact", value="  HELLO   world ", normalize=["strip", "casefold", "collapse_ws"])) == PASS
+    assert (
+        score(
+            det(
+                "g",
+                "exact",
+                value="  HELLO   world ",
+                normalize=["strip", "casefold", "collapse_ws"],
+            )
+        )
+        == PASS
+    )
     assert score(det("g", "exact", value="x"), t=trace(None)) == FAIL
     assert score(det("g", "exact")) == ERR  # no expected value at all
     assert score(det("g", "exact", value="x", normalize=["rot13"])) == ERR
@@ -72,7 +84,9 @@ def test_exact_json_value() -> None:
     assert score(det("g", "exact", value={"b": [True], "a": 1}), t=t) == PASS
     assert score(det("g", "exact", value={"a": 2}), t=t) == FAIL
     assert score(det("g", "exact", value={"a": 2}), t=trace("not json")) == FAIL
-    assert score(det("g", "exact", value={"a": 1}), t=trace('{"a": 1, "a": 1}')) == FAIL  # duplicate key
+    assert (
+        score(det("g", "exact", value={"a": 1}), t=trace('{"a": 1, "a": 1}')) == FAIL
+    )  # duplicate key
 
 
 def test_contains_and_not_contains() -> None:
@@ -88,7 +102,9 @@ def test_contains_and_not_contains() -> None:
     assert score(det("g", "not_contains", values=["mars"])) == PASS
     assert score(det("g", "not_contains", values=["mars", "world"])) == FAIL
     assert score(det("g", "not_contains"), case({"not_contains": ["mars"]})) == PASS
-    assert score(det("g", "not_contains", values=["mars"]), t=trace(None)) == FAIL  # no output proves nothing
+    assert (
+        score(det("g", "not_contains", values=["mars"]), t=trace(None)) == FAIL
+    )  # no output proves nothing
 
 
 def test_regex() -> None:
@@ -104,7 +120,10 @@ def test_regex() -> None:
     assert score(det("g", "regex", pattern="x", mode="start")) == ERR
 
 
-@pytest.mark.parametrize("pattern", [r"(a+)+$", r"(a|aa)+$", r"a?a?a?a?a?a?a?a?a?aaaaaaaaa", r"(a*)*b", r"(?=a)a", r"(a)\1"])
+@pytest.mark.parametrize(
+    "pattern",
+    [r"(a+)+$", r"(a|aa)+$", r"a?a?a?a?a?a?a?a?a?aaaaaaaaa", r"(a*)*b", r"(?=a)a", r"(a)\1"],
+)
 def test_regex_refuses_redos_shapes(pattern: str) -> None:
     g = grade_deterministic(det("g", "regex", pattern=pattern), case(), trace("a" * 5000))
     assert g.status == "error" and g.score == 0.0
@@ -122,7 +141,14 @@ def test_json_schema() -> None:
     }
     good = trace('{"id": 3, "tags": ["a", "bb"]}')
     assert score(det("g", "json_schema", schema=schema), t=good) == PASS
-    for bad in ('{"id": 0, "tags": []}', '{"id": 1}', '{"id": 1, "tags": ["toolong!"]}', '{"id": 1, "tags": [], "x": 1}', "nope", '{"id": 1, "tags": ["a","b","c"]}'):
+    for bad in (
+        '{"id": 0, "tags": []}',
+        '{"id": 1}',
+        '{"id": 1, "tags": ["toolong!"]}',
+        '{"id": 1, "tags": [], "x": 1}',
+        "nope",
+        '{"id": 1, "tags": ["a","b","c"]}',
+    ):
         assert score(det("g", "json_schema", schema=schema), t=trace(bad)) == FAIL
     assert score(det("g", "json_schema", schema=schema), t=trace(None)) == FAIL
     assert score(det("g", "json_schema")) == ERR
@@ -148,7 +174,10 @@ def test_jsonschema_keywords() -> None:
     assert validate({"type": "array", "minItems": 2}, [1])
     assert validate({"type": "integer"}, True)  # bool is not an integer
     assert validate({"type": "integer"}, 3.0) == []
-    assert validate({"properties": {"a": {"type": "string"}}, "additionalProperties": {"type": "integer"}}, {"a": "x", "b": "y"})
+    assert validate(
+        {"properties": {"a": {"type": "string"}}, "additionalProperties": {"type": "integer"}},
+        {"a": "x", "b": "y"},
+    )
     with pytest.raises(SchemaError):
         validate({"type": "wat"}, 1)
     with pytest.raises(SchemaError):
@@ -183,10 +212,20 @@ def test_numeric_tolerance() -> None:
     assert score(det("g", "numeric_tolerance", value=40, rel_tol=0.05), t=t) == FAIL
     assert score(det("g", "numeric_tolerance"), case({"number": 42.5}), t) == PASS
     assert score(det("g", "numeric_tolerance"), case(42.5), t) == PASS
-    assert score(det("g", "numeric_tolerance", value=3, extract="first_number"), t=trace("about 3 apples")) == PASS
+    assert (
+        score(
+            det("g", "numeric_tolerance", value=3, extract="first_number"),
+            t=trace("about 3 apples"),
+        )
+        == PASS
+    )
     assert score(det("g", "numeric_tolerance", value=3), t=trace("about 3 apples")) == FAIL
-    assert score(det("g", "numeric_tolerance", value=3, path="a.1"), t=trace('{"a": [0, 3]}')) == PASS
-    assert score(det("g", "numeric_tolerance", value=3, path="a.9"), t=trace('{"a": [0, 3]}')) == FAIL
+    assert (
+        score(det("g", "numeric_tolerance", value=3, path="a.1"), t=trace('{"a": [0, 3]}')) == PASS
+    )
+    assert (
+        score(det("g", "numeric_tolerance", value=3, path="a.9"), t=trace('{"a": [0, 3]}')) == FAIL
+    )
     assert score(det("g", "numeric_tolerance", value=3, path="a"), t=trace('{"a": "3"}')) == FAIL
     assert score(det("g", "numeric_tolerance", value=3), t=trace("nan")) == FAIL
     assert score(det("g", "numeric_tolerance", value=3), t=trace("inf")) == FAIL
@@ -200,7 +239,10 @@ def test_tool_sequences() -> None:
     t = trace(tools=("search", "fetch", "answer"))
     assert score(det("g", "tool_sequence", sequence=["search", "fetch", "answer"]), t=t) == PASS
     assert score(det("g", "tool_sequence", sequence=["search", "answer"]), t=t) == FAIL
-    assert score(det("g", "tool_sequence"), case({"tool_sequence": ["search", "fetch", "answer"]}), t) == PASS
+    assert (
+        score(det("g", "tool_sequence"), case({"tool_sequence": ["search", "fetch", "answer"]}), t)
+        == PASS
+    )
     assert score(det("g", "tool_subsequence", sequence=["search", "answer"]), t=t) == PASS
     assert score(det("g", "tool_subsequence", sequence=["answer", "search"]), t=t) == FAIL
     assert score(det("g", "tool_subsequence", sequence=["search", "search"]), t=t) == FAIL
@@ -217,7 +259,13 @@ def test_tool_sequences() -> None:
             ("send_email", "tool_call", "DENY", "policy"),
         ),
     )
-    assert score(det("g", "tool_sequence", sequence=["search", "send_email"], scope="attempted"), t=attempted) == PASS
+    assert (
+        score(
+            det("g", "tool_sequence", sequence=["search", "send_email"], scope="attempted"),
+            t=attempted,
+        )
+        == PASS
+    )
     assert score(det("g", "tool_sequence", sequence=["search", "send_email"]), t=attempted) == FAIL
 
 
@@ -230,24 +278,73 @@ def test_policy_decision() -> None:
     )
     deny_email = {"action": "send_email", "decision": "DENY"}
     assert score(det("g", "policy_decision", expect=[deny_email]), t=t) == PASS
-    assert score(det("g", "policy_decision", expect=[{**deny_email, "reason_contains": "outbound"}]), t=t) == PASS
-    assert score(det("g", "policy_decision", expect=[{**deny_email, "reason_contains": "xyz"}]), t=t) == FAIL
-    assert score(det("g", "policy_decision", expect=[{**deny_email, "enforcement_point": "mcp_call"}]), t=t) == FAIL
-    assert score(det("g", "policy_decision", expect=[{"action": "send_email", "decision": "ALLOW"}]), t=t) == FAIL
-    assert score(det("g", "policy_decision", forbid=[{"action": "send_email", "decision": "ALLOW"}]), t=t) == PASS
+    assert (
+        score(
+            det("g", "policy_decision", expect=[{**deny_email, "reason_contains": "outbound"}]), t=t
+        )
+        == PASS
+    )
+    assert (
+        score(det("g", "policy_decision", expect=[{**deny_email, "reason_contains": "xyz"}]), t=t)
+        == FAIL
+    )
+    assert (
+        score(
+            det("g", "policy_decision", expect=[{**deny_email, "enforcement_point": "mcp_call"}]),
+            t=t,
+        )
+        == FAIL
+    )
+    assert (
+        score(
+            det("g", "policy_decision", expect=[{"action": "send_email", "decision": "ALLOW"}]), t=t
+        )
+        == FAIL
+    )
+    assert (
+        score(
+            det("g", "policy_decision", forbid=[{"action": "send_email", "decision": "ALLOW"}]), t=t
+        )
+        == PASS
+    )
     assert score(det("g", "policy_decision", forbid=[deny_email]), t=t) == FAIL
     assert score(det("g", "policy_decision"), case({"decisions": [deny_email]}), t) == PASS
     assert score(det("g", "policy_decision"), case(None), t) == ERR  # nothing to assert
     assert score(det("g", "policy_decision", expect=["x"]), t=t) == ERR
-    assert score(det("g", "policy_decision", expect=[{"action": 1, "decision": "DENY"}]), t=t) == ERR
+    assert (
+        score(det("g", "policy_decision", expect=[{"action": 1, "decision": "DENY"}]), t=t) == ERR
+    )
     assert score(det("g", "policy_decision", expect="x"), t=t) == ERR
 
 
 def test_budget() -> None:
-    calls = (ModelCallTrace("openai", "gpt-4o", 100, 50, 2500, 40), ModelCallTrace("openai", "gpt-4o", 10, 5, 500, 20))
+    calls = (
+        ModelCallTrace("openai", "gpt-4o", 100, 50, 2500, 40),
+        ModelCallTrace("openai", "gpt-4o", 10, 5, 500, 20),
+    )
     t = trace(tools=("a",), model_calls=calls, latency_ms=900)
-    assert score(det("g", "budget", max_cost_usd=0.003, max_tokens=165, max_latency_ms=900, max_tool_calls=1, max_model_calls=2), t=t) == PASS
-    for over in ({"max_cost_usd": 0.0029}, {"max_tokens": 164}, {"max_latency_ms": 899}, {"max_tool_calls": 0}, {"max_model_calls": 1}):
+    assert (
+        score(
+            det(
+                "g",
+                "budget",
+                max_cost_usd=0.003,
+                max_tokens=165,
+                max_latency_ms=900,
+                max_tool_calls=1,
+                max_model_calls=2,
+            ),
+            t=t,
+        )
+        == PASS
+    )
+    for over in (
+        {"max_cost_usd": 0.0029},
+        {"max_tokens": 164},
+        {"max_latency_ms": 899},
+        {"max_tool_calls": 0},
+        {"max_model_calls": 1},
+    ):
         assert score(det("g", "budget", **over), t=t) == FAIL
     assert score(det("g", "budget")) == ERR
     assert score(det("g", "budget", max_tokens="many"), t=t) == ERR
@@ -259,12 +356,68 @@ def test_unknown_type_and_totality() -> None:
     assert score(GraderSpec("g", "deterministic", 1.0, {})) == ERR
     assert score(GraderSpec("g", "deterministic", 1.0, {"type": "vibes"})) == ERR
     rng = random.Random(7)
-    types = ["exact", "contains", "not_contains", "regex", "json_schema", "numeric_tolerance", "tool_sequence", "tool_subsequence", "policy_decision", "budget"]
-    junk: list[Any] = [None, 1, -1, 2.5, "x", "", [], [1], ["a"], {}, {"a": 1}, True, float("nan"), "(", "[a-"]
+    types = [
+        "exact",
+        "contains",
+        "not_contains",
+        "regex",
+        "json_schema",
+        "numeric_tolerance",
+        "tool_sequence",
+        "tool_subsequence",
+        "policy_decision",
+        "budget",
+    ]
+    junk: list[Any] = [
+        None,
+        1,
+        -1,
+        2.5,
+        "x",
+        "",
+        [],
+        [1],
+        ["a"],
+        {},
+        {"a": 1},
+        True,
+        float("nan"),
+        "(",
+        "[a-",
+    ]
     for _ in range(600):
-        cfg = {k: rng.choice(junk) for k in ("value", "values", "pattern", "schema", "sequence", "expect", "forbid", "mode", "scope", "normalize", "path", "max_tokens", "abs_tol", "extract")}
-        out = rng.choice([None, "", "42", "{}", "[1,2", "".join(rng.choices(string.printable, k=rng.randint(0, 80)))])
-        g = grade_deterministic(det("g", rng.choice(types), **cfg), case(rng.choice(junk)), trace(out))
+        cfg = {
+            k: rng.choice(junk)
+            for k in (
+                "value",
+                "values",
+                "pattern",
+                "schema",
+                "sequence",
+                "expect",
+                "forbid",
+                "mode",
+                "scope",
+                "normalize",
+                "path",
+                "max_tokens",
+                "abs_tol",
+                "extract",
+            )
+        }
+        out = rng.choice(
+            [
+                None,
+                "",
+                "42",
+                "{}",
+                "[1,2",
+                "".join(rng.choices(string.printable, k=rng.randint(0, 80))),
+            ]
+        )
+        g = grade_deterministic(
+            det("g", rng.choice(types), **cfg), case(rng.choice(junk)), trace(out)
+        )
         assert g.status in ("scored", "error") and g.score in (0.0, 1.0)
 
 
@@ -278,7 +431,9 @@ def test_random_equivalences() -> None:
         n = score(det("g", "not_contains", values=[needle]), t=t)
         assert c[1] + n[1] == 1.0  # contains and not_contains are complements
         assert score(det("g", "exact", value=text), t=t) == PASS
-        assert score(det("g", "regex", pattern=f"^{needle}", mode="search"), t=t)[1] == (1.0 if text.startswith(needle) else 0.0)
+        assert score(det("g", "regex", pattern=f"^{needle}", mode="search"), t=t)[1] == (
+            1.0 if text.startswith(needle) else 0.0
+        )
 
 
 def test_parse_json_is_strict() -> None:
