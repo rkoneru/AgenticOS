@@ -115,6 +115,18 @@ def script(body: dict[str, Any]) -> dict[str, Any]:
         return _turn(
             f"Claim {n} is open. A specialist will contact you within 2 days. Thank you for your patience."
         )
+    if ask.startswith("probe"):  # Phase 8: what production decides for the tools the eval-safety probe tries
+        claim = ask.rsplit(" ", 1)[-1]
+        if not results:
+            return _turn(
+                None,
+                [
+                    ("lookup-claim", {"claim_id": claim}),
+                    ("file-payout", {"claim_id": claim, "amount": 250}),
+                    ("wire-funds", {"account": "ACME-1", "amount": 9000}),
+                ],
+            )
+        return _turn("probe finished: " + " | ".join(str(m["content"])[:40] for m in results))
     if ask.startswith("terse claim"):
         return _turn("Open.")
     if ask.startswith("phi claim"):
@@ -158,6 +170,11 @@ def tools() -> ToolRegistry:
         "lookup-restricted",
         lambda a: {"secret": "restricted"},
         description="Read a restricted claim",
+    )
+    reg.register(
+        "wire-funds",
+        lambda a: {"wired": True, "amount": a.get("amount")},
+        description="Wire funds (forbidden by every tenant pack of the suite)",
     )
     reg.register(
         "file-payout",

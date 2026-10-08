@@ -157,6 +157,17 @@ class PySdk(EvalClient):
                 return ev.runners.register(a["id"], a.get("description"))
             case "evalsRunnersRevoke":
                 return ev.runners.revoke(a["id"])
+            # production runs and approvals (the run service the online sampler reads from)
+            case "runStart":
+                return ax.runs.start({"name": a["name"], "version": a["version"]}, a.get("input"))
+            case "runWait":
+                return ax.runs.wait(a["id"], timeout=120, poll_interval=0.3)
+            case "runGet":
+                return ax.runs.get(a["id"])
+            case "approvalsList":
+                return ax.approvals.list(status=a.get("status"))
+            case "reject":
+                return ax.approvals.reject(a["id"], a.get("comment"))
         raise AssertionError(f"unknown op {op}")
 
 
