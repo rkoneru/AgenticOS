@@ -8,22 +8,22 @@ Maps the obligations of Regulation (EU) 2024/1689 that fall on providers of high
 
 Matrix version 1. Rows: 14 (Built 3, Prototype 8, Designed 0, Gap 3).
 
-| id | requirement | status | evidence |
-| --- | --- | --- | --- |
-| EUAIACT-Art9 | A risk management system is established, documented and maintained across the lifecycle of a high-risk system. | Prototype | `packages/abl/test/lint.test.ts`<br>`services/compliance/test/records.test.ts` |
-| EUAIACT-Art10 | Training, validation and testing data meet quality and governance criteria, including examination for bias. | Prototype | `services/eval-hub/test/catalog.test.ts` |
-| EUAIACT-Art11 | Technical documentation per Annex IV is drawn up before placing on the market and kept up to date. | Built | `e2e-compliance`<br>`services/compliance/test/docgen.test.ts`<br>`services/compliance/test/properties.test.ts` |
-| EUAIACT-Art12 | High-risk systems technically allow automatic recording of events over their lifetime. | Built | `services/audit/test/pg.test.ts`<br>`runtime/tests/test_events.py`<br>`e2e-core` |
-| EUAIACT-Art13 | Systems are transparent enough for deployers to interpret output and use it appropriately, with instructions for use. | Prototype | `services/agil/test/explain.test.ts`<br>`services/compliance/test/docgen.test.ts` |
-| EUAIACT-Art14 | High-risk systems can be effectively overseen by natural people, including the ability to intervene or stop the system. | Built | `services/approvals/test/service.test.ts`<br>`services/risk-kernel/test/approvals.test.ts`<br>`e2e-phase3` |
-| EUAIACT-Art15 | Systems reach an appropriate level of accuracy, robustness and cybersecurity and perform consistently. | Prototype | `services/eval-hub/test/gate.test.ts`<br>`services/eval-hub/test/scoring.test.ts`<br>`e2e-phase8` |
-| EUAIACT-Art17 | Providers operate a quality management system covering design, testing, data, risk management and post-market monitoring. | Gap | none |
-| EUAIACT-Art26 | Deployers use systems per the instructions, assign human oversight, monitor operation, keep logs and inform affected persons. | Prototype | `services/audit/test/export.test.ts`<br>`packages/abl/test/lint.test.ts` |
-| EUAIACT-Art27 | Certain deployers assess the impact on fundamental rights before first use of a high-risk system. | Prototype | `e2e-compliance`<br>`services/compliance/test/records.test.ts`<br>`services/compliance/test/properties.test.ts` |
-| EUAIACT-Art43 | High-risk systems undergo the applicable conformity assessment procedure before being placed on the market. | Gap | none |
-| EUAIACT-Art50 | People are told they are interacting with an AI system, and synthetic content is marked, unless obvious. | Prototype | `packages/abl/test/compile.test.ts`<br>`runtime/tests/test_voice_compliance.py` |
-| EUAIACT-Art72 | Providers establish a post-market monitoring system proportionate to the risk and collect and analyse relevant data. | Prototype | `services/eval-hub/test/online.test.ts`<br>`e2e-phase8` |
-| EUAIACT-Art73 | Serious incidents are reported to the market surveillance authorities within the set deadlines. | Gap | none |
+| id            | requirement                                                                                                                   | status    | evidence                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| EUAIACT-Art9  | A risk management system is established, documented and maintained across the lifecycle of a high-risk system.                | Prototype | `packages/abl/test/lint.test.ts`<br>`services/compliance/test/records.test.ts`                                  |
+| EUAIACT-Art10 | Training, validation and testing data meet quality and governance criteria, including examination for bias.                   | Prototype | `services/eval-hub/test/catalog.test.ts`                                                                        |
+| EUAIACT-Art11 | Technical documentation per Annex IV is drawn up before placing on the market and kept up to date.                            | Built     | `e2e-compliance`<br>`services/compliance/test/docgen.test.ts`<br>`services/compliance/test/properties.test.ts`  |
+| EUAIACT-Art12 | High-risk systems technically allow automatic recording of events over their lifetime.                                        | Built     | `services/audit/test/pg.test.ts`<br>`runtime/tests/test_events.py`<br>`e2e-core`                                |
+| EUAIACT-Art13 | Systems are transparent enough for deployers to interpret output and use it appropriately, with instructions for use.         | Prototype | `services/agil/test/explain.test.ts`<br>`services/compliance/test/docgen.test.ts`                               |
+| EUAIACT-Art14 | High-risk systems can be effectively overseen by natural people, including the ability to intervene or stop the system.       | Built     | `services/approvals/test/service.test.ts`<br>`services/risk-kernel/test/approvals.test.ts`<br>`e2e-phase3`      |
+| EUAIACT-Art15 | Systems reach an appropriate level of accuracy, robustness and cybersecurity and perform consistently.                        | Prototype | `services/eval-hub/test/gate.test.ts`<br>`services/eval-hub/test/scoring.test.ts`<br>`e2e-phase8`               |
+| EUAIACT-Art17 | Providers operate a quality management system covering design, testing, data, risk management and post-market monitoring.     | Gap       | none                                                                                                            |
+| EUAIACT-Art26 | Deployers use systems per the instructions, assign human oversight, monitor operation, keep logs and inform affected persons. | Prototype | `services/audit/test/export.test.ts`<br>`packages/abl/test/lint.test.ts`                                        |
+| EUAIACT-Art27 | Certain deployers assess the impact on fundamental rights before first use of a high-risk system.                             | Prototype | `e2e-compliance`<br>`services/compliance/test/records.test.ts`<br>`services/compliance/test/properties.test.ts` |
+| EUAIACT-Art43 | High-risk systems undergo the applicable conformity assessment procedure before being placed on the market.                   | Gap       | none                                                                                                            |
+| EUAIACT-Art50 | People are told they are interacting with an AI system, and synthetic content is marked, unless obvious.                      | Prototype | `packages/abl/test/compile.test.ts`<br>`runtime/tests/test_voice_compliance.py`                                 |
+| EUAIACT-Art72 | Providers establish a post-market monitoring system proportionate to the risk and collect and analyse relevant data.          | Prototype | `services/eval-hub/test/online.test.ts`<br>`e2e-phase8`                                                         |
+| EUAIACT-Art73 | Serious incidents are reported to the market surveillance authorities within the set deadlines.                               | Gap       | none                                                                                                            |
 
 ## Controls
 
@@ -166,4 +166,3 @@ Matrix version 1. Rows: 14 (Built 3, Prototype 8, Designed 0, Gap 3).
 - **Evidence:** none
 - **Status:** Gap
 - **Notes and limits:** No incident classification, deadline tracking or reporting template exists.
-

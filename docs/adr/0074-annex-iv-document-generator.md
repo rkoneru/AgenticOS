@@ -20,7 +20,7 @@ must assemble them without inventing anything and without pretending to be a con
 - **Seal.** `content_hash` = SHA-256 of the canonical JSON body. The seal (HMAC-SHA256 or Ed25519, both deterministic) covers
   `{content_hash, meta}`, and `meta` carries the hash of the Markdown, so the JSON, the Markdown and the metadata cannot be changed independently.
   Verification recomputes everything on every read. The standalone gateway derives its HMAC key from the seal key it already has, so documents
-  keep verifying across restarts; a KMS-held asymmetric key is the intended production form (NEEDS #3103).
+  keep verifying across restarts; a KMS-held asymmetric key is the intended production form (NEEDS #349).
 - **Versions.** The body carries no timestamp, so unchanged sources give an unchanged `content_hash`; then no new version is stored
   (`created: false`). The documentation's own audit events (`compliance.*` and the gateway's records of those calls) are left out of the audit
   statistics, otherwise generating a document would change the next one.

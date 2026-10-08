@@ -325,10 +325,16 @@ class JudgeGrader:
 
     # ---- anchors -------------------------------------------------------------------------
     async def _check_anchors(self, spec: GraderSpec, config: JudgeConfig, seed: int) -> str | None:
-        lock = self._locks.setdefault(spec.id, asyncio.Lock())
+        # Keyed by the whole judge definition, not the grader id: the online worker keeps ONE
+        # JudgeGrader for every suite, and two suites may both call a grader "quality" with
+        # another model, rubric or anchors.
+        key = hashlib.sha256(
+            canonical({"id": spec.id, "config": dict(spec.config)}).encode()
+        ).hexdigest()
+        lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
-            if spec.id in self._drift:
-                return self._drift[spec.id]
+            if key in self._drift:
+                return self._drift[key]
             drift: str | None = None
             for n, anchor in enumerate(config.anchors):
                 score, why, _ = await self._vote(config, anchor.output, anchor.input, None, seed)
@@ -338,7 +344,7 @@ class JudgeGrader:
                 if not anchor.min_score <= score <= anchor.max_score:
                     drift = f"judge_drift:anchor_{n}_out_of_range"
                     break
-            self._drift[spec.id] = drift
+            self._drift[key] = drift
             return drift
 
     # ---- the grader ----------------------------------------------------------------------

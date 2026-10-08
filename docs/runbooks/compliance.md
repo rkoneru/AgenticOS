@@ -40,7 +40,7 @@ a key this deployment no longer trusts. Do not hand it to an auditor; regenerate
 chain (`compliance.document.generate` events carry the blueprint name and version).
 
 Seal key: the standalone gateway derives an HMAC key from `GW_SEAL_KEY`. Changing that key makes every earlier document fail `seal_signature`.
-Rotate by adding the old sealer to `trustedSealers` in the composition (NEEDS #3103).
+Rotate by adding the old sealer to `trustedSealers` in the composition (NEEDS #349).
 
 ## Impact assessments
 

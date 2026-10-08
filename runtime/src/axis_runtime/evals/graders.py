@@ -39,7 +39,7 @@ from typing import Any
 
 from axis_runtime.evals.jsonschema_lite import SchemaError, validate
 from axis_runtime.evals.types import CaseTrace, EvalCase, Grade, GraderSpec, errored, scored
-from axis_runtime.regex_guard import UnsafePatternError, compile_safe
+from axis_runtime.regex_guard import UnsafePatternError, compile_safe, max_text_len
 
 MAX_MATCH_CHARS = 100_000
 _NUMBER = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
@@ -169,11 +169,17 @@ def _regex(spec: GraderSpec, case: EvalCase, trace: CaseTrace) -> Grade:
     try:
         compile_safe(pattern)  # linear-time guard (docs/NEEDS.md RE2 note): refuses ReDoS shapes
         compiled = re.compile(pattern, re.IGNORECASE if cfg.get("ignore_case") else 0)
+        limit = max_text_len(pattern, anchored=mode == "fullmatch")
     except (UnsafePatternError, re.error) as exc:
         raise GraderConfigError(f"regex: {exc}") from exc
     text = _text(trace)
     if text is None:
         return scored(spec, False, "no_output")
+    if len(text) > limit:
+        # Refused, not truncated: the output is the agent's (online: shaped by a customer) and a
+        # legal pattern is still quadratic or cubic in its length; a cut would also let a
+        # forbidden string past it pass a negated check.
+        raise GraderConfigError("regex: output too long for this pattern")
     matched = (compiled.search(text) if mode == "search" else compiled.fullmatch(text)) is not None
     return scored(
         spec, matched != bool(cfg.get("negate", False)), "matched" if matched else "no match"

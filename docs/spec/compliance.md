@@ -46,7 +46,7 @@ assessments with an independent review).
 
 `make compliance-check ARGS=--write` rewrites the Markdown first. The same check runs inside the package tests against the real repository.
 Labelling rules are in `docs/compliance/README.md`. The checker proves that cited evidence exists and has the right shape; it does not run
-the tests and cannot judge adequacy (NEEDS #3106).
+the tests and cannot judge adequacy (NEEDS #352).
 
 ## 2. Technical documentation (Annex IV structure)
 

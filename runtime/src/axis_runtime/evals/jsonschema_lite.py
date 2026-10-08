@@ -12,7 +12,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from axis_runtime.regex_guard import UnsafePatternError, compile_safe
+from axis_runtime.regex_guard import UnsafePatternError, compile_safe, max_text_len
 
 MAX_DEPTH = 24
 MAX_ERRORS = 10
@@ -128,9 +128,12 @@ def _walk(schema: Any, value: Any, path: str, depth: int, errors: list[str]) -> 
             try:
                 compile_safe(pat)
                 compiled = re.compile(pat)
+                limit = max_text_len(pat)
             except (UnsafePatternError, re.error) as exc:
                 raise SchemaError("unusable pattern") from exc
-            if compiled.search(value[:100_000]) is None:
+            if len(value) > limit:
+                raise SchemaError("string too long for this pattern")
+            if compiled.search(value) is None:
                 errors.append(f"{path}: does not match the pattern")
     if isinstance(value, list):
         if "minItems" in schema and len(value) < _number(schema, "minItems"):

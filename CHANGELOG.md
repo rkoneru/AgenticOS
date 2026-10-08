@@ -11,7 +11,7 @@
 - Migration 0016 (`compliance_docs`, forced RLS, append-only collections); ADRs 0070-0074; OpenAPI 1.5.0 (14 operations, FREEZE and SDKs
   regenerated); `api.compliance.read|write|review` in the control-plane pack with 21 golden cases; gateway routes and adapters; ergonomic
   wrappers in both SDKs; `axis compliance ...`; read-only console pages (axe in both themes, XSS).
-- Spec `docs/spec/compliance.md`, runbook, threat model; NEEDS #3100-3115 (the parent renumbers).
+- Spec `docs/spec/compliance.md`, runbook, threat model; NEEDS #346-361 (the parent renumbers).
 
 ## Phase 8 - exit: evals gate releases, proven end to end (`make e2e-phase8`, `make console-e2e`, `make evals`)
 

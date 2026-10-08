@@ -33,4 +33,4 @@ ports for everything outside it, a memory store as the reference and a Postgres 
 
 The compliance records need no new infrastructure. Tenant isolation is tested against real Postgres as the application role, with the table owner
 path and the raw constraint tests in `test/stores.test.ts`. The service has no network surface of its own in production: the gateway composes it.
-Limits are in `docs/NEEDS.md` #3100 onward.
+Limits are in `docs/NEEDS.md` #346 onward.

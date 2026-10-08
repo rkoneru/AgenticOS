@@ -34,9 +34,16 @@ export class ReviewService {
     this.online = o;
   }
 
-  private view(t: ReviewTaskDoc): TaskView {
+  /**
+   * What `who` may see of a task. While a double-graded task is open, the other reviewer's score and comment are withheld:
+   * independence is the point of a second grade, and a reviewer who has seen the first one anchors on it. Once the task needs an
+   * adjudicator (the disagreement is the news) or is resolved, every grade is shown.
+   */
+  private view(t: ReviewTaskDoc, who: string): TaskView {
+    const open = t.resolution === null && t.state !== "needs_adjudication";
     return {
       ...t,
+      grades: open ? t.grades.filter((g) => g.reviewer === who) : t.grades,
       sla_breached:
         t.resolution === null && this.c.now().getTime() > new Date(t.sla_deadline).getTime(),
     };
@@ -68,7 +75,7 @@ export class ReviewService {
           !x.conflicts.includes(t.subject) &&
           (q.all === true || this.blocked(x, t.subject) === undefined),
       )
-      .map((x) => this.view(x))
+      .map((x) => this.view(x, t.subject))
       .sort((a, b) =>
         a.sla_deadline === b.sla_deadline
           ? a.id < b.id
@@ -84,7 +91,7 @@ export class ReviewService {
     const t = requireTenant(p, "evals.review");
     const d = await this.load(p.tenantId, id);
     if (d.data.conflicts.includes(t.subject)) throw notFound("task not found");
-    return this.view(d.data);
+    return this.view(d.data, t.subject);
   }
 
   private async load(tenantId: string, id: string) {
@@ -124,7 +131,7 @@ export class ReviewService {
         claim_expires_at: iso(new Date(this.c.now().getTime() + this.c.claimTtlMs)),
       };
       await guarded(() => this.c.docs.update(p.tenantId, "tasks", id, d.rev, next), "review task");
-      return this.view(next);
+      return this.view(next, who.subject);
     });
   }
 
@@ -186,7 +193,7 @@ export class ReviewService {
       }
       await guarded(() => this.c.docs.update(p.tenantId, "tasks", id, d.rev, next), "review task");
       if (next.state === "resolved") resolvedRun = next.run_id;
-      return this.view(next);
+      return this.view(next, who.subject);
     });
     if (resolvedRun !== undefined) {
       if (resolvedRun.startsWith("online:"))
@@ -219,7 +226,7 @@ export class ReviewService {
         skipped_by: [...t.skipped_by, who.subject],
       };
       await guarded(() => this.c.docs.update(p.tenantId, "tasks", id, d.rev, next), "review task");
-      return this.view(next);
+      return this.view(next, who.subject);
     });
   }
 

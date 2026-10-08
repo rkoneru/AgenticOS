@@ -321,6 +321,27 @@ async def test_a_drifted_judge_grades_nothing() -> None:
     assert len(be.users) == 2  # the failing anchor stopped the check; real cases never reached it
 
 
+async def test_anchor_results_are_not_shared_between_judges_that_share_a_grader_id() -> None:
+    """The online worker keeps one JudgeGrader for every suite. Suite B's grader "judge1" (another model and
+    rubric, a judge that scores everything 1.0) must be checked against its own anchors, not inherit
+    suite A's pass; and suite A's drift must not blind suite B."""
+    gullible_models = {"gullible"}
+
+    def fn(u: str, n: int) -> str:
+        if "gullible-rubric" in u:
+            return verdict(1.0)
+        return verdict(0.0 if "turtles" in u else 1.0)
+
+    g, _ = grader(fn)
+    a = await g.grade(spec(anchors=ANCHORS), EvalCase("c1", "q"), trace("x"), seed=1)
+    assert a.status == "scored"
+    b_spec = spec(anchors=ANCHORS, rubric="gullible-rubric", model=next(iter(gullible_models)))
+    b = await g.grade(b_spec, EvalCase("c1", "q"), trace("x"), seed=1)
+    assert (b.status, b.score) == ("ungraded", 0.0) and b.detail.startswith("judge_drift")
+    again = await g.grade(spec(anchors=ANCHORS), EvalCase("c2", "q"), trace("x"), seed=1)
+    assert again.status == "scored"  # A is unaffected by B's drift
+
+
 async def test_anchor_the_judge_cannot_answer_is_drift() -> None:
     g, _ = grader(lambda u, n: "I refuse")
     out = await g.grade(spec(anchors=ANCHORS), EvalCase("c1", "q"), trace("x"), seed=1)
