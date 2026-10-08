@@ -1,6 +1,6 @@
 import { hashJson } from "@axis/contracts";
-import { SCORE_EPSILON, aggregate, mismatches } from "./scoring.js";
-import type { EvalRunDoc, Suite } from "./types.js";
+import { SCORE_EPSILON, aggregateGrid, mismatches, type Aggregate, type GradeCell } from "./scoring.js";
+import type { CaseResult, EvalRunDoc, Suite } from "./types.js";
 
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
@@ -9,9 +9,33 @@ export function recordHashOf(run: EvalRunDoc): string {
   return hashJson({ ...plain(run), record_hash: null });
 }
 
+/** The grid of grades the aggregation reads: `grid[case][grader]`. The LAST grade of a grader for a case wins; none = missing cell. */
+export function gridOf(results: readonly CaseResult[]): Record<string, Record<string, GradeCell>> {
+  const grid: Record<string, Record<string, GradeCell>> = {};
+  for (const r of results) {
+    const row: Record<string, GradeCell> = {};
+    for (const g of r.grades) row[g.grader_id] = { status: g.status, score: g.score };
+    grid[r.case_id] = row;
+  }
+  return grid;
+}
+
+/** Cases whose run never produced a trace (infrastructure failure after retries): scored 0 and the run cannot pass. */
+export const erroredCases = (results: readonly CaseResult[]): string[] =>
+  results.filter((r) => r.status === "error").map((r) => r.case_id);
+
+/** The hub's own aggregate of a set of case results under a suite. Throws AggregationError on a result set that does not fit the suite. */
+export function recompute(results: readonly CaseResult[], suite: Suite): Aggregate {
+  return aggregateGrid(suite.graders, gridOf(results), {
+    pass_threshold: suite.pass_threshold,
+    min_case_score: suite.min_case_score,
+    errored: erroredCases(results),
+  });
+}
+
 /**
  * Re-verifies a stored FINAL run (the gate and the baseline logic call this every time, so a row edited behind the service is caught):
- * record hash, suite and dataset binding, and the scores recomputed from the case results. Returns the failed checks (empty = intact).
+ * record hash, suite and dataset binding, and the scores recomputed from the per-case grades. Returns the failed checks (empty = intact).
  */
 export function verifyStoredRun(run: EvalRunDoc, suite: Suite): string[] {
   const bad: string[] = [];
@@ -21,31 +45,15 @@ export function verifyStoredRun(run: EvalRunDoc, suite: Suite): string[] {
   if (run.content_hash !== run.blueprint.content_hash) bad.push("content_hash");
   if (run.status === "errored") return bad;
   if (run.scores === null) return [...bad, "scores_missing"];
-  if (run.case_results.length === 0 || run.sample_size !== run.case_results.length)
-    bad.push("sample_size");
+  if (run.case_results.length === 0 || run.sample_size !== run.case_results.length) bad.push("sample_size");
   try {
-    const scored = run.case_results.map((c) => {
-      const scores: Record<string, number> = {};
-      for (const [g, v] of Object.entries(c.scores)) {
-        if (typeof v !== "number") throw new Error("pending score in a final run");
-        scores[g] = v;
-      }
-      return { case_id: c.case_id, scores };
-    });
-    const again = aggregate(suite.graders, scored);
-    for (const m of mismatches(
-      { overall: run.scores.overall, per_grader: run.scores.per_grader },
-      again,
-    ))
-      bad.push(`recompute.${m}`);
-    for (const [id, v] of Object.entries(again.per_case))
-      if (Math.abs((run.scores.per_case[id] ?? NaN) - v) > SCORE_EPSILON)
-        bad.push(`recompute.per_case.${id}`);
-    if (Object.keys(run.scores.per_case).length !== Object.keys(again.per_case).length)
-      bad.push("recompute.per_case");
-    const shouldPass = again.overall >= suite.pass_threshold;
-    if (run.passed !== shouldPass || run.status !== (shouldPass ? "passed" : "failed"))
-      bad.push("status");
+    const again = recompute(run.case_results, suite);
+    if (again.status !== "complete") return [...bad, "recompute.pending"];
+    for (const m of mismatches(run.scores, again)) bad.push(`recompute.${m}`);
+    for (const r of run.case_results)
+      if (Math.abs((r.score ?? Number.NaN) - (again.per_case[r.case_id] ?? Number.NaN)) > SCORE_EPSILON)
+        bad.push(`recompute.case_result.${r.case_id}`);
+    if (run.passed !== again.passed || run.status !== (again.passed ? "passed" : "failed")) bad.push("status");
   } catch {
     bad.push("recompute");
   }

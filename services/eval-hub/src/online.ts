@@ -1,9 +1,9 @@
 import { requireReader, requireRunner, requireTenant } from "./authz.js";
 import { denyAudit, guarded, iso, mutate, type Ctx } from "./context.js";
 import type { Doc } from "./docstore.js";
-import { HubError, conflict, invalid, notFound } from "./errors.js";
+import { HubError, integrityFailed, invalid, notFound } from "./errors.js";
 import type { RunService } from "./runs.js";
-import { round9 } from "./scoring.js";
+import { AggregationError, SCORE_EPSILON, aggregateGrid, round9, type GradeCell } from "./scoring.js";
 import {
   HASH_RE,
   ID_RE,
@@ -66,9 +66,8 @@ export class OnlineService {
     const cap = input["max_per_hour"];
     if (typeof cap !== "number" || !Number.isInteger(cap) || cap < 1 || cap > 100_000)
       throw invalid("max_per_hour must be an integer in [1, 100000]", ["max_per_hour"]);
-    const red = input["redaction"] === undefined ? "redact" : input["redaction"];
-    if (red !== "redact" && red !== "hash_only")
-      throw invalid("redaction must be redact or hash_only", ["redaction"]);
+    const red = input["redaction"] === undefined ? "phi" : input["redaction"];
+    if (red !== "phi" && red !== "always") throw invalid("redaction must be phi or always", ["redaction"]);
     if (input["enabled"] !== undefined && typeof input["enabled"] !== "boolean")
       throw invalid("enabled must be a boolean", ["enabled"]);
     const at = input["alert_threshold"];
@@ -138,102 +137,107 @@ export class OnlineService {
     return (await this.c.docs.find<SamplingConfig>(p.tenantId, "sampling")).map((d) => d.data);
   }
 
-  /** A registered runner posts the scores of one sampled production run. */
-  async ingest(p: HubPrincipal, input: Record<string, unknown>): Promise<OnlineResult> {
-    const r = requireRunner(p);
-    return mutate(
-      this.c,
-      p,
-      "evals.online.ingest",
-      { sampling_id: input["sampling_id"] ?? null },
-      async () => {
-        if (!(await this.runs.runnerActive(p.tenantId, r.runnerId)))
-          throw new HubError("forbidden", "runner is not registered for this tenant");
-        const sid = input["sampling_id"];
-        if (typeof sid !== "string" || !ID_RE.test(sid))
-          throw invalid("sampling_id is required", ["sampling_id"]);
-        const cfgDoc = await this.c.docs.get<SamplingConfig>(p.tenantId, "sampling", sid);
-        if (!cfgDoc) throw notFound("sampling config not found");
-        const cfg = cfgDoc.data;
-        if (!cfg.enabled) throw conflict("sampling is disabled");
-        const b = input["blueprint"];
-        if (
-          !isObj(b) ||
-          b["name"] !== cfg.blueprint_name ||
-          typeof b["version"] !== "string" ||
-          b["version"].length === 0 ||
-          b["version"].length > 64 ||
-          typeof b["content_hash"] !== "string" ||
-          !HASH_RE.test(b["content_hash"])
-        )
-          throw invalid(
-            "blueprint must name the configured blueprint with a version and content_hash",
-            ["blueprint"],
-          );
-        const suiteDoc = await this.c.docs.get<Suite>(p.tenantId, "suites", cfg.suite_ref);
-        if (!suiteDoc) throw notFound("suite not found");
-        const graders = suiteDoc.data.graders.filter((g) => g.type !== "human");
-        const sc = input["scores"];
-        if (!isObj(sc) || Object.keys(sc).length === 0)
-          throw invalid("scores are required", ["scores"]);
-        const scores: Record<string, number> = {};
-        for (const [k, v] of Object.entries(sc)) {
-          if (!graders.some((g) => g.id === k))
-            throw invalid(`${k} is not an automated grader of the suite`, [`scores.${k}`]);
-          if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1)
-            throw invalid(`score for ${k} must be a number in [0, 1]`, [`scores.${k}`]);
-          scores[k] = v;
-        }
-        for (const k of ["source_run_id", "trace_id"])
-          if (
-            input[k] !== undefined &&
-            input[k] !== null &&
-            (typeof input[k] !== "string" || (input[k] as string).length > 100)
-          )
-            throw invalid(`${k} is malformed`, [k]);
-        const now = this.c.now();
-        const recent = (
-          await this.c.docs.find<OnlineResult>(p.tenantId, "online", { sampling_id: sid })
-        ).filter((d) => new Date(d.data.at).getTime() > now.getTime() - HOUR_MS);
-        if (recent.length >= cfg.max_per_hour)
-          throw new HubError("rate_limited", "the hourly sampling cap of this config is reached");
-        let wsum = 0;
-        let total = 0;
-        for (const g of graders)
-          if (g.id in scores) {
-            wsum += g.weight;
-            total += g.weight * (scores[g.id] as number);
-          }
-        const rec: OnlineResult = {
-          id: this.c.newId(),
-          sampling_id: sid,
-          blueprint: {
-            namespace: null,
-            name: cfg.blueprint_name,
-            version: b["version"],
-            content_hash: b["content_hash"],
-          },
-          suite_ref: cfg.suite_ref,
-          source_run_id: (input["source_run_id"] as string | null | undefined) ?? null,
-          trace_id: (input["trace_id"] as string | null | undefined) ?? null,
-          scores,
-          score: round9(total / wsum),
-          runner_id: r.runnerId,
-          at: iso(now),
-        };
-        await guarded(
-          () => this.c.docs.insert(p.tenantId, "online", `${rec.at}|${rec.id}`, rec),
-          "online result",
-        );
-        await this.maybeAlert(p.tenantId, cfg, now);
-        return rec;
-      },
-    );
+  /** `GET /online/configs`: what the runner's sampler needs (`{blueprint, suite_ref, rate, max_per_hour, redaction}`), enabled configs only. */
+  async runnerConfigs(p: HubPrincipal): Promise<{ blueprint: string; suite_ref: string; rate: number; max_per_hour: number; redaction: string }[]> {
+    requireRunner(p);
+    return (await this.list(p))
+      .filter((c) => c.enabled)
+      .map((c) => ({ blueprint: c.blueprint_name, suite_ref: c.suite_ref, rate: c.rate, max_per_hour: c.max_per_hour, redaction: c.redaction }));
   }
 
-  private async results(tenantId: string, sid: string): Promise<OnlineResult[]> {
+  /**
+   * A registered runner posts one sampled production run (docs/spec/evals-runner.md section 9): grades per grader, status and score. The
+   * hub recomputes the score from the grades and rejects a mismatch. Only scores and ids are stored: the sampled output, trace and
+   * review tasks are NOT kept (nothing of a production conversation is persisted by this path).
+   */
+  async ingest(p: HubPrincipal, input: Record<string, unknown>): Promise<OnlineResult> {
+    const r = requireRunner(p);
+    return mutate(this.c, p, "evals.online.ingest", { suite_ref: input["suite_ref"] ?? null }, async () => {
+      if (!(await this.runs.runnerActive(p.tenantId, r.runnerId)))
+        throw new HubError("forbidden", "runner is not registered for this tenant");
+      if (input["mode"] !== "online") throw invalid("mode must be online", ["mode"]);
+      if (input["runner_id"] !== r.runnerId) throw integrityFailed("payload names another runner", ["runner_id"]);
+      const b = input["blueprint"];
+      if (
+        !isObj(b) ||
+        typeof b["name"] !== "string" ||
+        typeof b["version"] !== "string" ||
+        b["version"].length === 0 ||
+        b["version"].length > 64 ||
+        typeof b["content_hash"] !== "string" ||
+        !HASH_RE.test(b["content_hash"])
+      )
+        throw invalid("blueprint needs a name, a version and a content_hash", ["blueprint"]);
+      const cfg = (await this.list(p)).find(
+        (c) => c.enabled && c.blueprint_name === b["name"] && c.suite_ref === input["suite_ref"],
+      );
+      if (!cfg) throw notFound("no enabled sampling configuration for this blueprint and suite");
+      const suiteDoc = await this.c.docs.get<Suite>(p.tenantId, "suites", cfg.suite_ref);
+      if (!suiteDoc) throw notFound("suite not found");
+      const suite = suiteDoc.data;
+      const gr = input["grades"];
+      if (!Array.isArray(gr) || gr.length === 0 || gr.length > suite.graders.length)
+        throw invalid("grades must be an array with one grade per grader", ["grades"]);
+      const row: Record<string, GradeCell> = {};
+      const scores: Record<string, number> = {};
+      for (const [i, g] of gr.entries()) {
+        const spec = isObj(g) ? suite.graders.find((x) => x.id === g["grader_id"]) : undefined;
+        if (!isObj(g) || !spec || g["kind"] !== spec.kind) throw invalid("grade for a grader the suite does not declare", [`grades[${i}]`]);
+        if (spec.id in row) throw invalid(`duplicate grade for ${spec.id}`, [`grades[${i}]`]);
+        const st = g["status"];
+        if (st !== "scored" && st !== "ungraded" && st !== "pending" && st !== "error")
+          throw invalid("grade status is malformed", [`grades[${i}].status`]);
+        if ((spec.kind === "human") !== (st === "pending") && !(spec.kind !== "human" && st !== "pending"))
+          throw invalid("only a human grader can be pending, and it always is", [`grades[${i}].status`]);
+        row[spec.id] = { status: st, score: g["score"] };
+        if (st === "scored" && typeof g["score"] === "number" && g["score"] >= 0 && g["score"] <= 1) scores[spec.id] = g["score"];
+      }
+      let agg;
+      try {
+        agg = aggregateGrid(suite.graders, { sample: row }, { pass_threshold: 0 });
+      } catch (e) {
+        if (e instanceof AggregationError) throw invalid(e.message, ["grades"]);
+        throw e;
+      }
+      const claimed = input["score"];
+      const want = agg.status === "complete" ? (agg.per_case["sample"] as number) : null;
+      if (input["status"] !== agg.status || (want === null ? claimed !== null && claimed !== undefined : typeof claimed !== "number" || Math.abs(claimed - want) > SCORE_EPSILON))
+        throw integrityFailed("the reported status or score does not match the grades", ["mismatch.score"]);
+      for (const k of ["source_run_id", "completed_at"])
+        if (input[k] !== undefined && input[k] !== null && (typeof input[k] !== "string" || (input[k] as string).length > 128))
+          throw invalid(`${k} is malformed`, [k]);
+      const trace = input["trace"];
+      const traceId = isObj(trace) && typeof trace["trace_id"] === "string" && trace["trace_id"].length <= 100 ? trace["trace_id"] : null;
+      const now = this.c.now();
+      const recent = (await this.c.docs.find<OnlineResult>(p.tenantId, "online", { sampling_id: cfg.id })).filter(
+        (d) => new Date(d.data.at).getTime() > now.getTime() - HOUR_MS,
+      );
+      if (recent.length >= cfg.max_per_hour)
+        throw new HubError("rate_limited", "the hourly sampling cap of this config is reached");
+      const rec: OnlineResult = {
+        id: this.c.newId(),
+        sampling_id: cfg.id,
+        blueprint: { namespace: null, name: b["name"], version: b["version"], content_hash: b["content_hash"] },
+        suite_ref: cfg.suite_ref,
+        source_run_id: (input["source_run_id"] as string | null | undefined) ?? null,
+        trace_id: traceId,
+        scores,
+        score: want,
+        status: agg.status,
+        runner_id: r.runnerId,
+        at: iso(now),
+      };
+      await guarded(() => this.c.docs.insert(p.tenantId, "online", `${rec.at}|${rec.id}`, rec), "online result");
+      await this.maybeAlert(p.tenantId, cfg, now);
+      return rec;
+    });
+  }
+
+  /** Sampled results that carry a score (a result still waiting for a human grade has none). */
+  private async results(tenantId: string, sid: string): Promise<(OnlineResult & { score: number })[]> {
     return (await this.c.docs.find<OnlineResult>(tenantId, "online", { sampling_id: sid }))
       .map((d: Doc<OnlineResult>) => d.data)
+      .filter((x): x is OnlineResult & { score: number } => x.score !== null)
       .sort((a, b) => (a.at === b.at ? (a.id < b.id ? -1 : 1) : a.at < b.at ? -1 : 1));
   }
 
@@ -271,7 +275,7 @@ export class OnlineService {
       if (q.suite_ref !== undefined && cfg.suite_ref !== q.suite_ref) continue;
       const all = await this.results(p.tenantId, cfg.id);
       const win = all.slice(-ALERT_WINDOW);
-      const mean = (xs: OnlineResult[]): number | null =>
+      const mean = (xs: (OnlineResult & { score: number })[]): number | null =>
         xs.length === 0 ? null : round9(xs.reduce((s, x) => s + x.score, 0) / xs.length);
       const wm = mean(win);
       out.push({

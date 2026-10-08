@@ -41,7 +41,7 @@ export function buildEvalStatement(run: EvalRunDoc, suite: Suite): EvalStatement
       dataset_hash: run.dataset_hash,
       mode: run.mode,
       status: run.status === "passed" ? "passed" : "failed",
-      overall: (run.scores as NonNullable<EvalRunDoc["scores"]>).overall,
+      overall: (run.scores as NonNullable<EvalRunDoc["scores"]>).overall as number,
       per_grader: (run.scores as NonNullable<EvalRunDoc["scores"]>).per_grader,
       pass_threshold: suite.pass_threshold,
       sample_size: run.sample_size,

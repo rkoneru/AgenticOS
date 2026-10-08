@@ -1,77 +1,130 @@
 import { createHash } from "node:crypto";
-import type { Comparison, Grader, RunScores, Significance } from "./types.js";
+import type { Comparison, Significance } from "./types.js";
 
 /**
  * Aggregation and comparison. Pure functions; every number the hub stores or gates on comes from here, never from a runner's claim.
  *
- * Aggregation rules (docs/spec/eval-hub.md):
- *   case_score(c)   = sum_g w_g * s(c,g) / sum_g w_g          over EVERY grader of the suite
- *   per_grader(g)   = mean_c s(c,g)
- *   overall         = mean_c case_score(c)
- * Cases are summed in case-id order and graders in grader-id order, so the result does not depend on the order a runner listed them.
- * Results are rounded to 9 decimals (stable canonical JSON).
+ * The aggregation is the runner's (docs/spec/evals-runner.md section 6, pinned by the shared vectors in test/fixtures): one algorithm in
+ * Python and TypeScript, plain IEEE-754 doubles, cases visited in ascending id and graders in the suite's declared order, a grade that
+ * is not `scored` counting as 0 (never excluded), outputs rounded half-up to 6 decimals.
  */
 export const SCORE_EPSILON = 1e-6;
+export const SCALE = 1_000_000;
+/** Rounds a value to [0, 1] and half-up to 6 decimals: `floor(x * 1e6 + 0.5) / 1e6`. */
+export const r6 = (x: number): number => Math.floor(Math.min(1, Math.max(0, x)) * SCALE + 0.5) / SCALE;
 export const round9 = (x: number): number => Math.round(x * 1e9) / 1e9;
 
-const byId = <T extends { id: string }>(a: T, b: T): number =>
-  a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+export class AggregationError extends Error {}
 
-export interface ScoredCase {
-  case_id: string;
-  scores: Record<string, number>;
+export interface AggGrader {
+  id: string;
+  weight: number;
+  min_mean?: number | null;
+}
+export interface GradeCell {
+  status: string;
+  score: unknown;
+}
+export interface Aggregate {
+  status: "complete" | "pending_human";
+  overall: number | null;
+  per_grader: Record<string, number>;
+  per_case: Record<string, number>;
+  passed: boolean | null;
+  failures: string[];
+  ungraded: number;
 }
 
-/** Throws when a case lacks a grader's score (callers validate completeness first; this keeps the arithmetic honest). */
-export function aggregate(
-  graders: readonly Pick<Grader, "id" | "weight">[],
-  cases: readonly ScoredCase[],
-): RunScores {
-  const gs = [...graders].sort(byId);
-  const cs = [...cases].sort((a, b) =>
-    a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0,
-  );
-  if (gs.length === 0 || cs.length === 0) throw new Error("aggregate: no graders or no cases");
-  const wsum = gs.reduce((s, g) => s + g.weight, 0);
-  const per_case: Record<string, number> = {};
-  const gsum: Record<string, number> = Object.fromEntries(gs.map((g) => [g.id, 0]));
-  let total = 0;
-  for (const c of cs) {
-    let weighted = 0;
-    for (const g of gs) {
-      const s = c.scores[g.id];
-      if (typeof s !== "number" || !Number.isFinite(s))
-        throw new Error(`aggregate: case ${c.case_id} has no score for ${g.id}`);
-      weighted += g.weight * s;
-      gsum[g.id] = (gsum[g.id] as number) + s;
-    }
-    const cscore = round9(weighted / wsum);
-    per_case[c.case_id] = cscore;
-    total += cscore;
+export const CASE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+const validScore = (g: GradeCell): number | undefined => {
+  if (g.status !== "scored") return undefined;
+  const s = g.score;
+  return typeof s === "number" && Number.isFinite(s) && s >= 0 && s <= 1 ? s : undefined;
+};
+
+export function aggregateGrid(
+  graders: readonly AggGrader[],
+  grades: Readonly<Record<string, Readonly<Record<string, GradeCell>>>>,
+  o: { pass_threshold: number; min_case_score?: number | null; errored?: Iterable<string> },
+): Aggregate {
+  if (graders.length === 0) throw new AggregationError("a suite needs at least one grader");
+  const ids = graders.map((g) => g.id);
+  if (new Set(ids).size !== ids.length) throw new AggregationError("duplicate grader id");
+  for (const [cid, row] of Object.entries(grades)) {
+    if (!CASE_ID_RE.test(cid)) throw new AggregationError("invalid case id");
+    for (const gid of Object.keys(row))
+      if (!ids.includes(gid)) throw new AggregationError("grade for a grader the suite does not declare");
   }
-  const per_grader: Record<string, number> = {};
-  for (const g of gs) per_grader[g.id] = round9((gsum[g.id] as number) / cs.length);
-  return { overall: round9(total / cs.length), per_grader, per_case };
+  const caseIds = Object.keys(grades).sort();
+  const errored = [...(o.errored ?? [])];
+  if (!errored.every((e) => e in grades)) throw new AggregationError("errored case is not in the results");
+  if (Object.values(grades).some((row) => Object.values(row).some((c) => c.status === "pending")))
+    return { status: "pending_human", overall: null, per_grader: {}, per_case: {}, passed: null, failures: [], ungraded: 0 };
+
+  let totalWeight = 0;
+  for (const g of graders) totalWeight += g.weight;
+  let ungraded = 0;
+  const perCaseRaw: Record<string, number> = {};
+  const sums: Record<string, number> = Object.fromEntries(ids.map((i) => [i, 0]));
+  for (const cid of caseIds) {
+    let weighted = 0;
+    for (const g of graders) {
+      const cell = (grades[cid] as Record<string, GradeCell>)[g.id];
+      let s = cell === undefined ? undefined : validScore(cell);
+      if (s === undefined) {
+        ungraded++;
+        s = 0;
+      }
+      weighted += g.weight * s;
+      sums[g.id] = (sums[g.id] as number) + s;
+    }
+    perCaseRaw[cid] = weighted / totalWeight;
+  }
+  const n = caseIds.length;
+  if (n === 0)
+    return { status: "complete", overall: 0, per_grader: Object.fromEntries(ids.map((i) => [i, 0])), per_case: {}, passed: false, failures: ["no_cases"], ungraded: 0 };
+  const perGraderRaw = Object.fromEntries(ids.map((i) => [i, (sums[i] as number) / n]));
+  let overallSum = 0;
+  for (const g of graders) overallSum += g.weight * (perGraderRaw[g.id] as number);
+  const overall = r6(overallSum / totalWeight);
+  const per_grader = Object.fromEntries(ids.map((i) => [i, r6(perGraderRaw[i] as number)]));
+  const per_case = Object.fromEntries(caseIds.map((c) => [c, r6(perCaseRaw[c] as number)]));
+  const failures: string[] = [];
+  if (overall < o.pass_threshold) failures.push("below_pass_threshold");
+  if (o.min_case_score !== null && o.min_case_score !== undefined) {
+    const low = caseIds.filter((c) => (per_case[c] as number) < (o.min_case_score as number));
+    if (low.length > 0) failures.push(`min_case_score:${low.slice(0, 5).join(",")}`);
+  }
+  for (const g of graders)
+    if (g.min_mean !== null && g.min_mean !== undefined && (per_grader[g.id] as number) < g.min_mean)
+      failures.push(`grader_min_mean:${g.id}`);
+  if (errored.length > 0) failures.push(`errored_cases:${[...errored].sort().slice(0, 5).join(",")}`);
+  return { status: "complete", overall, per_grader, per_case, passed: failures.length === 0, failures, ungraded };
 }
 
 /** Failed checks when a claimed aggregate disagrees with the recomputed one (empty = consistent). */
-export function mismatches(
-  claimed: { overall?: unknown; per_grader?: unknown },
-  computed: RunScores,
-): string[] {
+export function mismatches(claimed: unknown, computed: Aggregate): string[] {
+  if (typeof claimed !== "object" || claimed === null || Array.isArray(claimed)) return ["scores"];
+  const c = claimed as Record<string, unknown>;
   const bad: string[] = [];
-  const close = (a: unknown, b: number): boolean =>
-    typeof a === "number" && Number.isFinite(a) && Math.abs(a - b) <= SCORE_EPSILON;
-  if (!close(claimed.overall, computed.overall)) bad.push("overall");
-  if (claimed.per_grader !== undefined) {
-    const pg = claimed.per_grader;
-    if (typeof pg !== "object" || pg === null || Array.isArray(pg)) bad.push("per_grader");
-    else {
-      const m = pg as Record<string, unknown>;
-      for (const k of Object.keys(m)) if (!(k in computed.per_grader)) bad.push(`per_grader.${k}`);
-      for (const [k, v] of Object.entries(computed.per_grader))
-        if (!close(m[k], v)) bad.push(`per_grader.${k}`);
+  const close = (a: unknown, b: number | null): boolean =>
+    b === null ? a === null : typeof a === "number" && Number.isFinite(a) && Math.abs(a - b) <= SCORE_EPSILON;
+  if (c["status"] !== computed.status) bad.push("status");
+  if (!close(c["overall"], computed.overall)) bad.push("overall");
+  if (c["passed"] !== computed.passed) bad.push("passed");
+  if (c["ungraded"] !== computed.ungraded) bad.push("ungraded");
+  if (JSON.stringify(c["failures"]) !== JSON.stringify(computed.failures)) bad.push("failures");
+  for (const k of ["per_grader", "per_case"] as const) {
+    const mine = computed[k];
+    const theirs = c[k];
+    if (typeof theirs !== "object" || theirs === null || Array.isArray(theirs)) {
+      bad.push(k);
+      continue;
     }
+    const t = theirs as Record<string, unknown>;
+    for (const key of Object.keys(t)) if (!(key in mine)) bad.push(`${k}.${key}`);
+    for (const [key, v] of Object.entries(mine)) if (!close(t[key], v)) bad.push(`${k}.${key}`);
   }
   return bad;
 }
@@ -158,7 +211,7 @@ export interface ComparedRun {
   record_hash: string;
   suite_hash: string;
   dataset_hash: string;
-  scores: RunScores;
+  scores: { overall: number; per_grader: Record<string, number>; per_case: Record<string, number> };
 }
 
 /**

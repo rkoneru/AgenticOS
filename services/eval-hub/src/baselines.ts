@@ -2,7 +2,7 @@ import { requireReader, requireTenant } from "./authz.js";
 import { denyAudit, guarded, iso, mutate, type Ctx } from "./context.js";
 import { conflict, integrityFailed, invalid, notFound } from "./errors.js";
 import { verifyStoredRun } from "./integrity.js";
-import { compareRuns } from "./scoring.js";
+import { compareRuns, type ComparedRun } from "./scoring.js";
 import type { BaselineDoc, Comparison, EvalRunDoc, HubPrincipal, Suite } from "./types.js";
 import { NAME_RE, SUITE_REF_RE } from "./types.js";
 
@@ -68,7 +68,7 @@ export class BaselineService {
       suite_ref: run.suite_ref,
       seq,
       run_id: run.id,
-      overall: (run.scores as NonNullable<EvalRunDoc["scores"]>).overall,
+      overall: (run.scores as NonNullable<EvalRunDoc["scores"]>).overall as number,
       record_hash: run.record_hash as string,
       set_by: by,
       at: iso(this.c.now()),
@@ -130,14 +130,14 @@ export class BaselineService {
         record_hash: run.record_hash as string,
         suite_hash: run.suite_hash,
         dataset_hash: run.dataset_hash,
-        scores: run.scores,
+        scores: run.scores as ComparedRun["scores"],
       },
       {
         id: b.id,
         record_hash: b.record_hash as string,
         suite_hash: b.suite_hash,
         dataset_hash: b.dataset_hash,
-        scores: b.scores as NonNullable<EvalRunDoc["scores"]>,
+        scores: b.scores as ComparedRun["scores"],
       },
       {
         tolerance: suite.tolerance,

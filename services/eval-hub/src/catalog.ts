@@ -1,4 +1,5 @@
 import { hashJson } from "@axis/contracts";
+import { datasetHash } from "./canonical.js";
 import { denyAudit, guarded, iso, mutate, type Ctx } from "./context.js";
 import { requireReader, requireTenant } from "./authz.js";
 import { invalid, notFound } from "./errors.js";
@@ -45,7 +46,7 @@ export function parseCases(raw: unknown, max: number): EvalCase[] {
     const c: EvalCase = {
       id,
       input: x["input"],
-      ...(x["expected"] !== undefined ? { expected: x["expected"] } : {}),
+      expected: x["expected"] === undefined ? null : x["expected"],
       tags: tags as string[],
       metadata,
     };
@@ -96,7 +97,8 @@ export class DatasetService {
         phi,
         redacted: phi,
         case_count: stored.length,
-        content_hash: hashJson(stored),
+        content_hash: datasetHash(stored),
+        version_hash: datasetHash(stored),
         cases: stored,
         created_at: iso(this.c.now()),
         created_by: (p as { subject: string }).subject,
@@ -148,6 +150,8 @@ export interface SuiteInput {
   dataset_ref: unknown;
   graders: unknown;
   pass_threshold: unknown;
+  min_case_score?: unknown;
+  settings?: unknown;
   tolerance?: unknown;
   required_for_release?: unknown;
   applies_to?: unknown;
@@ -183,6 +187,12 @@ export class SuiteService {
     if (Number.isNaN(pass_threshold))
       throw invalid("pass_threshold is required", ["pass_threshold"]);
     const tolerance = num(input.tolerance, "tolerance", 0, 1, 0.02);
+    let min_case_score: number | null = null;
+    if (input.min_case_score !== undefined && input.min_case_score !== null)
+      min_case_score = num(input.min_case_score, "min_case_score", 0, 1, 0);
+    const settings = input.settings === undefined ? {} : input.settings;
+    if (!isObj(settings) || JSON.stringify(settings).length > 10_000)
+      throw invalid("settings must be an object of at most 10000 characters", ["settings"]);
     const alpha = num(input.alpha, "alpha", 0.0001, 0.5, 0.05);
     const max_age_days = num(input.max_age_days, "max_age_days", 1, 365, 30);
     if (!Number.isInteger(max_age_days))
@@ -216,6 +226,8 @@ export class SuiteService {
       dataset_hash: ds.data.content_hash,
       graders,
       pass_threshold,
+      min_case_score,
+      settings,
       tolerance,
       required_for_release: input.required_for_release !== false,
       applies_to: [...new Set(applies as string[])].sort(),

@@ -7,8 +7,9 @@ export const SUITE_REF_RE =
 /** What a blueprint's `spec.evals.suites[].ref` may say: `[namespace/]name@<version or semver range>`. The gate resolves ranges. */
 export const GATE_REF_RE = /^((?:[a-z][a-z0-9-]{1,62}\/)?[a-z][a-z0-9-]{1,62})@(.{1,60})$/;
 export const DATASET_REF_RE = /^([a-z][a-z0-9-]{1,62})@([1-9][0-9]{0,8})$/;
-export const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
-export const GRADER_ID_RE = /^[a-z][a-z0-9_-]{0,40}$/;
+/** Case, grader, run and task ids: ASCII only, so "sorted by id" means the same thing in every language. */
+export const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+export const GRADER_ID_RE = ID_RE;
 export const HASH_RE = /^[0-9a-f]{64}$/;
 
 export type HubRole = Role | "reviewer";
@@ -40,7 +41,8 @@ export interface PlatformActor {
 export interface EvalCase {
   id: string;
   input: unknown;
-  expected?: unknown;
+  /** `null` when the case has no expected answer (the wire shape always carries the key). */
+  expected: unknown;
   tags: string[];
   metadata: Record<string, unknown>;
 }
@@ -54,50 +56,41 @@ export interface DatasetVersion {
   /** True when PHI redaction ran before the cases were persisted. */
   redacted: boolean;
   case_count: number;
-  /** SHA-256 of the canonical JSON of the cases AS STORED (after redaction). */
+  /**
+   * SHA-256 of the canonical (sorted keys, compact, ASCII-escaped) JSON of the cases AS STORED (after redaction), sorted by id: the
+   * runner recomputes it and refuses a dataset that does not match. Same value as `version_hash`.
+   */
   content_hash: string;
+  version_hash: string;
   cases: EvalCase[];
   created_at: string;
   created_by: string;
 }
 
-export const DETERMINISTIC_KINDS = [
+/** `config.type` of a deterministic grader (docs/spec/evals-runner.md section 4). */
+export const DETERMINISTIC_TYPES = [
   "exact",
   "contains",
+  "not_contains",
   "regex",
   "json_schema",
   "numeric_tolerance",
-  "tool_call_sequence",
+  "tool_sequence",
+  "tool_subsequence",
   "policy_decision",
-  "cost_latency_budget",
+  "budget",
 ] as const;
-export type DeterministicKind = (typeof DETERMINISTIC_KINDS)[number];
+export type GraderKind = "deterministic" | "model" | "human";
+export const GRADER_KINDS: readonly GraderKind[] = ["deterministic", "model", "human"];
 
-export interface DeterministicGrader {
+/** A suite grader as the runner speaks it: `{id, kind, weight, config, min_mean?}`. */
+export interface Grader {
   id: string;
-  type: "deterministic";
-  kind: DeterministicKind;
+  kind: GraderKind;
   weight: number;
-  params: Record<string, unknown>;
+  config: Record<string, unknown>;
+  min_mean: number | null;
 }
-export interface ModelGrader {
-  id: string;
-  type: "model";
-  rubric: string;
-  judge_model: string;
-  weight: number;
-}
-export interface HumanGrader {
-  id: string;
-  type: "human";
-  rubric: string;
-  weight: number;
-  sla_hours: number;
-  double_grade: boolean;
-  /** Two grades closer than this are accepted (mean); farther apart needs a third reviewer. */
-  agreement_tolerance: number;
-}
-export type Grader = DeterministicGrader | ModelGrader | HumanGrader;
 
 export interface Suite {
   ref: string;
@@ -108,6 +101,10 @@ export interface Suite {
   graders: Grader[];
   /** Overall score a run needs to be `passed` (and the floor of the release threshold). */
   pass_threshold: number;
+  /** When set, any case scoring below it fails the run. */
+  min_case_score: number | null;
+  /** Runner settings (concurrency, case timeout, allow_sandboxed_targets, budgets). Opaque to the hub. */
+  settings: Record<string, unknown>;
   /** A score drop vs the baseline larger than this is a regression. */
   tolerance: number;
   required_for_release: boolean;
@@ -135,27 +132,46 @@ export interface BlueprintRef {
   content_hash: string;
 }
 
+export interface GradeRecord {
+  grader_id: string;
+  kind: GraderKind;
+  /** scored | ungraded | pending | error: only `scored` counts, everything else aggregates as 0 (a pending human grade holds the run). */
+  status: string;
+  score: number;
+  detail: string;
+  provenance: Record<string, unknown>;
+}
+
+/** One case of a run as the runner reports it (per-case grades are the evidence the hub recomputes from). */
 export interface CaseResult {
   case_id: string;
-  /** grader id -> score in [0, 1]; null for a human grader still pending. */
-  scores: Record<string, number | null>;
-  case_score: number | null;
-  cost_usd: number;
-  latency_ms: number | null;
-  trace_id: string | null;
+  status: string;
+  attempts: number;
+  seed: number;
   error: string | null;
+  score: number | null;
+  output: string | null;
+  grades: GradeRecord[];
+  trace: Record<string, unknown> | null;
 }
 
+/** The aggregate, stored exactly as the hub recomputed it. */
 export interface RunScores {
-  overall: number;
+  status: "complete" | "pending_human";
+  overall: number | null;
   per_grader: Record<string, number>;
   per_case: Record<string, number>;
+  passed: boolean | null;
+  failures: string[];
+  ungraded: number;
 }
 
-export interface RunProvenance {
-  runner_version: string;
-  model_ids: string[];
-  seed: string;
+export interface RunCost {
+  agent_usd: string;
+  judge_usd: string;
+  total_usd: string;
+  tokens: number;
+  judge_tokens: number;
 }
 
 export interface EvalRunDoc {
@@ -171,6 +187,8 @@ export interface EvalRunDoc {
   blueprint_name: string;
   content_hash: string;
   mode: RunMode;
+  /** Seed handed to the runner (every model call of every case derives its seed from it). */
+  seed: number;
   status: RunStatus;
   requested_by: string;
   /** Who published the blueprint version (ineligible as a human reviewer). Supplied by a trusted caller or the registry. */
@@ -182,8 +200,9 @@ export interface EvalRunDoc {
   scores: RunScores | null;
   case_results: CaseResult[];
   sample_size: number;
-  cost: { total_usd: number };
-  provenance: RunProvenance | null;
+  cost: RunCost;
+  /** As reported by the runner (validated against the run: blueprint hash, dataset hash, suite, runner id). */
+  provenance: Record<string, unknown> | null;
   pending_human: number;
   passed: boolean | null;
   failure_reason: string | null;
@@ -247,8 +266,9 @@ export interface ReviewTaskDoc {
   grader_id: string;
   rubric: string;
   blueprint: BlueprintRef;
-  /** Excerpts for the reviewer; redacted when the dataset is PHI. */
+  /** What the reviewer sees, already redacted by the runner. */
   case_input: unknown;
+  case_output: string | null;
   case_expected: unknown;
   state: TaskState;
   created_at: string;
@@ -275,7 +295,8 @@ export interface SamplingConfig {
   /** 0..1 fraction of production runs the sampler grades. */
   rate: number;
   max_per_hour: number;
-  redaction: "redact" | "hash_only";
+  /** phi: redact when the blueprint or run is PHI; always: redact everything. */
+  redaction: "phi" | "always";
   enabled: boolean;
   /** Mean score below this over the recent window raises an alert. */
   alert_threshold: number | null;
@@ -291,7 +312,8 @@ export interface OnlineResult {
   source_run_id: string | null;
   trace_id: string | null;
   scores: Record<string, number>;
-  score: number;
+  score: number | null;
+  status: "complete" | "pending_human";
   runner_id: string;
   at: string;
 }

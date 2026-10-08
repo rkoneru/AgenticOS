@@ -1,55 +1,65 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { aggregate, compareRuns, mismatches, pairedSignFlip, round9 } from "../src/index.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { aggregateGrid, compareRuns, mismatches, pairedSignFlip, r6, round9 } from "../src/index.js";
 
-const G = [
-  { id: "a", weight: 1 },
-  { id: "b", weight: 3 },
-];
+interface Vector {
+  name: string;
+  suite: { pass_threshold: number; min_case_score: number | null; graders: { id: string; weight: number; min_mean?: number }[] };
+  cases: Record<string, Record<string, { status: string; score: number }>>;
+  errored: string[];
+  expected: Record<string, unknown>;
+}
+const vectors = JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/eval-aggregation-vectors.json", import.meta.url)), "utf8")) as {
+  version: number;
+  vectors: Vector[];
+};
 
-describe("aggregate", () => {
-  it("weights graders, then averages cases and graders", () => {
-    const r = aggregate(G, [
-      { case_id: "c1", scores: { a: 1, b: 0 } },
-      { case_id: "c2", scores: { a: 0, b: 1 } },
-    ]);
-    expect(r.per_case).toEqual({ c1: 0.25, c2: 0.75 });
-    expect(r.per_grader).toEqual({ a: 0.5, b: 0.5 });
-    expect(r.overall).toBe(0.5);
+describe("aggregation: the runner's shared vectors (hand-derived in docs/spec/evals-runner.md section 6)", () => {
+  it("pins version 1 with 13 vectors", () => {
+    expect(vectors.version).toBe(1);
+    expect(vectors.vectors).toHaveLength(13);
+  });
+  for (const v of vectors.vectors)
+    it(v.name, () => {
+      const got = aggregateGrid(v.suite.graders, v.cases, { pass_threshold: v.suite.pass_threshold, min_case_score: v.suite.min_case_score, errored: v.errored });
+      expect(got).toEqual(v.expected);
+      // the hub accepts the runner's own report of every vector, and refuses any perturbation of it
+      expect(mismatches(v.expected, got)).toEqual([]);
+    });
+});
+
+describe("aggregation rules", () => {
+  const G = [
+    { id: "a", weight: 1 },
+    { id: "b", weight: 3 },
+  ];
+  const cell = (score: number) => ({ status: "scored", score });
+
+  it("r6 rounds half-up to 6 decimals and clamps", () => {
+    expect(r6(0.1234565)).toBe(0.123457);
+    expect(r6(2 / 3)).toBe(0.666667);
+    expect(r6(-1)).toBe(0);
+    expect(r6(7)).toBe(1);
   });
 
-  it("refuses a missing score or an empty input", () => {
-    expect(() => aggregate(G, [{ case_id: "c1", scores: { a: 1 } }])).toThrow(/no score for b/);
-    expect(() => aggregate(G, [])).toThrow();
-    expect(() => aggregate([], [{ case_id: "c", scores: {} }])).toThrow();
-    expect(() => aggregate(G, [{ case_id: "c1", scores: { a: Number.NaN, b: 1 } }])).toThrow();
+  it("refuses a result set that does not match its suite", () => {
+    expect(() => aggregateGrid([], {}, { pass_threshold: 0 })).toThrow(/at least one grader/);
+    expect(() => aggregateGrid([G[0] as never, G[0] as never], {}, { pass_threshold: 0 })).toThrow(/duplicate grader/);
+    expect(() => aggregateGrid(G, { "bad id": { a: cell(1) } }, { pass_threshold: 0 })).toThrow(/invalid case id/);
+    expect(() => aggregateGrid(G, { c1: { zzz: cell(1) } }, { pass_threshold: 0 })).toThrow(/does not declare/);
+    expect(() => aggregateGrid(G, { c1: { a: cell(1) } }, { pass_threshold: 0, errored: ["ghost"] })).toThrow(/errored case/);
   });
 
-  it("does not depend on the order of cases or graders (property)", () => {
-    const arb = fc.array(
-      fc.tuple(
-        fc.double({ min: 0, max: 1, noNaN: true }),
-        fc.double({ min: 0, max: 1, noNaN: true }),
-      ),
-      {
-        minLength: 1,
-        maxLength: 30,
-      },
-    );
+  it("does not depend on the order the runner listed the cases (property)", () => {
+    const arb = fc.array(fc.tuple(fc.double({ min: 0, max: 1, noNaN: true }), fc.double({ min: 0, max: 1, noNaN: true })), { minLength: 1, maxLength: 30 });
     fc.assert(
       fc.property(arb, fc.integer({ min: 0, max: 1000 }), (rows, seed) => {
-        const cases = rows.map(([a, b], i) => ({
-          case_id: `c${String(i).padStart(3, "0")}`,
-          scores: { a, b },
-        }));
-        const base = aggregate(G, cases);
-        const shuffled = [...cases].sort(
-          (x, y) =>
-            ((x.case_id.length * 31 + seed) % 7) - ((y.case_id.length * 17 + seed) % 5) ||
-            (x.case_id < y.case_id ? 1 : -1),
-        );
-        const other = aggregate([...G].reverse(), shuffled);
-        expect(other).toEqual(base);
+        const entries = rows.map(([a, b], i) => [`c${String(i).padStart(3, "0")}`, { a: cell(a), b: cell(b) }] as const);
+        const base = aggregateGrid(G, Object.fromEntries(entries), { pass_threshold: 0.5 });
+        const shuffled = [...entries].sort((x, y) => ((x[0].length * 31 + seed) % 7) - ((y[0].length * 17 + seed) % 5) || (x[0] < y[0] ? 1 : -1));
+        expect(aggregateGrid(G, Object.fromEntries(shuffled), { pass_threshold: 0.5 })).toEqual(base);
         expect(base.overall).toBeGreaterThanOrEqual(0);
         expect(base.overall).toBeLessThanOrEqual(1);
       }),
@@ -59,31 +69,30 @@ describe("aggregate", () => {
 });
 
 describe("mismatches", () => {
-  const computed = aggregate(G, [{ case_id: "c1", scores: { a: 1, b: 0.5 } }]);
+  const computed = aggregateGrid(G2(), { c1: { a: { status: "scored", score: 1 }, b: { status: "scored", score: 0.5 } } }, { pass_threshold: 0.5 });
+  function G2() {
+    return [
+      { id: "a", weight: 1 },
+      { id: "b", weight: 3 },
+    ];
+  }
   it("accepts a consistent claim (within the rounding epsilon)", () => {
-    expect(
-      mismatches({ overall: computed.overall + 1e-7, per_grader: computed.per_grader }, computed),
-    ).toEqual([]);
-    expect(mismatches({ overall: computed.overall }, computed)).toEqual([]);
+    expect(mismatches({ ...computed, overall: (computed.overall as number) + 1e-7 }, computed)).toEqual([]);
   });
   it("names every disagreement", () => {
-    expect(mismatches({ overall: 0.99 }, computed)).toEqual(["overall"]);
-    expect(mismatches({ overall: "x" }, computed)).toEqual(["overall"]);
-    expect(
-      mismatches({ overall: computed.overall, per_grader: { a: 0, b: 0.5 } }, computed),
-    ).toEqual(["per_grader.a"]);
-    expect(
-      mismatches({ overall: computed.overall, per_grader: { a: 1, b: 0.5, zzz: 1 } }, computed),
-    ).toEqual(["per_grader.zzz"]);
-    expect(mismatches({ overall: computed.overall, per_grader: { a: 1 } }, computed)).toEqual([
-      "per_grader.b",
-    ]);
-    expect(mismatches({ overall: computed.overall, per_grader: [1] }, computed)).toEqual([
-      "per_grader",
-    ]);
-    expect(mismatches({ overall: computed.overall, per_grader: null }, computed)).toEqual([
-      "per_grader",
-    ]);
+    expect(mismatches({ ...computed, overall: 0.99 }, computed)).toEqual(["overall"]);
+    expect(mismatches({ ...computed, overall: "x" }, computed)).toEqual(["overall"]);
+    expect(mismatches({ ...computed, passed: !computed.passed }, computed)).toEqual(["passed"]);
+    expect(mismatches({ ...computed, failures: ["x"] }, computed)).toEqual(["failures"]);
+    expect(mismatches({ ...computed, ungraded: 3 }, computed)).toEqual(["ungraded"]);
+    expect(mismatches({ ...computed, status: "pending_human" }, computed)).toEqual(["status"]);
+    expect(mismatches({ ...computed, per_grader: { a: 0, b: 0.5 } }, computed)).toEqual(["per_grader.a"]);
+    expect(mismatches({ ...computed, per_grader: { ...computed.per_grader, zzz: 1 } }, computed)).toEqual(["per_grader.zzz"]);
+    expect(mismatches({ ...computed, per_case: {} }, computed)).toEqual(["per_case.c1"]);
+    expect(mismatches({ ...computed, per_grader: [1] }, computed)).toEqual(["per_grader"]);
+    expect(mismatches({ ...computed, per_case: null }, computed)).toEqual(["per_case"]);
+    expect(mismatches(null, computed)).toEqual(["scores"]);
+    expect(mismatches([], computed)).toEqual(["scores"]);
   });
 });
 

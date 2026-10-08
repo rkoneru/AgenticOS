@@ -1,8 +1,9 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import {
   BadRequest,
+  MAX_BODY,
   RateLimiter,
-  readJson,
   refuseProduction,
   sendJson,
   staticTokenAuthenticator,
@@ -31,7 +32,8 @@ import type { EvalRunDoc, HubPrincipal, HubRole } from "./types.js";
  */
 export type DevAuth =
   | { kind: "tenant"; tenantId: string; subject: string; role: HubRole }
-  | { kind: "runner"; tenantId: string; runnerId: string };
+  /** A runner signs every POST body with HMAC-SHA256 under `signingKey` (default: its bearer token): `x-axis-runner-signature: v1=<hex>`. */
+  | { kind: "runner"; tenantId: string; runnerId: string; signingKey?: string };
 
 export interface HubDevServerDeps {
   hub: EvalHub;
@@ -60,6 +62,41 @@ function sendError(res: http.ServerResponse, err: unknown): void {
       },
     });
   sendJson(res, 500, { error: { code: "internal" } });
+}
+
+/** What a runner receives when it claims a run (`QueuedRun`). */
+export const queuedRunWire = (r: EvalRunDoc, tenantId: string) => ({
+  id: r.id,
+  tenant_id: tenantId,
+  suite_ref: r.suite_ref,
+  blueprint: r.blueprint,
+  mode: r.mode,
+  seed: r.seed,
+});
+
+function readRaw(req: http.IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let tooBig = false;
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY) tooBig = true;
+      else chunks.push(c);
+    });
+    req.on("end", () => (tooBig ? reject(new BadRequest("body too large")) : resolve(Buffer.concat(chunks))));
+    req.on("error", reject);
+  });
+}
+
+function parseBody(raw: Buffer): Record<string, unknown> {
+  try {
+    const v: unknown = JSON.parse(raw.toString("utf8") || "{}");
+    if (typeof v !== "object" || v === null || Array.isArray(v)) throw new BadRequest("body must be a JSON object");
+    return v as Record<string, unknown>;
+  } catch (e) {
+    throw e instanceof BadRequest ? e : new BadRequest("body is not valid JSON");
+  }
 }
 
 const seg = (u: URL): string[] => u.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -107,6 +144,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           return [200, { items: await h.datasets.list(p, q(url, "name")) }];
         if (r.length === 4 && r[2] === "versions" && m === "GET")
           return [200, await h.datasets.get(p, `${r[1]}@${r[3]}`)];
+        // The runner's form: GET /datasets/name@3 (or name@latest)
+        if (r.length === 2 && m === "GET") return [200, await h.datasets.get(p, r[1] as string)];
         break;
       }
       case "suites": {
@@ -125,6 +164,15 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           return [200, await h.runs.registerRunner(p, r[1] as string, body["description"])];
         if (r.length === 3 && r[2] === "revoke" && m === "POST")
           return [200, await h.runs.revokeRunner(p, r[1] as string)];
+        break;
+      }
+      case "runner": {
+        if (r.length === 2 && r[1] === "claim" && m === "POST") {
+          if (p.kind !== "runner" || body["runner_id"] !== p.runnerId)
+            throw new HubError("forbidden", "runner_id does not match the credential");
+          const run = await h.runs.claimNext(p);
+          return run ? [200, { run: queuedRunWire(run, p.tenantId) }] : [200, { run: null }];
+        }
         break;
       }
       case "runs": {
@@ -153,6 +201,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           return [200, await h.runs.claim(p, id)];
         if (r.length === 3 && m === "POST" && r[2] === "results")
           return [200, await h.runs.submitResults(p, id, body as never)];
+        if (r.length === 3 && m === "POST" && r[2] === "review-tasks")
+          return [200, await h.runs.createReviewTasks(p, id, body)];
         if (r.length === 3 && m === "POST" && r[2] === "fail")
           return [200, await h.runs.fail(p, id, body["reason"])];
         if (r.length === 3 && m === "GET" && r[2] === "comparison")
@@ -218,6 +268,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
         break;
       }
       case "online": {
+        if (r[1] === "configs" && r.length === 2 && m === "GET")
+          return [200, { configs: await h.online.runnerConfigs(p) }];
         if (r[1] === "results" && r.length === 2 && m === "POST")
           return [201, await h.online.ingest(p, body)];
         if (r[1] === "summary" && r.length === 2 && m === "GET")
@@ -252,7 +304,21 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           );
         const p: HubPrincipal = a.kind === "tenant" ? { ...a } : { ...a };
         const hasBody = rq.method === "POST" || rq.method === "PUT";
-        const body = hasBody ? await readJson(rq) : {};
+        const raw = hasBody ? await readRaw(rq) : Buffer.alloc(0);
+        if (a.kind === "runner") {
+          // The runner names itself and signs the exact bytes it sent: a body altered on the way, or sent by someone who only holds
+          // the bearer token of another runner, is refused.
+          const named = rq.headers["x-axis-runner-id"];
+          if (named !== undefined && named !== a.runnerId) throw new HubError("forbidden", "x-axis-runner-id does not match the credential");
+          if (hasBody) {
+            const key = a.signingKey ?? (rq.headers.authorization ?? "").slice(7);
+            const want = `v1=${createHmac("sha256", key).update(raw).digest("hex")}`;
+            const got = String(rq.headers["x-axis-runner-signature"] ?? "");
+            if (got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want)))
+              throw new HubError("forbidden", "the request signature does not verify");
+          }
+        }
+        const body = hasBody ? parseBody(raw) : {};
         const [status, json] = await handle(
           rq.method ?? "GET",
           new URL(rq.url ?? "/", "http://localhost"),
