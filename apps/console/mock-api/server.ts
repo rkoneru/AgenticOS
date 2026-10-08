@@ -172,6 +172,194 @@ const EV_TASKS: J[] = [
     resolution: null,
   },
 ];
+// ---- Compliance fixtures (OpenAPI 1.5.0): hostile text is in the data on purpose ---------------------------------------------------
+const CP_SYSTEMS: J[] = [
+  {
+    system_id: "claims-triage",
+    version: 2,
+    name: "Claims triage",
+    purpose: `Routes inbound claims to adjusters ${XSS}`,
+    owner: "claims-platform@example.com",
+    risk_level: "high",
+    lifecycle_stage: "deployed",
+    blueprints: [{ name: "hello-agent", version: "1.0.0" }],
+    data_categories: ["claims", "phi"],
+    stakeholders: [{ role: "owner", name: "Claims platform" }],
+    created_at: "2026-01-02T10:00:00.000Z",
+    created_by: "m-1",
+    updated_at: "2026-02-02T10:00:00.000Z",
+    updated_by: "m-1",
+  },
+  {
+    system_id: "faq-helper",
+    version: 1,
+    name: "FAQ helper",
+    purpose: "Answers product questions",
+    owner: "support@example.com",
+    risk_level: "minimal",
+    lifecycle_stage: "design",
+    blueprints: [],
+    data_categories: [],
+    stakeholders: [],
+    created_at: "2026-01-03T10:00:00.000Z",
+    created_by: "m-2",
+    updated_at: "2026-01-03T10:00:00.000Z",
+    updated_by: "m-2",
+  },
+];
+const CP_ASSESSMENTS: J[] = [
+  {
+    assessment_id: "assessment-0001",
+    version: 2,
+    system_id: "claims-triage",
+    title: `Claims triage impact ${XSS}`,
+    state: "approved",
+    risk_rating: "high",
+    intended_use: "Recommend a queue; an adjuster decides",
+    blueprints: [],
+    affected_groups: [{ group: "claimants", impact: "delay" }],
+    risks: [
+      {
+        id: "R1",
+        description: "Misrouting",
+        likelihood: "medium",
+        severity: "high",
+        mitigation: "Adjuster reviews",
+        residual: "low",
+      },
+    ],
+    stakeholders: [],
+    review_due: "2020-01-01",
+    author: "m-1",
+    contributors: ["m-1"],
+    created_at: "2026-01-02T10:00:00.000Z",
+    updated_at: "2026-02-02T10:00:00.000Z",
+    submitted_by: "m-1",
+    submitted_at: "2026-01-03T10:00:00.000Z",
+    reviewed_by: "m-9",
+    reviewed_at: "2026-01-04T10:00:00.000Z",
+    review_comment: "ok",
+    supersedes: 1,
+    overdue: true,
+    overdue_reason: "review_due_passed",
+    superseded: false,
+  },
+  {
+    assessment_id: "assessment-0002",
+    version: 1,
+    system_id: "faq-helper",
+    title: "FAQ helper impact",
+    state: "draft",
+    risk_rating: "low",
+    intended_use: "Answer questions",
+    blueprints: [],
+    affected_groups: [],
+    risks: [],
+    stakeholders: [],
+    review_due: "2099-01-01",
+    author: "m-2",
+    contributors: ["m-2"],
+    created_at: "2026-01-03T10:00:00.000Z",
+    updated_at: "2026-01-03T10:00:00.000Z",
+    submitted_by: null,
+    submitted_at: null,
+    reviewed_by: null,
+    reviewed_at: null,
+    review_comment: null,
+    supersedes: null,
+    overdue: false,
+    overdue_reason: null,
+    superseded: false,
+  },
+];
+const CP_DOC_ID = "cdoc-0123456789abcdef01234567";
+const CP_DOC_HASH = "e".repeat(64);
+const cpDocument = (): J => ({
+  document: {
+    body: {
+      disclaimer:
+        "This document assembles evidence recorded by the AXIS platform. It is not a conformity assessment.",
+      sections: {
+        general: {
+          title: "General description of the AI system",
+          annex_iv: ["1(a)"],
+          status: "partial",
+          gaps: ["hardware_and_deployer_instructions: supplied by the provider"],
+        },
+        performance: {
+          title: "Validation, testing and performance metrics",
+          annex_iv: ["2(g)"],
+          status: "gap",
+          gaps: [`evals: hub unavailable ${XSS}`],
+        },
+      },
+      gaps: [
+        { section: "performance", item: "evals", reason: `hub unavailable ${XSS}` },
+        {
+          section: "general",
+          item: "hardware_and_deployer_instructions",
+          reason: "supplied by the provider",
+        },
+      ],
+      annex_iv_coverage: [
+        { point: "1", title: "General description", section: "general", status: "partial" },
+        { point: "7", title: "Harmonised standards applied", section: null, status: "gap" },
+      ],
+    },
+    content_hash: CP_DOC_HASH,
+    meta: {
+      document_id: CP_DOC_ID,
+      doc_version: 1,
+      blueprint: { name: "hello-agent", version: "1.0.0" },
+    },
+    markdown: `# Technical documentation: hello-agent@1.0.0\n\nGap: ${XSS}\n`,
+    seal: { alg: "hmac-sha256", key_id: "mock-seal", sig: "c2ln" },
+  },
+  verification: { ok: true, failed: [] },
+});
+function complianceRoute(
+  p: string,
+  method: string,
+  url: URL,
+): { status: number; body: unknown } | undefined {
+  if (method !== "GET") return undefined;
+  if (p === "/compliance/systems") return { status: 200, body: { items: CP_SYSTEMS } };
+  if (p === "/compliance/impact-assessments") {
+    const st = url.searchParams.get("state");
+    const od = url.searchParams.get("overdue");
+    return {
+      status: 200,
+      body: {
+        items: CP_ASSESSMENTS.filter(
+          (a) => (!st || a["state"] === st) && (od !== "true" || a["overdue"] === true),
+        ),
+      },
+    };
+  }
+  if (p === "/compliance/documents")
+    return {
+      status: 200,
+      body: {
+        items: [
+          {
+            document_id: CP_DOC_ID,
+            blueprint: { name: "hello-agent", version: "1.0.0" },
+            doc_version: 1,
+            content_hash: CP_DOC_HASH,
+            generated_at: "2026-02-03T10:00:00.000Z",
+            generated_by: "m-1",
+            gap_count: 2,
+            seal: { alg: "hmac-sha256", key_id: "mock-seal" },
+          },
+        ],
+      },
+    };
+  if (p === `/compliance/documents/${CP_DOC_ID}`) return { status: 200, body: cpDocument() };
+  if (p.startsWith("/compliance/documents/"))
+    return { status: 404, body: { title: "not found", status: 404, code: "not_found" } };
+  return undefined;
+}
+
 function evalsRoute(
   p: string,
   method: string,
@@ -1192,6 +1380,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (p === "/usage" && method === "GET") {
       if (deny(40)) return;
       return send(res, 200, { items: usageRows(url.searchParams.get("group_by") ?? "meter") });
+    }
+    // ---- Compliance (OpenAPI 1.5.0): read-only pages; the billing role has no access
+    if (p.startsWith("/compliance/")) {
+      if (role === "billing")
+        return problem(res, 403, "forbidden", "Your role may not read compliance records");
+      const r = complianceRoute(p, method, url);
+      if (r) return send(res, r.status, r.body);
     }
     // ---- Eval Hub (OpenAPI 1.3.0 / 1.4.0): enough state for the console pages; hostile text is in the data on purpose ----
     if (p.startsWith("/evals/") || /\/versions\/[^/]+\/eval-attestations$/.test(p)) {
