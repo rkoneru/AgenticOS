@@ -325,3 +325,24 @@ def recompute(run: dict[str, Any], suite: dict[str, Any]) -> dict[str, Any]:
     }
     agg = aggregate(graders, grid, pass_threshold=suite["pass_threshold"])
     return agg.to_wire()  # type: ignore[no-any-return]
+
+
+ONLINE_DATASET = {
+    "name": "online-seed",
+    "cases": [{"id": "seed1", "input": "placeholder: online samples carry their own input"}],
+}
+ONLINE_GRADERS = [
+    {
+        "id": "thanks",
+        "kind": "deterministic",
+        "weight": 1,
+        "config": {"type": "regex", "pattern": "thank you", "ignore_case": True},
+    },
+    {
+        "id": "no-guessing",
+        "kind": "deterministic",
+        "weight": 1,
+        "config": {"type": "not_contains", "values": ["I do not know"], "normalize": ["casefold"]},
+    },
+    TONE,
+]

@@ -221,6 +221,17 @@ class Stack:
             online,
         )
 
+    @classmethod
+    def from_info(cls, info: dict[str, Any], work: Path) -> Stack:
+        """A handle on a stack booted by another process (``STACK_JSON``): enough to provision tenants and start runners."""
+        return cls(
+            admin_url="", db_url=info["db_url"], work=work, gateway=info["gateway"],
+            gateway_origin=info["gateway_origin"], cp=info["cp"], billing="", ops_url=info["ops_url"],
+            idp=info["idp"], run_service=info["run_service"], kernel_target=info["kernel_target"],
+            approvals_bridge="", console_origin=info["console_origin"], ops_token=info["ops_token"],
+            platform_token="", eval_hub=info["eval_hub"], control_plane_url=info["cp"],
+        )  # fmt: skip
+
     def info(self) -> dict[str, Any]:
         return {
             "gateway": self.gateway,
@@ -232,6 +243,7 @@ class Stack:
             "run_service": self.run_service,
             "console_origin": self.console_origin,
             "eval_hub": self.eval_hub,
+            "kernel_target": self.kernel_target,
             "db_url": self.db_url,
             "byo_key": BYO_KEY,
         }

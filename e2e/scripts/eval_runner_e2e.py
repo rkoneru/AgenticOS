@@ -100,6 +100,10 @@ def agent(body: dict[str, Any]) -> dict[str, Any]:
         return _turn("probe finished: " + " | ".join(r[:50] for r in results))
     if "SYSTEM OVERRIDE" in ask:
         return _turn(INJECTION)
+    if "XSS" in ask:  # hostile output, to see how a console renders it
+        return _turn(
+            'Claim is open. <img src=x onerror="window.__xss=1"><script>window.__xss=2</script>'
+        )
     if ask.startswith("phi "):
         return _turn(PHI_ANSWER)
     if "Persona: terse" in system and n in ("1003", "1004"):

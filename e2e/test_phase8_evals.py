@@ -788,27 +788,6 @@ def test_14_double_grading_and_adjudication(world: World) -> None:
 # ==== 5. online sampling ================================================================================================================
 
 
-ONLINE_DATASET = {
-    "name": "online-seed",
-    "cases": [{"id": "seed1", "input": "placeholder: online samples carry their own input"}],
-}
-ONLINE_GRADERS = [
-    {
-        "id": "thanks",
-        "kind": "deterministic",
-        "weight": 1,
-        "config": {"type": "regex", "pattern": "thank you", "ignore_case": True},
-    },
-    {
-        "id": "no-guessing",
-        "kind": "deterministic",
-        "weight": 1,
-        "config": {"type": "not_contains", "values": ["I do not know"], "normalize": ["casefold"]},
-    },
-    TONE,
-]
-
-
 def summary(w: World, sampling_id: str) -> dict[str, Any]:
     items = w.owner.call("evalsSamplingSummary", params={"blueprint": "answer-agent"})["items"]
     return next(i for i in items if i["sampling_id"] == sampling_id)  # type: ignore[no-any-return]
