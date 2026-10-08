@@ -7,6 +7,7 @@ import {
   verifyEvalAttestation,
   type EvalGatePort,
   type EvalGateReason,
+  type EvalStatement,
   type TrustedHubKey,
 } from "./eval-gate.js";
 import { isEnvelope } from "./provenance.js";
@@ -452,6 +453,37 @@ export class RegistryService {
         return rec;
       },
     );
+  }
+
+  /**
+   * Attestations of one version as a reader sees them: every envelope is RE-VERIFIED against the trusted hub keys on every read
+   * (`verified`), and only a verified one exposes its decoded summary (`predicate`). A row changed behind the registry's back reads as
+   * `verified: false` with no summary, never as a pass.
+   */
+  async evalAttestationSummaries(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<
+    {
+      record: EvalAttestationRecord;
+      verified: boolean;
+      predicate: EvalStatement["predicate"] | null;
+    }[]
+  > {
+    return (await this.evalAttestations(viewer, ns, name, version)).map((record) => {
+      const v = verifyEvalAttestation(record.envelope, this.hubKeys);
+      const aboutThis =
+        v.ok &&
+        v.statement.subject[0]?.name === `${ns}/${name}@${version}` &&
+        v.statement.subject[0].digest.sha256 === record.contentHash;
+      return {
+        record,
+        verified: aboutThis,
+        predicate: aboutThis && v.ok ? v.statement.predicate : null,
+      };
+    });
   }
 
   /** Attestations of one version (same visibility as the version). */

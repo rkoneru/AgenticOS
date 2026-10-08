@@ -14,9 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from axis_sdk import Axis, AxisError
-
 import interfaces_stack as istack  # noqa: E402  (e2e/ is on sys.path)
+from axis_sdk import Axis, AxisError
 
 ROOT = Path(__file__).resolve().parent.parent
 CLI = ["node", str(ROOT / "apps/cli/dist/bin.js")]
@@ -157,6 +156,8 @@ class PySdk(EvalClient):
                 return ev.runners.register(a["id"], a.get("description"))
             case "evalsRunnersRevoke":
                 return ev.runners.revoke(a["id"])
+            case "registryAttestations":
+                return ax.registry.eval_attestations(a["namespace"], a["name"], a["version"])
             # production runs and approvals (the run service the online sampler reads from)
             case "runStart":
                 return ax.runs.start({"name": a["name"], "version": a["version"]}, a.get("input"))
@@ -338,6 +339,14 @@ class Cli(EvalClient):
                 )
             case "evalsRunnersRevoke":
                 return j("evals", "runners", "revoke", a["id"])
+            case "registryAttestations":
+                # exit 1 when any attestation does not verify (the JSON is still printed)
+                return j(
+                    "registry",
+                    "attestations",
+                    f"{a['namespace']}/{a['name']}@{a['version']}",
+                    expect=(0, 1),
+                )
         raise AssertionError(f"unknown op {op}")
 
 

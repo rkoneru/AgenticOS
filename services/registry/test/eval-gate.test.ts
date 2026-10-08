@@ -222,6 +222,37 @@ describe("eval attestations", () => {
     expect(
       await svc.evalAttestations({ tenantId: null }, pub.namespace, "agent-one", "1.0.0"),
     ).toEqual([]);
+    // as a reader sees it: re-verified on every read, with the decoded summary only when it verifies
+    const seen = await svc.evalAttestationSummaries(
+      { tenantId: pub.p.tenantId },
+      pub.namespace,
+      "agent-one",
+      "1.0.0",
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      verified: true,
+      predicate: { run_id: "run-1", overall: 0.9, status: "passed", suite_ref: "smoke@1.0.0" },
+    });
+    expect(
+      await svc.evalAttestationSummaries({ tenantId: null }, pub.namespace, "agent-one", "1.0.0"),
+    ).toEqual([]);
+    // the same stored envelope read by a registry that does not trust the hub key (or after it was altered) is NOT verified
+    const untrusting = new RegistryService({
+      store: (
+        svc as unknown as { store: ConstructorParameters<typeof RegistryService>[0]["store"] }
+      ).store,
+      audit: new ServiceAudit(new MemoryAuditLog(), "registry"),
+      evalHubKeys: [{ keyId: "other", publicKey: generatePublisherKey().publicKey }],
+    });
+    const distrust = await untrusting.evalAttestationSummaries(
+      { tenantId: pub.p.tenantId },
+      pub.namespace,
+      "agent-one",
+      "1.0.0",
+    );
+    expect(distrust).toHaveLength(1);
+    expect(distrust[0]).toMatchObject({ verified: false, predicate: null });
     // wrong key, wrong hash, wrong name, wrong caller
     const other = generatePublisherKey();
     expect(

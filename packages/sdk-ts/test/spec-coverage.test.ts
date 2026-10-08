@@ -90,6 +90,7 @@ const ERGONOMIC: Record<OperationId, (ax: Axis) => Promise<unknown>> = {
       provenance: { payloadType: "t", payload: "p", signatures: [{ keyid: "k1", sig: "s" }] },
     }),
   listRegistryVersions: (ax) => ax.registry.versions("acme", "agent-one"),
+  listRegistryEvalAttestations: (ax) => ax.registry.evalAttestations("acme", "agent-one", "1.0.0"),
   yankRegistryVersion: (ax) => ax.registry.yank("acme", "agent-one", "1.0.0", "bad"),
   resolveRegistryBlueprint: (ax) => ax.registry.resolve("acme/agent-one@^1"),
   listMarketplaceListings: (ax) => ax.marketplace.listings({ q: "x" }),

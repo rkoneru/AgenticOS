@@ -931,6 +931,15 @@ class Registry:
     def versions(self, namespace: str, name: str, *, options: RequestOptions | None = None) -> Any:
         return self._ax.api.list_registry_versions(namespace=namespace, name=name, options=options)
 
+    def eval_attestations(
+        self, namespace: str, name: str, version: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        """The eval history of one version as the Eval Hub vouches for it: signed attestations,
+        each re-verified by the server on this read."""
+        return self._ax.api.list_registry_eval_attestations(
+            namespace=namespace, name=name, version=version, options=options
+        )
+
     def yank(
         self,
         namespace: str,
@@ -1932,6 +1941,13 @@ class AsyncRegistry:
     ) -> Any:
         return await self._ax.api.list_registry_versions(
             namespace=namespace, name=name, options=options
+        )
+
+    async def eval_attestations(
+        self, namespace: str, name: str, version: str, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.list_registry_eval_attestations(
+            namespace=namespace, name=name, version=version, options=options
         )
 
     async def yank(

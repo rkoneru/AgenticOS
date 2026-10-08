@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
-  "version": "1.3.0",
-  "inputHash": "a9170be81f591d4dfe61a9ec5b57dec96e4d59349a392732ab161932d2438b43",
+  "version": "1.4.0",
+  "inputHash": "d9bd908076568934d38fc2c0ffcbd3676efb5367dd55e3b4d053b235c8677d39",
   "security": [
     {
       "bearerAuth": []
@@ -11710,6 +11710,233 @@
                             "string",
                             "null"
                           ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error",
+          "content": {
+            "application/problem+json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "title",
+                  "status"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "URI, e.g. https://axis.example/problems/policy_denied"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "integer"
+                  },
+                  "code": {
+                    "enum": [
+                      "unauthenticated",
+                      "forbidden",
+                      "policy_denied",
+                      "not_found",
+                      "conflict",
+                      "validation_failed",
+                      "rate_limited",
+                      "budget_exceeded",
+                      "internal"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "trace_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "operationId": "listRegistryEvalAttestations",
+      "method": "GET",
+      "path": "/registry/blueprints/{namespace}/{name}/versions/{version}/eval-attestations",
+      "idempotent": "always",
+      "parameters": [
+        {
+          "name": "namespace",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,62}$"
+          }
+        },
+        {
+          "name": "name",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "requestBody": null,
+      "responses": {
+        "200": {
+          "description": "Attestations, oldest first",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "run_id",
+                        "suite_ref",
+                        "overall",
+                        "content_hash",
+                        "attached_at",
+                        "verified",
+                        "predicate",
+                        "envelope"
+                      ],
+                      "properties": {
+                        "run_id": {
+                          "type": "string"
+                        },
+                        "suite_ref": {
+                          "type": "string"
+                        },
+                        "overall": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "attached_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "verified": {
+                          "type": "boolean",
+                          "description": "The envelope verified against the trusted eval hub keys, and is about this version's name and content hash"
+                        },
+                        "predicate": {
+                          "description": "The decoded eval-result summary of the statement; null unless `verified`",
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": true
+                        },
+                        "envelope": {
+                          "type": "object",
+                          "required": [
+                            "payloadType",
+                            "payload",
+                            "signatures"
+                          ],
+                          "properties": {
+                            "payloadType": {
+                              "type": "string"
+                            },
+                            "payload": {
+                              "type": "string",
+                              "description": "base64 of the canonical in-toto statement"
+                            },
+                            "signatures": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": [
+                                  "keyid",
+                                  "sig"
+                                ],
+                                "properties": {
+                                  "keyid": {
+                                    "type": "string"
+                                  },
+                                  "sig": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     }

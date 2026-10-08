@@ -630,6 +630,18 @@ async function yankRegistryVersion(c: Ctx): Promise<HandlerResult> {
   );
   return ok({ ok: true });
 }
+async function listRegistryEvalAttestations(c: Ctx): Promise<HandlerResult> {
+  const version = str(c.params["version"]);
+  if (!SEMVER.test(version)) throw notFound("not found");
+  return ok({
+    items: await c.deps.registry.evalAttestations(
+      c.principal,
+      str(c.params["namespace"]),
+      regName(c),
+      version,
+    ),
+  });
+}
 async function resolveRegistryBlueprint(c: Ctx): Promise<HandlerResult> {
   return ok(await c.deps.registry.resolve(c.principal, str(c.query["ref"])));
 }
@@ -777,6 +789,11 @@ export const ROUTES: Record<string, Route> = {
   listRegistryVersions: {
     action: "api.registry.read",
     handler: listRegistryVersions,
+    mutation: false,
+  },
+  listRegistryEvalAttestations: {
+    action: "api.registry.read",
+    handler: listRegistryEvalAttestations,
     mutation: false,
   },
   yankRegistryVersion: {

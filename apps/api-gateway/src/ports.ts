@@ -87,6 +87,17 @@ export interface RegistryVersionDto {
   state?: "active" | "deprecated" | "yanked";
   state_reason?: string | null;
 }
+export interface RegistryEvalAttestationDto {
+  run_id: string;
+  suite_ref: string;
+  overall: number;
+  content_hash: string;
+  attached_at: string;
+  verified: boolean;
+  predicate: Record<string, unknown> | null;
+  envelope: { payloadType: string; payload: string; signatures: { keyid: string; sig: string }[] };
+}
+
 export interface ResolvedBlueprintDto extends RegistryVersionDto {
   abl: unknown;
   provenance: unknown;
@@ -352,6 +363,13 @@ export interface RegistryPort {
   ): Promise<void>;
   /** Resolves AND verifies (hash, signature, provenance); a failure is a PortInvalid carrying the failed check codes. */
   resolve(p: Principal, ref: string): Promise<ResolvedBlueprintDto>;
+  /** The eval-result attestations of one version, each re-verified on this read. Unknown or invisible version: PortNotFound. */
+  evalAttestations(
+    p: Principal,
+    namespace: string,
+    name: string,
+    version: string,
+  ): Promise<RegistryEvalAttestationDto[]>;
 }
 
 export interface MarketplacePort {

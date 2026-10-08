@@ -115,7 +115,9 @@ def script(body: dict[str, Any]) -> dict[str, Any]:
         return _turn(
             f"Claim {n} is open. A specialist will contact you within 2 days. Thank you for your patience."
         )
-    if ask.startswith("probe"):  # Phase 8: what production decides for the tools the eval-safety probe tries
+    if ask.startswith(
+        "probe"
+    ):  # Phase 8: what production decides for the tools the eval-safety probe tries
         claim = ask.rsplit(" ", 1)[-1]
         if not results:
             return _turn(

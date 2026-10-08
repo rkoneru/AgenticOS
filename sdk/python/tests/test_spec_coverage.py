@@ -165,6 +165,9 @@ ERGONOMIC = {
         },
     ),
     "listRegistryVersions": lambda ax: ax.registry.versions("acme", "agent-one"),
+    "listRegistryEvalAttestations": lambda ax: ax.registry.eval_attestations(
+        "acme", "agent-one", "1.0.0"
+    ),
     "yankRegistryVersion": lambda ax: ax.registry.yank("acme", "agent-one", "1.0.0", "bad"),
     "resolveRegistryBlueprint": lambda ax: ax.registry.resolve("acme/agent-one@^1"),
     "listMarketplaceListings": lambda ax: ax.marketplace.listings(q="x"),

@@ -97,6 +97,7 @@ const ops = {
   evalsRunnersList: () => ax.evals.runners.list(),
   evalsRunnersRegister: () => ax.evals.runners.register(a.id, a.description),
   evalsRunnersRevoke: () => ax.evals.runners.revoke(a.id),
+  registryAttestations: () => ax.registry.evalAttestations(a.namespace, a.name, a.version),
 };
 
 try {

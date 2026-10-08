@@ -512,6 +512,9 @@ describe("commands", () => {
     expect(await calls(["registry", "versions", "acme/agent-one"])).toEqual([
       "listRegistryVersions",
     ]);
+    expect(await calls(["registry", "attestations", "acme/agent-one@1.0.0"])).toEqual([
+      "listRegistryEvalAttestations",
+    ]);
     expect(await calls(["registry", "yank", "acme/agent-one@1.0.0", "--reason", "bad"])).toEqual([
       "yankRegistryVersion",
     ]);
@@ -537,6 +540,8 @@ describe("commands", () => {
       ["registry", "versions", "no-slash"],
       ["registry", "yank", "acme/a@1.0.0"],
       ["registry", "yank", "acme/a", "--reason", "x"],
+      ["registry", "attestations", "acme/a"],
+      ["registry", "attestations"],
       ["registry", "add-key", "acme"],
       ["marketplace", "show", "a/b/c"],
       ["audit", "explain", "x"],

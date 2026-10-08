@@ -357,6 +357,33 @@ async function versions(ctx: Ctx): Promise<number> {
   return EXIT.OK;
 }
 
+async function attestations(ctx: Ctx): Promise<number> {
+  const [ref] = need(ctx, 1, "registry attestations <namespace>/<name>@<version>");
+  const { ns, name, range } = parseListingRef(
+    ref as string,
+    "registry attestations <namespace>/<name>@<version>",
+  );
+  if (range === "*")
+    throw new UsageError("an exact version is required: <namespace>/<name>@<version>");
+  const r = await ctx.client().registry.evalAttestations(ns, name, range);
+  emit(ctx, r, () =>
+    r.items.length === 0
+      ? "no eval attestations for this version"
+      : table(
+          r.items,
+          [
+            { header: "run", get: (a) => a.run_id },
+            { header: "suite", get: (a) => a.suite_ref },
+            { header: "score", get: (a) => a.overall },
+            { header: "verified", get: (a) => (a.verified ? "yes" : "NO") },
+            { header: "attached", get: (a) => a.attached_at },
+          ],
+          ctx.style,
+        ),
+  );
+  return r.items.every((a) => a.verified) ? EXIT.OK : EXIT.ERROR;
+}
+
 async function yank(ctx: Ctx): Promise<number> {
   const [ref] = need(ctx, 1, "registry yank <namespace>/<name>@<version> --reason <text>");
   const reason = ctx.str("reason");
@@ -637,6 +664,12 @@ export const REGISTRY_COMMANDS: Command[] = [
     summary: "List the versions of a blueprint with their state",
     usage: "<namespace>/<name>",
     run: versions,
+  },
+  {
+    path: ["registry", "attestations"],
+    summary: "Show the signed eval results attached to a version (verified again on every read)",
+    usage: "<namespace>/<name>@<version>",
+    run: attestations,
   },
   {
     path: ["registry", "yank"],
