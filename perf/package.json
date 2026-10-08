@@ -1,0 +1,25 @@
+{
+  "name": "@axis/perf",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Load harness (open-model arrivals, HDR-like histograms, coordinated-omission aware) and k6 scripts for the NFR targets (Phase 9 D). Run with `make loadtest`.",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@axis/audit": "workspace:*",
+    "@axis/contracts": "workspace:*",
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
+    "pg": "^8.23.1",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  }
+}
