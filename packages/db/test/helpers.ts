@@ -198,6 +198,10 @@ export async function seedTenant(
     "INSERT INTO marketplace_docs (tenant_id, coll, key, rev, data) VALUES ($1, 'publishers', 'self', 1, '{\"state\": \"pending\"}')",
     [t],
   );
+  await q(
+    "INSERT INTO eval_hub_docs (tenant_id, coll, key, rev, data) VALUES ($1, 'runs', 'seed-run', 1, '{\"status\": \"queued\"}')",
+    [t],
+  );
   const mem = await q("SELECT id FROM members WHERE tenant_id = $1", [t]);
   const memberId = mem.rows[0].id as string;
   await q(
