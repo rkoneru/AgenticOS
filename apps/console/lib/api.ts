@@ -238,6 +238,92 @@ export interface EvalGateResult {
   checked_at: string;
 }
 
+// ---------------------------------------------------------------- compliance (OpenAPI 1.5.0)
+
+export interface ComplianceSystem {
+  system_id: string;
+  version: number;
+  name: string;
+  purpose: string;
+  owner: string;
+  risk_level: "minimal" | "limited" | "high";
+  lifecycle_stage: "design" | "development" | "deployed" | "retired";
+  blueprints: Array<{ name: string; version: string }>;
+  data_categories: string[];
+  stakeholders: Array<{ role: string; name: string }>;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface ComplianceAssessment {
+  assessment_id: string;
+  version: number;
+  system_id: string;
+  title: string;
+  state: "draft" | "in_review" | "approved" | "rejected";
+  risk_rating: "low" | "medium" | "high" | "critical";
+  intended_use: string;
+  affected_groups: Array<{ group: string; impact: string }>;
+  risks: Array<{
+    id: string;
+    description: string;
+    likelihood: string;
+    severity: string;
+    mitigation: string;
+    residual: string;
+  }>;
+  review_due: string;
+  author: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_comment: string | null;
+  overdue: boolean;
+  overdue_reason: string | null;
+  superseded: boolean;
+}
+
+export interface ComplianceDocumentSummary {
+  document_id: string;
+  blueprint: { name: string; version: string };
+  doc_version: number;
+  content_hash: string;
+  generated_at: string;
+  generated_by: string;
+  gap_count: number;
+  seal: { alg: string; key_id: string };
+}
+
+export interface ComplianceDocumentView {
+  document: {
+    body: {
+      disclaimer?: string;
+      sections: Record<
+        string,
+        {
+          title: string;
+          status: "complete" | "partial" | "gap";
+          annex_iv: string[];
+          gaps: string[];
+        }
+      >;
+      gaps: Array<{ section: string; item: string; reason: string }>;
+      annex_iv_coverage: Array<{
+        point: string;
+        title: string;
+        section: string | null;
+        status: string;
+      }>;
+    };
+    content_hash: string;
+    meta: Record<string, unknown>;
+    markdown: string;
+    seal: { alg: string; key_id: string; sig: string };
+  };
+  verification: { ok: boolean; failed: string[] };
+}
+
 export interface EvalDatasetVersion {
   name: string;
   version: number;
@@ -760,6 +846,14 @@ export interface Api {
   listRegistryVersions(namespace: string, name: string): Promise<{ items: RegistryVersion[] }>;
   resolveRegistry(ref: string): Promise<ResolvedBlueprint>;
   getApproval(id: string): Promise<Approval>;
+  // compliance (OpenAPI 1.5.0): read-only here; writing is done with the CLI or an SDK
+  listComplianceSystems(): Promise<{ items: ComplianceSystem[] }>;
+  listComplianceAssessments(q?: {
+    state?: string;
+    overdue?: boolean;
+  }): Promise<{ items: ComplianceAssessment[] }>;
+  listComplianceDocuments(): Promise<{ items: ComplianceDocumentSummary[] }>;
+  getComplianceDocument(id: string): Promise<ComplianceDocumentView>;
 }
 
 export function createApi(opts: ClientOptions = {}): Api {
@@ -898,6 +992,16 @@ export function createApi(opts: ClientOptions = {}): Api {
       )?.comparison ?? null,
     gateEval: (blueprint, suites) =>
       json("POST", "/v1/evals/gate", { body: { blueprint, ...(suites ? { suites } : {}) } }),
+    listComplianceSystems: () => json("GET", "/v1/compliance/systems"),
+    listComplianceAssessments: (q) =>
+      json("GET", "/v1/compliance/impact-assessments", {
+        query: {
+          ...(q?.state ? { state: q.state } : {}),
+          ...(q?.overdue ? { overdue: true } : {}),
+        },
+      }),
+    listComplianceDocuments: () => json("GET", "/v1/compliance/documents"),
+    getComplianceDocument: (id) => json("GET", `/v1/compliance/documents/${enc(id)}`),
     listEvalDatasets: () => json("GET", "/v1/evals/datasets"),
     getEvalDataset: (name, version) =>
       json("GET", `/v1/evals/datasets/${enc(name)}/versions/${enc(String(version))}`),

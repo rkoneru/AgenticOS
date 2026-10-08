@@ -106,6 +106,38 @@ const ERGONOMIC: Record<OperationId, (ax: Axis) => Promise<unknown>> = {
       consentDigest: "d",
     }),
   uninstallMarketplaceListing: (ax) => ax.marketplace.uninstall("acme", "agent-one"),
+  listComplianceSystems: (ax) => ax.compliance.systems.list({ risk_level: "high" }),
+  createComplianceSystem: (ax) =>
+    ax.compliance.systems.create({
+      name: "Claims triage",
+      purpose: "Routes claims",
+      owner: "owner@example.test",
+      risk_level: "high",
+    }),
+  getComplianceSystem: (ax) => ax.compliance.systems.get("claims-triage", 1),
+  updateComplianceSystem: (ax) =>
+    ax.compliance.systems.update("claims-triage", 1, { lifecycle_stage: "deployed" }),
+  listComplianceImpactAssessments: (ax) =>
+    ax.compliance.assessments.list({ system_id: "claims-triage", overdue: true }),
+  createComplianceImpactAssessment: (ax) =>
+    ax.compliance.assessments.create({
+      system_id: "claims-triage",
+      title: "Impact",
+      risk_rating: "high",
+      intended_use: "Routing",
+      review_due: "2027-01-01",
+    }),
+  getComplianceImpactAssessment: (ax) => ax.compliance.assessments.get("assessment-1", 2),
+  reviseComplianceImpactAssessment: (ax) =>
+    ax.compliance.assessments.revise("assessment-1", 1, { title: "Retitled" }),
+  submitComplianceImpactAssessment: (ax) => ax.compliance.assessments.submit("assessment-1", 1),
+  withdrawComplianceImpactAssessment: (ax) => ax.compliance.assessments.withdraw("assessment-1", 1),
+  reviewComplianceImpactAssessment: (ax) =>
+    ax.compliance.assessments.review("assessment-1", 1, "approve", "reviewed"),
+  listComplianceDocuments: (ax) =>
+    ax.compliance.documents.list({ blueprint_name: "agent-one", blueprint_version: "1.0.0" }),
+  generateComplianceDocument: (ax) => ax.compliance.documents.generate("agent-one@1.0.0"),
+  getComplianceDocument: (ax) => ax.compliance.documents.get("cdoc-abc"),
 };
 
 describe("coverage of the spec", () => {

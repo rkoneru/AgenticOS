@@ -23,6 +23,7 @@
     "@axis/approvals": "workspace:*",
     "@axis/audit": "workspace:*",
     "@axis/billing": "workspace:*",
+    "@axis/compliance": "workspace:*",
     "@axis/contracts": "workspace:*",
     "@axis/control-plane": "workspace:*",
     "@axis/eval-hub": "workspace:*",

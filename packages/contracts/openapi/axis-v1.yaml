@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AXIS Control Plane API
-  version: 1.4.0
+  version: 1.5.0
   summary: Governed agent runtime — REST API v1
   description: |
     Source of truth for the public `/v1` API. SDKs and server route schemas are generated from this file.
@@ -41,6 +41,10 @@ tags:
       description: "Signed, provenance-attested blueprint registry (private namespaces per tenant)",
     }
   - { name: Marketplace, description: Security-reviewed listings and consented installs }
+  - {
+      name: Compliance,
+      description: "AI system inventory, impact assessments and sealed technical documentation (designed for / evidence-ready; not a certification)",
+    }
 paths:
   /blueprints:
     get:
@@ -1385,6 +1389,309 @@ paths:
                   ok: { type: boolean }
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
+  /compliance/systems:
+    get:
+      tags: [Compliance]
+      operationId: listComplianceSystems
+      summary: List the AI system inventory (ISO/IEC 42001 asset register), latest version of each record
+      parameters:
+        - { name: risk_level, in: query, schema: { enum: [minimal, limited, high] } }
+        - {
+            name: lifecycle_stage,
+            in: query,
+            schema: { enum: [design, development, deployed, retired] },
+          }
+      responses:
+        "200":
+          description: Systems, ordered by id
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ComplianceSystem" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Compliance]
+      operationId: createComplianceSystem
+      summary: Register an AI system in the inventory (version 1)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComplianceSystemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceSystem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/systems/{systemId}:
+    get:
+      tags: [Compliance]
+      operationId: getComplianceSystem
+      summary: Get an AI system record (the latest version, or an earlier one with `version`)
+      parameters:
+        - { $ref: "#/components/parameters/ComplianceSystemId" }
+        - { name: version, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceSystem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Compliance]
+      operationId: updateComplianceSystem
+      summary: Change an AI system record; every change is a new version (nothing is deleted, retire a system instead)
+      parameters: [{ $ref: "#/components/parameters/ComplianceSystemId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComplianceSystemUpdate" }
+      responses:
+        "200":
+          description: The new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceSystem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/impact-assessments:
+    get:
+      tags: [Compliance]
+      operationId: listComplianceImpactAssessments
+      summary: List AI impact assessments (latest version of each), with derived overdue flags
+      parameters:
+        - { name: system_id, in: query, schema: { type: string, maxLength: 63 } }
+        - { name: state, in: query, schema: { enum: [draft, in_review, approved, rejected] } }
+        - { name: overdue, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Assessments, ordered by id
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Compliance]
+      operationId: createComplianceImpactAssessment
+      summary: Start an AI impact assessment of an inventoried system (draft, version 1)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComplianceImpactAssessmentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/impact-assessments/{assessmentId}:
+    get:
+      tags: [Compliance]
+      operationId: getComplianceImpactAssessment
+      summary: Get an impact assessment (the latest version, or an earlier one with `version`)
+      parameters:
+        - { $ref: "#/components/parameters/ComplianceAssessmentId" }
+        - { name: version, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: The assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Compliance]
+      operationId: reviseComplianceImpactAssessment
+      summary: Edit the draft in place, or start the next version when the latest was approved or rejected
+      parameters: [{ $ref: "#/components/parameters/ComplianceAssessmentId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComplianceImpactAssessmentUpdate" }
+      responses:
+        "200":
+          description: The edited or new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/impact-assessments/{assessmentId}/submit:
+    post:
+      tags: [Compliance]
+      operationId: submitComplianceImpactAssessment
+      summary: Submit a draft for independent review
+      parameters:
+        - { $ref: "#/components/parameters/ComplianceAssessmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComplianceExpectedVersion" }
+      responses:
+        "200":
+          description: In review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/impact-assessments/{assessmentId}/withdraw:
+    post:
+      tags: [Compliance]
+      operationId: withdrawComplianceImpactAssessment
+      summary: Take a submitted assessment back to draft
+      parameters:
+        - { $ref: "#/components/parameters/ComplianceAssessmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ComplianceExpectedVersion" }
+      responses:
+        "200":
+          description: Back to draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/impact-assessments/{assessmentId}/review:
+    post:
+      tags: [Compliance]
+      operationId: reviewComplianceImpactAssessment
+      summary: Approve or reject a submitted assessment (the reviewer is never the author, a contributor or the submitter)
+      parameters:
+        - { $ref: "#/components/parameters/ComplianceAssessmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_version, decision]
+              additionalProperties: false
+              properties:
+                expected_version: { type: integer, minimum: 1 }
+                decision: { enum: [approve, reject] }
+                comment: { type: string, maxLength: 2000, description: Required when rejecting }
+      responses:
+        "200":
+          description: Approved or rejected (final for this version)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceImpactAssessment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/documents:
+    get:
+      tags: [Compliance]
+      operationId: listComplianceDocuments
+      summary: List generated technical documentation (EU AI Act Annex IV structure), oldest version first
+      parameters:
+        - {
+            name: blueprint_name,
+            in: query,
+            schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" },
+          }
+        - { name: blueprint_version, in: query, schema: { type: string, maxLength: 64 } }
+      responses:
+        "200":
+          description: Documents without their bodies
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ComplianceDocumentSummary" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Compliance]
+      operationId: generateComplianceDocument
+      summary: Assemble and seal the technical documentation of a blueprint version from the platform's own records
+      description: |
+        Reads this tenant's registry/blueprint record, eval runs and attestations, active policy packs and audit statistics.
+        Anything that cannot be read is listed in the document as a gap; nothing is invented. The same sources give the same bytes:
+        when nothing changed since the latest version, that version is returned (`created: false`) and nothing is stored.
+        The document is designed for and evidence-ready toward Annex IV; it is not a conformity assessment.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blueprint]
+              additionalProperties: false
+              properties:
+                blueprint: { $ref: "#/components/schemas/ComplianceBlueprintRef" }
+      responses:
+        "201":
+          description: A new version was stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceGenerateResult" }
+        "200":
+          description: Unchanged since the latest version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceGenerateResult" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /compliance/documents/{documentId}:
+    get:
+      tags: [Compliance]
+      operationId: getComplianceDocument
+      summary: Get a generated document with a fresh verification of its hash, Markdown and seal
+      parameters: [{ $ref: "#/components/parameters/ComplianceDocumentId" }]
+      responses:
+        "200":
+          description: The document and its verification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComplianceDocumentView" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1419,6 +1726,27 @@ components:
     EvalRunnerId:
       {
         name: runnerId,
+        in: path,
+        required: true,
+        schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$" },
+      }
+    ComplianceSystemId:
+      {
+        name: systemId,
+        in: path,
+        required: true,
+        schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" },
+      }
+    ComplianceAssessmentId:
+      {
+        name: assessmentId,
+        in: path,
+        required: true,
+        schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$" },
+      }
+    ComplianceDocumentId:
+      {
+        name: documentId,
         in: path,
         required: true,
         schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$" },
@@ -2307,3 +2635,324 @@ components:
         consented_by: { type: string }
         consented_at: { type: string, format: date-time }
         flag_reason: { type: [string, "null"] }
+    ComplianceBlueprintRef:
+      type: object
+      required: [name, version]
+      additionalProperties: false
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        version: { type: string, maxLength: 64 }
+    ComplianceStakeholder:
+      type: object
+      required: [role, name]
+      additionalProperties: false
+      properties:
+        role: { type: string, maxLength: 200 }
+        name: { type: string, maxLength: 200 }
+    ComplianceExpectedVersion:
+      type: object
+      required: [expected_version]
+      additionalProperties: false
+      properties:
+        expected_version:
+          { type: integer, minimum: 1, description: The version you read; a stale one is a 409 }
+    ComplianceSystemInput:
+      type: object
+      required: [name, purpose, owner, risk_level]
+      additionalProperties: false
+      properties:
+        system_id:
+          { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: Generated when omitted }
+        name: { type: string, maxLength: 200 }
+        purpose: { type: string, maxLength: 4000 }
+        owner: { type: string, maxLength: 200 }
+        risk_level: { enum: [minimal, limited, high] }
+        lifecycle_stage: { enum: [design, development, deployed, retired] }
+        blueprints:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceBlueprintRef" },
+          }
+        data_categories: { type: array, maxItems: 100, items: { type: string, maxLength: 200 } }
+        stakeholders:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceStakeholder" },
+          }
+    ComplianceSystemUpdate:
+      type: object
+      required: [expected_version]
+      additionalProperties: false
+      properties:
+        expected_version: { type: integer, minimum: 1 }
+        name: { type: string, maxLength: 200 }
+        purpose: { type: string, maxLength: 4000 }
+        owner: { type: string, maxLength: 200 }
+        risk_level: { enum: [minimal, limited, high] }
+        lifecycle_stage: { enum: [design, development, deployed, retired] }
+        blueprints:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceBlueprintRef" },
+          }
+        data_categories: { type: array, maxItems: 100, items: { type: string, maxLength: 200 } }
+        stakeholders:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceStakeholder" },
+          }
+    ComplianceSystem:
+      type: object
+      required:
+        - system_id
+        - version
+        - name
+        - purpose
+        - owner
+        - risk_level
+        - lifecycle_stage
+        - blueprints
+        - data_categories
+        - stakeholders
+        - created_at
+        - created_by
+        - updated_at
+        - updated_by
+      properties:
+        system_id: { type: string }
+        version: { type: integer, minimum: 1 }
+        name: { type: string }
+        purpose: { type: string }
+        owner: { type: string }
+        risk_level: { enum: [minimal, limited, high] }
+        lifecycle_stage: { enum: [design, development, deployed, retired] }
+        blueprints: { type: array, items: { $ref: "#/components/schemas/ComplianceBlueprintRef" } }
+        data_categories: { type: array, items: { type: string } }
+        stakeholders: { type: array, items: { $ref: "#/components/schemas/ComplianceStakeholder" } }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: string }
+    ComplianceAffectedGroup:
+      type: object
+      required: [group, impact]
+      additionalProperties: false
+      properties:
+        group: { type: string, maxLength: 200 }
+        impact: { type: string, maxLength: 4000 }
+    ComplianceAssessedRisk:
+      type: object
+      required: [id, description, likelihood, severity, mitigation, residual]
+      additionalProperties: false
+      properties:
+        id: { type: string, maxLength: 64 }
+        description: { type: string, maxLength: 4000 }
+        likelihood: { enum: [low, medium, high] }
+        severity: { enum: [low, medium, high] }
+        mitigation: { type: string, maxLength: 4000 }
+        residual: { enum: [low, medium, high] }
+    ComplianceImpactAssessmentInput:
+      type: object
+      required: [system_id, title, risk_rating, intended_use, review_due]
+      additionalProperties: false
+      properties:
+        system_id: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        title: { type: string, maxLength: 200 }
+        risk_rating: { enum: [low, medium, high, critical] }
+        intended_use: { type: string, maxLength: 4000 }
+        blueprints:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceBlueprintRef" },
+          }
+        affected_groups:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceAffectedGroup" },
+          }
+        risks:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceAssessedRisk" },
+          }
+        stakeholders:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceStakeholder" },
+          }
+        review_due:
+          {
+            type: string,
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+            description: The date by which the assessment must be reviewed again,
+          }
+    ComplianceImpactAssessmentUpdate:
+      type: object
+      required: [expected_version]
+      additionalProperties: false
+      properties:
+        expected_version: { type: integer, minimum: 1 }
+        title: { type: string, maxLength: 200 }
+        risk_rating: { enum: [low, medium, high, critical] }
+        intended_use: { type: string, maxLength: 4000 }
+        blueprints:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceBlueprintRef" },
+          }
+        affected_groups:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceAffectedGroup" },
+          }
+        risks:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceAssessedRisk" },
+          }
+        stakeholders:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/ComplianceStakeholder" },
+          }
+        review_due: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+    ComplianceImpactAssessment:
+      type: object
+      required:
+        - assessment_id
+        - version
+        - system_id
+        - title
+        - state
+        - risk_rating
+        - intended_use
+        - blueprints
+        - affected_groups
+        - risks
+        - stakeholders
+        - review_due
+        - author
+        - contributors
+        - created_at
+        - updated_at
+        - submitted_by
+        - submitted_at
+        - reviewed_by
+        - reviewed_at
+        - review_comment
+        - supersedes
+        - overdue
+        - overdue_reason
+        - superseded
+      properties:
+        assessment_id: { type: string }
+        version: { type: integer, minimum: 1 }
+        system_id: { type: string }
+        title: { type: string }
+        state: { enum: [draft, in_review, approved, rejected] }
+        risk_rating: { enum: [low, medium, high, critical] }
+        intended_use: { type: string }
+        blueprints: { type: array, items: { $ref: "#/components/schemas/ComplianceBlueprintRef" } }
+        affected_groups:
+          { type: array, items: { $ref: "#/components/schemas/ComplianceAffectedGroup" } }
+        risks: { type: array, items: { $ref: "#/components/schemas/ComplianceAssessedRisk" } }
+        stakeholders: { type: array, items: { $ref: "#/components/schemas/ComplianceStakeholder" } }
+        review_due: { type: string }
+        author: { type: string }
+        contributors: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        submitted_by: { type: [string, "null"] }
+        submitted_at: { type: [string, "null"] }
+        reviewed_by: { type: [string, "null"] }
+        reviewed_at: { type: [string, "null"] }
+        review_comment: { type: [string, "null"] }
+        supersedes: { type: [integer, "null"] }
+        overdue:
+          type: boolean
+          description: Derived on read. Approved and past `review_due`, or waiting for a reviewer longer than the grace period. Never true for a superseded version.
+        overdue_reason:
+          type: [string, "null"]
+          description: "`review_due_passed`, `review_pending_too_long`, or null"
+        superseded: { type: boolean, description: A later version exists }
+    ComplianceDocumentSummary:
+      type: object
+      required:
+        [
+          document_id,
+          blueprint,
+          doc_version,
+          content_hash,
+          generated_at,
+          generated_by,
+          gap_count,
+          seal,
+        ]
+      properties:
+        document_id: { type: string }
+        blueprint: { $ref: "#/components/schemas/ComplianceBlueprintRef" }
+        doc_version: { type: integer, minimum: 1 }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        generated_at: { type: string, format: date-time }
+        generated_by: { type: string }
+        gap_count:
+          { type: integer, minimum: 0, description: Items the generator could not evidence }
+        seal:
+          type: object
+          required: [alg, key_id]
+          properties:
+            alg: { enum: [ed25519, hmac-sha256] }
+            key_id: { type: string }
+    ComplianceSealedDocument:
+      type: object
+      required: [body, content_hash, meta, markdown, seal]
+      properties:
+        body:
+          type: object
+          additionalProperties: true
+          description: The technical documentation (sections, gaps, Annex IV coverage); its canonical JSON hashes to `content_hash`
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        meta:
+          type: object
+          additionalProperties: true
+          description: Document id, tenant, blueprint, version, generation time, generator and the hash of `markdown`
+        markdown:
+          { type: string, description: A deterministic rendering of `body`; its hash is sealed }
+        seal:
+          type: object
+          required: [alg, key_id, sig]
+          properties:
+            alg: { enum: [ed25519, hmac-sha256] }
+            key_id: { type: string }
+            sig: { type: string }
+    ComplianceGenerateResult:
+      type: object
+      required: [document, created]
+      properties:
+        document: { $ref: "#/components/schemas/ComplianceSealedDocument" }
+        created: { type: boolean }
+    ComplianceDocumentView:
+      type: object
+      required: [document, verification]
+      properties:
+        document: { $ref: "#/components/schemas/ComplianceSealedDocument" }
+        verification:
+          type: object
+          required: [ok, failed]
+          description: Recomputed on this read
+          properties:
+            ok: { type: boolean }
+            failed:
+              { type: array, items: { enum: [content_hash, markdown, seal_key, seal_signature] } }

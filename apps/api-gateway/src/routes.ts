@@ -686,6 +686,134 @@ async function uninstallMarketplaceListing(c: Ctx): Promise<HandlerResult> {
   return ok({ ok: true });
 }
 
+// ---- compliance -------------------------------------------------------------------------------------------------------------------
+
+const optStr = (c: Ctx, k: string): string | undefined =>
+  c.query[k] === undefined ? undefined : str(c.query[k]);
+const optInt = (c: Ctx, k: string): number | undefined =>
+  c.query[k] === undefined ? undefined : Number(c.query[k]);
+/** The body without `expected_version` (the optimistic-concurrency token travels separately). */
+function withoutVersion(body: unknown): { expected: number; rest: Record<string, unknown> } {
+  const { expected_version, ...rest } = body as { expected_version: number } & Record<
+    string,
+    unknown
+  >;
+  return { expected: expected_version, rest };
+}
+
+async function listComplianceSystems(c: Ctx): Promise<HandlerResult> {
+  const risk = optStr(c, "risk_level");
+  const stage = optStr(c, "lifecycle_stage");
+  return ok({
+    items: await c.deps.compliance.listSystems(c.principal, {
+      ...(risk ? { risk_level: risk } : {}),
+      ...(stage ? { lifecycle_stage: stage } : {}),
+    }),
+  });
+}
+async function createComplianceSystem(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.createSystem(c.principal, c.body as Record<string, unknown>),
+    201,
+  );
+}
+async function getComplianceSystem(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.getSystem(c.principal, str(c.params["systemId"]), optInt(c, "version")),
+  );
+}
+async function updateComplianceSystem(c: Ctx): Promise<HandlerResult> {
+  const { expected, rest } = withoutVersion(c.body);
+  return ok(
+    await c.deps.compliance.updateSystem(c.principal, str(c.params["systemId"]), expected, rest),
+  );
+}
+async function listComplianceImpactAssessments(c: Ctx): Promise<HandlerResult> {
+  const system = optStr(c, "system_id");
+  const state = optStr(c, "state");
+  const overdue = c.query["overdue"];
+  return ok({
+    items: await c.deps.compliance.listAssessments(c.principal, {
+      ...(system ? { system_id: system } : {}),
+      ...(state ? { state } : {}),
+      ...(overdue !== undefined ? { overdue: overdue === true || overdue === "true" } : {}),
+    }),
+  });
+}
+async function createComplianceImpactAssessment(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.createAssessment(c.principal, c.body as Record<string, unknown>),
+    201,
+  );
+}
+async function getComplianceImpactAssessment(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.getAssessment(
+      c.principal,
+      str(c.params["assessmentId"]),
+      optInt(c, "version"),
+    ),
+  );
+}
+async function reviseComplianceImpactAssessment(c: Ctx): Promise<HandlerResult> {
+  const { expected, rest } = withoutVersion(c.body);
+  return ok(
+    await c.deps.compliance.reviseAssessment(
+      c.principal,
+      str(c.params["assessmentId"]),
+      expected,
+      rest,
+    ),
+  );
+}
+async function submitComplianceImpactAssessment(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.submitAssessment(
+      c.principal,
+      str(c.params["assessmentId"]),
+      (c.body as { expected_version: number }).expected_version,
+    ),
+  );
+}
+async function withdrawComplianceImpactAssessment(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.withdrawAssessment(
+      c.principal,
+      str(c.params["assessmentId"]),
+      (c.body as { expected_version: number }).expected_version,
+    ),
+  );
+}
+async function reviewComplianceImpactAssessment(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.compliance.reviewAssessment(
+      c.principal,
+      str(c.params["assessmentId"]),
+      c.body as { expected_version: number; decision: "approve" | "reject"; comment?: string },
+    ),
+  );
+}
+async function listComplianceDocuments(c: Ctx): Promise<HandlerResult> {
+  const name = optStr(c, "blueprint_name");
+  const version = optStr(c, "blueprint_version");
+  return ok({
+    items: await c.deps.compliance.listDocuments(c.principal, {
+      ...(name ? { blueprint_name: name } : {}),
+      ...(version ? { blueprint_version: version } : {}),
+    }),
+  });
+}
+async function generateComplianceDocument(c: Ctx): Promise<HandlerResult> {
+  const r = await c.deps.compliance.generateDocument(
+    c.principal,
+    (c.body as { blueprint: { name: string; version: string } }).blueprint,
+  );
+  return ok(r, r.created ? 201 : 200);
+}
+async function getComplianceDocument(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.compliance.getDocument(c.principal, str(c.params["documentId"])));
+}
+
 export const ROUTES: Record<string, Route> = {
   listBlueprints: { action: "api.blueprints.read", handler: listBlueprints, mutation: false },
   publishBlueprintVersion: {
@@ -835,6 +963,76 @@ export const ROUTES: Record<string, Route> = {
     action: "api.marketplace.install",
     handler: uninstallMarketplaceListing,
     mutation: true,
+  },
+  listComplianceSystems: {
+    action: "api.compliance.read",
+    handler: listComplianceSystems,
+    mutation: false,
+  },
+  createComplianceSystem: {
+    action: "api.compliance.write",
+    handler: createComplianceSystem,
+    mutation: true,
+  },
+  getComplianceSystem: {
+    action: "api.compliance.read",
+    handler: getComplianceSystem,
+    mutation: false,
+  },
+  updateComplianceSystem: {
+    action: "api.compliance.write",
+    handler: updateComplianceSystem,
+    mutation: true,
+  },
+  listComplianceImpactAssessments: {
+    action: "api.compliance.read",
+    handler: listComplianceImpactAssessments,
+    mutation: false,
+  },
+  createComplianceImpactAssessment: {
+    action: "api.compliance.write",
+    handler: createComplianceImpactAssessment,
+    mutation: true,
+  },
+  getComplianceImpactAssessment: {
+    action: "api.compliance.read",
+    handler: getComplianceImpactAssessment,
+    mutation: false,
+  },
+  reviseComplianceImpactAssessment: {
+    action: "api.compliance.write",
+    handler: reviseComplianceImpactAssessment,
+    mutation: true,
+  },
+  submitComplianceImpactAssessment: {
+    action: "api.compliance.write",
+    handler: submitComplianceImpactAssessment,
+    mutation: true,
+  },
+  withdrawComplianceImpactAssessment: {
+    action: "api.compliance.write",
+    handler: withdrawComplianceImpactAssessment,
+    mutation: true,
+  },
+  reviewComplianceImpactAssessment: {
+    action: "api.compliance.review",
+    handler: reviewComplianceImpactAssessment,
+    mutation: true,
+  },
+  listComplianceDocuments: {
+    action: "api.compliance.read",
+    handler: listComplianceDocuments,
+    mutation: false,
+  },
+  generateComplianceDocument: {
+    action: "api.compliance.write",
+    handler: generateComplianceDocument,
+    mutation: true,
+  },
+  getComplianceDocument: {
+    action: "api.compliance.read",
+    handler: getComplianceDocument,
+    mutation: false,
   },
 };
 

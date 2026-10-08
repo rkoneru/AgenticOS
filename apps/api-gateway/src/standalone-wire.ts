@@ -1,4 +1,7 @@
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { PgAuditLog } from "@axis/audit";
+import { HmacSealer, NeedsLimitations, PgDocStore as PgComplianceDocStore } from "@axis/compliance";
 import { HmacSealSigner, PgUsageLedger } from "@axis/billing";
 import {
   Authorizer,
@@ -130,6 +133,17 @@ export async function startStandalone(
       registry,
       marketplace,
       evals,
+      compliance: {
+        docs: new PgComplianceDocStore({ pool, ...role }),
+        // Documents are sealed with a key derived from the gateway's seal key: it survives restarts, so old documents keep verifying.
+        sealer: new HmacSealer(
+          createHmac("sha256", c.sealKey).update("axis-compliance-docs-v1").digest(),
+          "gw-compliance-1",
+        ),
+        limitations: new NeedsLimitations(() =>
+          c.complianceNeedsFile ? readFileSync(c.complianceNeedsFile, "utf8") : undefined,
+        ),
+      },
       audit,
       approvals: new HttpApprovalsClient(c.approvals.url, (t) => approvalTokens.get(t)) as never,
       ledger,

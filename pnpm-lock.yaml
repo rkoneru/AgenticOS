@@ -77,6 +77,9 @@ importers:
       '@axis/billing':
         specifier: workspace:*
         version: link:../../services/billing
+      '@axis/compliance':
+        specifier: workspace:*
+        version: link:../../services/compliance
       '@axis/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -428,6 +431,40 @@ importers:
       pg:
         specifier: ^8.13.0
         version: 8.23.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      fast-check:
+        specifier: ^4.0.0
+        version: 4.10.2
+
+  services/compliance:
+    dependencies:
+      '@axis/abl':
+        specifier: workspace:*
+        version: link:../../packages/abl
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@axis/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../registry
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.1
+      yaml:
+        specifier: ^2.5.0
+        version: 2.9.1
     devDependencies:
       '@types/pg':
         specifier: ^8.11.0

@@ -356,6 +356,57 @@ test("evals: XSS in a case output, a dataset input and a review task is rendered
   expect(dialogs).toEqual([]);
 });
 
+test("compliance: inventory, assessments and a sealed document are read-only, honest and inert against hostile text", async ({
+  page,
+}) => {
+  const dialogs: string[] = [];
+  page.on("dialog", (d) => {
+    dialogs.push(d.message());
+    void d.dismiss();
+  });
+  await login(page, "auditor", "/compliance");
+  await expect(page.getByTestId("evidence-note")).toContainText("not a certification");
+  await expect(page.getByRole("table", { name: "AI systems" })).toContainText("Claims triage");
+  await expect(page.getByRole("table", { name: "AI systems" })).toContainText("<img src=x");
+  await page.getByRole("link", { name: "Impact assessments" }).click();
+  const table = page.getByRole("table", { name: "Impact assessments" });
+  await expect(table).toContainText("review_due_passed");
+  await expect(table).toContainText("<script>");
+  await expect(page.getByRole("button", { name: /submit|approve|reject|generate/i })).toHaveCount(
+    0,
+  );
+  await page.getByRole("link", { name: "Technical documentation" }).click();
+  await page.getByRole("link", { name: "cdoc-0123456789abcdef01234567" }).click();
+  await expect(page.getByTestId("verification")).toContainText("verified");
+  await expect(page.getByRole("table", { name: "Gaps" })).toContainText("<img src=x");
+  await expect(page.getByTestId("document-markdown")).toContainText("<script>");
+  await expect(page.getByRole("table", { name: "Annex IV coverage" })).toContainText(
+    "Harmonised standards",
+  );
+  for (const url of [
+    "/compliance",
+    "/compliance/assessments",
+    "/compliance/documents/cdoc-0123456789abcdef01234567",
+  ]) {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+    expect(await page.locator("main img[src='x'], main script:not([src])").count(), url).toBe(0);
+  }
+  expect(
+    await page.evaluate(() => (window as unknown as { __xss?: unknown }).__xss),
+  ).toBeUndefined();
+  expect(dialogs).toEqual([]);
+});
+
+test("compliance: the billing role has no navigation entry and the records are refused", async ({
+  page,
+}) => {
+  await login(page, "billing", "/usage");
+  await expect(page.getByRole("link", { name: "Compliance" })).toHaveCount(0);
+  await page.goto("/compliance");
+  await expect(page.locator("main").getByRole("alert")).toBeVisible();
+});
+
 test("evals: datasets, suites, baselines and online pages", async ({ page }) => {
   await login(page, "admin", "/evals/datasets");
   await expect(page.getByRole("table", { name: "Dataset versions" })).toContainText(
@@ -512,6 +563,10 @@ const PAGES: Array<[string, string, string]> = [
   ["kill-switch", "/kill-switch", "admin"],
   ["marketplace", "/marketplace", "admin"],
   ["listing", "/marketplace/acme-labs/crm-agent", "admin"],
+  ["compliance inventory", "/compliance", "admin"],
+  ["compliance assessments", "/compliance/assessments", "admin"],
+  ["compliance documents", "/compliance/documents", "admin"],
+  ["compliance document", "/compliance/documents/cdoc-0123456789abcdef01234567", "auditor"],
 ];
 
 for (const theme of ["light", "dark"] as const) {

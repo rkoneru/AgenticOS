@@ -34,30 +34,31 @@ The tenant is `principal.tenantId` and nothing else; no handler can read one fro
 
 ## 3. Operations
 
-| Operation (`operationId`)                                     | Action                           | Backing                                                             |
-| ------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
-| listBlueprints, getBlueprintVersion                           | `api.blueprints.read`            | `BlueprintStore` (memory; registry later)                           |
-| publishBlueprintVersion                                       | `api.blueprints.publish`         | `@axis/abl` `compileAbl` (schema + lint) then the store; 409 dup    |
-| listRuns, getRun                                              | `api.runs.read`                  | run service                                                         |
-| startRun                                                      | `api.runs.start`                 | compiles the stored ABL to a manifest, calls the run service        |
-| signalRun                                                     | `api.runs.signal`                | run service (TKI scheduler signal)                                  |
-| listRunEvents (JSON, or SSE with `Accept: text/event-stream`) | `api.events.read`                | run service event log / feed                                        |
-| listApprovals, decideApproval                                 | `api.approvals.read` / `.decide` | `ApprovalService` (principal built from the credential only)        |
-| listPolicyPacks, publishPolicyPack                            | `api.policies.read` / `.publish` | control-plane `PolicyPackService`                                   |
-| testPolicy (`/policies:test`)                                 | `api.policies.test`              | real `opa eval`, bounded; gates not evaluated                       |
-| listAuditEvents, verifyAuditChain                             | `api.audit.read` / `.verify`     | audit store; verify range <= 50 000 events                          |
-| listKillSwitches, setKillSwitch                               | `api.killswitch.read` / `.write` | kernel gRPC first, then the record store                            |
-| getUsage                                                      | `api.usage.read`                 | billing ledger entries                                              |
-| startEvalRun                                                  | `api.evals.run`                  | 501 until Phase 8                                                   |
-| explainRun                                                    | `api.explanations.read`          | AGIL over the audit trail of the run's trace                        |
-| explainAuditEvent (`/audit/events/{seq}/explanation`)         | `api.audit.read`                 | AGIL                                                                |
-| getMe (`/me`)                                                 | none (any valid credential)      | the principal + control-plane store (tenant, member, scopes)        |
-| getApproval                                                   | `api.approvals.read`             | approvals service (same visibility as the list, else 404)           |
-| activatePolicyPack (`/policies/{versionId}/activate`)         | `api.policies.activate`          | control-plane admin activation (audit + kernel bundle publish)      |
-| list/claim namespace, list/add key, publish, versions, yank   | `api.registry.read` / `.write`   | `@axis/registry` in process; tenant + role from the credential      |
-| resolveRegistryBlueprint (`/registry/resolve`)                | `api.registry.read`              | re-verifies hash, signature, provenance on every read (422 + codes) |
-| marketplace listings, listing, installs                       | `api.marketplace.read`           | `@axis/marketplace` catalog and the tenant's installs               |
-| previewMarketplaceInstall, install, uninstall                 | `api.marketplace.install`        | permission diff + consent digest; install pinned to version+hash    |
+| Operation (`operationId`)                                     | Action                                       | Backing                                                             |
+| ------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| listBlueprints, getBlueprintVersion                           | `api.blueprints.read`                        | `BlueprintStore` (memory; registry later)                           |
+| publishBlueprintVersion                                       | `api.blueprints.publish`                     | `@axis/abl` `compileAbl` (schema + lint) then the store; 409 dup    |
+| listRuns, getRun                                              | `api.runs.read`                              | run service                                                         |
+| startRun                                                      | `api.runs.start`                             | compiles the stored ABL to a manifest, calls the run service        |
+| signalRun                                                     | `api.runs.signal`                            | run service (TKI scheduler signal)                                  |
+| listRunEvents (JSON, or SSE with `Accept: text/event-stream`) | `api.events.read`                            | run service event log / feed                                        |
+| listApprovals, decideApproval                                 | `api.approvals.read` / `.decide`             | `ApprovalService` (principal built from the credential only)        |
+| listPolicyPacks, publishPolicyPack                            | `api.policies.read` / `.publish`             | control-plane `PolicyPackService`                                   |
+| testPolicy (`/policies:test`)                                 | `api.policies.test`                          | real `opa eval`, bounded; gates not evaluated                       |
+| listAuditEvents, verifyAuditChain                             | `api.audit.read` / `.verify`                 | audit store; verify range <= 50 000 events                          |
+| listKillSwitches, setKillSwitch                               | `api.killswitch.read` / `.write`             | kernel gRPC first, then the record store                            |
+| getUsage                                                      | `api.usage.read`                             | billing ledger entries                                              |
+| startEvalRun                                                  | `api.evals.run`                              | 501 until Phase 8                                                   |
+| explainRun                                                    | `api.explanations.read`                      | AGIL over the audit trail of the run's trace                        |
+| explainAuditEvent (`/audit/events/{seq}/explanation`)         | `api.audit.read`                             | AGIL                                                                |
+| getMe (`/me`)                                                 | none (any valid credential)                  | the principal + control-plane store (tenant, member, scopes)        |
+| getApproval                                                   | `api.approvals.read`                         | approvals service (same visibility as the list, else 404)           |
+| activatePolicyPack (`/policies/{versionId}/activate`)         | `api.policies.activate`                      | control-plane admin activation (audit + kernel bundle publish)      |
+| list/claim namespace, list/add key, publish, versions, yank   | `api.registry.read` / `.write`               | `@axis/registry` in process; tenant + role from the credential      |
+| resolveRegistryBlueprint (`/registry/resolve`)                | `api.registry.read`                          | re-verifies hash, signature, provenance on every read (422 + codes) |
+| marketplace listings, listing, installs                       | `api.marketplace.read`                       | `@axis/marketplace` catalog and the tenant's installs               |
+| previewMarketplaceInstall, install, uninstall                 | `api.marketplace.install`                    | permission diff + consent digest; install pinned to version+hash    |
+| compliance systems, impact assessments, documents (14 ops)    | `api.compliance.read` / `.write` / `.review` | `@axis/compliance` in process (ADR 0070-0074); 503 when not wired   |
 
 Role matrix: `policies/control-plane/authz.cases.yaml` (`make policy-test`) and `services/control-plane/test/api-authz.test.ts`.
 
@@ -95,7 +96,7 @@ Internal errors never include exception text.
 `node apps/api-gateway/dist/main.js`; configuration only from the environment, validated by `configFromEnv` (exit 2 with the missing/invalid name, never a secret):
 `GW_DATABASE_URL`, `GW_DB_ROLE`, `GW_REGION` (default `us-east-1`), `GW_PORT` (0), `GW_HOST` (loopback only), `GW_ALLOWED_ORIGINS`, `GW_TRUSTED_PROXIES` (IP literals of reverse proxies, e.g. the console BFF, whose `X-Forwarded-For` names the client for failed-auth throttling; default none; the console relays the header only with `AXIS_TRUST_PROXY=1`), `GW_PEPPER` / `GW_COOKIE_KEY` / `GW_SIGNING_KEY`
 (64 hex each, shared with the control plane so its sessions and API keys verify), `GW_SEAL_KEY`, `GW_RUN_SERVICE_URL` + `GW_RUN_TOKENS_FILE`, `GW_KERNEL_TARGET` +
-`GW_KERNEL_TOKENS_FILE`, `GW_APPROVALS_URL` + `GW_APPROVALS_TOKENS_FILE`, `GW_BUNDLE_DIR`, `GW_RATE_BURST` / `GW_RATE_PER_SEC`. Token files are `{ "<tenant uuid>": "<token>" }`,
+`GW_KERNEL_TOKENS_FILE`, `GW_APPROVALS_URL` + `GW_APPROVALS_TOKENS_FILE`, `GW_BUNDLE_DIR`, `GW_COMPLIANCE_NEEDS_FILE` (optional: a NEEDS.md whose numbered rows are listed as known limitations in generated technical documentation), `GW_RATE_BURST` / `GW_RATE_PER_SEC`. Token files are `{ "<tenant uuid>": "<token>" }`,
 re-read when they change. It refuses `NODE_ENV=production` (dev adapters: static tokens, fake provers, in-memory blueprint store, NEEDS #275) and prints
 `{"event":"listening","port":N}`.
 

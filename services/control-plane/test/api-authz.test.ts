@@ -43,6 +43,8 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.evals.read",
     "api.evals.write",
     "api.evals.review",
+    "api.compliance.read",
+    "api.compliance.write",
   ],
   operator: [
     "api.blueprints.read",
@@ -61,6 +63,7 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.marketplace.read",
     "api.evals.read",
     "api.evals.review",
+    "api.compliance.read",
   ],
   auditor: [
     "api.blueprints.read",
@@ -76,6 +79,8 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.registry.read",
     "api.marketplace.read",
     "api.evals.read",
+    "api.compliance.read",
+    "api.compliance.review",
   ],
   billing: ["api.usage.read"],
   viewer: [
@@ -87,6 +92,7 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.registry.read",
     "api.marketplace.read",
     "api.evals.read",
+    "api.compliance.read",
   ],
 };
 
@@ -165,6 +171,24 @@ describe("api action namespace (ADR 0024)", () => {
     expect((await a.decide({ principal: me("auditor"), action: "api.evals.review" })).allowed).toBe(
       false,
     );
+  });
+
+  it("compliance actions: reads need compliance:read, write and review need compliance:write; a builder key cannot review", async () => {
+    const a = await sharedAuthorizer();
+    expect(requiredScope("api.compliance.read")).toBe("compliance:read");
+    for (const v of ["write", "review"])
+      expect(requiredScope(`api.compliance.${v}`)).toBe("compliance:write");
+    const key = (scopes: string[], role: Role) =>
+      me(role, { credential: "api_key", scopes, apiKeyId: "k" });
+    const can = async (scopes: string[], role: Role, action: ApiAction) =>
+      (await a.decide({ principal: key(scopes, role), action })).allowed;
+    expect(await can(["compliance:read"], "owner", "api.compliance.write")).toBe(false);
+    expect(await can(["compliance:write"], "owner", "api.compliance.write")).toBe(true);
+    expect(await can(["compliance:write"], "builder", "api.compliance.review")).toBe(false);
+    expect(await can(["compliance:write"], "auditor", "api.compliance.review")).toBe(true);
+    expect(await can(["compliance:write"], "auditor", "api.compliance.write")).toBe(false);
+    expect(await can(["runs:write"], "owner", "api.compliance.read")).toBe(false);
+    expect(await can(["compliance:read"], "billing", "api.compliance.read")).toBe(false);
   });
 
   it("scope names: api.<resource>.<verb> maps to <resource>:read|write", () => {

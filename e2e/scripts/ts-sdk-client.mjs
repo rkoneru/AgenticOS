@@ -98,6 +98,17 @@ const ops = {
   evalsRunnersRegister: () => ax.evals.runners.register(a.id, a.description),
   evalsRunnersRevoke: () => ax.evals.runners.revoke(a.id),
   registryAttestations: () => ax.registry.evalAttestations(a.namespace, a.name, a.version),
+  systemCreate: () => ax.compliance.systems.create(a.body),
+  systemGet: () => ax.compliance.systems.get(a.id, a.version),
+  systemList: () => ax.compliance.systems.list(a.params ?? {}),
+  assessmentCreate: () => ax.compliance.assessments.create(a.body),
+  assessmentGet: () => ax.compliance.assessments.get(a.id, a.version),
+  assessmentList: () => ax.compliance.assessments.list(a.params ?? {}),
+  assessmentSubmit: () => ax.compliance.assessments.submit(a.id, a.expected),
+  assessmentReview: () => ax.compliance.assessments.review(a.id, a.expected, a.decision, a.comment),
+  docGenerate: () => ax.compliance.documents.generate(a.blueprint),
+  docGet: () => ax.compliance.documents.get(a.id),
+  docList: () => ax.compliance.documents.list(a.params ?? {}),
 };
 
 try {

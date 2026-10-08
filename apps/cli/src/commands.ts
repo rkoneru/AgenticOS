@@ -19,6 +19,7 @@ import { markdownReference, type Command, type Ctx, type FlagSpec } from "./cli.
 import { configPath, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { CliError, EXIT, UsageError } from "./exit.js";
 import { inert, keyValues, structured, table, asJson, type Column } from "./render.js";
+import { COMPLIANCE_COMMANDS } from "./compliance.js";
 import { EVALS_COMMANDS } from "./evals.js";
 import { REGISTRY_COMMANDS } from "./registry.js";
 
@@ -1358,6 +1359,8 @@ export const COMMANDS: Command[] = [
   ...EVALS_COMMANDS,
 
   ...REGISTRY_COMMANDS,
+
+  ...COMPLIANCE_COMMANDS,
 
   {
     path: ["api"],

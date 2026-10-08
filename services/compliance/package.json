@@ -1,0 +1,38 @@
+{
+  "name": "@axis/compliance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "axis-compliance-check": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bash ../../infra/scripts/with-pg.sh vitest run",
+    "cov": "bash ../../infra/scripts/with-pg.sh vitest run --coverage",
+    "mutation": "bash ../../infra/scripts/with-pg.sh node scripts-mutation.mjs",
+    "check": "node dist/cli.js check",
+    "dev-server": "node dist/main.js"
+  },
+  "dependencies": {
+    "@axis/abl": "workspace:*",
+    "@axis/audit": "workspace:*",
+    "@axis/contracts": "workspace:*",
+    "@axis/control-plane": "workspace:*",
+    "@axis/db": "workspace:*",
+    "@axis/registry": "workspace:*",
+    "pg": "^8.13.0",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "fast-check": "^4.0.0"
+  }
+}

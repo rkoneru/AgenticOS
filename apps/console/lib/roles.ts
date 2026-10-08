@@ -78,6 +78,7 @@ export const NAV: NavItem[] = [
   { href: "/audit", label: "Audit", show: (r) => can(r, "audit.read") },
   { href: "/usage", label: "Usage", show: (r) => can(r, "usage.read") },
   { href: "/registry", label: "Registry", show: () => true },
+  { href: "/compliance", label: "Compliance", show: (r) => r !== "billing" },
   { href: "/marketplace", label: "Marketplace", show: () => true },
   { href: "/kill-switch", label: "Kill switch", show: (r) => RANK[r] >= 50 },
   { href: "/admin", label: "Admin", show: (r) => RANK[r] >= 50 },

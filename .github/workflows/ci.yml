@@ -30,6 +30,7 @@ jobs:
       - run: pnpm cov
       - run: make contracts-lint
       - run: make policy-test
+      - run: make compliance-check
 
   python:
     runs-on: ubuntu-latest
