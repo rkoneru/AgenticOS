@@ -5041,3 +5041,424 @@ cases:
         classification: internal
     expect:
       decision: DENY
+  # ---- Phase 9 (ADR 0072): compliance inventory, impact assessments and technical documentation
+  - name: owner may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: auditor may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: operator may not api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may not api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: owner may api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may not api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.compliance.review
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.review
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY

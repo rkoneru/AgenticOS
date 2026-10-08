@@ -81,6 +81,9 @@ export const API_ACTIONS = [
   "api.evals.admin",
   "api.evals.review",
   "api.explanations.read",
+  "api.compliance.read",
+  "api.compliance.write",
+  "api.compliance.review",
 ] as const;
 export type ApiAction = (typeof API_ACTIONS)[number];
 export type Action = ControlAction | ApiAction;
