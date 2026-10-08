@@ -121,7 +121,7 @@ def build_tool_registry(
 ) -> tuple[ToolRegistry, dict[str, FixtureTool]]:
     """A registry holding ONLY fixtures for the manifest's function tools."""
     meta = case.metadata
-    fixtures = meta.get("tool_fixtures") or {}
+    fixtures = meta.get("tool_fixtures", {})
     if not isinstance(fixtures, Mapping):
         raise ValueError("metadata.tool_fixtures must be an object")
     dry = bool(meta.get("dry_run", False))
