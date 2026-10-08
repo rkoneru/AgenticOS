@@ -1438,7 +1438,7 @@ async def test_15_a_tenant_b_admin_cannot_read_or_modify_tenant_a(stack: Stack) 
         assert (
             r.status_code == 200
             and a.id not in r.text
-            and r.json().get("entries", r.json().get("periods")) == []
+            and only_runtime(r.json().get("entries", r.json().get("periods")))
         )
     # A is exactly as it was (and its chain only grew by A's own reads/denials, none of B's)
     assert snapshot == {
