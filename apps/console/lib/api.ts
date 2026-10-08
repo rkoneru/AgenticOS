@@ -147,6 +147,179 @@ export interface EvalRun {
   status: "queued" | "running" | "passed" | "failed" | "errored";
   score?: number | null;
   threshold?: number | null;
+  blueprint?: { namespace?: string | null; name: string; version: string; content_hash: string };
+  mode?: "ci" | "manual" | "online";
+  pending_human?: number;
+  sample_size?: number;
+  runner_id?: string | null;
+  requested_by?: string;
+  created_at?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  failure_reason?: string | null;
+  scores?: EvalScores | null;
+}
+
+export interface EvalScores {
+  status: "complete" | "pending_human";
+  overall: number | null;
+  per_grader: Record<string, number>;
+  per_case: Record<string, number>;
+  passed: boolean | null;
+  failures: string[];
+  ungraded: number;
+}
+
+export interface EvalGrade {
+  grader_id: string;
+  kind: "deterministic" | "model" | "human";
+  status: "scored" | "ungraded" | "pending" | "error";
+  score: number;
+  detail?: string;
+  provenance?: Record<string, unknown>;
+}
+
+export interface EvalCaseResult {
+  case_id: string;
+  status: string;
+  attempts: number;
+  error?: string | null;
+  score?: number | null;
+  output?: string | null;
+  grades: EvalGrade[];
+  trace?: {
+    trace_id?: string;
+    run_id?: string;
+    exit_reason?: string;
+    gate_decisions?: Array<{
+      action: string;
+      enforcement_point: string;
+      decision: string;
+      reason: string;
+    }>;
+    tool_calls?: Array<{ name: string; ok: boolean; error?: string | null }>;
+  } | null;
+}
+
+export interface EvalRunDetail extends EvalRun {
+  case_results: EvalCaseResult[];
+}
+
+export interface EvalComparison {
+  baseline_run_id: string;
+  comparable: boolean;
+  delta: number | null;
+  tolerance: number;
+  regression: boolean;
+  blocking: boolean;
+  significance?: { method: string; p_value: number } | null;
+}
+
+export interface EvalGateReason {
+  code: string;
+  suite_ref?: string;
+  message: string;
+}
+
+export interface EvalGateRun {
+  suite_ref: string;
+  run_id: string | null;
+  overall: number | null;
+  required_threshold: number;
+  baseline_run_id: string | null;
+  delta: number | null;
+  regression: boolean | null;
+}
+
+export interface EvalGateResult {
+  allowed: boolean;
+  reasons: EvalGateReason[];
+  runs: EvalGateRun[];
+  checked_at: string;
+}
+
+export interface EvalDatasetVersion {
+  name: string;
+  version: number;
+  ref: string;
+  description?: string | null;
+  phi: boolean;
+  case_count: number;
+  content_hash: string;
+  created_at: string;
+  cases?: Array<{ id: string; input: unknown; expected?: unknown; tags?: string[] }>;
+}
+
+export interface EvalSuite {
+  ref: string;
+  dataset_ref: string;
+  graders: Array<{ id: string; kind: "deterministic" | "model" | "human"; weight: number }>;
+  pass_threshold: number;
+  tolerance: number;
+  min_case_score?: number | null;
+  required_for_release?: boolean;
+  suite_hash?: string;
+  created_at?: string;
+}
+
+export interface EvalBaseline {
+  seq: number;
+  run_id: string;
+  overall: number;
+  set_by: string;
+  at: string;
+}
+
+export interface EvalReviewTask {
+  id: string;
+  run_id: string;
+  suite_ref: string;
+  case_id: string;
+  grader_id: string;
+  rubric: string;
+  case_input?: unknown;
+  case_output?: string | null;
+  state: "open" | "claimed" | "needs_adjudication" | "resolved";
+  sla_deadline: string;
+  sla_breached?: boolean;
+  claimed_by?: string | null;
+  double_grade?: boolean;
+  grades?: Array<{ reviewer: string; score: number; comment: string }>;
+  resolution?: { score: number; method: string } | null;
+  blueprint?: { name: string; version: string };
+}
+
+export interface EvalSamplingConfig {
+  id: string;
+  blueprint_name: string;
+  suite_ref: string;
+  rate: number;
+  max_per_hour: number;
+  redaction: "phi" | "always";
+  enabled: boolean;
+  alert_threshold?: number | null;
+}
+
+export interface EvalOnlineSummary {
+  sampling_id: string;
+  blueprint_name: string;
+  suite_ref: string;
+  enabled: boolean;
+  count: number;
+  mean: number | null;
+  alerting: boolean;
+  alert_threshold: number | null;
+  recent: Array<{ at: string; score: number; blueprint_version: string; trace_id: string | null }>;
+}
+
+export interface EvalAttestation {
+  run_id: string;
+  suite_ref: string;
+  overall: number;
+  content_hash: string;
+  attached_at: string;
+  verified: boolean;
+  predicate: Record<string, unknown> | null;
 }
 
 export interface ProblemBody {
@@ -509,9 +682,44 @@ export interface Api {
     to: string;
     group_by?: "meter" | "model" | "blueprint" | "day";
   }): Promise<{ items: UsageRow[] }>;
-  // evals
-  listEvalRuns(): Promise<Page<EvalRun>>;
-  startEvalRun(suite: string, blueprint: { name: string; version: string }): Promise<EvalRun>;
+  // evals (OpenAPI 1.3.0 / 1.4.0)
+  listEvalRuns(q?: {
+    limit?: number;
+    cursor?: string;
+    suite?: string;
+    blueprint?: string;
+    content_hash?: string;
+    status?: string;
+  }): Promise<Page<EvalRun>>;
+  startEvalRun(
+    suite: string,
+    blueprint: { namespace?: string; name: string; version: string },
+  ): Promise<EvalRun>;
+  getEvalRun(id: string): Promise<EvalRunDetail>;
+  getEvalComparison(id: string): Promise<EvalComparison | null>;
+  gateEval(
+    blueprint: { namespace?: string; name: string; version: string; content_hash: string },
+    suites?: Array<{ ref: string; threshold?: number }>,
+  ): Promise<EvalGateResult>;
+  listEvalDatasets(): Promise<{ items: EvalDatasetVersion[] }>;
+  getEvalDataset(name: string, version: number | "latest"): Promise<EvalDatasetVersion>;
+  listEvalSuites(): Promise<{ items: EvalSuite[] }>;
+  getEvalSuite(ref: string): Promise<EvalSuite>;
+  listEvalBaselines(blueprint: string, suite: string): Promise<{ items: EvalBaseline[] }>;
+  listEvalReviewTasks(q?: {
+    state?: string;
+    run_id?: string;
+  }): Promise<{ items: EvalReviewTask[] }>;
+  claimEvalReviewTask(id: string): Promise<EvalReviewTask>;
+  gradeEvalReviewTask(id: string, score: number, comment: string): Promise<EvalReviewTask>;
+  skipEvalReviewTask(id: string, reason: string): Promise<EvalReviewTask>;
+  listEvalSampling(): Promise<{ items: EvalSamplingConfig[] }>;
+  getEvalOnlineSummary(): Promise<{ items: EvalOnlineSummary[] }>;
+  listEvalAttestations(
+    namespace: string,
+    name: string,
+    version: string,
+  ): Promise<{ items: EvalAttestation[] }>;
   // AGIL (ADDITIVE)
   explainRun(id: string): Promise<Explanation>;
   explainApproval(id: string): Promise<Explanation>;
@@ -677,9 +885,39 @@ export function createApi(opts: ClientOptions = {}): Api {
     listKillSwitches: () => json("GET", "/v1/kill-switches"),
     setKillSwitch: (req) => json("PUT", "/v1/kill-switches", { body: req }),
     getUsage: (q) => json("GET", "/v1/usage", { query: q }),
-    listEvalRuns: () => json("GET", "/v1/evals/runs"),
+    listEvalRuns: (q) => json("GET", "/v1/evals/runs", { query: q ?? {} }),
     startEvalRun: (suite, blueprint) =>
       json("POST", "/v1/evals/runs", { body: { suite, blueprint }, idempotent: true }),
+    getEvalRun: (id) => json("GET", `/v1/evals/runs/${enc(id)}`),
+    getEvalComparison: async (id) =>
+      (
+        await json<{ comparison?: EvalComparison | null }>(
+          "GET",
+          `/v1/evals/runs/${enc(id)}/comparison`,
+        )
+      )?.comparison ?? null,
+    gateEval: (blueprint, suites) =>
+      json("POST", "/v1/evals/gate", { body: { blueprint, ...(suites ? { suites } : {}) } }),
+    listEvalDatasets: () => json("GET", "/v1/evals/datasets"),
+    getEvalDataset: (name, version) =>
+      json("GET", `/v1/evals/datasets/${enc(name)}/versions/${enc(String(version))}`),
+    listEvalSuites: () => json("GET", "/v1/evals/suites"),
+    getEvalSuite: (ref) => json("GET", `/v1/evals/suites/${enc(ref)}`),
+    listEvalBaselines: (blueprint, suite) =>
+      json("GET", "/v1/evals/baselines", { query: { blueprint, suite } }),
+    listEvalReviewTasks: (q) => json("GET", "/v1/evals/reviews/tasks", { query: q ?? {} }),
+    claimEvalReviewTask: (id) => json("POST", `/v1/evals/reviews/tasks/${enc(id)}/claim`),
+    gradeEvalReviewTask: (id, score, comment) =>
+      json("POST", `/v1/evals/reviews/tasks/${enc(id)}/grade`, { body: { score, comment } }),
+    skipEvalReviewTask: (id, reason) =>
+      json("POST", `/v1/evals/reviews/tasks/${enc(id)}/skip`, { body: { reason } }),
+    listEvalSampling: () => json("GET", "/v1/evals/sampling"),
+    getEvalOnlineSummary: () => json("GET", "/v1/evals/online/summary"),
+    listEvalAttestations: (ns, name, version) =>
+      json(
+        "GET",
+        `/v1/registry/blueprints/${enc(ns)}/${enc(name)}/versions/${enc(version)}/eval-attestations`,
+      ),
     explainRun: async (id) =>
       normalizeExplanation(await json("GET", `/v1/runs/${enc(id)}/explanation`)),
     // An approval is explained by the explanation of the run it belongs to (AGIL explains runs and audited decisions).

@@ -291,9 +291,115 @@ test("marketplace: a builder cannot install", async ({ page }) => {
   await expect(page.getByText("Your role cannot install listings")).toBeVisible();
 });
 
-test("evals shows a graceful not-implemented state", async ({ page }) => {
+test("evals: runs list with live status, start form for builders, run detail with per-case drill-down", async ({
+  page,
+}) => {
   await login(page, "admin", "/evals");
-  await expect(page.getByRole("heading", { name: "Evals are not available yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evals", level: 1 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Evals sections" })).toBeVisible();
+  const table = page.getByRole("table", { name: "Eval runs" });
+  await expect(table).toContainText("passed");
+  await expect(table).toContainText("awaiting 2 human grade(s)");
+  await page.getByLabel("Status").selectOption("running");
+  await expect(table).not.toContainText("passed");
+  await page.getByLabel("Status").selectOption("");
+  // start a run
+  await page.getByLabel(/Blueprint \(namespace/).fill("not a ref");
+  await expect(page.getByRole("button", { name: "Start eval run" })).toBeDisabled();
+  await page.getByLabel(/Blueprint \(namespace/).fill("hello-agent@1.0.0");
+  await page.getByRole("button", { name: "Start eval run" }).click();
+  await expect(page).toHaveURL(/\/evals\/runs\//);
+  // the passed run: scores, chart, case drill-down
+  await page.goto("/evals");
+  await page.getByRole("link", { name: "e1111111" }).click();
+  await expect(page.getByTestId("run-score")).toContainText("0.962");
+  await expect(page.getByTestId("score-chart")).toBeVisible();
+  await page.getByTestId("case-q1").locator("summary").click();
+  await expect(
+    page.getByTestId("case-q1").getByRole("table", { name: "Grades of case q1" }),
+  ).toContainText("human_review");
+  await expect(
+    page.getByTestId("case-q1").getByRole("link", { name: /^abababababab/ }),
+  ).toHaveAttribute("href", /\/audit\?trace_id=/);
+});
+
+test("evals: a regressed run shows the baseline comparison and the chart has a table view", async ({
+  page,
+}) => {
+  await login(page, "admin", "/evals/runs/e2222222-2222-4222-8222-222222222222");
+  await expect(page.getByTestId("baseline-compare")).toContainText("regression: blocks release");
+  await page.getByTestId("score-chart").getByRole("button", { name: "Show table" }).click();
+  await expect(page.getByRole("table", { name: "Score per grader data" })).toContainText(
+    "has-facts",
+  );
+});
+
+test("evals: XSS in a case output, a dataset input and a review task is rendered inert", async ({
+  page,
+}) => {
+  const dialogs: string[] = [];
+  page.on("dialog", (d) => {
+    dialogs.push(d.message());
+    void d.dismiss();
+  });
+  await login(page, "admin", "/evals/runs/e1111111-1111-4111-8111-111111111111");
+  await page.getByTestId("case-q1").locator("summary").click();
+  await expect(page.getByTestId("case-output").first()).toContainText("<img src=x");
+  await page.goto("/evals/datasets/answer-cases%401");
+  await expect(page.getByRole("table", { name: "Cases" })).toContainText("<script>");
+  await page.goto("/evals/review");
+  await expect(page.getByTestId("task-output").first()).toContainText("<img src=x");
+  expect(await page.locator("main img[src='x'], main script").count()).toBe(0);
+  expect(
+    await page.evaluate(() => (window as unknown as { __xss?: number }).__xss),
+  ).toBeUndefined();
+  expect(dialogs).toEqual([]);
+});
+
+test("evals: datasets, suites, baselines and online pages", async ({ page }) => {
+  await login(page, "admin", "/evals/datasets");
+  await expect(page.getByRole("table", { name: "Dataset versions" })).toContainText(
+    "answer-cases@1",
+  );
+  await page.goto("/evals/suites");
+  await page.getByRole("link", { name: "answers@1.0.0" }).click();
+  await expect(page.getByRole("table", { name: "Graders" })).toContainText("human");
+  await page.goto("/evals/baselines");
+  await page.getByLabel("Blueprint name").fill("hello-agent");
+  await page.getByLabel("Suite").fill("answers@1.0.0");
+  await page.getByRole("button", { name: "Show history" }).click();
+  await expect(page.getByRole("table", { name: "Baseline history" })).toContainText(
+    "release:marketplace",
+  );
+  await page.getByRole("button", { name: /Compare run e2222/ }).click();
+  await expect(page.getByTestId("compare-summary")).toContainText("blocks the release");
+  await expect(page.getByText("Per grader: this run against the baseline")).toBeVisible();
+  await page.goto("/evals/online");
+  await expect(page.getByTestId("sampling-prod-health")).toContainText("3 sample(s)");
+  await expect(page.getByTestId("history-chart")).toBeVisible();
+});
+
+test("evals: the review queue claims, grades, and a viewer cannot", async ({ page }) => {
+  await login(page, "operator", "/evals/review");
+  await page.getByRole("button", { name: "Claim to grade" }).click();
+  await page.getByLabel("Score (0 to 1) for q1").fill("0.8");
+  await page.getByLabel("Comment for q1").fill("fine");
+  await page.getByRole("button", { name: "Submit grade" }).click();
+  await page.getByLabel("State").selectOption("resolved");
+  await expect(page.getByTestId("task-q1")).toContainText("resolved");
+  await login(page, "viewer", "/evals/review");
+  await expect(page.getByRole("button", { name: "Claim to grade" })).toHaveCount(0);
+});
+
+test("evals: the release gate panel on a blueprint version shows the verdict, the reasons and the eval history", async ({
+  page,
+}) => {
+  await login(page, "admin", "/blueprints/hello-agent/1.0.0");
+  const panel = page.getByTestId("gate-panel");
+  await expect(panel.getByTestId("gate-verdict")).toHaveText("ALLOWED");
+  await expect(panel.getByRole("table", { name: "Eval runs of this version" })).toContainText(
+    "answers@1.0.0",
+  );
 });
 
 test("usage: meters, chart and table view", async ({ page }) => {
@@ -391,6 +497,14 @@ const PAGES: Array<[string, string, string]> = [
   ["approval", `/approvals/${SEED_APPROVAL}`, "builder"],
   ["policies", "/policies", "admin"],
   ["evals", "/evals", "admin"],
+  ["eval run", "/evals/runs/e2222222-2222-4222-8222-222222222222", "admin"],
+  ["eval datasets", "/evals/datasets", "admin"],
+  ["eval dataset", "/evals/datasets/answer-cases%401", "admin"],
+  ["eval suites", "/evals/suites", "admin"],
+  ["eval suite", "/evals/suites/answers%401.0.0", "admin"],
+  ["eval baselines", "/evals/baselines", "admin"],
+  ["eval review queue", "/evals/review", "operator"],
+  ["eval online", "/evals/online", "admin"],
   ["audit", "/audit", "admin"],
   ["usage", "/usage", "admin"],
   ["admin", "/admin", "admin"],

@@ -4,6 +4,7 @@ import { Badge, Button, EmptyState, Input } from "@axis/ui";
 import { api, type ResolvedBlueprint } from "@/lib/api";
 import { useAction, useResource } from "@/lib/hooks";
 import { ErrorNote, PageHeader, ResourceView } from "@/components/common";
+import { ReleaseGatePanel } from "@/components/evals";
 
 /**
  * The registry from the console is READ-ONLY on purpose: publishing needs the publisher's Ed25519 private key and the platform
@@ -85,6 +86,14 @@ export default function RegistryPage() {
           <dt className="text-[var(--axis-muted)]">State</dt>
           <dd>{out.state ?? "-"}</dd>
         </dl>
+      ) : null}
+      {out ? (
+        <ReleaseGatePanel
+          namespace={out.namespace}
+          name={out.name}
+          version={out.version}
+          contentHash={out.content_hash}
+        />
       ) : null}
     </>
   );

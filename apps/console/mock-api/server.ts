@@ -53,6 +53,367 @@ interface State {
 
 const iso = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString();
 
+// ---- Eval Hub fixtures ------------------------------------------------------------------------------------------------------------
+const EV_HASH = "d".repeat(64);
+const EV_SUITE = "answers@1.0.0";
+const evGrade = (
+  grader_id: string,
+  kind: string,
+  score: number,
+  status = "scored",
+  detail = "",
+) => ({
+  grader_id,
+  kind,
+  status,
+  score,
+  detail,
+  provenance: {},
+});
+const evRun = (id: string, version: string, over: J = {}): J => ({
+  id,
+  suite: EV_SUITE,
+  status: "passed",
+  score: 0.9625,
+  threshold: 0.5,
+  blueprint: { name: "hello-agent", version, content_hash: EV_HASH },
+  mode: "ci",
+  pending_human: 0,
+  runner_id: "runner-a",
+  created_at: iso(-3_600_000),
+  finished_at: iso(-3_500_000),
+  scores: {
+    status: "complete",
+    overall: 0.9625,
+    per_grader: { "has-facts": 1, tone: 0.95, reviewer: 0.9 },
+    per_case: { q1: 1, q2: 0.9 },
+    passed: true,
+    failures: [],
+    ungraded: 0,
+  },
+  ...over,
+});
+const EV_RUNS: J[] = [
+  evRun("e1111111-1111-4111-8111-111111111111", "1.0.0"),
+  evRun("e2222222-2222-4222-8222-222222222222", "1.1.0", {
+    score: 0.61,
+    created_at: iso(-1_800_000),
+    finished_at: iso(-1_700_000),
+    scores: {
+      status: "complete",
+      overall: 0.61,
+      per_grader: { "has-facts": 0.5, tone: 0.55, reviewer: 0.65 },
+      per_case: { q1: 0.9, q2: 0.3 },
+      passed: true,
+      failures: [],
+      ungraded: 0,
+    },
+  }),
+  evRun("e3333333-3333-4333-8333-333333333333", "1.2.0", {
+    status: "running",
+    score: null,
+    pending_human: 2,
+    finished_at: null,
+    scores: null,
+  }),
+];
+const evCases = (id: string): J[] => [
+  {
+    case_id: "q1",
+    status: "completed",
+    attempts: 1,
+    score: 0.9,
+    output: `Claim 1001 is open. ${XSS}`,
+    grades: [
+      evGrade("has-facts", "deterministic", 1),
+      evGrade("tone", "model", 0.95, "scored", "scripted rubric check"),
+      evGrade("reviewer", "human", 0.9, "scored", "human_review:single"),
+    ],
+    trace: {
+      trace_id: "ab".repeat(16),
+      gate_decisions: [
+        {
+          action: "openai/gpt-4o",
+          enforcement_point: "model_call",
+          decision: "ALLOW",
+          reason: "tenant-evals/allow-agent-model-calls",
+        },
+      ],
+    },
+  },
+  {
+    case_id: "q2",
+    status: "completed",
+    attempts: 1,
+    score: id.startsWith("e2") ? 0.3 : 0.9,
+    output: "Open.",
+    grades: [
+      evGrade("has-facts", "deterministic", 0),
+      evGrade("tone", "model", 0.15),
+      evGrade("reviewer", "human", 0.4),
+    ],
+    trace: null,
+  },
+];
+const EV_TASKS: J[] = [
+  {
+    id: "rt-00000000000000000000000000000001",
+    run_id: "e3333333-3333-4333-8333-333333333333",
+    suite_ref: EV_SUITE,
+    case_id: "q1",
+    grader_id: "reviewer",
+    rubric: "Would you send this answer to a customer as it is?",
+    case_output: `Claim 1001 is open. ${XSS}`,
+    state: "open",
+    sla_deadline: iso(86_400_000),
+    sla_breached: false,
+    double_grade: false,
+    grades: [],
+    resolution: null,
+  },
+];
+function evalsRoute(
+  p: string,
+  method: string,
+  body: J,
+  url: URL,
+  can: (rank: number) => boolean,
+): { status: number; body: unknown } | undefined {
+  let m: RegExpExecArray | null;
+  if (p === "/evals/runs" && method === "GET") {
+    const st = url.searchParams.get("status");
+    const bp = url.searchParams.get("blueprint");
+    return {
+      status: 200,
+      body: {
+        items: EV_RUNS.filter(
+          (r) => (!st || r["status"] === st) && (!bp || (r["blueprint"] as J)["name"] === bp),
+        ),
+      },
+    };
+  }
+  if (p === "/evals/runs" && method === "POST") {
+    if (!can(50))
+      return { status: 403, body: { title: "forbidden", status: 403, code: "forbidden" } };
+    return {
+      status: 202,
+      body: { ...EV_RUNS[2], id: "e4444444-4444-4444-8444-444444444444", status: "queued" },
+    };
+  }
+  m = /^\/evals\/runs\/([^/]+)$/.exec(p);
+  if (m && method === "GET") {
+    const r = EV_RUNS.find((x) => x["id"] === m![1]);
+    if (!r) return { status: 404, body: { title: "not found", status: 404, code: "not_found" } };
+    return {
+      status: 200,
+      body: { ...r, case_results: r["status"] === "running" ? [] : evCases(String(r["id"])) },
+    };
+  }
+  m = /^\/evals\/runs\/([^/]+)\/comparison$/.exec(p);
+  if (m)
+    return {
+      status: 200,
+      body: m[1]!.startsWith("e2")
+        ? {
+            comparison: {
+              baseline_run_id: EV_RUNS[0]!["id"],
+              comparable: true,
+              delta: -0.3525,
+              tolerance: 0.05,
+              regression: true,
+              blocking: true,
+              significance: null,
+            },
+          }
+        : {},
+    };
+  if (p === "/evals/gate" && method === "POST") {
+    const bp = body["blueprint"] as J;
+    const bad = bp["version"] !== "1.0.0";
+    return {
+      status: 200,
+      body: {
+        allowed: !bad,
+        blueprint: bp,
+        reasons: bad
+          ? [
+              {
+                code: "regression",
+                suite_ref: EV_SUITE,
+                message: "score dropped by 0.3525 vs the baseline (tolerance 0.05)",
+              },
+            ]
+          : [],
+        runs: [
+          {
+            suite_ref: EV_SUITE,
+            run_id: EV_RUNS[bad ? 1 : 0]!["id"],
+            overall: bad ? 0.61 : 0.9625,
+            required_threshold: 0.5,
+            sample_size: 2,
+            finished_at: iso(),
+            baseline_run_id: EV_RUNS[0]!["id"],
+            delta: bad ? -0.3525 : 0,
+            regression: bad,
+            p_value: null,
+          },
+        ],
+        checked_at: iso(),
+      },
+    };
+  }
+  if (p === "/evals/datasets" && method === "GET")
+    return {
+      status: 200,
+      body: {
+        items: [
+          {
+            name: "answer-cases",
+            version: 1,
+            ref: "answer-cases@1",
+            phi: false,
+            case_count: 2,
+            content_hash: "e".repeat(64),
+            created_at: iso(-7_200_000),
+          },
+        ],
+      },
+    };
+  m = /^\/evals\/datasets\/([^/]+)\/versions\/([^/]+)$/.exec(p);
+  if (m)
+    return {
+      status: 200,
+      body: {
+        name: m[1],
+        version: 1,
+        ref: `${m[1]}@1`,
+        phi: false,
+        case_count: 2,
+        content_hash: "e".repeat(64),
+        created_at: iso(-7_200_000),
+        cases: [
+          { id: "q1", input: XSS, expected: { contains: ["claim 1001"] } },
+          { id: "q2", input: "What is the status of claim 1002?" },
+        ],
+      },
+    };
+  const suite = {
+    ref: EV_SUITE,
+    dataset_ref: "answer-cases@1",
+    graders: [
+      { id: "has-facts", kind: "deterministic", weight: 1 },
+      { id: "tone", kind: "model", weight: 1 },
+      { id: "reviewer", kind: "human", weight: 1 },
+    ],
+    pass_threshold: 0.5,
+    tolerance: 0.05,
+    required_for_release: true,
+    suite_hash: "f".repeat(64),
+    created_at: iso(-7_200_000),
+  };
+  if (p === "/evals/suites" && method === "GET") return { status: 200, body: { items: [suite] } };
+  if (/^\/evals\/suites\/[^/]+$/.test(p)) return { status: 200, body: suite };
+  if (p === "/evals/baselines")
+    return {
+      status: 200,
+      body: {
+        items: [
+          {
+            seq: 1,
+            run_id: EV_RUNS[0]!["id"],
+            overall: 0.9625,
+            set_by: "release:marketplace",
+            at: iso(-3_000_000),
+          },
+        ],
+      },
+    };
+  if (p === "/evals/reviews/tasks" && method === "GET") {
+    const st = url.searchParams.get("state");
+    return { status: 200, body: { items: EV_TASKS.filter((t) => !st || t["state"] === st) } };
+  }
+  m = /^\/evals\/reviews\/tasks\/([^/]+)\/(claim|grade|skip)$/.exec(p);
+  if (m && method === "POST") {
+    if (!can(50))
+      return { status: 403, body: { title: "forbidden", status: 403, code: "forbidden" } };
+    const t = EV_TASKS.find((x) => x["id"] === m![1]);
+    if (!t) return { status: 404, body: { title: "not found", status: 404, code: "not_found" } };
+    if (m[2] === "claim") t["state"] = "claimed";
+    if (m[2] === "grade") {
+      t["state"] = "resolved";
+      t["resolution"] = { score: body["score"], method: "single" };
+    }
+    if (m[2] === "skip") t["state"] = "open";
+    return { status: 200, body: t };
+  }
+  if (p === "/evals/sampling")
+    return {
+      status: 200,
+      body: {
+        items: [
+          {
+            id: "prod-health",
+            blueprint_name: "hello-agent",
+            suite_ref: EV_SUITE,
+            rate: 0.5,
+            max_per_hour: 100,
+            redaction: "always",
+            enabled: true,
+            alert_threshold: 0.7,
+          },
+        ],
+      },
+    };
+  if (p === "/evals/online/summary")
+    return {
+      status: 200,
+      body: {
+        items: [
+          {
+            sampling_id: "prod-health",
+            blueprint_name: "hello-agent",
+            suite_ref: EV_SUITE,
+            enabled: true,
+            count: 3,
+            mean: 0.8,
+            alerting: false,
+            alert_threshold: 0.7,
+            recent: [
+              {
+                at: iso(-1000),
+                score: 0.95,
+                blueprint_version: "1.0.0",
+                trace_id: "ab".repeat(16),
+              },
+              { at: iso(-2000), score: 0.15, blueprint_version: "1.0.0", trace_id: null },
+              { at: iso(-3000), score: 0.95, blueprint_version: "1.0.0", trace_id: null },
+            ],
+          },
+        ],
+      },
+    };
+  m = /^\/registry\/blueprints\/[^/]+\/[^/]+\/versions\/[^/]+\/eval-attestations$/.exec(p);
+  if (m)
+    return {
+      status: 200,
+      body: {
+        items: [
+          {
+            run_id: EV_RUNS[0]!["id"],
+            suite_ref: EV_SUITE,
+            overall: 0.9625,
+            content_hash: EV_HASH,
+            attached_at: iso(-3_400_000),
+            verified: true,
+            predicate: { status: "passed" },
+            envelope: { payloadType: "x", payload: "", signatures: [] },
+          },
+        ],
+      },
+    };
+  return undefined;
+}
+
 function ablDoc(name: string, version: string): J {
   return {
     apiVersion: "abl.axis.dev/v1",
@@ -832,7 +1193,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       if (deny(40)) return;
       return send(res, 200, { items: usageRows(url.searchParams.get("group_by") ?? "meter") });
     }
-    if (p === "/evals/runs") return problem(res, 501, "internal", "Eval Hub is not implemented");
+    // ---- Eval Hub (OpenAPI 1.3.0 / 1.4.0): enough state for the console pages; hostile text is in the data on purpose ----
+    if (p.startsWith("/evals/") || /\/versions\/[^/]+\/eval-attestations$/.test(p)) {
+      const r = evalsRoute(p, method, body, url, (min) => need(role, min));
+      if (r) return send(res, r.status, r.body);
+    }
     const listingOut = (l: J): J => ({
       namespace: "acme-labs",
       name: l["id"],
