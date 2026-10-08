@@ -486,12 +486,28 @@ describe("eval-hub retention purge", () => {
     await admin.query("SET session_replication_role = origin");
     const g = build();
     const p = officer(t);
-    await g.holds.placeHold(p, { scope: "subject", reason: "dispute", groups: [[{ kind: "subject_key", value: BOB.subjectKey }]] });
+    await g.holds.placeHold(p, {
+      scope: "subject",
+      reason: "dispute",
+      groups: [[{ kind: "subject_key", value: BOB.subjectKey }]],
+    });
     const dry = await g.retention.run(p, { dryRun: true, classes: ["eval_data"] });
-    expect(dry.classes[0]).toMatchObject({ status: "dry_run", matched: 2, purged: 0, protectedByHold: 1 });
+    expect(dry.classes[0]).toMatchObject({
+      status: "dry_run",
+      matched: 2,
+      purged: 0,
+      protectedByHold: 1,
+    });
     const rep = await g.retention.run(p, { classes: ["eval_data"] });
-    expect(rep.classes[0]).toMatchObject({ status: "purged", matched: 2, purged: 1, protectedByHold: 1 });
-    const left = (await admin.query("SELECT key FROM eval_hub_docs WHERE tenant_id=$1 AND coll='runs'", [t])).rows.map((r) => r.key);
+    expect(rep.classes[0]).toMatchObject({
+      status: "purged",
+      matched: 2,
+      purged: 1,
+      protectedByHold: 1,
+    });
+    const left = (
+      await admin.query("SELECT key FROM eval_hub_docs WHERE tenant_id=$1 AND coll='runs'", [t])
+    ).rows.map((r) => r.key);
     expect(left).toEqual(["run-bob"]);
   });
 });

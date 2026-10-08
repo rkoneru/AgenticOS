@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ApprovalsProvider, type ApprovalLike } from "../src/index.js";
 
-const ctx = { tenantId: "t1", now: new Date(), pseudonym: async (_k: string, v: string) => `anon_${v.length}` };
+const ctx = {
+  tenantId: "t1",
+  now: new Date(),
+  pseudonym: async (_k: string, v: string) => `anon_${v.length}`,
+};
 
 function store(rows: ApprovalLike[]) {
   return {
@@ -16,7 +20,15 @@ function store(rows: ApprovalLike[]) {
   };
 }
 const row = (id: string, who: string, over: Partial<ApprovalLike> = {}): ApprovalLike => ({
-  id, version: 1, requester: { type: "human", id: who }, conflicted: [who, "other"], claimed_by: who, decided_by: who, comment: `by ${who}`, reason: "r", ...over,
+  id,
+  version: 1,
+  requester: { type: "human", id: who },
+  conflicted: [who, "other"],
+  claimed_by: who,
+  decided_by: who,
+  comment: `by ${who}`,
+  reason: "r",
+  ...over,
 });
 
 describe("ApprovalsProvider over the in-memory approvals store port", () => {
@@ -38,6 +50,8 @@ describe("ApprovalsProvider over the in-memory approvals store port", () => {
   it("works with no store configured", async () => {
     const p = new ApprovalsProvider({});
     expect(await p.find(ctx, [{ kind: "user_ref", value: "x" }])).toEqual({ count: 0 });
-    expect(await p.erase(ctx, [{ kind: "user_ref", value: "x" }])).toMatchObject({ pseudonymised: 0 });
+    expect(await p.erase(ctx, [{ kind: "user_ref", value: "x" }])).toMatchObject({
+      pseudonymised: 0,
+    });
   });
 });

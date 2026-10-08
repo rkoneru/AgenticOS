@@ -1,5 +1,12 @@
 # Changelog
 
+## Phase 9 / B - data governance (`services/data-governance`, migration 0020, ADR 0080-0083)
+
+DSAR engine (30-day SLA, verification hook, signed export bundle, idempotent resumable erase with a mandatory verification pass and crypto-shred), retention engine
+(class bounds, legal holds, dry run, purge reports), providers for memory, channels, voice transcripts, control-plane members, billing, eval hub, run logs, approvals,
+`ResidencyPolicy` wired into memory/channels/eval-hub/billing/registry write paths and the runtime `ModelGateway`, PHI canary harness (two real leaks fixed: channels Unicode
+redaction, eval dataset description). Status: Prototype (NEEDS 3200-3217; no public API/SDK/CLI/console surface yet). Mutation check: 14/14 killed.
+
 ## Phase 8 - exit: evals gate releases, proven end to end (`make e2e-phase8`, `make console-e2e`, `make evals`)
 
 **One additive contract change: OpenAPI 1.4.0** (ADR 0059: `listRegistryEvalAttestations`, re-verified on every read; FREEZE regenerated, SDKs and
