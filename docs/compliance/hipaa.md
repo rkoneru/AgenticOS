@@ -8,27 +8,27 @@ Maps the administrative, physical and technical safeguards of the HIPAA Security
 
 Matrix version 1. Rows: 19 (Built 3, Prototype 6, Designed 2, Gap 8).
 
-| id                | requirement                                                                                                                                                              | status    | evidence                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------ |
-| HIPAA-164.308a1   | A security management process includes risk analysis, risk management, sanction policy and review of information system activity.                                        | Prototype | `docs/security/risk-kernel-threat-model.md`<br>`services/agil/test/explain.test.ts`                          |
-| HIPAA-164.308a2   | A security official is identified and responsible for the security programme.                                                                                            | Gap       | none                                                                                                         |
-| HIPAA-164.308a3   | Workforce access to ePHI is authorised, supervised and terminated appropriately.                                                                                         | Prototype | `services/control-plane/test/scim.test.ts`<br>`services/control-plane/test/admin.test.ts`                    |
-| HIPAA-164.308a4   | Information access management restricts access to ePHI to authorised persons and applications.                                                                           | Built     | `services/memory/test/isolation.test.ts`<br>`services/control-plane/test/api-authz.test.ts`<br>`policy-test` |
-| HIPAA-164.308a5   | A security awareness and training programme exists for the workforce.                                                                                                    | Gap       | none                                                                                                         |
-| HIPAA-164.308a6   | Security incidents are identified, responded to, mitigated and documented.                                                                                               | Designed  | `services/audit/test/export.test.ts`<br>`docs/runbooks/risk-kernel.md`                                       |
-| HIPAA-164.308a7   | A contingency plan covers data backup, disaster recovery and emergency mode operation, and is tested.                                                                    | Gap       | none                                                                                                         |
-| HIPAA-164.308a8   | Periodic technical and non-technical evaluation of the security programme is performed.                                                                                  | Prototype | `e2e-phase6`<br>`e2e-phase4`                                                                                 |
-| HIPAA-164.308b    | A business associate contract is in place before a business associate creates, receives, maintains or transmits ePHI.                                                    | Gap       | none                                                                                                         |
-| HIPAA-164.310a    | Facility access controls limit physical access to systems that hold ePHI.                                                                                                | Gap       | none                                                                                                         |
-| HIPAA-164.310bc   | Workstation use and security are specified and implemented.                                                                                                              | Gap       | none                                                                                                         |
-| HIPAA-164.310d    | Hardware and media containing ePHI are controlled on receipt, movement, re-use and disposal.                                                                             | Gap       | none                                                                                                         |
-| HIPAA-164.312a1   | Technical access control allows only authorised persons and software to access ePHI, with unique user identification, emergency access, automatic logoff and encryption. | Prototype | `services/control-plane/test/sessions.test.ts`<br>`packages/db/test/tenancy.test.ts`                         |
-| HIPAA-164.312b    | Audit controls record and examine activity in systems that contain or use ePHI.                                                                                          | Built     | `services/audit/test/pg.test.ts`<br>`packages/contracts/test/audit-chain.test.ts`<br>`e2e-core`              |
-| HIPAA-164.312c    | Policies protect ePHI from improper alteration or destruction, and mechanisms authenticate ePHI.                                                                         | Built     | `services/audit/test/checkpoint.test.ts`<br>`packages/db/test/hardening.test.ts`                             |
-| HIPAA-164.312d    | Persons or entities seeking access to ePHI are authenticated.                                                                                                            | Prototype | `services/control-plane/test/sso.test.ts`<br>`services/channels/test/jwt.test.ts`                            |
-| HIPAA-164.312e    | Transmission security guards ePHI against unauthorised access in transit, including integrity controls and encryption.                                                   | Designed  | `apps/api-gateway/test/hardening.test.ts`<br>`services/channels/test/crypto.test.ts`                         |
-| HIPAA-164.514d    | Uses and disclosures of PHI are limited to the minimum necessary, with redaction and role-based limits.                                                                  | Prototype | `services/memory/test/redact.test.ts`<br>`runtime/tests/test_redaction_tools.py`<br>`e2e-phase5`             |
-| HIPAA-164.404-408 | Breaches of unsecured PHI are notified to individuals, the regulator and in some cases the media, without unreasonable delay.                                            | Gap       | none                                                                                                         |
+| id | requirement | status | evidence |
+| --- | --- | --- | --- |
+| HIPAA-164.308a1 | A security management process includes risk analysis, risk management, sanction policy and review of information system activity. | Prototype | `docs/security/risk-kernel-threat-model.md`<br>`services/agil/test/explain.test.ts` |
+| HIPAA-164.308a2 | A security official is identified and responsible for the security programme. | Gap | none |
+| HIPAA-164.308a3 | Workforce access to ePHI is authorised, supervised and terminated appropriately. | Prototype | `services/control-plane/test/scim.test.ts`<br>`services/control-plane/test/admin.test.ts` |
+| HIPAA-164.308a4 | Information access management restricts access to ePHI to authorised persons and applications. | Built | `services/memory/test/isolation.test.ts`<br>`services/control-plane/test/api-authz.test.ts`<br>`policy-test` |
+| HIPAA-164.308a5 | A security awareness and training programme exists for the workforce. | Gap | none |
+| HIPAA-164.308a6 | Security incidents are identified, responded to, mitigated and documented. | Designed | `services/audit/test/export.test.ts`<br>`docs/runbooks/risk-kernel.md` |
+| HIPAA-164.308a7 | A contingency plan covers data backup, disaster recovery and emergency mode operation, and is tested. | Gap | none |
+| HIPAA-164.308a8 | Periodic technical and non-technical evaluation of the security programme is performed. | Prototype | `e2e-phase6`<br>`e2e-phase4` |
+| HIPAA-164.308b | A business associate contract is in place before a business associate creates, receives, maintains or transmits ePHI. | Gap | none |
+| HIPAA-164.310a | Facility access controls limit physical access to systems that hold ePHI. | Gap | none |
+| HIPAA-164.310bc | Workstation use and security are specified and implemented. | Gap | none |
+| HIPAA-164.310d | Hardware and media containing ePHI are controlled on receipt, movement, re-use and disposal. | Gap | none |
+| HIPAA-164.312a1 | Technical access control allows only authorised persons and software to access ePHI, with unique user identification, emergency access, automatic logoff and encryption. | Prototype | `services/control-plane/test/sessions.test.ts`<br>`packages/db/test/tenancy.test.ts` |
+| HIPAA-164.312b | Audit controls record and examine activity in systems that contain or use ePHI. | Built | `services/audit/test/pg.test.ts`<br>`packages/contracts/test/audit-chain.test.ts`<br>`e2e-core` |
+| HIPAA-164.312c | Policies protect ePHI from improper alteration or destruction, and mechanisms authenticate ePHI. | Built | `services/audit/test/checkpoint.test.ts`<br>`packages/db/test/hardening.test.ts` |
+| HIPAA-164.312d | Persons or entities seeking access to ePHI are authenticated. | Prototype | `services/control-plane/test/sso.test.ts`<br>`services/channels/test/jwt.test.ts` |
+| HIPAA-164.312e | Transmission security guards ePHI against unauthorised access in transit, including integrity controls and encryption. | Designed | `apps/api-gateway/test/hardening.test.ts`<br>`services/channels/test/crypto.test.ts` |
+| HIPAA-164.514d | Uses and disclosures of PHI are limited to the minimum necessary, with redaction and role-based limits. | Prototype | `services/memory/test/redact.test.ts`<br>`runtime/tests/test_redaction_tools.py`<br>`e2e-phase5` |
+| HIPAA-164.404-408 | Breaches of unsecured PHI are notified to individuals, the regulator and in some cases the media, without unreasonable delay. | Gap | none |
 
 ## Controls
 
@@ -221,3 +221,4 @@ Matrix version 1. Rows: 19 (Built 3, Prototype 6, Designed 2, Gap 8).
 - **Evidence:** none
 - **Status:** Gap
 - **Notes and limits:** No breach risk assessment, register or notification templates exist.
+
