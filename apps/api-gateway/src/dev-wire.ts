@@ -6,6 +6,7 @@ import {
   type ControlPlane,
   type ControlPlaneStore,
 } from "@axis/control-plane";
+import type { EvalHub } from "@axis/eval-hub";
 import type { Marketplace } from "@axis/marketplace";
 import type { RegistryService } from "@axis/registry";
 import type { GatewayDeps, GatewayOptions } from "./context.js";
@@ -28,6 +29,7 @@ import {
   MemoryKillSwitchRecords,
   type KernelKillApplier,
 } from "./adapters/kernel.js";
+import { EvalsAdapter, UnavailableEvals } from "./adapters/evals.js";
 import { MarketplaceAdapter } from "./adapters/marketplace.js";
 import { RegistryAdapter } from "./adapters/registry.js";
 import { HttpRunsPort } from "./adapters/runs-http.js";
@@ -41,6 +43,8 @@ export interface DevWiring {
   store: Pick<ControlPlaneStore, "listPackVersions" | "getTenant" | "getMember">;
   registry: RegistryService;
   marketplace: Marketplace;
+  /** The Eval Hub. Without one every evals operation answers 503 (fail-closed); wire the SAME hub into the registry's `evalGate`. */
+  evals?: EvalHub;
   /** The tenant's audit store (gateway events are appended here, AGIL reads it through a frozen reader). */
   audit: AuditStoreLike & { append(e: never): Promise<unknown> };
   approvals: Pick<ApprovalService, "list" | "approve" | "deny" | "get">;
@@ -92,6 +96,7 @@ export function wireGateway(
     identity: new ControlPlaneIdentity(w.store),
     registry: new RegistryAdapter(w.registry),
     marketplace: new MarketplaceAdapter(w.marketplace),
+    evals: w.evals ? new EvalsAdapter(w.evals) : new UnavailableEvals(),
     idempotency: new MemoryIdempotencyStore(),
   };
   return { gateway: createGateway(deps, { validateResponses: true, ...options }), deps };

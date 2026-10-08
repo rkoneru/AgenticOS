@@ -3,7 +3,7 @@ import { compileAbl, type AblIssue } from "@axis/abl";
 import type { AuditEvent } from "@axis/contracts";
 import type { Ctx, HandlerResult, Route } from "./context.js";
 import { PortConflict, PortNotFound, type BlueprintVersionDto, type RunEventDto } from "./ports.js";
-import { internal, notFound, notImplemented, validation, type ValidationIssue } from "./problem.js";
+import { internal, notFound, validation, type ValidationIssue } from "./problem.js";
 
 const NAME = /^[a-z][a-z0-9-]{1,62}$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
@@ -358,12 +358,6 @@ async function getUsage(c: Ctx): Promise<HandlerResult> {
   });
 }
 
-async function startEvalRun(): Promise<HandlerResult> {
-  throw notImplemented(
-    "Eval Hub runs arrive in Phase 8; this operation is part of the v1 contract but has no implementation yet.",
-  );
-}
-
 async function explainRun(c: Ctx): Promise<HandlerResult> {
   const runId = str(c.params["runId"]);
   const run = await c.deps.runs.get(c.tenantId, runId);
@@ -388,6 +382,167 @@ async function explainAuditEvent(c: Ctx): Promise<HandlerResult> {
   const x = await c.deps.explain.explainEvent(c.tenantId, Number(c.params["seq"]));
   if (x === undefined) throw notFound("audit event not found");
   return ok(x);
+}
+
+// ---- evals ------------------------------------------------------------------------------------------------------------------------
+
+async function startEvalRun(c: Ctx): Promise<HandlerResult> {
+  const b = c.body as {
+    suite: string;
+    mode?: "ci" | "manual";
+    blueprint: { name: string; version: string; namespace?: string };
+  };
+  // The run is bound to the CONTENT of exactly this version: the gateway resolves the hash, the caller never supplies it.
+  let contentHash: string;
+  if (b.blueprint.namespace !== undefined) {
+    const r = await c.deps.registry.resolve(
+      c.principal,
+      `${b.blueprint.namespace}/${b.blueprint.name}@${b.blueprint.version}`,
+    );
+    contentHash = r.content_hash;
+  } else {
+    const bp = await c.deps.blueprints.get(c.tenantId, b.blueprint.name, b.blueprint.version);
+    if (!bp) throw notFound("blueprint version not found");
+    contentHash = bp.content_hash;
+  }
+  const run = await c.deps.evals.start(c.principal, {
+    suite: b.suite,
+    ...(b.mode ? { mode: b.mode } : {}),
+    blueprint: {
+      ...(b.blueprint.namespace !== undefined ? { namespace: b.blueprint.namespace } : {}),
+      name: b.blueprint.name,
+      version: b.blueprint.version,
+      content_hash: contentHash,
+    },
+  });
+  return ok(run, 202, { location: `/v1/evals/runs/${run.id}` });
+}
+
+async function listEvalRuns(c: Ctx): Promise<HandlerResult> {
+  const after = position(c, "evalruns");
+  const q = (k: string): string | undefined =>
+    c.query[k] === undefined ? undefined : str(c.query[k]);
+  const r = await c.deps.evals.listRuns(c.principal, {
+    limit: limit(c),
+    ...(after ? { cursor: after } : {}),
+    ...(q("suite") ? { suite: q("suite") as string } : {}),
+    ...(q("blueprint") ? { blueprint: q("blueprint") as string } : {}),
+    ...(q("content_hash") ? { content_hash: q("content_hash") as string } : {}),
+    ...(q("status") ? { status: q("status") as string } : {}),
+  });
+  return ok({ items: r.items, next_cursor: wrap(c, "evalruns", r.next) });
+}
+
+async function getEvalRun(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.evals.getRun(c.principal, str(c.params["evalRunId"])));
+}
+
+async function getEvalRunComparison(c: Ctx): Promise<HandlerResult> {
+  const cmp = await c.deps.evals.comparison(c.principal, str(c.params["evalRunId"]));
+  return ok(cmp === undefined ? {} : { comparison: cmp });
+}
+
+async function gateEvalRelease(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.evals.gate(c.principal, c.body as { blueprint: unknown; suites?: unknown }),
+  );
+}
+
+async function listEvalDatasets(c: Ctx): Promise<HandlerResult> {
+  const name = c.query["name"] === undefined ? undefined : str(c.query["name"]);
+  return ok({ items: await c.deps.evals.listDatasets(c.principal, name) });
+}
+async function createEvalDataset(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.evals.createDataset(c.principal, c.body as Record<string, unknown>), 201);
+}
+async function getEvalDatasetVersion(c: Ctx): Promise<HandlerResult> {
+  const name = regName(c);
+  const version = str(c.params["version"]);
+  if (!/^(latest|[1-9][0-9]{0,8})$/.test(version)) throw notFound("not found");
+  return ok(await c.deps.evals.getDataset(c.principal, name, version));
+}
+async function listEvalSuites(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.evals.listSuites(c.principal) });
+}
+async function createEvalSuite(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.evals.createSuite(c.principal, c.body as Record<string, unknown>), 201);
+}
+async function getEvalSuite(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.evals.getSuite(c.principal, str(c.params["suite"])));
+}
+async function listEvalBaselines(c: Ctx): Promise<HandlerResult> {
+  return ok({
+    items: await c.deps.evals.listBaselines(
+      c.principal,
+      str(c.query["blueprint"]),
+      str(c.query["suite"]),
+    ),
+  });
+}
+async function setEvalBaseline(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.evals.setBaseline(c.principal, (c.body as { run_id: string }).run_id),
+    201,
+  );
+}
+async function listEvalReviewTasks(c: Ctx): Promise<HandlerResult> {
+  return ok({
+    items: await c.deps.evals.listTasks(c.principal, {
+      ...(c.query["state"] ? { state: str(c.query["state"]) } : {}),
+      ...(c.query["run_id"] ? { run_id: str(c.query["run_id"]) } : {}),
+    }),
+  });
+}
+async function claimEvalReviewTask(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.evals.claimTask(c.principal, str(c.params["taskId"])));
+}
+async function gradeEvalReviewTask(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.evals.gradeTask(
+      c.principal,
+      str(c.params["taskId"]),
+      c.body as { score: number; comment: string },
+    ),
+  );
+}
+async function skipEvalReviewTask(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.evals.skipTask(
+      c.principal,
+      str(c.params["taskId"]),
+      (c.body as { reason: string }).reason,
+    ),
+  );
+}
+async function listEvalSamplingConfigs(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.evals.listSampling(c.principal) });
+}
+async function putEvalSamplingConfig(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.evals.putSampling(
+      c.principal,
+      str(c.params["samplingId"]),
+      c.body as Record<string, unknown>,
+    ),
+  );
+}
+async function getEvalOnlineSummary(c: Ctx): Promise<HandlerResult> {
+  return ok({
+    items: await c.deps.evals.onlineSummary(c.principal, {
+      ...(c.query["blueprint"] ? { blueprint: str(c.query["blueprint"]) } : {}),
+      ...(c.query["suite"] ? { suite: str(c.query["suite"]) } : {}),
+    }),
+  });
+}
+async function listEvalRunners(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.evals.listRunners(c.principal) });
+}
+async function registerEvalRunner(c: Ctx): Promise<HandlerResult> {
+  const d = (c.body as { description?: string } | undefined)?.description;
+  return ok(await c.deps.evals.registerRunner(c.principal, str(c.params["runnerId"]), d));
+}
+async function revokeEvalRunner(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.evals.revokeRunner(c.principal, str(c.params["runnerId"])));
 }
 
 // ---- registry -----------------------------------------------------------------------------------------------------------------------
@@ -509,7 +664,53 @@ export const ROUTES: Record<string, Route> = {
   listKillSwitches: { action: "api.killswitch.read", handler: listKillSwitches, mutation: false },
   setKillSwitch: { action: "api.killswitch.write", handler: setKillSwitch, mutation: true },
   getUsage: { action: "api.usage.read", handler: getUsage, mutation: false },
-  startEvalRun: { action: "api.evals.run", handler: startEvalRun, mutation: false },
+  startEvalRun: { action: "api.evals.run", handler: startEvalRun, mutation: true },
+  listEvalRuns: { action: "api.evals.read", handler: listEvalRuns, mutation: false },
+  getEvalRun: { action: "api.evals.read", handler: getEvalRun, mutation: false },
+  getEvalRunComparison: {
+    action: "api.evals.read",
+    handler: getEvalRunComparison,
+    mutation: false,
+  },
+  gateEvalRelease: { action: "api.evals.read", handler: gateEvalRelease, mutation: false },
+  listEvalDatasets: { action: "api.evals.read", handler: listEvalDatasets, mutation: false },
+  createEvalDataset: { action: "api.evals.write", handler: createEvalDataset, mutation: true },
+  getEvalDatasetVersion: {
+    action: "api.evals.read",
+    handler: getEvalDatasetVersion,
+    mutation: false,
+  },
+  listEvalSuites: { action: "api.evals.read", handler: listEvalSuites, mutation: false },
+  createEvalSuite: { action: "api.evals.write", handler: createEvalSuite, mutation: true },
+  getEvalSuite: { action: "api.evals.read", handler: getEvalSuite, mutation: false },
+  listEvalBaselines: { action: "api.evals.read", handler: listEvalBaselines, mutation: false },
+  setEvalBaseline: { action: "api.evals.admin", handler: setEvalBaseline, mutation: true },
+  listEvalReviewTasks: {
+    action: "api.evals.review",
+    handler: listEvalReviewTasks,
+    mutation: false,
+  },
+  claimEvalReviewTask: { action: "api.evals.review", handler: claimEvalReviewTask, mutation: true },
+  gradeEvalReviewTask: { action: "api.evals.review", handler: gradeEvalReviewTask, mutation: true },
+  skipEvalReviewTask: { action: "api.evals.review", handler: skipEvalReviewTask, mutation: true },
+  listEvalSamplingConfigs: {
+    action: "api.evals.read",
+    handler: listEvalSamplingConfigs,
+    mutation: false,
+  },
+  putEvalSamplingConfig: {
+    action: "api.evals.admin",
+    handler: putEvalSamplingConfig,
+    mutation: true,
+  },
+  getEvalOnlineSummary: {
+    action: "api.evals.read",
+    handler: getEvalOnlineSummary,
+    mutation: false,
+  },
+  listEvalRunners: { action: "api.evals.read", handler: listEvalRunners, mutation: false },
+  registerEvalRunner: { action: "api.evals.admin", handler: registerEvalRunner, mutation: true },
+  revokeEvalRunner: { action: "api.evals.admin", handler: revokeEvalRunner, mutation: true },
   explainRun: { action: "api.explanations.read", handler: explainRun, mutation: false },
   explainAuditEvent: { action: "api.audit.read", handler: explainAuditEvent, mutation: false },
   getMe: { action: null, handler: getMe, mutation: false },

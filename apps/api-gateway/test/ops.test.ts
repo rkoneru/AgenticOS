@@ -658,15 +658,6 @@ describe("usage", () => {
 });
 
 describe("evals and explanations", () => {
-  it("evals answer 501 problem+json until Phase 8", async () => {
-    const r = await call(w, "POST", "/evals/runs", {
-      token: T(),
-      body: { suite: "s", blueprint: a.blueprint },
-    });
-    expect(r.status).toBe(501);
-    expect(r.body.type).toContain("not_implemented");
-    expect(r.body.code).toBeUndefined();
-  });
   it("explains a run and a denial from the audit rows", async () => {
     const run = await call(w, "GET", `/runs/${a.runId}/explanation`, { token: T() });
     expect(run.body.summary).toContain("denied");

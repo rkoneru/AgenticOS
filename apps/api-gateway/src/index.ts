@@ -13,6 +13,7 @@ export * from "./adapters/usage.js";
 export * from "./adapters/runs-http.js";
 export * from "./adapters/registry.js";
 export * from "./adapters/marketplace.js";
+export * from "./adapters/evals.js";
 export * from "./dev-wire.js";
 export * from "./adapters/approvals-http.js";
 export * from "./standalone.js";
