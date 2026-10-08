@@ -41,6 +41,8 @@ class ModelTarget:
     model: str  # model id; for azure-openai this is the DEPLOYMENT name
     endpoint: str | None = None
     params: Mapping[str, Any] = field(default_factory=dict)
+    # Region the endpoint serves (data residency); required when the tenant restricts regions.
+    region: str | None = None
 
 
 @dataclass(frozen=True)

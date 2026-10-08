@@ -67,6 +67,9 @@ class TenantModelPolicy:
     allow_platform_keys: bool = False
     # Self-hosted deployments only: permit private/loopback/internal endpoint hosts (no DNS check).
     allow_private_endpoints: bool = False
+    # Data residency: None = unrestricted; a set = the ONLY regions prompts may be sent to.
+    # Fail-closed: when set, a target with no declared region is refused, and so is an empty set.
+    allowed_regions: frozenset[str] | None = None
 
 
 class ModelGateway:
@@ -260,7 +263,20 @@ class ModelGateway:
         return adapter
 
     async def _check_endpoint(self, request: ModelRequest, target: ModelTarget) -> None:
+        self._check_region(request.tenant_id, target)
         await self._check_endpoint_for(request.tenant_id, target.provider, target.endpoint)
+
+    def _check_region(self, tenant_id: str, target: ModelTarget) -> None:
+        allowed = self._policy(tenant_id).allowed_regions
+        if allowed is None:
+            return
+        region = (target.region or "").strip().lower()
+        if region == "" or region not in {r.strip().lower() for r in allowed}:
+            raise ModelError(
+                ErrorKind.CONFIGURATION,
+                target.provider,
+                "provider region is not permitted for this tenant",
+            )
 
     async def _check_endpoint_for(
         self, tenant_id: str, provider: str, endpoint: str | None, *, websocket: bool = False

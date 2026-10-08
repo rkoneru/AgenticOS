@@ -7,7 +7,6 @@ import re
 import unicodedata
 
 import pytest
-
 from axis_runtime.evals.redact import redact_value
 from axis_runtime.voice.phi import redact_transcript
 
@@ -27,7 +26,9 @@ CANARIES = [
 
 
 def leaks(text: str, core: str) -> bool:
-    t = "".join(c for c in unicodedata.normalize("NFKC", text) if unicodedata.category(c) != "Cf").lower()
+    t = "".join(
+        c for c in unicodedata.normalize("NFKC", text) if unicodedata.category(c) != "Cf"
+    ).lower()
     if not core.isdigit():
         return core in t
     return re.search(r"[\s.\-()]*".join(core), t) is not None
