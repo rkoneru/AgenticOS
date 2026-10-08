@@ -35,6 +35,7 @@ from conftest import (
 OTHER = "22222222-2222-4222-8222-222222222222"
 TOKEN_A, TOKEN_B = "tok-a-" + secrets.token_hex(8), "tok-b-" + secrets.token_hex(8)  # noqa: S105
 BP = {"name": "claims-triage", "version": "1.0.0"}
+READ_A, READ_B = "rd-a-" + secrets.token_hex(8), "rd-b-" + secrets.token_hex(8)  # noqa: S105
 
 
 def rid() -> str:
@@ -54,6 +55,7 @@ class Env:
             self.service,
             RunServerConfig(
                 tokens={TOKEN_A: TENANT, TOKEN_B: OTHER},
+                read_tokens={READ_A: TENANT, READ_B: OTHER},
                 max_body_bytes=4096,
                 sse_poll_seconds=0.01,
                 max_active_runs_per_tenant=3,
@@ -395,3 +397,109 @@ def test_event_dto_shapes() -> None:
 
 
 _unused: Callable[..., Any] = lambda: RunDeps  # noqa: E731
+
+
+# ---- the read-only completed-runs feed for the online eval sampler -------------------------------------------------------
+
+
+async def test_completed_runs_feed_is_read_only_tenant_scoped_and_redacted(env: Env) -> None:
+    secret = "sk-" + "a1B2c3D4" * 4
+    done = env.start_body()
+    assert (await env.call("POST", "/v1/runs", body=done)).status_code == 202
+    await env.wait_state(done["run_id"], "terminated")
+    other = env.start_body(blueprint={"name": "other-agent", "version": "2.0.0"})
+    other["manifest"] = manifest_dict(
+        blueprint={"name": "other-agent", "version": "2.0.0", "content_hash": "b" * 64}
+    )
+    assert (await env.call("POST", "/v1/runs", TOKEN_A, other)).status_code == 202
+    await env.wait_state(other["run_id"], "terminated")
+
+    feed = (await env.call("GET", "/v1/completed-runs", READ_A)).json()["items"]
+    assert {i["run_id"] for i in feed} == {done["run_id"], other["run_id"]}
+    row = next(i for i in feed if i["run_id"] == done["run_id"])
+    assert row["blueprint"] == "claims-triage" and row["version"] == "1.0.0"
+    assert len(row["content_hash"]) == 64 and row["completed_at"] and row["phi"] is False
+    assert row["trace"]["exit_reason"] == "completed" and row["trace"]["events_hash"]
+    assert row["output"] == "done" and "input" not in row and "input_text" not in row
+    # filters: blueprint name, since (inclusive), limit
+    only = (await env.call("GET", "/v1/completed-runs?blueprint=other-agent", READ_A)).json()
+    assert [i["run_id"] for i in only["items"]] == [other["run_id"]]
+    late = (await env.call("GET", "/v1/completed-runs?since=2999-01-01T00:00:00Z", READ_A)).json()
+    assert late["items"] == []
+    one = (await env.call("GET", "/v1/completed-runs?limit=1", READ_A)).json()["items"]
+    assert len(one) == 1
+    assert (await env.call("GET", "/v1/completed-runs?limit=0", READ_A)).status_code == 422
+    # another tenant's read credential sees none of it
+    assert (await env.call("GET", "/v1/completed-runs", READ_B)).json()["items"] == []
+    assert secret not in str(feed)
+
+
+async def test_completed_runs_scrubs_credentials_from_the_output() -> None:
+    secret = "sk-" + "a1B2c3D4" * 4
+    log = InMemoryRunEventLog()
+    clock = FakeClock()
+
+    async def factory(
+        tenant: str, manifest: RuntimeManifest, principal: Mapping[str, Any]
+    ) -> RunSetup:
+        t = ScriptedTransport([(200, final_body(f"your key is {secret}, keep it"))])
+        return RunSetup(deps=make_deps(gate=ScriptedGate(), transport=t, clock=clock))
+
+    svc = RunService(factory, log, clock)
+    server = RunServer(svc, RunServerConfig(tokens={TOKEN_A: TENANT}, read_tokens={READ_A: TENANT}))
+    port = await server.start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            body = {
+                "run_id": rid(),
+                "trace_id": secrets.token_hex(16),
+                "blueprint": BP,
+                "manifest": manifest_dict(),
+                "input": {"prompt": "hi"},
+                "principal": {"id": "m", "role": "owner"},
+            }
+            r = await c.post(
+                base + "/v1/runs", json=body, headers={"authorization": f"Bearer {TOKEN_A}"}
+            )
+            assert r.status_code == 202
+            for _ in range(200):
+                got = (
+                    await c.get(
+                        base + f"/v1/runs/{body['run_id']}",
+                        headers={"authorization": f"Bearer {TOKEN_A}"},
+                    )
+                ).json()
+                if got["state"] == "terminated":
+                    break
+                await asyncio.sleep(0.02)
+            feed = (
+                await c.get(
+                    base + "/v1/completed-runs", headers={"authorization": f"Bearer {READ_A}"}
+                )
+            ).json()
+        assert secret not in str(feed) and "[REDACTED" in str(feed).upper()
+    finally:
+        await server.stop()
+
+
+async def test_a_read_token_reaches_nothing_else_and_no_other_token_reaches_the_feed(
+    env: Env,
+) -> None:
+    body = env.start_body()
+    assert (await env.call("POST", "/v1/runs", body=body)).status_code == 202
+    await env.wait_state(body["run_id"], "terminated")
+    # read-only credential: 403 everywhere but the feed (not 404: it is recognised and refused), including writes
+    for method, path, b in [
+        ("GET", "/v1/runs", None),
+        ("GET", f"/v1/runs/{body['run_id']}", None),
+        ("POST", "/v1/runs", env.start_body()),
+        ("POST", f"/v1/runs/{body['run_id']}/signals", {"signal": "KILL"}),
+        ("POST", "/v1/completed-runs", {}),
+        ("GET", "/v1/nothing", None),
+    ]:
+        assert (await env.call(method, path, READ_A, b)).status_code == 403, path
+    # the gateway's own credential cannot read the feed, and neither can an unknown or missing one
+    assert (await env.call("GET", "/v1/completed-runs", TOKEN_A)).status_code == 403
+    assert (await env.call("GET", "/v1/completed-runs", "nope")).status_code == 401
+    assert (await env.call("GET", "/v1/completed-runs", None)).status_code == 401

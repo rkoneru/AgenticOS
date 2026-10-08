@@ -305,14 +305,20 @@ class BlueprintRef:
     name: str
     version: str
     content_hash: str
+    #: registry namespace of the version, when it has one (not part of the reported payload)
+    namespace: str | None = None
 
     @classmethod
     def from_wire(cls, raw: object, path: str = "blueprint") -> BlueprintRef:
         o = _obj(raw, path)
+        ns = o.get("namespace")
+        if ns is not None and (not isinstance(ns, str) or not ns):
+            raise WireError(f"{path}.namespace: expected a string or null")
         return cls(
             name=_str(o, "name", path),
             version=_str(o, "version", path),
             content_hash=_str(o, "content_hash", path, pattern=HASH_RE),
+            namespace=ns,
         )
 
     def to_wire(self) -> dict[str, str]:

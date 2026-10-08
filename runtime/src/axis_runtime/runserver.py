@@ -17,6 +17,11 @@ runtime never parses ABL). The agent
   ``InMemoryRunEventLog`` behind the ``RunEventLog`` port (lost on restart; NEEDS #224). ``GET
   .../events`` and an SSE feed serve it,
   ``POST .../replay`` re-folds it and verifies the hash chain.
+* ``GET /v1/completed-runs`` is the READ-ONLY feed of finished runs for the online eval sampler:
+  it answers only to a separate ``read_tokens`` credential (which can call nothing else, and no
+  other token can call it), is tenant-scoped like everything here, and returns a REDACTED
+  projection (credentials scrubbed from the output, tool results as hashes, no input text). It
+  performs no action and changes nothing.
 * Stdlib asyncio HTTP/1.1, one request per connection, Content-Length bodies only, size and time
 limits.
 """
@@ -34,6 +39,9 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import unquote_plus
 
+from axis_runtime.evals.redact import scrub_secrets
+from axis_runtime.evals.sampler import completed_run_from_events
+from axis_runtime.evals.trace import trace_wire
 from axis_runtime.events import (
     CorruptLogError,
     InMemoryRunEventLog,
@@ -88,6 +96,8 @@ class RunServerConfig:
     sse_poll_seconds: float = 0.05
     sse_heartbeat_seconds: float = 10.0
     sse_max_seconds: float = 900.0
+    #: read-only bearer token -> tenant id: may call ``GET /v1/completed-runs`` and nothing else
+    read_tokens: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -340,6 +350,56 @@ class RunService:
             "next_cursor": f"{last['created_at']}|{last['id']}" if more and last else None,
         }
 
+    async def completed(self, tenant: str, q: Mapping[str, str]) -> dict[str, Any]:
+        """Finished runs of the tenant for the online sampler, oldest first, REDACTED.
+
+        ``blueprint`` (name) and ``since`` (timestamp, inclusive) filter; at most ``limit``
+        (default 100, max 200). A run whose log does not verify is skipped (and logged), never
+        served. Read-only: nothing here starts, signals or changes a run.
+        """
+        limit = _int(q.get("limit", "100"), 1, 200)
+        bp, since = q.get("blueprint"), q.get("since", "")
+        out: list[dict[str, Any]] = []
+        for rec in sorted(
+            (r for r in self.runs.values() if r.tenant_id == tenant),
+            key=lambda r: (r.created_at, r.run_id),
+        ):
+            if bp and rec.blueprint["name"] != bp:
+                continue
+            if rec.task is None or not rec.task.done():
+                continue
+            try:
+                events = await self.log.read(rec.run_id)
+                if not events:
+                    continue
+                run = completed_run_from_events(events, tenant_id=tenant)
+            except (CorruptLogError, ValueError):
+                log.warning("completed-runs: skipping run %s (log unreadable)", rec.run_id)
+                continue
+            if run.completed_at < since:
+                continue
+            out.append(
+                {
+                    "run_id": run.run_id,
+                    "blueprint": run.blueprint,
+                    "version": run.version,
+                    "content_hash": run.content_hash,
+                    "completed_at": run.completed_at,
+                    "phi": bool(events[0].data.get("phi", False)),
+                    "trace": trace_wire(
+                        dataclasses.replace(
+                            run.trace,
+                            output=None
+                            if run.trace.output is None
+                            else scrub_secrets(run.trace.output),
+                        )
+                    ),
+                    "output": None if run.trace.output is None else scrub_secrets(run.trace.output),
+                }
+            )
+        out.sort(key=lambda r: (r["completed_at"], r["run_id"]))
+        return {"items": out[:limit]}
+
     async def signal(self, tenant: str, run_id: str, body: Mapping[str, Any]) -> dict[str, Any]:
         rec = self._own(tenant, run_id)
         try:
@@ -459,21 +519,38 @@ class RunServer:
             self._server.close()
             await self._server.wait_closed()
 
-    def _tenant(self, authorization: str | None) -> str:
+    @staticmethod
+    def _lookup(table: Mapping[str, str], authorization: str | None) -> str | None:
         m = re.fullmatch(r"Bearer (\S{1,512})", authorization or "")
         found: str | None = None
         presented = (m.group(1) if m else "").encode()
-        for (
-            token,
-            tenant,
-        ) in self.config.tokens.items():  # no early exit: constant work per table entry
+        for token, tenant in table.items():  # no early exit: constant work per table entry
             if hmac.compare_digest(token.encode(), presented) and m:
                 found = tenant
+        return found
+
+    def _tenant(self, authorization: str | None) -> str:
+        found = self._lookup(self.config.tokens, authorization)
         if found is None:
             raise HttpError(
                 401, "unauthenticated", {"www-authenticate": 'Bearer realm="runserver"'}
             )
         return found
+
+    def _reader(self, authorization: str | None) -> str | None:
+        """The tenant of a READ-ONLY credential, or None when the token is not one."""
+        return self._lookup(self.config.read_tokens, authorization)
+
+    @staticmethod
+    def _query(qs: str) -> dict[str, str]:
+        query: dict[str, str] = {}
+        for pair in filter(None, qs.split("&")):
+            k, _, v = pair.partition("=")
+            key = unquote_plus(k)
+            if key in query:
+                raise HttpError(422, "repeated query parameter")
+            query[key] = unquote_plus(v)
+        return query
 
     async def _conn(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -522,15 +599,19 @@ class RunServer:
     async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             method, target, headers, raw = await self._read_request(reader)
-            tenant = self._tenant(headers.get("authorization"))
             path, _, qs = target.partition("?")
-            query: dict[str, str] = {}
-            for pair in filter(None, qs.split("&")):
-                k, _, v = pair.partition("=")
-                key = unquote_plus(k)
-                if key in query:
-                    raise HttpError(422, "repeated query parameter")
-                query[key] = unquote_plus(v)
+            reader_tenant = self._reader(headers.get("authorization"))
+            if reader_tenant is not None:
+                # A read-only credential reaches exactly one route; the rest is forbidden.
+                if method != "GET" or path != "/v1/completed-runs":
+                    raise HttpError(403, "this credential is read-only")
+                tenant = reader_tenant
+                return await self._send(
+                    writer, 200, await self.service.completed(tenant, self._query(qs))
+                )
+            else:
+                tenant = self._tenant(headers.get("authorization"))
+            query = self._query(qs)
             body: Any = {}
             if method == "POST" and raw:
                 try:
@@ -554,6 +635,10 @@ class RunServer:
         headers: dict[str, str],
     ) -> None:
         s = self.service
+        if (
+            path == "/v1/completed-runs"
+        ):  # reached only by a service credential: read credentials are routed before
+            raise HttpError(403, "this route needs the read-only credential")
         if path == "/v1/runs" and method == "POST":
             return await self._send(w, 202, await s.start(tenant, body))
         if path == "/v1/runs" and method == "GET":

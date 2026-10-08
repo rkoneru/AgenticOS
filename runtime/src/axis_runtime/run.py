@@ -954,6 +954,7 @@ async def start_agent(manifest: RuntimeManifest, input_text: str, deps: RunDeps)
                 "blueprint": manifest.name,
                 "version": manifest.version,
                 "content_hash": manifest.content_hash,
+                "phi": manifest.phi,
                 "input_hash": hashlib.sha256(input_text.encode("utf-8")).hexdigest(),
                 "trace_id": trace_id,
             },
