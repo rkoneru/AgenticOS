@@ -23,7 +23,7 @@ export interface ServiceAuditEntry {
 export class ServiceAudit {
   constructor(
     private readonly sink: AuditSink,
-    private readonly service: "registry" | "marketplace",
+    private readonly service: "registry" | "marketplace" | "eval-hub",
     private readonly now: () => Date = () => new Date(),
     private readonly newId: () => string = randomUUID,
   ) {}

@@ -73,6 +73,7 @@ export function sendError(res: http.ServerResponse, err: unknown): void {
         code: err.code,
         message: err.message,
         ...(err.checks.length ? { checks: err.checks } : {}),
+        ...(err.reasons.length ? { reasons: err.reasons } : {}),
       },
     });
   sendJson(res, 500, { error: { code: "internal" } });

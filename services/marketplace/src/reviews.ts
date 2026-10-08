@@ -98,6 +98,15 @@ export class ReviewService {
     const viewer = { tenantId: p.tenantId };
     const bp = await this.registry().getVersion(viewer, input.namespace, input.name, input.version);
     if (bp.record.tenantId !== p.tenantId) throw forbidden("not your namespace");
+    // Required evals must pass BEFORE a human spends time on the blueprint (evals_gate_failed, 409, carries the reasons).
+    await this.registry().requireEvalGate({
+      tenantId: p.tenantId,
+      namespace: bp.namespace,
+      name: bp.name,
+      version: bp.version,
+      purpose: "marketplace_submit",
+      actor: p.subject,
+    });
     const key = reviewKey(bp.namespace, bp.name, bp.version);
     const base: ReviewRecord = {
       namespace: bp.namespace,

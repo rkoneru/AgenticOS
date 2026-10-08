@@ -49,3 +49,31 @@ ALTER TABLE eval_hub_docs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE eval_hub_docs FORCE ROW LEVEL SECURITY;
 CREATE POLICY eval_docs_tenant ON eval_hub_docs USING (tenant_id = axis.current_tenant()) WITH CHECK (tenant_id = axis.current_tenant());
 GRANT SELECT, INSERT, UPDATE ON eval_hub_docs TO axis_app;
+
+-- Eval-result attestations attached to a registry version (docs/adr/0056). Append-only, one per (version, run). Readable wherever the
+-- version is readable (the owner, or everyone once the version is released); insertable only by the version's owner context.
+CREATE TABLE registry_eval_attestations (
+  seq          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  tenant_id    uuid NOT NULL REFERENCES tenants (id),
+  namespace    text NOT NULL,
+  name         text NOT NULL,
+  version      text NOT NULL,
+  run_id       text NOT NULL,
+  suite_ref    text NOT NULL,
+  content_hash text NOT NULL CHECK (content_hash ~ '^[0-9a-f]{64}$'),
+  overall      double precision NOT NULL,
+  envelope     jsonb NOT NULL,
+  attached_at  timestamptz NOT NULL,
+  attached_by  text NOT NULL,
+  UNIQUE (namespace, name, version, run_id),
+  FOREIGN KEY (namespace, name, version) REFERENCES registry_versions (namespace, name, version)
+);
+CREATE INDEX registry_eval_attestations_idx ON registry_eval_attestations (namespace, name, version, seq);
+CREATE TRIGGER registry_eval_attestations_immutable BEFORE UPDATE OR DELETE ON registry_eval_attestations
+  FOR EACH ROW EXECUTE FUNCTION axis.forbid_mutation();
+ALTER TABLE registry_eval_attestations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE registry_eval_attestations FORCE ROW LEVEL SECURITY;
+CREATE POLICY evalatt_read ON registry_eval_attestations FOR SELECT USING (axis.registry_version_visible(namespace, name, version, tenant_id));
+CREATE POLICY evalatt_insert ON registry_eval_attestations FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));
+GRANT SELECT, INSERT ON registry_eval_attestations TO axis_app;
+GRANT USAGE ON SEQUENCE registry_eval_attestations_seq_seq TO axis_app;

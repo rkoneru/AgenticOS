@@ -26,8 +26,11 @@ export function requireTenant(p: Principal, action: RegistryAction): TenantPrinc
   return p;
 }
 
-export function requirePlatform(p: Principal): PlatformPrincipal {
-  if (p.kind !== "platform" || p.service !== "marketplace")
+export function requirePlatform(
+  p: Principal,
+  service: PlatformPrincipal["service"] = "marketplace",
+): PlatformPrincipal {
+  if (p.kind !== "platform" || p.service !== service)
     throw forbidden("platform credential required");
   return p;
 }

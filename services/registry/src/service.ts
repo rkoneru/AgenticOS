@@ -2,6 +2,13 @@ import { canonicalJson, compileAbl, contentHash, validateAbl, type AblDocument }
 import type { ServiceAudit } from "./audit.js";
 import { requirePlatform, requireTenant } from "./authz.js";
 import { RegistryError, conflict, forbidden, invalid, notFound } from "./errors.js";
+import {
+  DENY_ALL_EVAL_GATE,
+  verifyEvalAttestation,
+  type EvalGatePort,
+  type EvalGateReason,
+  type TrustedHubKey,
+} from "./eval-gate.js";
 import { isEnvelope } from "./provenance.js";
 import {
   compareVersions,
@@ -19,6 +26,7 @@ import {
   normalizeName,
   type BlueprintSignature,
   type DsseEnvelope,
+  type EvalAttestationRecord,
   type EventKind,
   type NamespaceRecord,
   type PlatformPrincipal,
@@ -37,6 +45,10 @@ export interface RegistryDeps {
   audit: ServiceAudit;
   now?: () => Date;
   verify?: VerifyOptions;
+  /** The Eval Hub gate. Default: refuses (a registry that was not wired to a gate cannot release a blueprint that declares evals). */
+  evalGate?: EvalGatePort;
+  /** Public keys of the Eval Hub whose signed attestations the registry attaches to versions. */
+  evalHubKeys?: TrustedHubKey[];
 }
 
 export interface PublishInput {
@@ -114,7 +126,11 @@ export class RegistryService {
   private readonly audit: ServiceAudit;
   private readonly now: () => Date;
   private readonly verifyOpts: VerifyOptions;
+  private readonly evalGate: EvalGatePort;
+  private readonly hubKeys: TrustedHubKey[];
   constructor(d: RegistryDeps) {
+    this.evalGate = d.evalGate ?? DENY_ALL_EVAL_GATE;
+    this.hubKeys = d.evalHubKeys ?? [];
     this.store = d.store;
     this.audit = d.audit;
     this.now = d.now ?? (() => new Date());
@@ -255,6 +271,8 @@ export class RegistryService {
     if (!owner) throw notFound("namespace not found");
     if (!(await this.store.getVersion({ tenantId: owner }, namespace, name, version)))
       throw notFound("version not found");
+    // The eval gate runs BEFORE anything becomes public. A blueprint that declares no suites is not gated.
+    await this.requireEvalGate({ tenantId: owner, namespace, name, version, purpose: "release", actor: p.subject });
     await this.setNamespacePublic(p, namespace);
     await this.mutate(
       owner,
@@ -263,6 +281,129 @@ export class RegistryService {
       { namespace, name, version },
       () => this.store.setVersionPublic(owner, namespace, name, version, p.subject, this.now()),
     );
+    await this.afterRelease({ tenantId: owner, namespace, name, version, purpose: "release", actor: p.subject });
+  }
+
+  private async gateInput(g: {
+    tenantId: string;
+    namespace: string;
+    name: string;
+    version: string;
+    purpose: "release" | "marketplace_submit";
+    actor: string;
+  }): Promise<import("./eval-gate.js").EvalGateInput | undefined> {
+    const row = await this.store.getVersion({ tenantId: g.tenantId }, g.namespace, g.name, g.version);
+    if (!row) throw notFound("version not found");
+    let suites: { ref: string; threshold: number }[] = [];
+    try {
+      const abl = JSON.parse(row.record.abl) as { spec?: { evals?: { suites?: { ref: string; threshold: number }[] } } };
+      suites = abl.spec?.evals?.suites ?? [];
+    } catch {
+      throw invalid("stored blueprint is not readable"); // fail closed: an unreadable ABL cannot be shown to declare no suites
+    }
+    if (suites.length === 0) return undefined;
+    return {
+      tenantId: g.tenantId,
+      blueprint: { namespace: g.namespace, name: g.name, version: g.version, contentHash: row.record.contentHash },
+      suites: suites.map((x) => ({ ref: x.ref, threshold: x.threshold })),
+      actor: g.actor,
+      purpose: g.purpose,
+    };
+  }
+
+  /**
+   * Refuses (`evals_gate_failed`, 409, with the gate's reasons) unless the Eval Hub allows this version. The suites come from the
+   * STORED blueprint. No declared suites: allowed without asking the gate. A gate that errors, times out or is absent refuses.
+   */
+  async requireEvalGate(g: {
+    tenantId: string;
+    namespace: string;
+    name: string;
+    version: string;
+    purpose: "release" | "marketplace_submit";
+    actor: string;
+  }): Promise<void> {
+    const input = await this.gateInput(g);
+    if (!input) return;
+    let reasons: EvalGateReason[];
+    try {
+      const r = await this.evalGate.check(input);
+      if (r && r.allowed === true) return;
+      reasons = Array.isArray(r?.reasons) && r.reasons.length > 0 ? r.reasons : [{ code: "not_allowed", message: "the eval gate did not allow this version" }];
+    } catch {
+      reasons = [{ code: "gate_unavailable", message: "the eval gate could not be reached" }];
+    }
+    await this.audit
+      .record({
+        tenantId: g.tenantId,
+        actor: { type: "system", id: g.actor },
+        action: `registry.evals_gate.${g.purpose}`,
+        decision: "DENY",
+        reason: `code=evals_gate_failed reasons=${reasons.map((x) => x.code).join(",")}`,
+        inputs: { namespace: g.namespace, name: g.name, version: g.version },
+      })
+      .catch(() => undefined);
+    throw new RegistryError("evals_gate_failed", "the eval gate did not allow this version", reasons.map((x) => x.code), reasons);
+  }
+
+  private async afterRelease(g: Parameters<RegistryService["requireEvalGate"]>[0]): Promise<void> {
+    try {
+      const input = await this.gateInput(g);
+      if (input && this.evalGate.released) await this.evalGate.released(input);
+    } catch {
+      /* best effort: the baseline can be promoted by an admin */
+    }
+  }
+
+  // ---------------------------------------------------------------- eval attestations
+  /**
+   * Eval Hub only. Attaches a signed eval-result summary to a version. The envelope must verify against a trusted hub key, be about
+   * THIS version (subject name and content hash), and is append-only (one per run).
+   */
+  async attachEvalAttestation(
+    p: PlatformPrincipal,
+    ref: { namespace: string; name: string; version: string },
+    envelope: DsseEnvelope,
+  ): Promise<EvalAttestationRecord> {
+    requirePlatform(p, "eval-hub");
+    const owner = await this.store.ownerOf(ref.namespace);
+    if (!owner) throw notFound("namespace not found");
+    const row = await this.store.getVersion({ tenantId: owner }, ref.namespace, ref.name, ref.version);
+    if (!row) throw notFound("version not found");
+    if (!isEnvelope(envelope)) throw invalid("attestation is not a DSSE envelope");
+    const v = verifyEvalAttestation(envelope, this.hubKeys);
+    if (!v.ok) throw new RegistryError("verification_failed", v.reason, ["attestation_signature"]);
+    const subj = v.statement.subject[0];
+    if (
+      subj?.name !== `${ref.namespace}/${ref.name}@${ref.version}` ||
+      subj.digest.sha256 !== row.record.contentHash
+    )
+      throw new RegistryError("verification_failed", "attestation is about a different blueprint", ["attestation_subject"]);
+    const rec: EvalAttestationRecord = {
+      tenantId: owner,
+      ...ref,
+      runId: v.statement.predicate.run_id,
+      suiteRef: v.statement.predicate.suite_ref,
+      contentHash: row.record.contentHash,
+      overall: v.statement.predicate.overall,
+      envelope,
+      attachedAt: this.now(),
+      attachedBy: p.subject,
+    };
+    return this.mutate(owner, p.subject, "registry.eval_attestation.attach", { ...ref, run: rec.runId }, async () => {
+      try {
+        await this.store.addAttestation(rec);
+      } catch (e) {
+        if (e instanceof StoreConflict) throw conflict(e.message);
+        throw e;
+      }
+      return rec;
+    });
+  }
+
+  /** Attestations of one version (same visibility as the version). */
+  async evalAttestations(viewer: Viewer, ns: string, name: string, version: string): Promise<EvalAttestationRecord[]> {
+    return this.store.attestations(viewer, ns, name, version);
   }
 
   // ---------------------------------------------------------------- keys
