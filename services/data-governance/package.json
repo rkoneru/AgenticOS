@@ -1,0 +1,39 @@
+{
+  "name": "@axis/data-governance",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./residency": {
+      "types": "./dist/residency.d.ts",
+      "default": "./dist/residency.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bash ../../infra/scripts/with-pg.sh vitest run",
+    "cov": "bash ../../infra/scripts/with-pg.sh vitest run --coverage",
+    "dev-server": "node dist/main.js"
+  },
+  "dependencies": {
+    "@axis/contracts": "workspace:*",
+    "@axis/db": "workspace:*",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@axis/audit": "workspace:*",
+    "@types/pg": "^8.11.0",
+    "fast-check": "^4.0.0"
+  }
+}
