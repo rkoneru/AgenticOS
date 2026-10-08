@@ -18,7 +18,6 @@ import dataclasses
 import hashlib
 import re
 import time
-from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -251,12 +250,12 @@ class CaseRunner:
         run one after another (in dataset order); everything else is independent."""
         sem = asyncio.Semaphore(self.config.concurrency)
         results: dict[str, CaseOutcome] = {}
-        groups: dict[str | None, list[EvalCase]] = defaultdict(list)
+        groups: dict[str, list[EvalCase]] = {}
         independent: list[EvalCase] = []
         for c in cases:
             key = c.metadata.get("session")
             if isinstance(key, str) and key:
-                groups[key].append(c)
+                groups.setdefault(key, []).append(c)
             else:
                 independent.append(c)
 
@@ -272,6 +271,6 @@ class CaseRunner:
 
         await asyncio.gather(
             *[one(c, None) for c in independent],
-            *[chain(str(s), m) for s, m in groups.items()],
+            *[chain(s, m) for s, m in groups.items()],
         )
         return [results[c.id] for c in cases]

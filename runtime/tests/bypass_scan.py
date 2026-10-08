@@ -116,6 +116,13 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "from the bearer token and the client refuses to ask for another tenant. A failure is "
         "fail-closed (no key: no model call; no budgets: no run).",
     },
+    "evals/hubclient.py": {
+        "httpx": "HttpEvalHubClient: the eval runner's only outbound channel, to the Eval Hub "
+        "(loopback dev surface, NEEDS). Fetches suites and datasets and posts graded results "
+        "with a runner token; not an agent action and unreachable from one. Results never feed "
+        "back into any decision; a failure leaves the run unreported, which the release gate "
+        "treats as a block.",
+    },
     "channels.py": {
         "httpx": "HttpChannelSender: client of the channels service (loopback dev surface, NEEDS). "
         "Reachable only through MessageSend performed by ActionExecutor: a DENY never sends; the "

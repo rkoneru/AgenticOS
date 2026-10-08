@@ -101,6 +101,7 @@ class SuiteExecutor:
         self._base_deps = base_deps
         self._tenant_id = tenant_id
         self._identity = identity
+        self.runner_id = identity.runner_id
         self._judge_backend = judge_backend
         self._ids = ids
         self._clock = clock or SystemClock()
