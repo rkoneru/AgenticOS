@@ -74,7 +74,7 @@ class RunLogReader(Protocol):
     async def completed_runs(
         self, *, tenant_id: str, blueprint: str, since: str, limit: int
     ) -> list[CompletedRun]:
-        """Runs of ``tenant_id`` and ``blueprint`` that ended at or after ``since``, oldest first."""
+        """Runs of the tenant and blueprint that ended at or after ``since``, oldest first."""
         ...
 
 
