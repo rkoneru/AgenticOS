@@ -11,7 +11,8 @@ import type { Comparison, Significance } from "./types.js";
 export const SCORE_EPSILON = 1e-6;
 export const SCALE = 1_000_000;
 /** Rounds a value to [0, 1] and half-up to 6 decimals: `floor(x * 1e6 + 0.5) / 1e6`. */
-export const r6 = (x: number): number => Math.floor(Math.min(1, Math.max(0, x)) * SCALE + 0.5) / SCALE;
+export const r6 = (x: number): number =>
+  Math.floor(Math.min(1, Math.max(0, x)) * SCALE + 0.5) / SCALE;
 export const round9 = (x: number): number => Math.round(x * 1e9) / 1e9;
 
 export class AggregationError extends Error {}
@@ -54,13 +55,23 @@ export function aggregateGrid(
   for (const [cid, row] of Object.entries(grades)) {
     if (!CASE_ID_RE.test(cid)) throw new AggregationError("invalid case id");
     for (const gid of Object.keys(row))
-      if (!ids.includes(gid)) throw new AggregationError("grade for a grader the suite does not declare");
+      if (!ids.includes(gid))
+        throw new AggregationError("grade for a grader the suite does not declare");
   }
   const caseIds = Object.keys(grades).sort();
   const errored = [...(o.errored ?? [])];
-  if (!errored.every((e) => e in grades)) throw new AggregationError("errored case is not in the results");
+  if (!errored.every((e) => e in grades))
+    throw new AggregationError("errored case is not in the results");
   if (Object.values(grades).some((row) => Object.values(row).some((c) => c.status === "pending")))
-    return { status: "pending_human", overall: null, per_grader: {}, per_case: {}, passed: null, failures: [], ungraded: 0 };
+    return {
+      status: "pending_human",
+      overall: null,
+      per_grader: {},
+      per_case: {},
+      passed: null,
+      failures: [],
+      ungraded: 0,
+    };
 
   let totalWeight = 0;
   for (const g of graders) totalWeight += g.weight;
@@ -83,7 +94,15 @@ export function aggregateGrid(
   }
   const n = caseIds.length;
   if (n === 0)
-    return { status: "complete", overall: 0, per_grader: Object.fromEntries(ids.map((i) => [i, 0])), per_case: {}, passed: false, failures: ["no_cases"], ungraded: 0 };
+    return {
+      status: "complete",
+      overall: 0,
+      per_grader: Object.fromEntries(ids.map((i) => [i, 0])),
+      per_case: {},
+      passed: false,
+      failures: ["no_cases"],
+      ungraded: 0,
+    };
   const perGraderRaw = Object.fromEntries(ids.map((i) => [i, (sums[i] as number) / n]));
   let overallSum = 0;
   for (const g of graders) overallSum += g.weight * (perGraderRaw[g.id] as number);
@@ -97,10 +116,23 @@ export function aggregateGrid(
     if (low.length > 0) failures.push(`min_case_score:${low.slice(0, 5).join(",")}`);
   }
   for (const g of graders)
-    if (g.min_mean !== null && g.min_mean !== undefined && (per_grader[g.id] as number) < g.min_mean)
+    if (
+      g.min_mean !== null &&
+      g.min_mean !== undefined &&
+      (per_grader[g.id] as number) < g.min_mean
+    )
       failures.push(`grader_min_mean:${g.id}`);
-  if (errored.length > 0) failures.push(`errored_cases:${[...errored].sort().slice(0, 5).join(",")}`);
-  return { status: "complete", overall, per_grader, per_case, passed: failures.length === 0, failures, ungraded };
+  if (errored.length > 0)
+    failures.push(`errored_cases:${[...errored].sort().slice(0, 5).join(",")}`);
+  return {
+    status: "complete",
+    overall,
+    per_grader,
+    per_case,
+    passed: failures.length === 0,
+    failures,
+    ungraded,
+  };
 }
 
 /** Failed checks when a claimed aggregate disagrees with the recomputed one (empty = consistent). */
@@ -109,7 +141,9 @@ export function mismatches(claimed: unknown, computed: Aggregate): string[] {
   const c = claimed as Record<string, unknown>;
   const bad: string[] = [];
   const close = (a: unknown, b: number | null): boolean =>
-    b === null ? a === null : typeof a === "number" && Number.isFinite(a) && Math.abs(a - b) <= SCORE_EPSILON;
+    b === null
+      ? a === null
+      : typeof a === "number" && Number.isFinite(a) && Math.abs(a - b) <= SCORE_EPSILON;
   if (c["status"] !== computed.status) bad.push("status");
   if (!close(c["overall"], computed.overall)) bad.push("overall");
   if (c["passed"] !== computed.passed) bad.push("passed");

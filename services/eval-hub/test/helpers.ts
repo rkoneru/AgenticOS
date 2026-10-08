@@ -98,6 +98,7 @@ export function world(
     publishers?: PublisherLookup;
     start?: string;
     sink?: never;
+    log?: (msg: string) => void;
   } = {},
 ): World {
   const clock = new Clock(new Date(o.start ?? "2026-10-08T12:00:00Z"));
@@ -108,6 +109,7 @@ export function world(
     docs,
     audit: new ServiceAudit(audit, "eval-hub", clock.now),
     now: clock.now,
+    ...(o.log ? { log: o.log } : {}),
     ...(o.publishers ? { publishers: o.publishers } : {}),
   });
   return {
@@ -267,7 +269,7 @@ export async function payloadFor(
     started_at: "2026-10-08T12:00:00Z",
     finished_at: "2026-10-08T12:00:05Z",
     scores: JSON.parse(JSON.stringify(agg)) as unknown,
-    case_results: withScores,
+    case_results: JSON.parse(JSON.stringify(withScores)) as unknown,
     cost: { ...ZERO_COST },
     provenance: {
       runner_version: "1.0.0",

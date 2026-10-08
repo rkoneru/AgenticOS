@@ -16,10 +16,7 @@
       "error": {
         "code": "<string>",
         "message": "<string>",
-        "checks": [
-          "<each>",
-          "<string>"
-        ]
+        "checks": ["<each>", "<string>"]
       }
     },
     "codes": {
@@ -68,9 +65,7 @@
             "expected": {
               "output": "Use the reset link."
             },
-            "tags": [
-              "account"
-            ],
+            "tags": ["account"],
             "metadata": {
               "source": "tickets"
             }
@@ -430,9 +425,7 @@
           "runner_id": "ci-runner-1",
           "aggregation_version": 1,
           "seed": "{{seed}}",
-          "model_ids": [
-            "scripted/model-1"
-          ],
+          "model_ids": ["scripted/model-1"],
           "blueprint_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "dataset_ref": "support-qa@1",
           "dataset_version_hash": "{{dataset_hash}}",
@@ -643,9 +636,7 @@
           "runner_id": "ci-runner-1",
           "aggregation_version": 1,
           "seed": "{{seed2}}",
-          "model_ids": [
-            "scripted/model-1"
-          ],
+          "model_ids": ["scripted/model-1"],
           "blueprint_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "dataset_ref": "support-qa@1",
           "dataset_version_hash": "{{dataset_hash}}",
@@ -661,11 +652,7 @@
         "error": {
           "code": "integrity_failed",
           "message": "<string>",
-          "checks": [
-            "mismatch.overall",
-            "mismatch.passed",
-            "mismatch.failures"
-          ]
+          "checks": ["mismatch.overall", "mismatch.passed", "mismatch.failures"]
         }
       }
     },
@@ -1031,9 +1018,7 @@
           "runner_id": "ci-runner-1",
           "aggregation_version": 1,
           "seed": "{{seed3}}",
-          "model_ids": [
-            "scripted/model-1"
-          ],
+          "model_ids": ["scripted/model-1"],
           "blueprint_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "dataset_ref": "support-qa@1",
           "dataset_version_hash": "{{dataset_hash}}",

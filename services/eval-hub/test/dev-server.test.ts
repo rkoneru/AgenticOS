@@ -105,7 +105,6 @@ describe("wire-v1.json: the documented examples run, in order, against the dev s
 });
 
 const H = "a".repeat(64);
-const prov = { runner_version: "t/1", model_ids: [], seed: "1" };
 
 describe("the dev server surface", () => {
   it("refuses to run with NODE_ENV=production", () => {

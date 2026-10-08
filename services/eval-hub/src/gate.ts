@@ -312,7 +312,8 @@ export class GateService {
       fail("below_threshold", `score ${overall} is below the required ${required}`);
     // The suite's own failure rules (min_case_score, per-grader minimum, errored cases) block even when the mean is high enough.
     const other = sc.failures.filter((f) => f !== "below_pass_threshold");
-    if (other.length > 0) fail("run_failed", `the run failed the suite's rules (${other.join("; ")})`);
+    if (other.length > 0)
+      fail("run_failed", `the run failed the suite's rules (${other.join("; ")})`);
 
     let cmp: Comparison | undefined;
     try {

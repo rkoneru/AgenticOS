@@ -11,7 +11,10 @@ export function canonicalAscii(value: unknown): string {
   if (value === null) return "null";
   switch (typeof value) {
     case "string":
-      return JSON.stringify(value).replace(/[^ -~]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+      return JSON.stringify(value).replace(
+        /[^ -~]/g,
+        (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+      );
     case "boolean":
       return value ? "true" : "false";
     case "number":
@@ -34,6 +37,12 @@ export function canonicalAscii(value: unknown): string {
 export function datasetHash(cases: readonly EvalCase[]): string {
   const ordered = [...cases]
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    .map((c) => ({ id: c.id, input: c.input, expected: c.expected ?? null, tags: c.tags, metadata: c.metadata }));
+    .map((c) => ({
+      id: c.id,
+      input: c.input,
+      expected: c.expected ?? null,
+      tags: c.tags,
+      metadata: c.metadata,
+    }));
   return createHash("sha256").update(canonicalAscii(ordered), "utf8").digest("hex");
 }

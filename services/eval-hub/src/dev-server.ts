@@ -84,7 +84,9 @@ function readRaw(req: http.IncomingMessage): Promise<Buffer> {
       if (size > MAX_BODY) tooBig = true;
       else chunks.push(c);
     });
-    req.on("end", () => (tooBig ? reject(new BadRequest("body too large")) : resolve(Buffer.concat(chunks))));
+    req.on("end", () =>
+      tooBig ? reject(new BadRequest("body too large")) : resolve(Buffer.concat(chunks)),
+    );
     req.on("error", reject);
   });
 }
@@ -92,7 +94,8 @@ function readRaw(req: http.IncomingMessage): Promise<Buffer> {
 function parseBody(raw: Buffer): Record<string, unknown> {
   try {
     const v: unknown = JSON.parse(raw.toString("utf8") || "{}");
-    if (typeof v !== "object" || v === null || Array.isArray(v)) throw new BadRequest("body must be a JSON object");
+    if (typeof v !== "object" || v === null || Array.isArray(v))
+      throw new BadRequest("body must be a JSON object");
     return v as Record<string, unknown>;
   } catch (e) {
     throw e instanceof BadRequest ? e : new BadRequest("body is not valid JSON");
@@ -309,7 +312,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           // The runner names itself and signs the exact bytes it sent: a body altered on the way, or sent by someone who only holds
           // the bearer token of another runner, is refused.
           const named = rq.headers["x-axis-runner-id"];
-          if (named !== undefined && named !== a.runnerId) throw new HubError("forbidden", "x-axis-runner-id does not match the credential");
+          if (named !== undefined && named !== a.runnerId)
+            throw new HubError("forbidden", "x-axis-runner-id does not match the credential");
           if (hasBody) {
             const key = a.signingKey ?? (rq.headers.authorization ?? "").slice(7);
             const want = `v1=${createHmac("sha256", key).update(raw).digest("hex")}`;

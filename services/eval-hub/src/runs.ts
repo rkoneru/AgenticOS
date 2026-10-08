@@ -216,7 +216,9 @@ export class RunService {
       dataset_ref: suite.dataset_ref,
       dataset_hash: suite.dataset_hash,
       pass_threshold: suite.pass_threshold,
-      seed: parseInt(createHash("sha256").update(`seed|${id}`).digest("hex").slice(0, 8), 16) & 0x7fffffff,
+      seed:
+        parseInt(createHash("sha256").update(`seed|${id}`).digest("hex").slice(0, 8), 16) &
+        0x7fffffff,
       blueprint: parsed.blueprint,
       blueprint_name: parsed.blueprint.name,
       content_hash: parsed.blueprint.content_hash,
@@ -298,7 +300,15 @@ export class RunService {
     await this.requireActiveRunner(r);
     const queued = (await this.c.docs.find<EvalRunDoc>(p.tenantId, "runs", { status: "queued" }))
       .map((d) => d.data)
-      .sort((a, b) => (a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1));
+      .sort((a, b) =>
+        a.created_at === b.created_at
+          ? a.id < b.id
+            ? -1
+            : 1
+          : a.created_at < b.created_at
+            ? -1
+            : 1,
+      );
     for (const q of queued) {
       try {
         return await this.claim(p, q.id);
@@ -326,25 +336,41 @@ export class RunService {
   }
 
   /** The runner's provenance must be about THIS run: its blueprint hash, dataset hash and suite. Stored as reported. */
-  private parseProvenance(raw: unknown, run: EvalRunDoc, runnerId: string): Record<string, unknown> {
+  private parseProvenance(
+    raw: unknown,
+    run: EvalRunDoc,
+    runnerId: string,
+  ): Record<string, unknown> {
     if (!isObj(raw)) throw invalid("provenance is required", ["provenance"]);
-    if (JSON.stringify(raw).length > 100_000) throw invalid("provenance is too large", ["provenance"]);
+    if (JSON.stringify(raw).length > 100_000)
+      throw invalid("provenance is too large", ["provenance"]);
     const v = raw["runner_version"];
     if (typeof v !== "string" || v === "" || v.length > 100)
       throw invalid("provenance.runner_version is required", ["provenance.runner_version"]);
     if (raw["runner_id"] !== runnerId)
       throw integrityFailed("provenance names another runner", ["provenance.runner_id"]);
     if (raw["aggregation_version"] !== AGGREGATION_VERSION)
-      throw invalid(`aggregation_version must be ${AGGREGATION_VERSION}`, ["provenance.aggregation_version"]);
+      throw invalid(`aggregation_version must be ${AGGREGATION_VERSION}`, [
+        "provenance.aggregation_version",
+      ]);
     if (raw["blueprint_content_hash"] !== run.content_hash)
-      throw integrityFailed("the run was executed against different blueprint content", ["provenance.blueprint_content_hash"]);
+      throw integrityFailed("the run was executed against different blueprint content", [
+        "provenance.blueprint_content_hash",
+      ]);
     if (raw["dataset_version_hash"] !== run.dataset_hash)
-      throw integrityFailed("the run was executed against a different dataset", ["provenance.dataset_version_hash"]);
+      throw integrityFailed("the run was executed against a different dataset", [
+        "provenance.dataset_version_hash",
+      ]);
     if (raw["suite_ref"] !== run.suite_ref)
       throw integrityFailed("provenance names another suite", ["provenance.suite_ref"]);
-    if (raw["seed"] !== run.seed) throw integrityFailed("provenance carries another seed", ["provenance.seed"]);
+    if (raw["seed"] !== run.seed)
+      throw integrityFailed("provenance carries another seed", ["provenance.seed"]);
     const ids = raw["model_ids"];
-    if (!Array.isArray(ids) || ids.length > 50 || ids.some((x) => typeof x !== "string" || x.length > 200))
+    if (
+      !Array.isArray(ids) ||
+      ids.length > 50 ||
+      ids.some((x) => typeof x !== "string" || x.length > 200)
+    )
       throw invalid("provenance.model_ids must be an array of model ids", ["provenance.model_ids"]);
     return { ...raw };
   }
@@ -360,7 +386,8 @@ export class RunService {
     };
     const int = (k: string): number => {
       const v = raw[k];
-      if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) throw invalid(`cost.${k} must be a non-negative integer`, [`cost.${k}`]);
+      if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0)
+        throw invalid(`cost.${k} must be a non-negative integer`, [`cost.${k}`]);
       return v;
     };
     if (usd("agent_usd") + usd("judge_usd") !== usd("total_usd"))
@@ -383,7 +410,8 @@ export class RunService {
       const path = `case_results[${i}]`;
       if (!isObj(x)) throw invalid("case result must be an object", [path]);
       const id = x["case_id"];
-      if (typeof id !== "string" || !want.has(id)) throw invalid("case_id is not in the dataset", [`${path}.case_id`]);
+      if (typeof id !== "string" || !want.has(id))
+        throw invalid("case_id is not in the dataset", [`${path}.case_id`]);
       if (seen.has(id)) throw invalid(`duplicate result for case ${id}`, [`${path}.case_id`]);
       seen.add(id);
       const status = x["status"];
@@ -402,33 +430,49 @@ export class RunService {
       if (out_ !== undefined && out_ !== null && (typeof out_ !== "string" || out_.length > 20_000))
         throw invalid("output must be a string of at most 20000 characters", [`${path}.output`]);
       const trace = x["trace"];
-      if (trace !== undefined && trace !== null && (!isObj(trace) || JSON.stringify(trace).length > 100_000))
+      if (
+        trace !== undefined &&
+        trace !== null &&
+        (!isObj(trace) || JSON.stringify(trace).length > 100_000)
+      )
         throw invalid("trace must be an object of at most 100000 characters", [`${path}.trace`]);
       const gradesRaw = x["grades"];
       if (!Array.isArray(gradesRaw) || gradesRaw.length > byGrader.size)
-        throw invalid("grades must be an array with at most one grade per grader", [`${path}.grades`]);
+        throw invalid("grades must be an array with at most one grade per grader", [
+          `${path}.grades`,
+        ]);
       const gseen = new Set<string>();
       const grades: GradeRecord[] = gradesRaw.map((g: unknown, j): GradeRecord => {
         const gp = `${path}.grades[${j}]`;
         if (!isObj(g)) throw invalid("grade must be an object", [gp]);
         const spec = typeof g["grader_id"] === "string" ? byGrader.get(g["grader_id"]) : undefined;
-        if (!spec) throw invalid("grade for a grader the suite does not declare", [`${gp}.grader_id`]);
-        if (gseen.has(spec.id)) throw invalid(`duplicate grade for ${spec.id}`, [`${gp}.grader_id`]);
+        if (!spec)
+          throw invalid("grade for a grader the suite does not declare", [`${gp}.grader_id`]);
+        if (gseen.has(spec.id))
+          throw invalid(`duplicate grade for ${spec.id}`, [`${gp}.grader_id`]);
         gseen.add(spec.id);
-        if (g["kind"] !== spec.kind) throw invalid("grade kind does not match the suite's grader", [`${gp}.kind`]);
+        if (g["kind"] !== spec.kind)
+          throw invalid("grade kind does not match the suite's grader", [`${gp}.kind`]);
         const gs = g["status"];
         if (gs !== "scored" && gs !== "ungraded" && gs !== "pending" && gs !== "error")
-          throw invalid("grade status must be scored, ungraded, pending or error", [`${gp}.status`]);
+          throw invalid("grade status must be scored, ungraded, pending or error", [
+            `${gp}.status`,
+          ]);
         if (spec.kind === "human" && gs !== "pending")
           throw invalid("human grader scores come only from the review queue", [`${gp}.status`]);
         if (spec.kind !== "human" && gs === "pending")
           throw invalid("only a human grader can be pending", [`${gp}.status`]);
         const score = g["score"];
-        if (typeof score !== "number" || !Number.isFinite(score)) throw invalid("grade score must be a finite number", [`${gp}.score`]);
+        if (typeof score !== "number" || !Number.isFinite(score))
+          throw invalid("grade score must be a finite number", [`${gp}.score`]);
         const detail = g["detail"] === undefined ? "" : g["detail"];
-        if (typeof detail !== "string" || detail.length > 4000) throw invalid("detail must be a string of at most 4000 characters", [`${gp}.detail`]);
+        if (typeof detail !== "string" || detail.length > 4000)
+          throw invalid("detail must be a string of at most 4000 characters", [`${gp}.detail`]);
         const prov = g["provenance"] === undefined ? {} : g["provenance"];
-        if (!isObj(prov) || JSON.stringify(prov).length > 20_000) throw invalid("provenance must be an object of at most 20000 characters", [`${gp}.provenance`]);
+        if (!isObj(prov) || JSON.stringify(prov).length > 20_000)
+          throw invalid("provenance must be an object of at most 20000 characters", [
+            `${gp}.provenance`,
+          ]);
         return { grader_id: spec.id, kind: spec.kind, status: gs, score, detail, provenance: prov };
       });
       return {
@@ -445,7 +489,9 @@ export class RunService {
     });
     const missing = [...want].filter((id) => !seen.has(id));
     if (missing.length > 0)
-      throw invalid(`results must cover every case of the dataset (missing ${missing.length})`, ["case_results"]);
+      throw invalid(`results must cover every case of the dataset (missing ${missing.length})`, [
+        "case_results",
+      ]);
     return out.sort((a, b) => (a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0));
   }
 
@@ -472,9 +518,15 @@ export class RunService {
       if (input["runner_id"] !== r.runnerId)
         throw integrityFailed("payload names another runner", ["runner_id"]);
       if (input["run_id"] !== runId) throw integrityFailed("payload names another run", ["run_id"]);
-      if (input["suite_ref"] !== run.suite_ref) throw integrityFailed("payload names another suite", ["suite_ref"]);
+      if (input["suite_ref"] !== run.suite_ref)
+        throw integrityFailed("payload names another suite", ["suite_ref"]);
       const b = input["blueprint"];
-      if (!isObj(b) || b["name"] !== run.blueprint.name || b["version"] !== run.blueprint.version || b["content_hash"] !== run.content_hash)
+      if (
+        !isObj(b) ||
+        b["name"] !== run.blueprint.name ||
+        b["version"] !== run.blueprint.version ||
+        b["content_hash"] !== run.content_hash
+      )
         throw integrityFailed("payload names another blueprint", ["blueprint"]);
       if (input["mode"] !== run.mode) throw integrityFailed("payload names another mode", ["mode"]);
       if (input["status"] === "failed") return this.failRun(p.tenantId, d, input["reason"]);
@@ -495,13 +547,21 @@ export class RunService {
       if (agg.status === "complete") {
         for (const x of results) {
           const want = agg.per_case[x.case_id];
-          if (typeof x.score !== "number" || want === undefined || Math.abs(x.score - want) > SCORE_EPSILON)
+          if (
+            typeof x.score !== "number" ||
+            want === undefined ||
+            Math.abs(x.score - want) > SCORE_EPSILON
+          )
             bad.push(`case_score.${x.case_id}`);
         }
       }
-      if ((input["status"] === "pending_human") !== (agg.status === "pending_human")) bad.push("status");
+      if ((input["status"] === "pending_human") !== (agg.status === "pending_human"))
+        bad.push("status");
       if (bad.length > 0)
-        throw integrityFailed("the submitted aggregate does not match the per-case grades", bad.map((b) => `mismatch.${b}`));
+        throw integrityFailed(
+          "the submitted aggregate does not match the per-case grades",
+          bad.map((b) => `mismatch.${b}`),
+        );
       const started = run.started_at;
       const base: EvalRunDoc = {
         ...run,
@@ -510,7 +570,10 @@ export class RunService {
         cost,
         provenance,
         started_at: typeof input["started_at"] === "string" ? input["started_at"] : started,
-        pending_human: results.reduce((n, x) => n + x.grades.filter((g) => g.status === "pending").length, 0),
+        pending_human: results.reduce(
+          (n, x) => n + x.grades.filter((g) => g.status === "pending").length,
+          0,
+        ),
       };
       if (agg.status === "pending_human") {
         await guarded(() => this.c.docs.update(p.tenantId, "runs", runId, d.rev, base), "run");
@@ -530,7 +593,11 @@ export class RunService {
     });
   }
 
-  private async failRun(tenantId: string, d: Doc<EvalRunDoc>, reason: unknown): Promise<EvalRunDoc> {
+  private async failRun(
+    tenantId: string,
+    d: Doc<EvalRunDoc>,
+    reason: unknown,
+  ): Promise<EvalRunDoc> {
     if (typeof reason !== "string" || reason.trim() === "" || reason.length > 500)
       throw invalid("reason must be a string of 1-500 characters", ["reason"]);
     const next: EvalRunDoc = {
@@ -565,7 +632,12 @@ export class RunService {
   }
 
   /** Takes the final status from the hub's own aggregate, seals the record, audits it, then stores it. */
-  private async finalize(tenantId: string, rev: number, run: EvalRunDoc, agg: Aggregate): Promise<EvalRunDoc> {
+  private async finalize(
+    tenantId: string,
+    rev: number,
+    run: EvalRunDoc,
+    agg: Aggregate,
+  ): Promise<EvalRunDoc> {
     const scores: RunScores = {
       status: "complete",
       overall: agg.overall,
@@ -630,7 +702,11 @@ export class RunService {
    * The runner posts one review task per pending (case, human grader) cell after submitting a `pending_human` run. Idempotent: a task
    * that exists is left alone. A task for a cell that is not pending, or for a grader that is not a human grader, is refused.
    */
-  async createReviewTasks(p: HubPrincipal, runId: string, input: { tasks?: unknown }): Promise<{ created: number; existing: number }> {
+  async createReviewTasks(
+    p: HubPrincipal,
+    runId: string,
+    input: { tasks?: unknown },
+  ): Promise<{ created: number; existing: number }> {
     const r = requireRunner(p);
     return mutate(this.c, p, "evals.run.review_tasks", { run_id: runId }, async () => {
       await this.requireActiveRunner(r);
@@ -639,7 +715,11 @@ export class RunService {
       const { suite } = await this.load(p.tenantId, run.suite_ref, run);
       if (!Array.isArray(input.tasks) || input.tasks.length === 0 || input.tasks.length > 5000)
         throw invalid("tasks must be an array of 1-5000 review tasks", ["tasks"]);
-      const conflicts = [...new Set([run.requested_by, run.publisher].filter((x): x is string => typeof x === "string"))];
+      const conflicts = [
+        ...new Set(
+          [run.requested_by, run.publisher].filter((x): x is string => typeof x === "string"),
+        ),
+      ];
       const created = this.c.now();
       let made = 0;
       let existing = 0;
@@ -648,13 +728,20 @@ export class RunService {
         if (!isObj(t)) throw invalid("task must be an object", [path]);
         const cr = run.case_results.find((x) => x.case_id === t["case_id"]);
         const spec = suite.graders.find((g) => g.id === t["grader_id"]);
-        if (!cr || !spec || spec.kind !== "human") throw invalid("task must name a case of the run and a human grader", [path]);
-        if (!cr.grades.some((g) => g.grader_id === spec.id && g.status === "pending")) throw invalid("that grade is not pending", [path]);
+        if (!cr || !spec || spec.kind !== "human")
+          throw invalid("task must name a case of the run and a human grader", [path]);
+        if (!cr.grades.some((g) => g.grader_id === spec.id && g.status === "pending"))
+          throw invalid("that grade is not pending", [path]);
         const rubric = t["rubric"] === undefined ? String(spec.config["rubric"]) : t["rubric"];
-        if (typeof rubric !== "string" || rubric === "" || rubric.length > 4000) throw invalid("rubric must be a string of 1-4000 characters", [`${path}.rubric`]);
+        if (typeof rubric !== "string" || rubric === "" || rubric.length > 4000)
+          throw invalid("rubric must be a string of 1-4000 characters", [`${path}.rubric`]);
         const output = t["output"] === undefined ? null : t["output"];
-        if (output !== null && (typeof output !== "string" || output.length > 20_000)) throw invalid("output must be a string of at most 20000 characters", [`${path}.output`]);
-        if (JSON.stringify(t["input"] ?? null).length > 64_000 || JSON.stringify(t["expected"] ?? null).length > 64_000)
+        if (output !== null && (typeof output !== "string" || output.length > 20_000))
+          throw invalid("output must be a string of at most 20000 characters", [`${path}.output`]);
+        if (
+          JSON.stringify(t["input"] ?? null).length > 64_000 ||
+          JSON.stringify(t["expected"] ?? null).length > 64_000
+        )
           throw invalid("input/expected are too large", [path]);
         const id = `rt-${createHash("sha256").update(`${runId}|${cr.case_id}|${spec.id}`).digest("hex").slice(0, 32)}`;
         const task: ReviewTaskDoc = {
@@ -670,7 +757,9 @@ export class RunService {
           case_expected: t["expected"] ?? null,
           state: "open",
           created_at: iso(created),
-          sla_deadline: iso(new Date(created.getTime() + (spec.config["sla_hours"] as number) * 3_600_000)),
+          sla_deadline: iso(
+            new Date(created.getTime() + (spec.config["sla_hours"] as number) * 3_600_000),
+          ),
           double_grade: spec.config["double_grade"] === true,
           agreement_tolerance: spec.config["agreement_tolerance"] as number,
           conflicts,
@@ -699,19 +788,29 @@ export class RunService {
     for (let attempt = 0; attempt < 5; attempt++) {
       const d = await this.c.docs.get<EvalRunDoc>(tenantId, "runs", runId);
       if (!d || d.data.status !== "running") return;
-      const tasks = (await this.c.docs.find<ReviewTaskDoc>(tenantId, "tasks", { run_id: runId })).map((t) => t.data);
+      const tasks = (
+        await this.c.docs.find<ReviewTaskDoc>(tenantId, "tasks", { run_id: runId })
+      ).map((t) => t.data);
       const { suite } = await this.load(tenantId, d.data.suite_ref, d.data);
-      const results: CaseResult[] = d.data.case_results.map((x) => ({ ...x, grades: x.grades.map((g) => ({ ...g })) }));
+      const results: CaseResult[] = d.data.case_results.map((x) => ({
+        ...x,
+        grades: x.grades.map((g) => ({ ...g })),
+      }));
       for (const t of tasks) {
         if (t.resolution === null) continue;
-        const g = results.find((x) => x.case_id === t.case_id)?.grades.find((y) => y.grader_id === t.grader_id);
+        const g = results
+          .find((x) => x.case_id === t.case_id)
+          ?.grades.find((y) => y.grader_id === t.grader_id);
         if (g && g.status === "pending") {
           g.status = "scored";
           g.score = t.resolution.score;
           g.detail = `human_review:${t.resolution.method}`;
         }
       }
-      const pending = results.reduce((n, x) => n + x.grades.filter((g) => g.status === "pending").length, 0);
+      const pending = results.reduce(
+        (n, x) => n + x.grades.filter((g) => g.status === "pending").length,
+        0,
+      );
       const base: EvalRunDoc = { ...d.data, case_results: results, pending_human: pending };
       try {
         if (pending > 0) {
