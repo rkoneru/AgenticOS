@@ -1186,3 +1186,110 @@ def test_18_an_eval_that_tries_side_effects_is_denied_and_recorded(world: World)
     # nothing was filed or wired by anyone, and the policy still decides the same after all those evals
     text = json.dumps(world.owner.call("runEvents", id=prod["id"]))
     assert "wired" not in text and '"filed": true' not in text.lower()
+
+
+# ==== 7. cross-tenant isolation from every client ======================================================================================
+
+
+def test_19_another_tenant_sees_and_changes_nothing_from_any_client(world: World) -> None:
+    """Scenario 7: tenant B (an owner, so role is not the barrier) tries tenant A's datasets, suites, runs, comparisons, baselines,
+    review tasks, sampling configs and runners from the TS SDK, the Python SDK and the CLI: reads are empty or 404 and
+    indistinguishable from a missing id, writes find nothing, and the gate never leaks A's runs."""
+    a_run = world.state["run1"]["id"]
+    resolved = world.client(PySdk, world.reviewer_key).call("evalsReviewTasks", params={"state": "resolved"})["items"]
+    a_task_id = resolved[0]["id"] if resolved else "rt-" + "0" * 32
+    v1 = world.state["v1"]
+    for cls in CLIENTS:
+        cb = world.client(cls, world.key_b)
+        # reads: nothing of A's is listed
+        assert cb.call("evalsDatasetList")["items"] == [], cls.name
+        assert cb.call("evalsSuiteList")["items"] == [], cls.name
+        assert cb.call("evalsRunList")["items"] == [], cls.name
+        assert cb.call("evalsRunnersList")["items"] == [], cls.name
+        assert cb.call("evalsSamplingList")["items"] == [], cls.name
+        assert cb.call("evalsSamplingSummary")["items"] == [], cls.name
+        assert cb.call("evalsReviewTasks")["items"] == [], cls.name
+        assert cb.call("evalsBaselineList", blueprint="answer-agent", suite=SUITE_REF)["items"] == [], cls.name
+        # by id: 404, the same as an id that never existed
+        for op, args in (
+            ("evalsDatasetGet", {"name": "answer-cases", "version": 1}),
+            ("evalsSuiteGet", {"ref": SUITE_REF}),
+            ("evalsRunGet", {"id": a_run}),
+            ("evalsCompare", {"id": world.state["run2"]["id"]}),
+            ("evalsBaselineSet", {"run_id": a_run}),
+            ("evalsReviewClaim", {"id": a_task_id}),
+            ("evalsReviewGrade", {"id": a_task_id, "score": 1.0, "comment": "not mine to grade"}),
+            ("evalsRunnersRevoke", {"id": "runner-a"}),
+        ):
+            with pytest.raises(ApiFail) as e:
+                cb.call(op, **args)
+            assert e.value.status == 404 or (cls.name == "cli" and "not found" in e.value.text.lower()), (cls.name, op, e.value)
+        # writes that reference A's objects find nothing: a run of A's suite on A's released blueprint is a 422, not a run
+        with pytest.raises(ApiFail):
+            cb.call("evalsRunStart", suite=SUITE_REF, blueprint=ref_of(world, v1))
+        with pytest.raises(ApiFail):
+            cb.call("evalsSamplingPut", id="steal", body={"blueprint": "answer-agent", "suite": SUITE_REF, "rate": 1, "max_per_hour": 1})
+        # the gate answers for B's tenant only: A's blueprint is public (released), A's suites and runs are not
+        g = cb.call("evalsGate", blueprint=bp_dict(world, v1), suites=[{"ref": SUITE_REF}])
+        assert g["allowed"] is False and codes(g) == ["suite_not_found"], (cls.name, g)
+        assert g["runs"][0]["run_id"] is None and g["runs"][0]["overall"] is None
+    # A's data is all still there and unchanged
+    assert [d["ref"] for d in world.owner.call("evalsDatasetList")["items"]][:1] == ["answer-cases@1"]
+    assert world.owner.call("evalsRunGet", id=a_run)["status"] == "passed"
+    # a tenant named in the query or the body is refused, never honoured; a tenant header is refused
+    hb = {"x-axis-api-key": world.key_b}
+    s = world.stack
+    assert httpx.get(f"{s.gateway}/evals/runs", params={"tenant_id": world.a["tenant_id"]}, headers=hb).status_code == 422
+    assert httpx.get(f"{s.gateway}/evals/runs", headers={**hb, "x-tenant-id": world.a["tenant_id"]}).status_code == 400
+    # the runner surface: B's runner credentials (registered by B) reach only B's data, and cannot read A's blueprint manifest
+    creds_b = s.runner_credentials(world.b, "runner-b1")
+    PySdk(s, world.key_b).call("evalsRunnersRegister", id="runner-b1")
+    hub_b = Hub(s.eval_hub, "runner-b1", creds_b["runner_token"])
+    assert hub_b.req("GET", f"/suites/{SUITE_REF}").status_code == 404
+    assert hub_b.req("GET", "/datasets/answer-cases@1").status_code == 404
+    assert hub_b.req("GET", f"/runs/{a_run}").status_code in (403, 404)
+    m = hub_b.req("GET", f"/runner/manifest?name=answer-agent&version=1.0.0&namespace={world.ns}")
+    assert m.status_code == 403
+    # ... and A's runner credentials do not work for B's tenant either way round: they carry A's tenant, whatever the path says
+    hub_a = world.hub("runner-a")
+    assert hub_a.req("GET", "/suites").status_code in (200, 403)
+    assert all(x["ref"] != "b-only" for x in (hub_a.req("GET", "/suites").json().get("items", [])))
+
+
+# ==== judge policy bootstrap (NEEDS #309) and tenant-local blueprints ==========================================================
+
+
+def test_20_a_tenant_without_the_judge_rule_gets_ungraded_model_cases_not_a_free_pass(world: World) -> None:
+    """The judge is a gated model call of blueprint `eval-judge`. A deny-by-default tenant that never added the rule shipped as
+    policies/eval-judge gets `ungraded` model grades (score 0), the kernel's DENY in its audit chain, and a run that cannot pass on
+    the strength of a judge that never answered. (This tenant also evaluates a tenant-LOCAL blueprint: no registry namespace; the hub
+    serves its manifest from the gateway's store.)"""
+    s = world.stack
+    pack = copy.deepcopy(PACK)
+    pack["spec"]["rules"] = [r for r in pack["spec"]["rules"] if r["id"] != "allow-eval-judge-model-calls"]
+    c = s.provision(f"ec{short()}", pack=pack)
+    key = s.api_key(c["tenant_id"], c["owner_member_id"])
+    cc = PySdk(s, key)
+    cc.call("evalsRunnersRegister", id="runner-c")
+    runner = s.start_runner(c, "runner-c", judge_log=world.judge_log)
+    world.runners["runner-c"] = runner
+    try:
+        cli = Cli(s, key)
+        cli.j("blueprints", "publish", cli.file("bp.json", ABL_V1))
+        cc.call("evalsDatasetCreate", body={"name": "c-cases", "cases": CASES[:2]})
+        suite = {"ref": "c-tone@1.0.0", "dataset_ref": "c-cases@1", "graders": [DETERMINISTIC[1], TONE], "pass_threshold": 0.9, "required_for_release": False}
+        cc.call("evalsSuiteCreate", body=suite)
+        time.sleep(2.0)
+        run = cc.call("evalsRunStart", suite="c-tone@1.0.0", blueprint="answer-agent@1.0.0", mode="manual")
+        final = cc.call("evalsRunWait", id=run["id"])
+        detail = cc.call("evalsRunGet", id=run["id"])
+        tone = [g for cr in detail["case_results"] for g in cr["grades"] if g["grader_id"] == "tone"]
+        assert tone and all(g["status"] == "ungraded" and g["score"] == 0 and "judge_unavailable" in g["detail"] for g in tone), tone
+        assert final["status"] == "failed" and final["score"] == 0.5  # (1 + 0) / 2: the missing judge counts as a zero
+        assert detail["scores"]["ungraded"] == 2
+        denied = [r for r in audit_rows(s, c["tenant_id"]) if (r.get("blueprint") or {}).get("name") == "eval-judge"]
+        assert denied and all(r["decision"] == "DENY" and r["enforcement_point"] == "model_call" for r in denied)
+        # the agent's own calls were allowed: only the judge was missing a rule
+        assert all(cr["status"] == "completed" and cr["output"] for cr in detail["case_results"])
+    finally:
+        runner.stop()
