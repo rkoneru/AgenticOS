@@ -276,6 +276,57 @@ describe("Postgres", () => {
     ).rejects.toMatchObject({ code: "42501" });
   });
 
+  it("each half of the database rule stands on its own: not the author, and not any contributor", async () => {
+    const draft = (key: string) =>
+      admin.query(
+        "INSERT INTO compliance_docs (tenant_id, coll, key, rev, data) VALUES ($1,'assessments',$2,1,$3)",
+        [t1, key, JSON.stringify({ state: "in_review", author: "alice", contributors: [] })],
+      );
+    const finish = (key: string, data: object) =>
+      admin.query(
+        "UPDATE compliance_docs SET rev = 2, data = $3 WHERE tenant_id = $1 AND key = $2",
+        [t1, key, JSON.stringify(data)],
+      );
+    await draft("half-a@1");
+    // the author is not among the contributors listed, and still may not review
+    await expect(
+      finish("half-a@1", {
+        state: "rejected",
+        author: "alice",
+        contributors: [],
+        reviewed_by: "alice",
+      }),
+    ).rejects.toMatchObject({ code: "23514" });
+    await draft("half-b@1");
+    // a contributor who is not the author may not review either
+    await expect(
+      finish("half-b@1", {
+        state: "approved",
+        author: "alice",
+        contributors: ["carol"],
+        reviewed_by: "carol",
+      }),
+    ).rejects.toMatchObject({ code: "23514" });
+    await expect(
+      finish("half-b@1", {
+        state: "approved",
+        author: "alice",
+        contributors: ["carol"],
+        reviewed_by: "",
+      }),
+    ).rejects.toMatchObject({ code: "23514" });
+    await expect(
+      finish("half-b@1", { state: "approved", author: "alice", contributors: ["carol"] }),
+    ).rejects.toMatchObject({ code: "23514" });
+    const ok = await finish("half-b@1", {
+      state: "approved",
+      author: "alice",
+      contributors: ["carol"],
+      reviewed_by: "bob",
+    });
+    expect(ok.rowCount).toBe(1);
+  });
+
   it("the whole service works on Postgres: inventory, assessment workflow, documents, per-tenant isolation", async () => {
     const w = world({ docs: store });
     const owner = user(t1, "owner", "olivia");

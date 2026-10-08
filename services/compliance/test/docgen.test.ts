@@ -657,3 +657,16 @@ describe("assemble with a minimal blueprint (every optional field absent)", () =
     expect(body.annex_iv_coverage.find((c) => c.point === "2(g)")?.status).toBe("partial");
   });
 });
+
+describe("canonical JSON", () => {
+  it("does not depend on key order, and refuses what it cannot represent", () => {
+    expect(canonicalJson({ b: 1, a: { d: [3, { y: 1, x: 2 }], c: null } })).toBe(
+      canonicalJson({ a: { c: null, d: [3, { x: 2, y: 1 }] }, b: 1 }),
+    );
+    expect(canonicalJson({ b: 1, a: 2 })).toBe('{"a":2,"b":1}');
+    expect(() => canonicalJson({ a: undefined })).toThrow(TypeError);
+    expect(() => canonicalJson({ a: Number.NaN })).toThrow(TypeError);
+    expect(() => canonicalJson({ a: () => 1 })).toThrow(TypeError);
+    expect(canonicalJson([true, false, "x\n"])).toBe('[true,false,"x\\n"]');
+  });
+});

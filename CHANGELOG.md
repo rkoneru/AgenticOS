@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 9 / A — 2026-10-08 — Compliance matrix, technical documentation, ISO 42001 records
+
+- `docs/compliance/`: control matrices (YAML source, generated Markdown) for SOC 2, GDPR, HIPAA, the EU AI Act and ISO/IEC 42001: 118 rows, each
+  with mechanism, code, config, evidence and an honest status. Labelled "designed for / evidence-ready"; never certified or compliant.
+- `services/compliance` (`@axis/compliance`): `make compliance-check` (fails on cited paths, tests or make targets that do not exist, `Built`
+  without executable evidence, forbidden wording, missing required rows, stale rendered Markdown); a deterministic, sealed EU AI Act Annex IV
+  technical documentation generator that lists every missing source as a gap; ISO/IEC 42001 AI system inventory and AI impact assessments
+  (versioned, independent reviewer enforced in the service and by a database constraint, overdue detection).
+- Migration 0016 (`compliance_docs`, forced RLS, append-only collections); ADRs 0070-0074; OpenAPI 1.5.0 (14 operations, FREEZE and SDKs
+  regenerated); `api.compliance.read|write|review` in the control-plane pack with 21 golden cases; gateway routes and adapters; ergonomic
+  wrappers in both SDKs; `axis compliance ...`; read-only console pages (axe in both themes, XSS).
+- Spec `docs/spec/compliance.md`, runbook, threat model; NEEDS #3100-3115 (the parent renumbers).
+
 ## Phase 8 - exit: evals gate releases, proven end to end (`make e2e-phase8`, `make console-e2e`, `make evals`)
 
 **One additive contract change: OpenAPI 1.4.0** (ADR 0059: `listRegistryEvalAttestations`, re-verified on every read; FREEZE regenerated, SDKs and

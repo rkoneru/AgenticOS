@@ -126,9 +126,22 @@ describe("matrix checker", () => {
       ),
     ).toEqual(["M014"]);
   });
-  it("FAILS when a path escapes the repository", () => {
-    for (const p of ["../outside", "/etc/passwd", "a\\b", "src/../../x"])
-      expect(codes(check({ "t.yaml": fw([row({ code: [p] })]) }))).toEqual(["M010"]);
+  it("FAILS when a path escapes the repository, even when something exists there", () => {
+    const repo = {
+      ...FILES,
+      "../outside": "x",
+      "/etc/passwd": "x",
+      "a\\b": "x",
+      "src/../../x": "x",
+      "src/../a.ts": "x",
+    };
+    for (const p of ["../outside", "/etc/passwd", "a\\b", "src/../../x", "src/../a.ts"]) {
+      const r = check({ "t.yaml": fw([row({ code: [p] })]) }, repo);
+      expect(
+        r.findings.map((f) => f.message),
+        p,
+      ).toEqual([`code path path is not repository-relative: ${p}`]);
+    }
   });
   it("FAILS a Built row without executable evidence (M020), with only documents, or without code (M021)", () => {
     expect(codes(check({ "t.yaml": fw([row({ evidence: [] })]) }))).toEqual(["M020"]);
