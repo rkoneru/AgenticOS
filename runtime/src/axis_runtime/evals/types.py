@@ -87,10 +87,10 @@ class EvalCase:
     @classmethod
     def from_wire(cls, raw: object, path: str = "case") -> EvalCase:
         o = _obj(raw, path)
-        tags = o.get("tags") or []
+        tags = [] if o.get("tags") is None else o["tags"]
         if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
             raise WireError(f"{path}.tags: expected a list of strings")
-        meta = o.get("metadata") or {}
+        meta = {} if o.get("metadata") is None else o["metadata"]
         if not isinstance(meta, Mapping):
             raise WireError(f"{path}.metadata: expected an object")
         if "input" not in o:
@@ -132,7 +132,7 @@ class GraderSpec:
         weight = _number(o, "weight", path, default=1.0)
         if weight <= 0:
             raise WireError(f"{path}.weight: must be positive")
-        config = o.get("config") or {}
+        config = {} if o.get("config") is None else o["config"]
         if not isinstance(config, Mapping):
             raise WireError(f"{path}.config: expected an object")
         min_mean = None if o.get("min_mean") is None else _unit(o, "min_mean", path)
@@ -165,7 +165,7 @@ class Suite:
         specs = tuple(GraderSpec.from_wire(g, f"suite.graders[{i}]") for i, g in enumerate(graders))
         if len({g.id for g in specs}) != len(specs):
             raise WireError("suite.graders: duplicate grader id")
-        settings = o.get("settings") or {}
+        settings = {} if o.get("settings") is None else o["settings"]
         if not isinstance(settings, Mapping):
             raise WireError("suite.settings: expected an object")
         return cls(
