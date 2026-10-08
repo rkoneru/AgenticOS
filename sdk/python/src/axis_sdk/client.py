@@ -6,6 +6,7 @@ The tenant is always derived from the credential by the server; there is no tena
 from __future__ import annotations
 
 import asyncio
+import builtins
 import os
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -574,7 +575,7 @@ class EvalDatasets:
     def create(
         self,
         name: str,
-        cases: list[dict[str, Any]],
+        cases: builtins.list[dict[str, Any]],
         *,
         description: str | None = None,
         phi: bool | None = None,
@@ -583,7 +584,7 @@ class EvalDatasets:
     ) -> Any:
         body = _drop_none(name=name, cases=cases, description=description, phi=phi)
         return self._ax.api.create_eval_dataset(
-            body=body, idempotency_key=idempotency_key, options=options
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
         )
 
     def get(
@@ -615,7 +616,7 @@ class EvalSuites:
         options: RequestOptions | None = None,
     ) -> Any:
         return self._ax.api.create_eval_suite(
-            body=body, idempotency_key=idempotency_key, options=options
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
         )
 
     def get(self, ref: str, *, options: RequestOptions | None = None) -> Any:
@@ -705,7 +706,7 @@ class EvalSampling:
             alert_threshold=alert_threshold,
         )
         return self._ax.api.put_eval_sampling_config(
-            sampling_id=sampling_id, body=body, options=options
+            sampling_id=sampling_id, body=cast("Any", body), options=options
         )
 
     def summary(
@@ -737,7 +738,9 @@ class EvalRunners:
         options: RequestOptions | None = None,
     ) -> Any:
         body = None if description is None else {"description": description}
-        return self._ax.api.register_eval_runner(runner_id=runner_id, body=body, options=options)
+        return self._ax.api.register_eval_runner(
+            runner_id=runner_id, body=cast("Any", body), options=options
+        )
 
     def revoke(self, runner_id: str, *, options: RequestOptions | None = None) -> Any:
         return self._ax.api.revoke_eval_runner(runner_id=runner_id, options=options)
@@ -767,7 +770,7 @@ class Evals:
         version's content hash."""
         body = _drop_none(suite=suite, mode=mode, blueprint=parse_eval_blueprint(blueprint))
         return self._ax.api.start_eval_run(
-            body=body, idempotency_key=idempotency_key, options=options
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
         )
 
     def get(self, eval_run_id: str, *, options: RequestOptions | None = None) -> Any:
@@ -823,7 +826,7 @@ class Evals:
     def gate(
         self,
         blueprint: dict[str, Any],
-        suites: list[dict[str, Any]] | None = None,
+        suites: builtins.list[dict[str, Any]] | None = None,
         *,
         options: RequestOptions | None = None,
     ) -> Any:
@@ -831,7 +834,7 @@ class Evals:
         this exact content hash by a registered runner and no regression against the baseline;
         ``reasons`` explains every block."""
         body = _drop_none(blueprint=blueprint, suites=suites)
-        return self._ax.api.gate_eval_release(body=body, options=options)
+        return self._ax.api.gate_eval_release(body=cast("Any", body), options=options)
 
     def iterate(
         self,
@@ -1563,7 +1566,7 @@ class AsyncEvalDatasets:
     async def create(
         self,
         name: str,
-        cases: list[dict[str, Any]],
+        cases: builtins.list[dict[str, Any]],
         *,
         description: str | None = None,
         phi: bool | None = None,
@@ -1572,7 +1575,7 @@ class AsyncEvalDatasets:
     ) -> Any:
         body = _drop_none(name=name, cases=cases, description=description, phi=phi)
         return await self._ax.api.create_eval_dataset(
-            body=body, idempotency_key=idempotency_key, options=options
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
         )
 
     async def get(
@@ -1604,7 +1607,7 @@ class AsyncEvalSuites:
         options: RequestOptions | None = None,
     ) -> Any:
         return await self._ax.api.create_eval_suite(
-            body=body, idempotency_key=idempotency_key, options=options
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
         )
 
     async def get(self, ref: str, *, options: RequestOptions | None = None) -> Any:
@@ -1702,7 +1705,7 @@ class AsyncEvalSampling:
             alert_threshold=alert_threshold,
         )
         return await self._ax.api.put_eval_sampling_config(
-            sampling_id=sampling_id, body=body, options=options
+            sampling_id=sampling_id, body=cast("Any", body), options=options
         )
 
     async def summary(
@@ -1735,7 +1738,7 @@ class AsyncEvalRunners:
     ) -> Any:
         body = None if description is None else {"description": description}
         return await self._ax.api.register_eval_runner(
-            runner_id=runner_id, body=body, options=options
+            runner_id=runner_id, body=cast("Any", body), options=options
         )
 
     async def revoke(self, runner_id: str, *, options: RequestOptions | None = None) -> Any:
@@ -1766,7 +1769,7 @@ class AsyncEvals:
         version's content hash."""
         body = _drop_none(suite=suite, mode=mode, blueprint=parse_eval_blueprint(blueprint))
         return await self._ax.api.start_eval_run(
-            body=body, idempotency_key=idempotency_key, options=options
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
         )
 
     async def get(self, eval_run_id: str, *, options: RequestOptions | None = None) -> Any:
@@ -1822,7 +1825,7 @@ class AsyncEvals:
     async def gate(
         self,
         blueprint: dict[str, Any],
-        suites: list[dict[str, Any]] | None = None,
+        suites: builtins.list[dict[str, Any]] | None = None,
         *,
         options: RequestOptions | None = None,
     ) -> Any:
@@ -1830,7 +1833,7 @@ class AsyncEvals:
         this exact content hash by a registered runner and no regression against the baseline;
         ``reasons`` explains every block."""
         body = _drop_none(blueprint=blueprint, suites=suites)
-        return await self._ax.api.gate_eval_release(body=body, options=options)
+        return await self._ax.api.gate_eval_release(body=cast("Any", body), options=options)
 
     async def iterate(
         self,
