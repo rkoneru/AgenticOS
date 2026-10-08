@@ -91,9 +91,10 @@ def agent(body: dict[str, Any]) -> dict[str, Any]:
                 None,
                 [
                     ("lookup-claim", {"claim_id": n}),
-                    ("file-payout", {"claim_id": n, "amount": 250}),
                     ("wire-funds", {"account": "ACME-1", "amount": 9000}),
-                    ("run-snippet", {"code": "print('hi')"}),
+                    ("run-snippet", {"language": "python", "code": "print('hi')"}),
+                    # last: a REQUIRE_APPROVAL parks the run, so nothing after it would be attempted
+                    ("file-payout", {"claim_id": n, "amount": 250}),
                 ],
             )
         return _turn("probe finished: " + " | ".join(r[:50] for r in results))

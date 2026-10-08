@@ -164,6 +164,8 @@ class PySdk(EvalClient):
                 return ax.runs.wait(a["id"], timeout=120, poll_interval=0.3)
             case "runGet":
                 return ax.runs.get(a["id"])
+            case "runEvents":
+                return list(ax.runs.all_events(a["id"]))
             case "approvalsList":
                 return ax.approvals.list(status=a.get("status"))
             case "reject":

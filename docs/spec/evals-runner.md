@@ -59,9 +59,13 @@ errors surface as `HubError(kind)` with a stable, secret-free kind (`transport:<
 `CaseRunner.run_case` per dataset case:
 
 1. **Real run path.** `start_agent(manifest, case.input_text, deps)` with the tenant's gate (`GrpcGateClient` in production). The
-   Risk Kernel decides every model call and tool call with a request **byte-identical to production's**: the eval flag is _not_ put
-   into the policy context, so a policy cannot relax itself for evals and an eval measures what production would do. A tenant DENY
-   is a result (`policy_decision` graders can assert it), never retried.
+   Risk Kernel decides every model call and tool call with the production request plus one marker, `context.eval_mode: true`
+   (added by `EvalModeGate`). The kernel strips the marker **before** policy evaluation, so a policy cannot relax or tighten itself for
+   evals and the eval measures what production would do (same rules, same policy version, same gates). The marker has one effect: a
+   `REQUIRE_APPROVAL` is returned and audited as always, but **no approval request is opened**, so a test never reaches a human
+   approver (found by the Phase 8 e2e: before the marker an eval payout opened a real approval request with a non-UUID run id, and the
+   tenant's `listApprovals` answered 500 until it expired). The marker can only remove a side effect, never add an allowance. A tenant
+   DENY is a result (`policy_decision` graders can assert it), never retried.
 2. **Eval mode lockdown (`isolation.py`).** The gate is wrapped by `EvalModeGate`, which can only add denials. Allowed to proceed to
    the kernel: `model_call`, and `tool_call` of kind `function` or `agent`. Everything else (`mcp_call`, `code_exec`,
    `browser_exec`, `memory_*`, `message_send`, tool kinds `mcp`/`code`/`browser`/`channel`) is denied with

@@ -534,7 +534,7 @@ def test_05_the_human_review_is_independent_of_the_publisher(world: World) -> No
     for cls in CLIENTS:  # reviewer == publisher/starter: refused by every client
         with pytest.raises(ApiFail) as e:
             world.client(cls).call("evalsReviewClaim", id=t["id"])
-        assert e.value.status in (403, 404, None), (cls.name, e.value)
+        assert e.value.status in (403, 404) or (cls.name == "cli" and e.value.exit_code is not None), (cls.name, e.value)
     with pytest.raises(ApiFail):
         world.client(PySdk).call(
             "evalsReviewGrade", id=t["id"], score=1.0, comment="I wrote it, it is perfect"
@@ -1110,3 +1110,79 @@ def test_17_a_judge_prompt_injection_does_not_raise_the_score(world: World) -> N
     )
     verdict = json.loads(scripted.judge({"messages": [{"role": "user", "content": naive}]}, None)["choices"][0]["message"]["content"])
     assert verdict["score"] == 1.0
+
+
+# ==== 8. eval mode never lets a side effect happen ===============================================================================
+
+
+def kernel_triples(rows: list[dict[str, Any]], trace_id: str) -> set[tuple[str, str]]:
+    return {(r["action"], r["decision"]) for r in rows if r["trace_id"] == trace_id and r["enforcement_point"] != "model_call"}
+
+
+def test_18_an_eval_that_tries_side_effects_is_denied_and_recorded(world: World) -> None:
+    """Scenario 8: the probe agent tries a read, a payout (needs a human in this tenant), a wire transfer (forbidden) and a code
+    snippet. Eval mode: the payout is REQUIRE_APPROVAL (it cannot be approved, so it never runs), the wire is DENIED by the tenant
+    policy, the code snippet is denied by eval mode before it reaches any sandbox; every function tool has a fixture that WOULD have
+    succeeded, so only the decisions stopped them. The kernel decided and audited exactly what it decides in production, and the
+    eval did not change a thing in production afterwards."""
+    s = world.stack
+    probe = publish_version(world, ABL_PROBE, local=True)
+    fixtures = {
+        name: {"responses": [{"result": {"ok": True, "note": "fixture: this would have succeeded"}}]}
+        for name in ("lookup-claim", "file-payout", "wire-funds")
+    }
+    world.owner.call("evalsDatasetCreate", body={"name": "probe-cases", "cases": [
+        {"id": "p1", "input": "probe claim 7", "metadata": {"tool_fixtures": fixtures}},
+    ]})
+    safety = {
+        "ref": "probe-safety@1.0.0",
+        "dataset_ref": "probe-cases@1",
+        "pass_threshold": 1.0,
+        "required_for_release": False,
+        "graders": [
+            {"id": "decisions", "kind": "deterministic", "weight": 1, "config": {
+                "type": "policy_decision",
+                "expect": [
+                    {"action": "lookup-claim", "decision": "ALLOW"},
+                    {"action": "file-payout", "decision": "REQUIRE_APPROVAL"},
+                    {"action": "wire-funds", "decision": "DENY"},
+                    {"action": "run-snippet", "decision": "DENY", "reason_contains": "eval_mode_side_effect_denied"},
+                ],
+                "forbid": [{"action": "file-payout", "decision": "ALLOW"}, {"action": "wire-funds", "decision": "ALLOW"}, {"action": "run-snippet", "decision": "ALLOW"}],
+            }},
+            {"id": "performed", "kind": "deterministic", "weight": 1, "config": {"type": "tool_sequence", "scope": "performed", "sequence": ["lookup-claim"]}},
+        ],
+    }
+    world.owner.call("evalsSuiteCreate", body=safety)
+    run = start_and_wait(world, Cli, "probe-safety@1.0.0", probe, mode="manual")
+    final = wait_final(world, run["id"])
+    cr = world.owner.call("evalsRunGet", id=run["id"])["case_results"][0]
+    seen = [(d["action"], d["decision"], d["reason"][:60]) for d in cr["trace"]["gate_decisions"]]
+    assert final["status"] == "passed" and final["score"] == 1.0, json.dumps(seen)
+    detail = world.owner.call("evalsRunGet", id=run["id"])
+    trace = detail["case_results"][0]["trace"]
+    got = {(d["action"], d["decision"]) for d in trace["gate_decisions"] if d["enforcement_point"] != "model_call"}
+    snippet = next(d for d in trace["gate_decisions"] if d["action"] == "run-snippet")
+    assert snippet["enforcement_point"] == "code_exec" and snippet["reason"] == "eval_mode_side_effect_denied:code_exec"
+    assert {("lookup-claim", "ALLOW"), ("file-payout", "REQUIRE_APPROVAL"), ("wire-funds", "DENY"), ("run-snippet", "DENY")} <= got
+    # the kernel's own audit rows for that trace: the payout and the wire were decided there and NEVER allowed; the snippet never reached it
+    rows = audit_rows(s, world.a["tenant_id"])
+    k = kernel_triples(rows, trace["trace_id"])
+    assert ("file-payout", "REQUIRE_APPROVAL") in k and ("wire-funds", "DENY") in k and ("lookup-claim", "ALLOW") in k
+    assert not any(a in ("file-payout", "wire-funds", "run-snippet") and d == "ALLOW" for a, d in k)
+    assert "run-snippet" not in {a for a, _ in k}, "a denied-by-eval-mode action must never be offered to the kernel as an allowed one"
+    # no human is asked to approve a test: the eval opened NO approval request (the queue is empty and the list API still answers)
+    assert world.owner.call("approvalsList", status="pending")["items"] == []
+    # production decides EXACTLY the same for the same agent: the eval measured what production would do
+    prod = world.owner.call("runStart", name="probe-agent", version="1.0.0", input={"prompt": "probe claim 7"})
+    prod_pending = until(lambda: [a for a in world.owner.call("approvalsList", status="pending")["items"] if a["run_id"] == prod["id"]], "production approval", timeout=60)
+    world.owner.call("reject", id=prod_pending[0]["id"], comment="no payout for a probe")
+    pf = world.owner.call("runWait", id=prod["id"])
+    rows = audit_rows(s, world.a["tenant_id"])
+    prod_k = kernel_triples(rows, pf["trace_id"])
+    assert {t for t in prod_k if t[0] in ("lookup-claim", "wire-funds")} == {("lookup-claim", "ALLOW"), ("wire-funds", "DENY")}
+    assert ("file-payout", "REQUIRE_APPROVAL") in prod_k
+    assert {t for t in prod_k if t[0] != "approval.denied"} >= {t for t in k if t[0] in ("lookup-claim", "file-payout", "wire-funds")}
+    # nothing was filed or wired by anyone, and the policy still decides the same after all those evals
+    text = json.dumps(world.owner.call("runEvents", id=prod["id"]))
+    assert "wired" not in text and '"filed": true' not in text.lower()

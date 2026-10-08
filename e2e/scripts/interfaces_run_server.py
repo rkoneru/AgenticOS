@@ -122,8 +122,8 @@ def script(body: dict[str, Any]) -> dict[str, Any]:
                 None,
                 [
                     ("lookup-claim", {"claim_id": claim}),
-                    ("file-payout", {"claim_id": claim, "amount": 250}),
                     ("wire-funds", {"account": "ACME-1", "amount": 9000}),
+                    ("file-payout", {"claim_id": claim, "amount": 250}),
                 ],
             )
         return _turn("probe finished: " + " | ".join(str(m["content"])[:40] for m in results))
