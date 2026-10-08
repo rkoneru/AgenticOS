@@ -97,10 +97,76 @@ const FIXTURES: Record<string, Fx> = {
     const to = new Date(Date.now() + 86_400_000).toISOString();
     return `/usage?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&group_by=meter`;
   }),
-  startEvalRun: ok("POST", "/evals/runs", 501, () => ({
-    suite: "claims-regression",
-    blueprint: { name: "claims", version: "1.0.0" },
+  startEvalRun: ok("POST", "/evals/runs", 202, (s) => ({
+    suite: s.evals.plainSuite,
+    mode: "ci",
+    blueprint: s.blueprint,
   })),
+  listEvalRuns: ok("GET", (s) => `/evals/runs?limit=5&status=passed&blueprint=${s.blueprint.name}`),
+  getEvalRun: ok("GET", (s) => `/evals/runs/${s.evals.runId}`),
+  getEvalRunComparison: ok("GET", (s) => `/evals/runs/${s.evals.run2Id}/comparison`),
+  gateEvalRelease: ok("POST", "/evals/gate", 200, (s) => ({
+    blueprint: {
+      name: s.blueprint.name,
+      version: s.blueprint.version,
+      content_hash: s.evals.contentHash,
+    },
+    suites: [{ ref: s.evals.plainSuite, threshold: 0.8 }],
+  })),
+  listEvalDatasets: ok("GET", "/evals/datasets?name=seed-ds"),
+  createEvalDataset: ok("POST", "/evals/datasets", 201, () => ({
+    name: `ds-${rid()}`,
+    cases: [{ id: "a", input: "q", expected: "a", tags: ["t"] }],
+  })),
+  getEvalDatasetVersion: ok("GET", "/evals/datasets/seed-ds/versions/latest"),
+  listEvalSuites: ok("GET", "/evals/suites"),
+  createEvalSuite: ok("POST", "/evals/suites", 201, () => ({
+    ref: `fx-${rid()}@1.0.0`,
+    dataset_ref: "seed-ds@1",
+    graders: [{ id: "exact", kind: "deterministic", config: { type: "exact" } }],
+    pass_threshold: 0.9,
+    min_case_score: 0.5,
+    settings: { concurrency: 2 },
+  })),
+  getEvalSuite: ok("GET", "/evals/suites/seed-plain%401.0.0"),
+  listEvalBaselines: ok(
+    "GET",
+    (s) =>
+      `/evals/baselines?blueprint=${s.blueprint.name}&suite=${encodeURIComponent(s.evals.plainSuite)}`,
+  ),
+  setEvalBaseline: ok("POST", "/evals/baselines", 201, (s) => ({ run_id: s.evals.runId })),
+  listEvalReviewTasks: ok("GET", "/evals/reviews/tasks?state=open"),
+  claimEvalReviewTask: ok("POST", (s) => `/evals/reviews/tasks/${s.evals.claimTask}/claim`),
+  gradeEvalReviewTask: ok(
+    "POST",
+    (s) => `/evals/reviews/tasks/${s.evals.gradeTask}/grade`,
+    200,
+    () => ({ score: 0.9, comment: "Clear and polite." }),
+  ),
+  skipEvalReviewTask: ok(
+    "POST",
+    (s) => `/evals/reviews/tasks/${s.evals.skipTask}/skip`,
+    200,
+    () => ({ reason: "outside my expertise" }),
+  ),
+  listEvalSamplingConfigs: ok("GET", "/evals/sampling"),
+  putEvalSamplingConfig: ok("PUT", "/evals/sampling/fx-sampling", 200, (s) => ({
+    blueprint: s.blueprint.name,
+    suite: s.evals.plainSuite,
+    rate: 0.05,
+    max_per_hour: 20,
+    redaction: "phi",
+    alert_threshold: 0.7,
+  })),
+  getEvalOnlineSummary: ok("GET", (s) => `/evals/online/summary?blueprint=${s.blueprint.name}`),
+  listEvalRunners: ok("GET", "/evals/runners"),
+  registerEvalRunner: ok(
+    "PUT",
+    () => `/evals/runners/fx-${rid()}`,
+    200,
+    () => ({ description: "CI worker" }),
+  ),
+  revokeEvalRunner: ok("POST", (s) => `/evals/runners/${s.evals.revokableRunner}/revoke`),
   explainRun: ok("GET", (s) => `/runs/${s.runId}/explanation`),
   explainAuditEvent: ok("GET", (s) => `/audit/events/${s.denySeq}/explanation`),
   getMe: { ...ok("GET", "/me"), anyRole: true },
@@ -182,8 +248,8 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     const ids = spec.operations.map((o) => o.id).sort();
     expect(Object.keys(ROUTES).sort()).toEqual(ids);
     expect(Object.keys(FIXTURES).sort()).toEqual(ids);
-    expect(ids.length).toBe(38);
-    expect(spec.version).toBe("1.2.0");
+    expect(ids.length).toBe(60);
+    expect(spec.version).toBe("1.3.0");
   });
 
   it("every operation has a security requirement in the document (nothing is public)", () => {

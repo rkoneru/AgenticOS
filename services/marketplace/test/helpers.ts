@@ -11,6 +11,7 @@ import {
   generatePublisherKey,
   signBlueprint,
   signStatement,
+  type EvalGatePort,
   type PublisherKeyPair,
   type RegistryStore,
 } from "@axis/registry";
@@ -110,6 +111,7 @@ export interface EnvOptions {
   registryStore?: RegistryStore;
   tenant?: () => Promise<string>;
   review?: ReviewOptions;
+  evalGate?: EvalGatePort;
 }
 
 export function makeEnv(o: EnvOptions = {}): Env {
@@ -121,6 +123,7 @@ export function makeEnv(o: EnvOptions = {}): Env {
     store: registryStore,
     audit: new ServiceAudit(audit, "registry", clock.now),
     now: clock.now,
+    ...(o.evalGate ? { evalGate: o.evalGate } : {}),
   });
   const domain = new FakeDomainProver();
   const identity = new FakeIdentityProver();

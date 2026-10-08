@@ -6,7 +6,7 @@
     "packages/contracts/schemas/ipc-envelope-v1.schema.json": "7a60b6bde6ccb89e5e47223accde3e32b53f9f9e9080173c94d9aa9cf3f0449d",
     "packages/contracts/schemas/policy-v1.schema.json": "9421d5a629fbe971d85a2a11fdca1217949dfcd05afad679795a8777d1264d22",
     "packages/contracts/process-model.json": "c963ac5787d1d34f51a65d893caeecafec83928de1dc728d3afce6fb17a58c52",
-    "packages/contracts/openapi/axis-v1.yaml": "d08f1c6d949fd0f354bfe8b8425cf6e176b93cc720b3cc9b2441d4c6bc2499a7",
+    "packages/contracts/openapi/axis-v1.yaml": "0792c1ca18f4ce5e4caf6a6379414375c44b763e4f392bd12e1f48040acd7ef7",
     "proto/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "proto/axis/runtime/v1/audit.proto": "8bb9bfb9a42304a2cc8927f3af70f5f4f175fae2fc0e98a34524a41c1349f93e",
     "proto/axis/runtime/v1/common.proto": "b0124e436e52e9f13a125f5deced4752cf51f10b0574c12ee04204d48a225566",
@@ -23,6 +23,8 @@
     "packages/db/migrations/0008_billing.sql": "b3fa9da76158033ed2d3761786599431d1eab35d9a8b881c8f86a2d3d0aa9608",
     "packages/db/migrations/0009_control_plane.sql": "7f2c40037d9958cea01defb0442935fca65a5dff204256bed1248e9bdea096a9",
     "packages/db/migrations/0010_registry.sql": "ba4d90822ad01fc24a8af19f8a8ccee79eb8308cdefe04fb1cd8d1c1c0d327e7",
-    "packages/db/migrations/0011_marketplace.sql": "11e3679e4ce51a6748e1ecdaef3153b22fdf9d87678c06bba1f7789527626229"
+    "packages/db/migrations/0011_marketplace.sql": "11e3679e4ce51a6748e1ecdaef3153b22fdf9d87678c06bba1f7789527626229",
+    "packages/db/migrations/0012_registry_public_versions.sql": "d0474ec7e5c28de201b0b4dfc4530d61cf57c3dfa8aeb00ea6c99102728d2751",
+    "packages/db/migrations/0013_eval_hub.sql": "1637e9a7de544e8db02ea107cb88f264f297f0280c68be2b5cf6c2b3d1491046"
   }
 }

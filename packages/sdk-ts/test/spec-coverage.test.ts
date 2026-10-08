@@ -36,7 +36,46 @@ const ERGONOMIC: Record<OperationId, (ax: Axis) => Promise<unknown>> = {
   setKillSwitch: (ax) => ax.killSwitches.engage("agent", "agent-one", "drill"),
   getUsage: (ax) =>
     ax.usage.get({ from: "2026-01-01T00:00:00Z", to: "2026-02-01T00:00:00Z", groupBy: "day" }),
-  startEvalRun: (ax) => ax.evals.start({ suite: "smoke", blueprint: "agent-one@1.0.0" }),
+  startEvalRun: (ax) => ax.evals.start({ suite: "smoke@1.0.0", blueprint: "agent-one@1.0.0" }),
+  listEvalRuns: (ax) => ax.evals.list({ suite: "smoke@1.0.0", status: "passed" }),
+  getEvalRun: (ax) => ax.evals.get("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  getEvalRunComparison: (ax) => ax.evals.comparison("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  gateEvalRelease: (ax) =>
+    ax.evals.gate({
+      blueprint: { name: "agent-one", version: "1.0.0", content_hash: "a".repeat(64) },
+      suites: [{ ref: "smoke@1.0.0", threshold: 0.8 }],
+    }),
+  listEvalDatasets: (ax) => ax.evals.datasets.list({ name: "qa" }),
+  createEvalDataset: (ax) =>
+    ax.evals.datasets.create({ name: "qa", cases: [{ id: "c1", input: "q", expected: "a" }] }),
+  getEvalDatasetVersion: (ax) => ax.evals.datasets.get("qa", 1),
+  listEvalSuites: (ax) => ax.evals.suites.list(),
+  createEvalSuite: (ax) =>
+    ax.evals.suites.create({
+      ref: "smoke@1.0.0",
+      dataset_ref: "qa@1",
+      graders: [{ id: "exact", kind: "deterministic", config: { type: "exact" } }],
+      pass_threshold: 0.8,
+    }),
+  getEvalSuite: (ax) => ax.evals.suites.get("smoke@1.0.0"),
+  listEvalBaselines: (ax) => ax.evals.baselines.list("agent-one", "smoke@1.0.0"),
+  setEvalBaseline: (ax) => ax.evals.baselines.set("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  listEvalReviewTasks: (ax) => ax.evals.review.tasks({ state: "open" }),
+  claimEvalReviewTask: (ax) => ax.evals.review.claim("rt-1"),
+  gradeEvalReviewTask: (ax) => ax.evals.review.grade("rt-1", { score: 0.9, comment: "clear" }),
+  skipEvalReviewTask: (ax) => ax.evals.review.skip("rt-1", "not my area"),
+  listEvalSamplingConfigs: (ax) => ax.evals.sampling.list(),
+  putEvalSamplingConfig: (ax) =>
+    ax.evals.sampling.put("prod", {
+      blueprint: "agent-one",
+      suite: "smoke@1.0.0",
+      rate: 0.1,
+      max_per_hour: 10,
+    }),
+  getEvalOnlineSummary: (ax) => ax.evals.sampling.summary({ blueprint: "agent-one" }),
+  listEvalRunners: (ax) => ax.evals.runners.list(),
+  registerEvalRunner: (ax) => ax.evals.runners.register("ci-1", "CI worker"),
+  revokeEvalRunner: (ax) => ax.evals.runners.revoke("ci-1"),
   getMe: (ax) => ax.me(),
   getApproval: (ax) => ax.approvals.get("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
   activatePolicyPack: (ax) => ax.policies.activate("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),

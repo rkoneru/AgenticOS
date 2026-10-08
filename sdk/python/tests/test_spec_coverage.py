@@ -108,7 +108,43 @@ ERGONOMIC = {
     "getUsage": lambda ax: ax.usage.get(
         "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", group_by="day"
     ),
-    "startEvalRun": lambda ax: ax.evals.start("smoke", "agent-one@1.0.0"),
+    "startEvalRun": lambda ax: ax.evals.start("smoke@1.0.0", "agent-one@1.0.0"),
+    "listEvalRuns": lambda ax: ax.evals.list(suite="smoke@1.0.0", status="passed"),
+    "getEvalRun": lambda ax: ax.evals.get(RUN),
+    "getEvalRunComparison": lambda ax: ax.evals.comparison(RUN),
+    "gateEvalRelease": lambda ax: ax.evals.gate(
+        {"name": "agent-one", "version": "1.0.0", "content_hash": "a" * 64},
+        [{"ref": "smoke@1.0.0", "threshold": 0.8}],
+    ),
+    "listEvalDatasets": lambda ax: ax.evals.datasets.list(name="qa"),
+    "createEvalDataset": lambda ax: ax.evals.datasets.create(
+        "qa", [{"id": "c1", "input": "q", "expected": "a"}]
+    ),
+    "getEvalDatasetVersion": lambda ax: ax.evals.datasets.get("qa", 1),
+    "listEvalSuites": lambda ax: ax.evals.suites.list(),
+    "createEvalSuite": lambda ax: ax.evals.suites.create(
+        {
+            "ref": "smoke@1.0.0",
+            "dataset_ref": "qa@1",
+            "graders": [{"id": "exact", "kind": "deterministic", "config": {"type": "exact"}}],
+            "pass_threshold": 0.8,
+        }
+    ),
+    "getEvalSuite": lambda ax: ax.evals.suites.get("smoke@1.0.0"),
+    "listEvalBaselines": lambda ax: ax.evals.baselines.list("agent-one", "smoke@1.0.0"),
+    "setEvalBaseline": lambda ax: ax.evals.baselines.set(RUN),
+    "listEvalReviewTasks": lambda ax: ax.evals.review.tasks(state="open"),
+    "claimEvalReviewTask": lambda ax: ax.evals.review.claim("rt-1"),
+    "gradeEvalReviewTask": lambda ax: ax.evals.review.grade("rt-1", score=0.9, comment="clear"),
+    "skipEvalReviewTask": lambda ax: ax.evals.review.skip("rt-1", "not my area"),
+    "listEvalSamplingConfigs": lambda ax: ax.evals.sampling.list(),
+    "putEvalSamplingConfig": lambda ax: ax.evals.sampling.put(
+        "prod", blueprint="agent-one", suite="smoke@1.0.0", rate=0.1, max_per_hour=10
+    ),
+    "getEvalOnlineSummary": lambda ax: ax.evals.sampling.summary(blueprint="agent-one"),
+    "listEvalRunners": lambda ax: ax.evals.runners.list(),
+    "registerEvalRunner": lambda ax: ax.evals.runners.register("ci-1", "CI worker"),
+    "revokeEvalRunner": lambda ax: ax.evals.runners.revoke("ci-1"),
     "getMe": lambda ax: ax.me(),
     "getApproval": lambda ax: ax.approvals.get(RUN),
     "activatePolicyPack": lambda ax: ax.policies.activate(RUN),

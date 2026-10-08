@@ -1,4 +1,5 @@
 import type {
+  EvalAttestationRecord,
   EventKind,
   NamespaceRecord,
   PublisherKey,
@@ -68,6 +69,14 @@ export interface RegistryStore {
   ): Promise<VersionRow | undefined>;
   listVersions(viewer: Viewer, ns: string, name: string): Promise<VersionRow[]>;
   listNames(viewer: Viewer, ns: string): Promise<string[]>;
+  /** Append-only; owner context only; one per (version, run): a duplicate throws StoreConflict("version"). */
+  addAttestation(a: EvalAttestationRecord): Promise<void>;
+  attestations(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<EvalAttestationRecord[]>;
   appendEvent(e: VersionEvent): Promise<void>;
   events(viewer: Viewer, ns: string, name: string, version: string): Promise<VersionEvent[]>;
 }

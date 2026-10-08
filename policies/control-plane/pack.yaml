@@ -270,6 +270,10 @@ spec:
                 api.registry.write,
                 api.marketplace.read,
                 api.marketplace.install,
+                api.evals.read,
+                api.evals.write,
+                api.evals.admin,
+                api.evals.review,
               ]
       decision: ALLOW
     - id: api-builder
@@ -296,6 +300,9 @@ spec:
                 api.registry.read,
                 api.registry.write,
                 api.marketplace.read,
+                api.evals.read,
+                api.evals.write,
+                api.evals.review,
               ]
       decision: ALLOW
     - id: api-operator
@@ -321,6 +328,8 @@ spec:
                 api.explanations.read,
                 api.registry.read,
                 api.marketplace.read,
+                api.evals.read,
+                api.evals.review,
               ]
       decision: ALLOW
     - id: api-auditor
@@ -344,6 +353,7 @@ spec:
                 api.explanations.read,
                 api.registry.read,
                 api.marketplace.read,
+                api.evals.read,
               ]
       decision: ALLOW
     - id: api-billing
@@ -369,5 +379,6 @@ spec:
                 api.explanations.read,
                 api.registry.read,
                 api.marketplace.read,
+                api.evals.read,
               ]
       decision: ALLOW

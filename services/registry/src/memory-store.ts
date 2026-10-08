@@ -1,6 +1,7 @@
 import { StoreConflict, StoreForbidden, type RegistryStore } from "./store.js";
 import {
   statusOf,
+  type EvalAttestationRecord,
   type NamespaceRecord,
   type PublisherKey,
   type RevokeReason,
@@ -21,6 +22,7 @@ export class MemoryRegistryStore implements RegistryStore {
   private names = new Map<string, { tenantId: string; normalized: string }>(); // ns\0name
   private versions = new Map<string, VersionRecord>();
   private evs: VersionEvent[] = [];
+  private atts: EvalAttestationRecord[] = [];
 
   private visible(viewer: Viewer, namespace: string, owner: string): boolean {
     return this.pub.has(namespace) || (viewer.tenantId !== null && viewer.tenantId === owner);
@@ -181,6 +183,37 @@ export class MemoryRegistryStore implements RegistryStore {
         out.push(name);
     }
     return Promise.resolve(out.sort());
+  }
+  addAttestation(a: EvalAttestationRecord): Promise<void> {
+    const rec = this.versions.get(k(a.namespace, a.name, a.version));
+    if (!rec || rec.tenantId !== a.tenantId)
+      return Promise.reject(new StoreForbidden("not the version owner"));
+    if (
+      this.atts.some(
+        (x) =>
+          x.namespace === a.namespace &&
+          x.name === a.name &&
+          x.version === a.version &&
+          x.runId === a.runId,
+      )
+    )
+      return Promise.reject(new StoreConflict("version", "attestation exists for this run"));
+    this.atts.push(structuredClone(a));
+    return Promise.resolve();
+  }
+  attestations(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<EvalAttestationRecord[]> {
+    const rec = this.versions.get(k(ns, name, version));
+    if (!rec || !this.versionVisible(viewer, rec)) return Promise.resolve([]);
+    return Promise.resolve(
+      this.atts
+        .filter((a) => a.namespace === ns && a.name === name && a.version === version)
+        .map((a) => structuredClone(a)),
+    );
   }
   appendEvent(e: VersionEvent): Promise<void> {
     const rec = this.versions.get(k(e.namespace, e.name, e.version));

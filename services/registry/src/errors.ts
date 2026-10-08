@@ -6,6 +6,7 @@ export type RegistryErrorCode =
   | "invalid"
   | "verification_failed"
   | "rate_limited"
+  | "evals_gate_failed"
   | "unavailable";
 
 export const HTTP_STATUS: Record<RegistryErrorCode, number> = {
@@ -16,6 +17,7 @@ export const HTTP_STATUS: Record<RegistryErrorCode, number> = {
   invalid: 422,
   verification_failed: 422,
   rate_limited: 429,
+  evals_gate_failed: 409,
   unavailable: 503,
 };
 
@@ -26,6 +28,8 @@ export class RegistryError extends Error {
     message: string,
     /** Machine-readable failed checks, for `verification_failed`. */
     readonly checks: readonly string[] = [],
+    /** Why the Eval Hub gate refused, for `evals_gate_failed`. */
+    readonly reasons: readonly { code: string; suite_ref?: string; message: string }[] = [],
   ) {
     super(message);
   }

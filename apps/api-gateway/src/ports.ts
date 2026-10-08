@@ -414,3 +414,68 @@ export interface RateLimiter {
     cost: number,
   ): { ok: boolean; limit: number; remaining: number; retryAfterSec: number };
 }
+
+// ---- evals --------------------------------------------------------------------------------------------------------------
+
+/** The Eval Hub as the tenant side of the public API sees it (wire shapes = OpenAPI 1.3.0; the tenant and role come from the principal). */
+export interface EvalsPort {
+  start(
+    p: Principal,
+    q: {
+      suite: string;
+      mode?: "ci" | "manual";
+      blueprint: { namespace?: string; name: string; version: string; content_hash: string };
+    },
+  ): Promise<EvalRunDto>;
+  listRuns(
+    p: Principal,
+    q: {
+      limit: number;
+      cursor?: string;
+      suite?: string;
+      blueprint?: string;
+      content_hash?: string;
+      status?: string;
+    },
+  ): Promise<{ items: EvalRunDto[]; next?: string }>;
+  getRun(p: Principal, id: string): Promise<EvalRunDetailDto>;
+  comparison(p: Principal, id: string): Promise<Record<string, unknown> | undefined>;
+  gate(
+    p: Principal,
+    body: { blueprint: unknown; suites?: unknown },
+  ): Promise<Record<string, unknown>>;
+  listDatasets(p: Principal, name?: string): Promise<Record<string, unknown>[]>;
+  createDataset(p: Principal, body: Record<string, unknown>): Promise<Record<string, unknown>>;
+  getDataset(p: Principal, name: string, version: string): Promise<Record<string, unknown>>;
+  listSuites(p: Principal): Promise<Record<string, unknown>[]>;
+  createSuite(p: Principal, body: Record<string, unknown>): Promise<Record<string, unknown>>;
+  getSuite(p: Principal, ref: string): Promise<Record<string, unknown>>;
+  listBaselines(p: Principal, blueprint: string, suite: string): Promise<Record<string, unknown>[]>;
+  setBaseline(p: Principal, runId: string): Promise<Record<string, unknown>>;
+  listTasks(
+    p: Principal,
+    q: { state?: string; run_id?: string },
+  ): Promise<Record<string, unknown>[]>;
+  claimTask(p: Principal, id: string): Promise<Record<string, unknown>>;
+  gradeTask(
+    p: Principal,
+    id: string,
+    body: { score: number; comment: string },
+  ): Promise<Record<string, unknown>>;
+  skipTask(p: Principal, id: string, reason: string): Promise<Record<string, unknown>>;
+  listSampling(p: Principal): Promise<Record<string, unknown>[]>;
+  putSampling(
+    p: Principal,
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
+  onlineSummary(
+    p: Principal,
+    q: { blueprint?: string; suite?: string },
+  ): Promise<Record<string, unknown>[]>;
+  listRunners(p: Principal): Promise<Record<string, unknown>[]>;
+  registerRunner(p: Principal, id: string, description?: string): Promise<Record<string, unknown>>;
+  revokeRunner(p: Principal, id: string): Promise<Record<string, unknown>>;
+}
+export type EvalRunDto = { id: string; suite: string; status: string } & Record<string, unknown>;
+export type EvalRunDetailDto = EvalRunDto & { case_results: unknown[] };

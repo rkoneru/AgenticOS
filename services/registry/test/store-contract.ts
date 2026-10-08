@@ -130,6 +130,50 @@ export function storeContract(name: string, env: () => Promise<ContractEnv>): vo
       expect(await store.getKeys({ tenantId: null }, ns)).toHaveLength(2);
     });
 
+    it("eval attestations: owner-only, append-only, one per run, visible like the version", async () => {
+      const { store, tenants } = await env();
+      const [a, b] = [await tenants(), await tenants()];
+      const ns = `att-${sfx()}`;
+      await store.claimNamespace(nsRec(ns, a));
+      await store.insertVersion(verRec(ns, a), normalizeName("agent-one"));
+      await store.insertVersion(verRec(ns, a, "agent-one", "1.1.0"), normalizeName("agent-one"));
+      const att = (runId: string, tenantId = a, version = "1.0.0") => ({
+        tenantId,
+        namespace: ns,
+        name: "agent-one",
+        version,
+        runId,
+        suiteRef: "smoke@1.0.0",
+        contentHash: "a".repeat(64),
+        overall: 0.9,
+        envelope: { payloadType: "t", payload: "p", signatures: [{ keyid: "k", sig: "s" }] },
+        attachedAt: T0,
+        attachedBy: "eval-hub",
+      });
+      await expect(store.addAttestation(att("r1", b))).rejects.toBeInstanceOf(StoreForbidden);
+      await expect(store.addAttestation({ ...att("r1"), version: "9.9.9" })).rejects.toBeInstanceOf(
+        StoreForbidden,
+      );
+      await store.addAttestation(att("r1"));
+      await store.addAttestation(att("r2"));
+      await expect(store.addAttestation(att("r1"))).rejects.toMatchObject({ what: "version" });
+      expect(
+        (await store.attestations({ tenantId: a }, ns, "agent-one", "1.0.0")).map((x) => x.runId),
+      ).toEqual(["r1", "r2"]);
+      expect(await store.attestations({ tenantId: a }, ns, "agent-one", "1.1.0")).toEqual([]);
+      expect(
+        (await store.attestations({ tenantId: a }, ns, "agent-one", "1.0.0"))[0],
+      ).toMatchObject({ overall: 0.9, attachedAt: T0, envelope: { payload: "p" } });
+      // invisible to other tenants and to anonymous readers until the version is released
+      expect(await store.attestations({ tenantId: b }, ns, "agent-one", "1.0.0")).toEqual([]);
+      expect(await store.attestations({ tenantId: null }, ns, "agent-one", "1.0.0")).toEqual([]);
+      await store.setVersionPublic(a, ns, "agent-one", "1.0.0", "m", T0);
+      expect(await store.attestations({ tenantId: null }, ns, "agent-one", "1.0.0")).toHaveLength(
+        2,
+      );
+      expect(await store.attestations({ tenantId: b }, ns, "agent-one", "1.1.0")).toEqual([]);
+    });
+
     it("versions: immutable, typosquat-guarded names, isolated, events decide status", async () => {
       const { store, tenants } = await env();
       const [a, b] = [await tenants(), await tenants()];

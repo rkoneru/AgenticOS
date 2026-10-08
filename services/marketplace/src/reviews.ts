@@ -98,6 +98,15 @@ export class ReviewService {
     const viewer = { tenantId: p.tenantId };
     const bp = await this.registry().getVersion(viewer, input.namespace, input.name, input.version);
     if (bp.record.tenantId !== p.tenantId) throw forbidden("not your namespace");
+    // Required evals must pass BEFORE a human spends time on the blueprint (evals_gate_failed, 409, carries the reasons).
+    await this.registry().requireEvalGate({
+      tenantId: p.tenantId,
+      namespace: bp.namespace,
+      name: bp.name,
+      version: bp.version,
+      purpose: "marketplace_submit",
+      actor: p.subject,
+    });
     const key = reviewKey(bp.namespace, bp.name, bp.version);
     const base: ReviewRecord = {
       namespace: bp.namespace,
@@ -288,6 +297,16 @@ export class ReviewService {
             throw new RegistryError("conflict", "blueprint changed since it was scanned", [
               "content_hash_changed",
             ]);
+          // Required evals are re-checked at the moment of release: a run that went stale, or a regression found since the submission,
+          // keeps the review open (evals_gate_failed) instead of leaving an approved review whose release was refused.
+          await this.registry().requireEvalGate({
+            tenantId,
+            namespace: cur.data.namespace,
+            name: cur.data.name,
+            version: cur.data.version,
+            purpose: "release",
+            actor: r.subject,
+          });
           patch = { ...patch, approvedHash: bp.contentHash };
         }
         const next = await this.move(tenantId, cur, to, r.subject, patch);

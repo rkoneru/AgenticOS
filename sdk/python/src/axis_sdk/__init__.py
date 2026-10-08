@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ._generated.models import *  # noqa: F403 - re-export the wire types
 from ._generated.operations import API_VERSION, DEFAULT_BASE_URL, OPERATIONS, OperationSpec
-from .client import AsyncAxis, Axis, parse_blueprint_ref
+from .client import AsyncAxis, Axis, parse_blueprint_ref, parse_eval_blueprint
 from .errors import (
     ApprovalRequiredError,
     AuthenticationError,
@@ -68,5 +68,6 @@ __all__ = [
     "normalize_base_url",
     "paginate",
     "parse_blueprint_ref",
+    "parse_eval_blueprint",
     "redact_text",
 ]

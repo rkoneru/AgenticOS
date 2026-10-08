@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 8 - Eval Hub (component H, `services/eval-hub`)
+
+**One additive contract change: OpenAPI 1.3.0** (ADR 0057; FREEZE regenerated; 22 operations). Migration 0013. Status: Prototype
+(ADR 0056; NEEDS #293-#305; `docs/spec/eval-hub.md`).
+
+- `@axis/eval-hub`: immutable versioned datasets (content hash, PHI redaction before persist), suites, runner-aligned score recompute (13 pinned vectors), append-only runs, baselines, regression comparison with a deterministic paired sign-flip test, human review queue (SLA, double grading, adjudication, reviewer != publisher/starter), fail-closed gate bound to content hash and registered runners, signed DSSE attestations on registry versions, online sampling, Postgres stores with forced RLS, dev HTTP server.
+- Registry and marketplace refuse with 409 `evals_gate_failed` (+ reasons) through an injected gate port (default deny).
+- Gateway: `startEvalRun` real, 22 evals operations; control-plane `api.evals.*` actions; both SDK ergonomic layers; `axis evals ...` CLI.
+- Honest gaps: ephemeral attestation key, dev tokens, runner-side grading trusted for raw grades (NEEDS #293-#305).
+
 ## Phase 7 - Interfaces and ecosystem exit (component E, `make e2e-phase7`, `make console-e2e`)
 
 **One additive contract change: OpenAPI 1.2.0** (ADR 0053; FREEZE regenerated, 17 operations: `GET /v1/me`, approval by id, policy activation, registry, marketplace). Status: Prototype on the real stack

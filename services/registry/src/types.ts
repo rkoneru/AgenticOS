@@ -27,11 +27,11 @@ export interface TenantPrincipal {
   role: "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer";
 }
 
-/** The marketplace service acting for the platform (public namespaces, takedowns). Never producible from an HTTP credential. */
+/** The marketplace service (public namespaces, takedowns) or the Eval Hub (attestations) acting for the platform. Never producible from an HTTP credential. */
 export interface PlatformPrincipal {
   kind: "platform";
   subject: string;
-  service: "marketplace";
+  service: "marketplace" | "eval-hub";
 }
 
 export type Principal = TenantPrincipal | PlatformPrincipal;
@@ -95,6 +95,21 @@ export interface VersionRecord {
   provenance: DsseEnvelope;
   publishedAt: Date;
   publishedBy: string;
+}
+
+/** A signed Eval Hub summary of one finished eval run, attached to the version it is about (append-only). */
+export interface EvalAttestationRecord {
+  tenantId: string;
+  namespace: string;
+  name: string;
+  version: string;
+  runId: string;
+  suiteRef: string;
+  contentHash: string;
+  overall: number;
+  envelope: DsseEnvelope;
+  attachedAt: Date;
+  attachedBy: string;
 }
 
 export type EventKind = "yank" | "deprecate";

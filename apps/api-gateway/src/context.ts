@@ -7,6 +7,7 @@ import type {
   Authenticator,
   Authz,
   BlueprintStore,
+  EvalsPort,
   ExplainPort,
   IdempotencyStore,
   IdentityPort,
@@ -36,6 +37,7 @@ export interface GatewayDeps {
   identity: IdentityPort;
   registry: RegistryPort;
   marketplace: MarketplacePort;
+  evals: EvalsPort;
   idempotency: IdempotencyStore;
   /** Per-tenant buckets (key = tenant id). Defaults to `TokenBuckets` from the options. */
   limiter?: RateLimiter;

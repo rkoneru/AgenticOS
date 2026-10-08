@@ -15,7 +15,13 @@ import {
   FakeIdentityProver,
   createMarketplace,
 } from "@axis/marketplace";
-import { PgRegistryStore, RegistryService, ServiceAudit } from "@axis/registry";
+import { PgDocStore as PgEvalDocStore, createEvalHub } from "@axis/eval-hub";
+import {
+  PgRegistryStore,
+  RegistryService,
+  ServiceAudit,
+  generatePublisherKey,
+} from "@axis/registry";
 import pg from "pg";
 import { HttpApprovalsClient } from "./adapters/approvals-http.js";
 import type { GatewayOptions } from "./context.js";
@@ -60,10 +66,43 @@ export async function startStandalone(
     ...(c.bundleDir ? { bundleSink: new FileBundleSink(c.bundleDir) } : {}),
     secureCookies: true,
   });
+  // The Eval Hub and the registry gate each other: the registry asks the hub before it releases a version (fail-closed), and the hub
+  // hands the registry a signed summary of every finished run. The attestation key lives in this process only (docs/NEEDS.md: KMS).
+  const hubKey = generatePublisherKey();
+  const late: { registry?: RegistryService } = {};
+  const evals = createEvalHub({
+    docs: new PgEvalDocStore({ pool, ...role }),
+    audit: new ServiceAudit(audit, "eval-hub"),
+    signing: hubKey,
+    sink: {
+      attach: async (_tenantId, ref, envelope) => {
+        await (late.registry as RegistryService).attachEvalAttestation(
+          { kind: "platform", subject: "eval-hub", service: "eval-hub" },
+          ref,
+          envelope,
+        );
+      },
+    },
+    publishers: {
+      publisherOf: async (tenantId, b) =>
+        b.namespace === null
+          ? null
+          : ((
+              await (late.registry as RegistryService).listVersions(
+                { tenantId },
+                b.namespace,
+                b.name,
+              )
+            ).find((v) => v.record.version === b.version)?.record.publishedBy ?? null),
+    },
+  });
   const registry = new RegistryService({
     store: new PgRegistryStore({ pool, ...role }),
     audit: new ServiceAudit(audit, "registry"),
+    evalGate: evals.gatePort,
+    evalHubKeys: [{ keyId: hubKey.keyId, publicKey: hubKey.publicKey }],
   });
+  late.registry = registry;
   const marketplace = createMarketplace({
     docs: new PgDocStore({ pool, ...role }),
     registry,
@@ -86,6 +125,7 @@ export async function startStandalone(
       store,
       registry,
       marketplace,
+      evals,
       audit,
       approvals: new HttpApprovalsClient(c.approvals.url, (t) => approvalTokens.get(t)) as never,
       ledger,

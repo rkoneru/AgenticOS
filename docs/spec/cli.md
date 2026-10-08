@@ -46,6 +46,7 @@ Credentials:
 Generated from the command table by `axis docs`; `apps/cli/test/cli.test.ts` fails if this section drifts from `--help`.
 
 <!-- reference:begin -->
+
 ### `axis login`
 
 Store an API key for this machine
@@ -56,11 +57,11 @@ axis login [options]
 
 The key is verified against the API, then saved under $XDG_CONFIG_HOME/axis/config.json with mode 0600. Alternatively set AXIS_API_KEY. The key is never accepted as a command-line argument (it would leak through shell history and process listings).
 
-| Option | Description |
-| --- | --- |
-| `--with-key-stdin` | Read the API key from stdin |
-| `--device` | Device-flow sign-in (not available yet) |
-| `--no-verify` | Save without calling the API |
+| Option             | Description                             |
+| ------------------ | --------------------------------------- |
+| `--with-key-stdin` | Read the API key from stdin             |
+| `--device`         | Device-flow sign-in (not available yet) |
+| `--no-verify`      | Save without calling the API            |
 
 ### `axis logout`
 
@@ -96,10 +97,10 @@ Validate locally, then publish a blueprint version
 axis blueprints publish <file> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--no-validate` | Skip the local check (the server still validates) |
-| `--idempotency-key <key>` | Idempotency key (default: generated) |
+| Option                    | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| `--no-validate`           | Skip the local check (the server still validates) |
+| `--idempotency-key <key>` | Idempotency key (default: generated)              |
 
 ### `axis blueprints list`
 
@@ -109,10 +110,10 @@ List blueprint versions
 axis blueprints list [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option        | Description       |
+| ------------- | ----------------- |
 | `--limit <n>` | Page size (1-200) |
-| `--all` | Follow every page |
+| `--all`       | Follow every page |
 
 ### `axis blueprints get`
 
@@ -130,13 +131,13 @@ Start a run of a published blueprint
 axis run start <name>@<version> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--input <json|file>` | Run input: inline JSON object, a file path, or - for stdin |
-| `--idempotency-key <key>` | Idempotency key (default: generated) |
-| `--wait` | Wait for the run to terminate (exit 5 on timeout) |
-| `--tail` | Stream the run's events until it terminates |
-| `--wait-timeout <seconds>` | Give up waiting after this long (default 300) |
+| Option                     | Description                                       |
+| -------------------------- | ------------------------------------------------- |
+| `--input <json             | file>`                                            | Run input: inline JSON object, a file path, or - for stdin |
+| `--idempotency-key <key>`  | Idempotency key (default: generated)              |
+| `--wait`                   | Wait for the run to terminate (exit 5 on timeout) |
+| `--tail`                   | Stream the run's events until it terminates       |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300)     |
 
 ### `axis run tail`
 
@@ -148,8 +149,8 @@ axis run tail <run-id> [options]
 
 Reconnects automatically with Last-Event-ID. With --json prints one JSON event per line.
 
-| Option | Description |
-| --- | --- |
+| Option               | Description                      |
+| -------------------- | -------------------------------- |
 | `--after <sequence>` | Resume after this event sequence |
 
 ### `axis run get`
@@ -176,11 +177,11 @@ List runs
 axis run list [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--limit <n>` | Page size (1-200) |
-| `--all` | Follow every page |
-| `--state <state>` | Filter by process state |
+| Option               | Description              |
+| -------------------- | ------------------------ |
+| `--limit <n>`        | Page size (1-200)        |
+| `--all`              | Follow every page        |
+| `--state <state>`    | Filter by process state  |
 | `--blueprint <name>` | Filter by blueprint name |
 
 ### `axis run signal`
@@ -191,10 +192,10 @@ Send a signal to a process in a run
 axis run signal <run-id> <PAUSE|RESUME|TERM|KILL|INTERRUPT> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--pid <pid>` | Target process (default: the run's init process) |
-| `--reason <text>` | Reason recorded in the audit log |
+| Option            | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `--pid <pid>`     | Target process (default: the run's init process) |
+| `--reason <text>` | Reason recorded in the audit log                 |
 
 ### `axis run cancel`
 
@@ -204,10 +205,10 @@ Stop a run (TERM; --force sends KILL)
 axis run cancel <run-id> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--force` | Send KILL instead of TERM |
-| `--pid <pid>` | Target process |
+| Option            | Description                      |
+| ----------------- | -------------------------------- |
+| `--force`         | Send KILL instead of TERM        |
+| `--pid <pid>`     | Target process                   |
 | `--reason <text>` | Reason recorded in the audit log |
 
 ### `axis run replay`
@@ -228,11 +229,11 @@ List approvals
 axis approvals list [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--limit <n>` | Page size (1-200) |
-| `--all` | Follow every page |
-| `--status <status>` | Filter by status |
+| Option              | Description       |
+| ------------------- | ----------------- |
+| `--limit <n>`       | Page size (1-200) |
+| `--all`             | Follow every page |
+| `--status <status>` | Filter by status  |
 
 ### `axis approvals get`
 
@@ -250,9 +251,9 @@ Approve a pending approval
 axis approvals approve <approval-id> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--comment <text>` | Comment recorded with the decision |
+| Option                    | Description                          |
+| ------------------------- | ------------------------------------ |
+| `--comment <text>`        | Comment recorded with the decision   |
 | `--idempotency-key <key>` | Idempotency key (default: generated) |
 
 ### `axis approvals deny`
@@ -263,9 +264,9 @@ Deny (reject) a pending approval
 axis approvals deny <approval-id> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--comment <text>` | Comment recorded with the decision |
+| Option                    | Description                          |
+| ------------------------- | ------------------------------------ |
+| `--comment <text>`        | Comment recorded with the decision   |
 | `--idempotency-key <key>` | Idempotency key (default: generated) |
 
 ### `axis policies list`
@@ -276,10 +277,10 @@ List policy packs
 axis policies list [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option        | Description       |
+| ------------- | ----------------- |
 | `--limit <n>` | Page size (1-200) |
-| `--all` | Follow every page |
+| `--all`       | Follow every page |
 
 ### `axis policies test`
 
@@ -291,9 +292,9 @@ axis policies test <policy-file> --request <json|file> [options]
 
 Nothing is executed. Exit 4 when the decision is DENY, 5 when it is REQUIRE_APPROVAL.
 
-| Option | Description |
-| --- | --- |
-| `--request <json|file>` | The request: {enforcement_point, action?, context} |
+| Option           | Description |
+| ---------------- | ----------- |
+| `--request <json | file>`      | The request: {enforcement_point, action?, context} |
 
 ### `axis policies publish`
 
@@ -321,13 +322,13 @@ Query audit events
 axis audit events [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--limit <n>` | Page size (1-200) |
-| `--all` | Follow every page |
-| `--trace-id <32 hex>` | Only events of this trace |
-| `--decision <decision>` | Only this decision |
-| `--from-seq <seq>` | Start at this sequence number |
+| Option                  | Description                   |
+| ----------------------- | ----------------------------- |
+| `--limit <n>`           | Page size (1-200)             |
+| `--all`                 | Follow every page             |
+| `--trace-id <32 hex>`   | Only events of this trace     |
+| `--decision <decision>` | Only this decision            |
+| `--from-seq <seq>`      | Start at this sequence number |
 
 ### `axis audit explain`
 
@@ -345,10 +346,10 @@ Verify the hash chain (exit 1 if it is broken)
 axis audit verify [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option             | Description              |
+| ------------------ | ------------------------ |
 | `--from-seq <seq>` | First sequence to verify |
-| `--to-seq <seq>` | Last sequence to verify |
+| `--to-seq <seq>`   | Last sequence to verify  |
 
 ### `axis audit export`
 
@@ -358,13 +359,13 @@ Export audit events as NDJSON
 axis audit export [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--out <file>` | Write to a file (mode 0600) instead of stdout |
-| `--verify` | Verify the chain first and refuse to export if it is broken |
-| `--trace-id <32 hex>` | Only events of this trace |
-| `--decision <decision>` | Only this decision |
-| `--from-seq <seq>` | Start at this sequence number |
+| Option                  | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
+| `--out <file>`          | Write to a file (mode 0600) instead of stdout               |
+| `--verify`              | Verify the chain first and refuse to export if it is broken |
+| `--trace-id <32 hex>`   | Only events of this trace                                   |
+| `--decision <decision>` | Only this decision                                          |
+| `--from-seq <seq>`      | Start at this sequence number                               |
 
 ### `axis kill-switch on`
 
@@ -374,8 +375,8 @@ Engage a kill-switch
 axis kill-switch on <tenant|agent|tool> [target] [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option            | Description                      |
+| ----------------- | -------------------------------- |
 | `--reason <text>` | Reason recorded in the audit log |
 
 ### `axis kill-switch off`
@@ -386,8 +387,8 @@ Release a kill-switch
 axis kill-switch off <tenant|agent|tool> [target] [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option            | Description                      |
+| ----------------- | -------------------------------- |
 | `--reason <text>` | Reason recorded in the audit log |
 
 ### `axis kill-switch list`
@@ -406,18 +407,289 @@ Metered usage
 axis usage [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option              | Description                                      |
+| ------------------- | ------------------------------------------------ |
 | `--from <iso-time>` | Period start (default: first of this month, UTC) |
-| `--to <iso-time>` | Period end (default: now) |
-| `--group-by <key>` | Group rows |
+| `--to <iso-time>`   | Period end (default: now)                        |
+| `--group-by <key>`  | Group rows                                       |
+
+### `axis evals run`
+
+Queue an eval run of a suite against a blueprint version
+
+```
+axis evals run <suite> <[namespace/]name@version> [options]
+```
+
+The run is bound to the version's content hash and executed by a registered runner. With --wait the exit code is 0 only if the run passed.
+
+| Option                     | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `--mode <mode>`            | Run mode (default ci)                                                |
+| `--idempotency-key <key>`  | Idempotency key (default: generated)                                 |
+| `--wait`                   | Wait for the run to finish (exit 1 if it did not pass, 5 on timeout) |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300)                        |
 
 ### `axis evals start`
 
-Run an eval suite against a blueprint version
+Alias of `evals run`
 
 ```
-axis evals start <suite> <name>@<version> [options]
+axis evals start <suite> <[namespace/]name@version> [options]
+```
+
+| Option                     | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `--mode <mode>`            | Run mode (default ci)                                                |
+| `--idempotency-key <key>`  | Idempotency key (default: generated)                                 |
+| `--wait`                   | Wait for the run to finish (exit 1 if it did not pass, 5 on timeout) |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300)                        |
+
+### `axis evals get`
+
+Show one eval run with its scores
+
+```
+axis evals get <eval-run-id> [options]
+```
+
+### `axis evals wait`
+
+Wait for an eval run to finish
+
+```
+axis evals wait <eval-run-id> [options]
+```
+
+| Option                     | Description                                   |
+| -------------------------- | --------------------------------------------- |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300) |
+
+### `axis evals list`
+
+List eval runs, newest first
+
+```
+axis evals list [options]
+```
+
+| Option               | Description              |
+| -------------------- | ------------------------ |
+| `--limit <n>`        | Page size (1-200)        |
+| `--all`              | Follow every page        |
+| `--suite <ref>`      | Only this suite          |
+| `--blueprint <name>` | Only this blueprint name |
+| `--status <status>`  | Only this status         |
+
+### `axis evals compare`
+
+Compare a run with the baseline (delta, regression, paired significance)
+
+```
+axis evals compare <eval-run-id> [options]
+```
+
+Exits 4 when the run regressed beyond the suite's tolerance.
+
+### `axis evals gate`
+
+Ask the release gate whether a blueprint version may be released
+
+```
+axis evals gate <[namespace/]name@version> [options]
+```
+
+Fail-closed: exits 0 only when every required suite has a fresh, intact, passing run of this exact content hash by a registered runner with no regression against the baseline. Exits 4 and lists every reason otherwise.
+
+| Option                      | Description                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| `--suite <ref[:threshold]>` | An additional required suite (the blueprint's own spec.evals.suites are always asked) |
+
+### `axis evals datasets list`
+
+List dataset versions
+
+```
+axis evals datasets list [options]
+```
+
+| Option          | Description       |
+| --------------- | ----------------- |
+| `--name <name>` | Only this dataset |
+
+### `axis evals datasets get`
+
+Show a dataset version
+
+```
+axis evals datasets get <name> [version|latest] [options]
+```
+
+### `axis evals datasets create`
+
+Create the next version of a dataset from a YAML/JSON file
+
+```
+axis evals datasets create <file|-> [options]
+```
+
+The file holds {name, cases: [{id, input, expected?, tags?, metadata?}], phi?, description?}. A phi dataset is redacted before it is stored.
+
+| Option                    | Description                          |
+| ------------------------- | ------------------------------------ |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis evals suites list`
+
+List suites
+
+```
+axis evals suites list [options]
+```
+
+### `axis evals suites get`
+
+Show a suite
+
+```
+axis evals suites get <name@version> [options]
+```
+
+### `axis evals suites create`
+
+Create a suite from a YAML/JSON file
+
+```
+axis evals suites create <file|-> [options]
+```
+
+The file holds {ref, dataset_ref, graders, pass_threshold, tolerance?, min_case_score?, settings?, ...}.
+
+| Option                    | Description                          |
+| ------------------------- | ------------------------------------ |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis evals baseline list`
+
+Baseline history
+
+```
+axis evals baseline list <blueprint-name> <suite> [options]
+```
+
+### `axis evals baseline set`
+
+Make a passed run the baseline (admin)
+
+```
+axis evals baseline set <eval-run-id> [options]
+```
+
+| Option                    | Description                          |
+| ------------------------- | ------------------------------------ |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis evals review tasks`
+
+Tasks you may work on
+
+```
+axis evals review tasks [options]
+```
+
+| Option                | Description     |
+| --------------------- | --------------- |
+| `--state <state>`     | Only this state |
+| `--run <eval-run-id>` | Only this run   |
+
+### `axis evals review claim`
+
+Claim a task
+
+```
+axis evals review claim <task-id> [options]
+```
+
+### `axis evals review grade`
+
+Grade a claimed task
+
+```
+axis evals review grade <task-id> --score <0-1> --comment <text> [options]
+```
+
+| Option             | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| `--score <0-1>`    | Your score                                           |
+| `--comment <text>` | Why (redacted for personal data before it is stored) |
+
+### `axis evals review skip`
+
+Give a claimed task back
+
+```
+axis evals review skip <task-id> --reason <text> [options]
+```
+
+| Option            | Description     |
+| ----------------- | --------------- |
+| `--reason <text>` | Why you skip it |
+
+### `axis evals sampling list`
+
+Sampling configurations
+
+```
+axis evals sampling list [options]
+```
+
+### `axis evals sampling put`
+
+Create or replace a sampling configuration (admin)
+
+```
+axis evals sampling put <sampling-id> <file|-> [options]
+```
+
+### `axis evals sampling summary`
+
+History and alert state of the samples
+
+```
+axis evals sampling summary [options]
+```
+
+| Option               | Description         |
+| -------------------- | ------------------- |
+| `--blueprint <name>` | Only this blueprint |
+| `--suite <ref>`      | Only this suite     |
+
+### `axis evals runners list`
+
+Registered runners
+
+```
+axis evals runners list [options]
+```
+
+### `axis evals runners register`
+
+Register a runner id (admin)
+
+```
+axis evals runners register <runner-id> [options]
+```
+
+| Option                 | Description |
+| ---------------------- | ----------- |
+| `--description <text>` | What it is  |
+
+### `axis evals runners revoke`
+
+Revoke a runner (admin, one-way)
+
+```
+axis evals runners revoke <runner-id> [options]
 ```
 
 ### `axis registry keygen`
@@ -430,8 +702,8 @@ axis registry keygen [options]
 
 The private key is written to a local file and never sent anywhere. Register the printed public key with `axis registry add-key`.
 
-| Option | Description |
-| --- | --- |
+| Option         | Description                                                 |
+| -------------- | ----------------------------------------------------------- |
 | `--out <file>` | Private key file to create (PEM, mode 0600; must not exist) |
 
 ### `axis registry namespaces`
@@ -466,10 +738,10 @@ Register a publisher public key for a namespace (admin)
 axis registry add-key <namespace> (--public-key <b64url> | --key <pem>) [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--public-key <b64url>` | Raw Ed25519 public key, base64url |
-| `--key <pem>` | Derive the public key from this private key file |
+| Option                  | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `--public-key <b64url>` | Raw Ed25519 public key, base64url                |
+| `--key <pem>`           | Derive the public key from this private key file |
 
 ### `axis registry sign`
 
@@ -481,13 +753,13 @@ axis registry sign <abl-file> [options]
 
 Validates and lints the file with the platform compiler, then signs with the local key. Output is the bundle `registry publish` accepts.
 
-| Option | Description |
-| --- | --- |
-| `--namespace <ns>` | Registry namespace (yours) |
-| `--key <pem>` | Ed25519 private key file (PKCS#8 PEM) |
-| `--builder <id>` | Builder id recorded in the provenance |
-| `--source-ref <ref>` | Source reference recorded in the provenance |
-| `--out <file>` | Write the signed bundle here instead of stdout |
+| Option               | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `--namespace <ns>`   | Registry namespace (yours)                     |
+| `--key <pem>`        | Ed25519 private key file (PKCS#8 PEM)          |
+| `--builder <id>`     | Builder id recorded in the provenance          |
+| `--source-ref <ref>` | Source reference recorded in the provenance    |
+| `--out <file>`       | Write the signed bundle here instead of stdout |
 
 ### `axis registry publish`
 
@@ -497,11 +769,11 @@ Publish a signed blueprint version (immutable; verified before it is stored)
 axis registry publish <bundle.json | abl-file> [options]
 ```
 
-| Option | Description |
-| --- | --- |
-| `--namespace <ns>` | Registry namespace (yours) |
-| `--key <pem>` | Ed25519 private key file (PKCS#8 PEM) |
-| `--builder <id>` | Builder id recorded in the provenance |
+| Option               | Description                                 |
+| -------------------- | ------------------------------------------- |
+| `--namespace <ns>`   | Registry namespace (yours)                  |
+| `--key <pem>`        | Ed25519 private key file (PKCS#8 PEM)       |
+| `--builder <id>`     | Builder id recorded in the provenance       |
 | `--source-ref <ref>` | Source reference recorded in the provenance |
 
 ### `axis registry versions`
@@ -520,8 +792,8 @@ Yank a version so it stops resolving (admin)
 axis registry yank <namespace>/<name>@<version> [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option            | Description    |
+| ----------------- | -------------- |
 | `--reason <text>` | Why (recorded) |
 
 ### `axis registry resolve`
@@ -542,8 +814,8 @@ Search the catalog
 axis marketplace search [query] [options]
 ```
 
-| Option | Description |
-| --- | --- |
+| Option              | Description        |
+| ------------------- | ------------------ |
 | `--category <name>` | Only this category |
 
 ### `axis marketplace show`
@@ -572,10 +844,10 @@ axis marketplace install <namespace>/<name>[@range] [options]
 
 Without --yes or --consent-digest the preview is printed and nothing is installed (exit 2).
 
-| Option | Description |
-| --- | --- |
-| `--yes` | Consent to the permissions listed by the preview |
-| `--consent-digest <digest>` | Consent to exactly the diff with this digest |
+| Option                      | Description                                      |
+| --------------------------- | ------------------------------------------------ |
+| `--yes`                     | Consent to the permissions listed by the preview |
+| `--consent-digest <digest>` | Consent to exactly the diff with this digest     |
 
 ### `axis marketplace installs`
 
@@ -603,10 +875,10 @@ axis api <operationId> [path args...] [options]
 
 Escape hatch for endpoints without a dedicated command. Path parameters are positional, in order.
 
-| Option | Description |
-| --- | --- |
+| Option                 | Description                  |
+| ---------------------- | ---------------------------- |
 | `--param <name=value>` | Query parameter (repeatable) |
-| `--body <json|file>` | Request body (inline JSON, a file path, or - for stdin) |
+| `--body <json          | file>`                       | Request body (inline JSON, a file path, or - for stdin) |
 
 ### `axis completion`
 
@@ -615,4 +887,5 @@ Print a shell completion script
 ```
 axis completion <bash|zsh|fish> [options]
 ```
+
 <!-- reference:end -->

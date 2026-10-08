@@ -4,6 +4,7 @@ export * from "./semver.js";
 export * from "./signing.js";
 export * from "./provenance.js";
 export * from "./verify.js";
+export * from "./eval-gate.js";
 export * from "./store.js";
 export { MemoryRegistryStore } from "./memory-store.js";
 export { PgRegistryStore } from "./pg-store.js";

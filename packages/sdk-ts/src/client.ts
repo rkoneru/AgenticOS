@@ -14,7 +14,13 @@ import type {
   ApprovalStatus,
   BlueprintPage,
   BlueprintVersion,
+  EvalGateResult,
   EvalRun,
+  CreateEvalDatasetRequest,
+  CreateEvalSuiteRequest,
+  PutEvalSamplingConfigRequest,
+  ListEvalReviewTasksParams,
+  ListEvalRunsParams,
   GateDecision,
   KillSwitch,
   PolicyDocument,
@@ -467,17 +473,245 @@ export class Usage {
   }
 }
 
-export class Evals {
+const EVAL_FINAL = new Set(["passed", "failed", "errored"]);
+
+/** `"name@version"`, `"namespace/name@version"` or `{name, version, namespace?}` to the wire shape of an eval run's blueprint. */
+export function parseEvalBlueprint(
+  ref: BlueprintRef | { namespace: string; name: string; version: string },
+): {
+  name: string;
+  version: string;
+  namespace?: string;
+} {
+  if (typeof ref !== "string") {
+    const o = ref as { namespace?: string; name: string; version: string };
+    return o.namespace === undefined
+      ? { name: o.name, version: o.version }
+      : { namespace: o.namespace, name: o.name, version: o.version };
+  }
+  const slash = ref.indexOf("/");
+  if (slash < 0) return parseBlueprintRef(ref);
+  const inner = parseBlueprintRef(ref.slice(slash + 1));
+  return { namespace: ref.slice(0, slash), ...inner };
+}
+
+/** Datasets: immutable numbered versions; a PHI dataset is redacted before it is stored. */
+export class EvalDatasets {
   constructor(private readonly ax: Axis) {}
+  list(args: { name?: string | undefined } = {}, options?: Opts) {
+    return this.ax.api.listEvalDatasets(pick(args), options);
+  }
+  create(
+    body: CreateEvalDatasetRequest,
+    args: { idempotencyKey?: string | undefined } = {},
+    options?: Opts,
+  ) {
+    return this.ax.api.createEvalDataset(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  /** `version` is an integer or `"latest"`. */
+  get(name: string, version: number | "latest" = "latest", options?: Opts) {
+    return this.ax.api.getEvalDatasetVersion({ name, version: String(version) }, options);
+  }
+}
+
+/** Suites: immutable definitions (`name@major.minor.patch`) pinned to a dataset version. */
+export class EvalSuites {
+  constructor(private readonly ax: Axis) {}
+  list(options?: Opts) {
+    return this.ax.api.listEvalSuites(options);
+  }
+  create(
+    body: CreateEvalSuiteRequest,
+    args: { idempotencyKey?: string | undefined } = {},
+    options?: Opts,
+  ) {
+    return this.ax.api.createEvalSuite(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  get(ref: string, options?: Opts) {
+    return this.ax.api.getEvalSuite({ suite: ref }, options);
+  }
+}
+
+export class EvalBaselines {
+  constructor(private readonly ax: Axis) {}
+  list(blueprint: string, suite: string, options?: Opts) {
+    return this.ax.api.listEvalBaselines({ blueprint, suite }, options);
+  }
+  /** Admin: make a finished, passed, intact run the baseline for its blueprint name and suite. */
+  set(runId: string, args: { idempotencyKey?: string | undefined } = {}, options?: Opts) {
+    return this.ax.api.setEvalBaseline(
+      pick({ body: { run_id: runId }, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+}
+
+/** Human review. The publisher of a blueprint and whoever started a run never see (or get) its tasks. */
+export class EvalReview {
+  constructor(private readonly ax: Axis) {}
+  tasks(args: ListEvalReviewTasksParams = {}, options?: Opts) {
+    return this.ax.api.listEvalReviewTasks(pick(args), options);
+  }
+  claim(taskId: string, options?: Opts) {
+    return this.ax.api.claimEvalReviewTask({ taskId }, options);
+  }
+  grade(taskId: string, args: { score: number; comment: string }, options?: Opts) {
+    return this.ax.api.gradeEvalReviewTask({ taskId, body: args }, options);
+  }
+  skip(taskId: string, reason: string, options?: Opts) {
+    return this.ax.api.skipEvalReviewTask({ taskId, body: { reason } }, options);
+  }
+}
+
+/** Online sampling of production runs. Results raise alerts and show history; they never gate or change a release. */
+export class EvalSampling {
+  constructor(private readonly ax: Axis) {}
+  list(options?: Opts) {
+    return this.ax.api.listEvalSamplingConfigs(options);
+  }
+  put(samplingId: string, body: PutEvalSamplingConfigRequest, options?: Opts) {
+    return this.ax.api.putEvalSamplingConfig({ samplingId, body }, options);
+  }
+  summary(
+    args: { blueprint?: string | undefined; suite?: string | undefined } = {},
+    options?: Opts,
+  ) {
+    return this.ax.api.getEvalOnlineSummary(pick(args), options);
+  }
+}
+
+/** Runners: only runs of a registered, un-revoked runner count toward a release gate. */
+export class EvalRunners {
+  constructor(private readonly ax: Axis) {}
+  list(options?: Opts) {
+    return this.ax.api.listEvalRunners(options);
+  }
+  register(runnerId: string, description?: string, options?: Opts) {
+    return this.ax.api.registerEvalRunner(
+      pick({ runnerId, body: description === undefined ? undefined : { description } }),
+      options,
+    );
+  }
+  revoke(runnerId: string, options?: Opts) {
+    return this.ax.api.revokeEvalRunner({ runnerId }, options);
+  }
+}
+
+export class Evals {
+  readonly datasets: EvalDatasets;
+  readonly suites: EvalSuites;
+  readonly baselines: EvalBaselines;
+  readonly review: EvalReview;
+  readonly sampling: EvalSampling;
+  readonly runners: EvalRunners;
+  constructor(private readonly ax: Axis) {
+    this.datasets = new EvalDatasets(ax);
+    this.suites = new EvalSuites(ax);
+    this.baselines = new EvalBaselines(ax);
+    this.review = new EvalReview(ax);
+    this.sampling = new EvalSampling(ax);
+    this.runners = new EvalRunners(ax);
+  }
+
+  /** Queue a run of `suite` against a blueprint version; a registered runner executes it. The hub binds it to the version's content hash. */
   start(
-    args: { suite: string; blueprint: BlueprintRef; idempotencyKey?: string | undefined },
+    args: {
+      suite: string;
+      blueprint: BlueprintRef | { namespace: string; name: string; version: string };
+      mode?: "ci" | "manual" | undefined;
+      idempotencyKey?: string | undefined;
+    },
     options?: Opts,
   ): Promise<EvalRun> {
     return this.ax.api.startEvalRun(
       pick({
-        body: { suite: args.suite, blueprint: parseBlueprintRef(args.blueprint) },
+        body: pick({
+          suite: args.suite,
+          mode: args.mode,
+          blueprint: parseEvalBlueprint(args.blueprint),
+        }),
         idempotencyKey: args.idempotencyKey,
       }),
+      options,
+    );
+  }
+
+  get(evalRunId: string, options?: Opts) {
+    return this.ax.api.getEvalRun({ evalRunId }, options);
+  }
+
+  list(args: ListEvalRunsParams = {}, options?: Opts) {
+    return this.ax.api.listEvalRuns(pick(args), options);
+  }
+
+  /** Every run, following the cursor (bounded by `maxItems`, default 1000). */
+  async *iterate(
+    args: Omit<ListEvalRunsParams, "cursor"> & { maxItems?: number } = {},
+    options?: Opts,
+  ): AsyncGenerator<EvalRun> {
+    const { maxItems = 1000, ...q } = args;
+    let cursor: string | undefined;
+    let n = 0;
+    for (;;) {
+      const page = await this.list(pick({ ...q, cursor }), options);
+      for (const r of page.items) {
+        if (n++ >= maxItems) return;
+        yield r;
+      }
+      if (!page.next_cursor) return;
+      cursor = page.next_cursor;
+    }
+  }
+
+  /** Poll until the run is passed, failed or errored. Throws AxisWaitTimeoutError when `timeoutMs` elapses first. */
+  async wait(evalRunId: string, options: WaitOptions = {}) {
+    const timeout = options.timeoutMs ?? 300_000;
+    const poll = options.pollIntervalMs ?? 1000;
+    const started = Date.now();
+    const { timeoutMs: _t, pollIntervalMs: _p, ...reqOpts } = options;
+    void _t;
+    void _p;
+    for (;;) {
+      const run = await this.get(evalRunId, reqOpts);
+      if (EVAL_FINAL.has(run.status)) return run;
+      const remaining = timeout - (Date.now() - started);
+      if (remaining <= 0)
+        throw new AxisWaitTimeoutError(
+          `eval run ${evalRunId} still ${run.status} after ${timeout} ms`,
+        );
+      await this.ax.sleep(Math.min(poll, remaining), options.signal);
+    }
+  }
+
+  /** Comparison of a finished run with its blueprint's baseline; `undefined` when there is no baseline. */
+  async comparison(evalRunId: string, options?: Opts) {
+    return (await this.ax.api.getEvalRunComparison({ evalRunId }, options)).comparison;
+  }
+
+  /**
+   * Ask the release gate. Fail-closed: `allowed` is true only when every required suite has a fresh, intact, passing run of this exact
+   * content hash by a registered runner with no regression against the baseline; `reasons` explains every block.
+   */
+  gate(
+    args: {
+      blueprint: {
+        name: string;
+        version: string;
+        content_hash: string;
+        namespace?: string | undefined;
+      };
+      suites?: { ref: string; threshold?: number | undefined }[] | undefined;
+    },
+    options?: Opts,
+  ): Promise<EvalGateResult> {
+    return this.ax.api.gateEvalRelease(
+      { body: pick({ blueprint: pick(args.blueprint), suites: args.suites?.map((x) => pick(x)) }) },
       options,
     );
   }

@@ -1,6 +1,13 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { HmacSigner, ApprovalService, MemoryApprovalStore } from "@axis/approvals";
 import { MemoryAuditLog } from "@axis/audit";
+import {
+  MemoryDocStore as MemoryEvalDocStore,
+  createEvalHub,
+  recompute,
+  type EvalHub,
+  type HubPrincipal,
+} from "@axis/eval-hub";
 import { HmacSealSigner, MemoryUsageLedger } from "@axis/billing";
 import {
   FakeDomainProver,
@@ -46,6 +53,7 @@ import {
   KillSwitchService,
   MarketplaceAdapter,
   RegistryAdapter,
+  EvalsAdapter,
   LedgerUsage,
   MemoryBlueprintStore,
   MemoryIdempotencyStore,
@@ -91,6 +99,7 @@ export interface World {
   approvals: ApprovalService;
   registry: RegistryService;
   marketplace: Marketplace;
+  evals: EvalHub;
   mpDomain: FakeDomainProver;
   ledger: MemoryUsageLedger;
   idem: MemoryIdempotencyStore;
@@ -136,9 +145,14 @@ export async function makeWorld(
     signer: new HmacSigner(randomBytes(32)),
   });
   const ledger = new MemoryUsageLedger({ signer: new HmacSealSigner(randomBytes(32)) });
+  const evals = createEvalHub({
+    docs: new MemoryEvalDocStore(),
+    audit: new ServiceAudit(audit, "eval-hub"),
+  });
   const registry = new RegistryService({
     store: new MemoryRegistryStore(),
     audit: new ServiceAudit(audit, "registry"),
+    evalGate: evals.gatePort,
   });
   const mpDomain = new FakeDomainProver();
   const marketplace = createMarketplace({
@@ -171,6 +185,7 @@ export async function makeWorld(
     identity: new ControlPlaneIdentity(store),
     registry: new RegistryAdapter(registry),
     marketplace: new MarketplaceAdapter(marketplace),
+    evals: new EvalsAdapter(evals),
     idempotency: idem,
     ...over,
   };
@@ -192,6 +207,7 @@ export async function makeWorld(
     approvals,
     registry,
     marketplace,
+    evals,
     mpDomain,
     ledger,
     idem,
@@ -333,6 +349,18 @@ export interface Seed {
   approvalId: string;
   denySeq: number;
   blueprint: { name: string; version: string };
+  /** Eval Hub fixtures of the owner's tenant: a passed run (the baseline), a second finished run to compare, review tasks, a runner to revoke. */
+  evals: {
+    runId: string;
+    run2Id: string;
+    contentHash: string;
+    plainSuite: string;
+    claimTask: string;
+    gradeTask: string;
+    skipTask: string;
+    samplingId: string;
+    revokableRunner: string;
+  };
 }
 
 export const hex32 = (): string => randomBytes(16).toString("hex");
@@ -557,8 +585,10 @@ export async function seed(w: World, owner?: Cred): Promise<Seed> {
     body: { policy: POLICY("seeded-pack", "1.0.0") },
   });
   if (pol.status !== 201) throw new Error(`seed policy: ${pol.text}`);
+  const evals = await seedEvals(w, o, pub.body.content_hash as string, blueprint);
   return {
     owner: o,
+    evals,
     listing: { namespace: listed.namespace, name: listed.name, version: listed.version },
     install: { content_hash: preview.contentHash, consent_digest: preview.consentDigest },
     own: { namespace: ownNs, name: "own-agent", key: ownKey },
@@ -568,5 +598,184 @@ export async function seed(w: World, owner?: Cred): Promise<Seed> {
     approvalId: approval.id,
     denySeq: denied.seq,
     blueprint,
+  };
+}
+
+const EV_IDS = ["c1", "c2", "c3"];
+const grade = (g: string, kind: string, status: string, score: number) => ({
+  grader_id: g,
+  kind,
+  status,
+  score,
+  detail: "",
+  provenance: {},
+});
+
+/** Datasets, suites, a registered runner, finished and half-finished runs, review tasks and sampling for the owner's tenant. */
+async function seedEvals(
+  w: World,
+  o: Cred,
+  contentHash: string,
+  blueprint: { name: string; version: string },
+): Promise<Seed["evals"]> {
+  const hub = w.evals;
+  const admin: HubPrincipal = {
+    kind: "tenant",
+    tenantId: o.tenantId,
+    subject: "eval-seeder",
+    role: "admin",
+  };
+  const runner: HubPrincipal = { kind: "runner", tenantId: o.tenantId, runnerId: "runner-1" };
+  await hub.runs.registerRunner(admin, "runner-1");
+  await hub.runs.registerRunner(admin, "revoke-me");
+  await hub.datasets.create(admin, {
+    name: "seed-ds",
+    cases: EV_IDS.map((id) => ({ id, input: `q ${id}`, expected: `a ${id}` })),
+  });
+  const det = [
+    { id: "exact", kind: "deterministic", weight: 1, config: { type: "exact" } },
+    { id: "contains", kind: "deterministic", weight: 1, config: { type: "contains" } },
+  ];
+  await hub.suites.create(admin, {
+    ref: "seed-plain@1.0.0",
+    dataset_ref: "seed-ds@1",
+    graders: det,
+    pass_threshold: 0.8,
+    tolerance: 0.05,
+  });
+  await hub.suites.create(admin, {
+    ref: "seed-human@1.0.0",
+    dataset_ref: "seed-ds@1",
+    graders: [
+      det[0],
+      { id: "helpful", kind: "human", weight: 1, config: { rubric: "Helpful?", sla_hours: 24 } },
+    ],
+    pass_threshold: 0.7,
+  });
+  const finish = async (suite: string, hash: string, version: string, score: number) => {
+    const run = await hub.runs.startAsRunner(runner, {
+      suite_ref: suite,
+      blueprint: { name: blueprint.name, version, content_hash: hash },
+    });
+    const results = EV_IDS.map((id) => ({
+      case_id: id,
+      status: "completed",
+      attempts: 1,
+      seed: 5,
+      error: null,
+      score: null as number | null,
+      output: `a ${id}`,
+      grades: det.map((d) => grade(d.id, "deterministic", "scored", score)),
+      trace: null,
+    }));
+    const suiteDoc = await hub.suites.get(admin, suite);
+    const agg = recompute(results as never, suiteDoc);
+    for (const r of results) r.score = agg.per_case[r.case_id] ?? null;
+    return hub.runs.submitResults(runner, run.id, payload(run, results, agg, "completed"));
+  };
+  const payload = (
+    run: {
+      id: string;
+      suite_ref: string;
+      mode: string;
+      seed: number;
+      dataset_hash: string;
+      content_hash: string;
+      blueprint: { name: string; version: string };
+    },
+    results: unknown[],
+    agg: unknown,
+    status: string,
+  ) => ({
+    runner_id: "runner-1",
+    run_id: run.id,
+    mode: run.mode,
+    status,
+    suite_ref: run.suite_ref,
+    blueprint: {
+      name: run.blueprint.name,
+      version: run.blueprint.version,
+      content_hash: run.content_hash,
+    },
+    started_at: "2026-10-08T12:00:00Z",
+    finished_at: "2026-10-08T12:00:05Z",
+    scores: agg,
+    case_results: results,
+    cost: { agent_usd: "0.001", judge_usd: "0", total_usd: "0.001", tokens: 10, judge_tokens: 0 },
+    provenance: {
+      runner_version: "1.0.0",
+      runner_id: "runner-1",
+      aggregation_version: 1,
+      seed: run.seed,
+      model_ids: [],
+      blueprint_content_hash: run.content_hash,
+      dataset_version_hash: run.dataset_hash,
+      suite_ref: run.suite_ref,
+    },
+  });
+  const good = await finish("seed-plain@1.0.0", contentHash, blueprint.version, 0.95);
+  const other = await finish("seed-plain@1.0.0", "f".repeat(64), "9.9.9", 0.85);
+  await hub.baselines.set(admin, { run_id: good.id });
+  // a run waiting for human review, with its tasks; the owner holds claims on two of them
+  const hr = await hub.runs.startAsRunner(runner, {
+    suite_ref: "seed-human@1.0.0",
+    blueprint: { name: blueprint.name, version: "8.0.0", content_hash: "e".repeat(64) },
+  });
+  const hres = EV_IDS.map((id) => ({
+    case_id: id,
+    status: "completed",
+    attempts: 1,
+    seed: 5,
+    error: null,
+    score: null,
+    output: `a ${id}`,
+    grades: [grade("exact", "deterministic", "scored", 1), grade("helpful", "human", "pending", 0)],
+    trace: null,
+  }));
+  const pend = {
+    status: "pending_human",
+    overall: null,
+    per_grader: {},
+    per_case: {},
+    passed: null,
+    failures: [],
+    ungraded: 0,
+  };
+  await hub.runs.submitResults(runner, hr.id, payload(hr, hres, pend, "pending_human"));
+  await hub.runs.createReviewTasks(runner, hr.id, {
+    tasks: EV_IDS.map((c) => ({
+      case_id: c,
+      grader_id: "helpful",
+      input: `q ${c}`,
+      output: `a ${c}`,
+      expected: null,
+    })),
+  });
+  const me: HubPrincipal = {
+    kind: "tenant",
+    tenantId: o.tenantId,
+    subject: o.memberId,
+    role: "admin",
+  };
+  const tasks = await hub.reviews.list(me, { run_id: hr.id });
+  const [t1, t2, t3] = tasks.map((t) => t.id) as [string, string, string];
+  await hub.reviews.claim(me, t2);
+  await hub.reviews.claim(me, t3);
+  await hub.online.put(admin, "seed-sampling", {
+    blueprint_name: blueprint.name,
+    suite_ref: "seed-plain@1.0.0",
+    rate: 0.1,
+    max_per_hour: 10,
+  });
+  return {
+    runId: good.id,
+    run2Id: other.id,
+    contentHash,
+    plainSuite: "seed-plain@1.0.0",
+    claimTask: t1,
+    gradeTask: t2,
+    skipTask: t3,
+    samplingId: "seed-sampling",
+    revokableRunner: "revoke-me",
   };
 }
