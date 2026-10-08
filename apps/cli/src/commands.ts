@@ -19,6 +19,7 @@ import { markdownReference, type Command, type Ctx, type FlagSpec } from "./cli.
 import { configPath, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { CliError, EXIT, UsageError } from "./exit.js";
 import { inert, keyValues, structured, table, asJson, type Column } from "./render.js";
+import { EVALS_COMMANDS } from "./evals.js";
 import { REGISTRY_COMMANDS } from "./registry.js";
 
 // ------------------------------------------------------------------------------------------- helpers
@@ -848,24 +849,6 @@ async function usage(ctx: Ctx): Promise<number> {
   return EXIT.OK;
 }
 
-async function evalsStart(ctx: Ctx): Promise<number> {
-  const [suite, ref] = need(ctx, 2, "evals start <suite> <name>@<version>");
-  const e = await ctx.client().evals.start({ suite: suite as string, blueprint: ref as string });
-  emit(ctx, e, () =>
-    keyValues(
-      [
-        ["eval run", e.id],
-        ["suite", e.suite],
-        ["status", e.status],
-        ["score", e.score],
-        ["threshold", e.threshold],
-      ],
-      ctx.style,
-    ),
-  );
-  return EXIT.OK;
-}
-
 // ------------------------------------------------------------------------------------------- raw api, placeholders
 
 /** Find an operation for a placeholder command: id starts with the verb and mentions the domain (id, tag or path). */
@@ -1372,13 +1355,7 @@ export const COMMANDS: Command[] = [
     ],
     run: usage,
   },
-  { path: ["evals"], summary: "Eval Hub" },
-  {
-    path: ["evals", "start"],
-    summary: "Run an eval suite against a blueprint version",
-    usage: "<suite> <name>@<version>",
-    run: evalsStart,
-  },
+  ...EVALS_COMMANDS,
 
   ...REGISTRY_COMMANDS,
 

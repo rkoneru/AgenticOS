@@ -412,12 +412,283 @@ axis usage [options]
 | `--to <iso-time>` | Period end (default: now) |
 | `--group-by <key>` | Group rows |
 
-### `axis evals start`
+### `axis evals run`
 
-Run an eval suite against a blueprint version
+Queue an eval run of a suite against a blueprint version
 
 ```
-axis evals start <suite> <name>@<version> [options]
+axis evals run <suite> <[namespace/]name@version> [options]
+```
+
+The run is bound to the version's content hash and executed by a registered runner. With --wait the exit code is 0 only if the run passed.
+
+| Option | Description |
+| --- | --- |
+| `--mode <mode>` | Run mode (default ci) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+| `--wait` | Wait for the run to finish (exit 1 if it did not pass, 5 on timeout) |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300) |
+
+### `axis evals start`
+
+Alias of `evals run`
+
+```
+axis evals start <suite> <[namespace/]name@version> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--mode <mode>` | Run mode (default ci) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+| `--wait` | Wait for the run to finish (exit 1 if it did not pass, 5 on timeout) |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300) |
+
+### `axis evals get`
+
+Show one eval run with its scores
+
+```
+axis evals get <eval-run-id> [options]
+```
+
+### `axis evals wait`
+
+Wait for an eval run to finish
+
+```
+axis evals wait <eval-run-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--wait-timeout <seconds>` | Give up waiting after this long (default 300) |
+
+### `axis evals list`
+
+List eval runs, newest first
+
+```
+axis evals list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--limit <n>` | Page size (1-200) |
+| `--all` | Follow every page |
+| `--suite <ref>` | Only this suite |
+| `--blueprint <name>` | Only this blueprint name |
+| `--status <status>` | Only this status |
+
+### `axis evals compare`
+
+Compare a run with the baseline (delta, regression, paired significance)
+
+```
+axis evals compare <eval-run-id> [options]
+```
+
+Exits 4 when the run regressed beyond the suite's tolerance.
+
+### `axis evals gate`
+
+Ask the release gate whether a blueprint version may be released
+
+```
+axis evals gate <[namespace/]name@version> [options]
+```
+
+Fail-closed: exits 0 only when every required suite has a fresh, intact, passing run of this exact content hash by a registered runner with no regression against the baseline. Exits 4 and lists every reason otherwise.
+
+| Option | Description |
+| --- | --- |
+| `--suite <ref[:threshold]>` | An additional required suite (the blueprint's own spec.evals.suites are always asked) |
+
+### `axis evals datasets list`
+
+List dataset versions
+
+```
+axis evals datasets list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--name <name>` | Only this dataset |
+
+### `axis evals datasets get`
+
+Show a dataset version
+
+```
+axis evals datasets get <name> [version|latest] [options]
+```
+
+### `axis evals datasets create`
+
+Create the next version of a dataset from a YAML/JSON file
+
+```
+axis evals datasets create <file|-> [options]
+```
+
+The file holds {name, cases: [{id, input, expected?, tags?, metadata?}], phi?, description?}. A phi dataset is redacted before it is stored.
+
+| Option | Description |
+| --- | --- |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis evals suites list`
+
+List suites
+
+```
+axis evals suites list [options]
+```
+
+### `axis evals suites get`
+
+Show a suite
+
+```
+axis evals suites get <name@version> [options]
+```
+
+### `axis evals suites create`
+
+Create a suite from a YAML/JSON file
+
+```
+axis evals suites create <file|-> [options]
+```
+
+The file holds {ref, dataset_ref, graders, pass_threshold, tolerance?, min_case_score?, settings?, ...}.
+
+| Option | Description |
+| --- | --- |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis evals baseline list`
+
+Baseline history
+
+```
+axis evals baseline list <blueprint-name> <suite> [options]
+```
+
+### `axis evals baseline set`
+
+Make a passed run the baseline (admin)
+
+```
+axis evals baseline set <eval-run-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis evals review tasks`
+
+Tasks you may work on
+
+```
+axis evals review tasks [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--state <state>` | Only this state |
+| `--run <eval-run-id>` | Only this run |
+
+### `axis evals review claim`
+
+Claim a task
+
+```
+axis evals review claim <task-id> [options]
+```
+
+### `axis evals review grade`
+
+Grade a claimed task
+
+```
+axis evals review grade <task-id> --score <0-1> --comment <text> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--score <0-1>` | Your score |
+| `--comment <text>` | Why (redacted for personal data before it is stored) |
+
+### `axis evals review skip`
+
+Give a claimed task back
+
+```
+axis evals review skip <task-id> --reason <text> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--reason <text>` | Why you skip it |
+
+### `axis evals sampling list`
+
+Sampling configurations
+
+```
+axis evals sampling list [options]
+```
+
+### `axis evals sampling put`
+
+Create or replace a sampling configuration (admin)
+
+```
+axis evals sampling put <sampling-id> <file|-> [options]
+```
+
+### `axis evals sampling summary`
+
+History and alert state of the samples
+
+```
+axis evals sampling summary [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--blueprint <name>` | Only this blueprint |
+| `--suite <ref>` | Only this suite |
+
+### `axis evals runners list`
+
+Registered runners
+
+```
+axis evals runners list [options]
+```
+
+### `axis evals runners register`
+
+Register a runner id (admin)
+
+```
+axis evals runners register <runner-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--description <text>` | What it is |
+
+### `axis evals runners revoke`
+
+Revoke a runner (admin, one-way)
+
+```
+axis evals runners revoke <runner-id> [options]
 ```
 
 ### `axis registry keygen`
