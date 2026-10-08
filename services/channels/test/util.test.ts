@@ -355,3 +355,19 @@ describe("egress guard", () => {
     expect(r.body).toHaveLength(4096);
   });
 });
+
+describe("redactPatterns Unicode hardening (PHI canary regression)", () => {
+  it("catches fullwidth digits, zero-width characters and labelled MRN/SSN", async () => {
+    const { redactPatterns } = await import("../src/redact.js");
+    for (const t of [
+      "ssn １３５-７９-２４６８ typed",
+      "ssn 246-80-13​57 pasted",
+      "chart MRN: 99887766 ok",
+      "social security number 468013579",
+      "call +1 415 555 0177",
+    ]) {
+      const out = redactPatterns(t);
+      expect(out).not.toMatch(/\d{3}|１３５|99887766/u);
+    }
+  });
+});

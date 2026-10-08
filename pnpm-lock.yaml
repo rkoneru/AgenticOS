@@ -482,6 +482,18 @@ importers:
       '@axis/audit':
         specifier: workspace:*
         version: link:../audit
+      '@axis/channels':
+        specifier: workspace:*
+        version: link:../channels
+      '@axis/eval-hub':
+        specifier: workspace:*
+        version: link:../eval-hub
+      '@axis/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@axis/registry':
+        specifier: workspace:*
+        version: link:../registry
       '@types/pg':
         specifier: ^8.11.0
         version: 8.23.1

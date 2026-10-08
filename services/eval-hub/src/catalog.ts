@@ -93,7 +93,12 @@ export class DatasetService {
         name,
         version,
         ref: `${name}@${version}`,
-        description: (input.description as string | undefined) ?? null,
+        description:
+          input.description === undefined
+            ? null
+            : phi
+              ? (redactJson(input.description, this.c.redact) as string)
+              : (input.description as string),
         phi,
         redacted: phi,
         case_count: stored.length,
