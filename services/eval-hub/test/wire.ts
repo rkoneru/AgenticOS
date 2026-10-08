@@ -25,10 +25,23 @@ export const loadWire = (): Wire =>
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export const subst = <T>(v: T, vars: Record<string, string>): T =>
-  JSON.parse(
-    JSON.stringify(v).replace(/\{\{(\w+)\}\}/g, (_m, k: string) => vars[k] ?? `UNBOUND:${k}`),
-  ) as T;
+/** A string that is exactly `{{x}}` becomes the (typed) captured value; `{{x}}` inside a longer string becomes its text. */
+export function subst<T>(v: T, vars: Record<string, unknown>): T {
+  const walk = (n: unknown): unknown => {
+    if (typeof n === "string") {
+      const m = /^\{\{(\w+)\}\}$/.exec(n);
+      if (m) return m[1] !== undefined && m[1] in vars ? vars[m[1]] : `UNBOUND:${m[1]}`;
+      return n.replace(/\{\{(\w+)\}\}/g, (_m, k: string) =>
+        k in vars ? String(vars[k]) : `UNBOUND:${k}`,
+      );
+    }
+    if (Array.isArray(n)) return n.map(walk);
+    if (typeof n === "object" && n !== null)
+      return Object.fromEntries(Object.entries(n).map(([k, x]) => [k, walk(x)]));
+    return n;
+  };
+  return walk(v) as T;
+}
 
 /** Returns the list of mismatches ("path: why"); empty = the actual value conforms to the expected shape. */
 export function conform(expected: unknown, actual: unknown, path = "$"): string[] {

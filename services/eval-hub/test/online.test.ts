@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { HubError } from "../src/index.js";
 import {
-  HASH_A,
   HOUR,
   events,
-  bp,
+  onlineSample,
   registerRunner,
   runnerOf,
   seedSuite,
@@ -38,39 +37,42 @@ const cfg = (o: Record<string, unknown> = {}) => ({
 });
 const ing = (
   w: World,
-  scores: Record<string, number> = { exact: 1, contains: 1 },
-  o: Record<string, unknown> = {},
-) =>
-  w.hub.online.ingest(w.runner, {
-    sampling_id: "prod",
-    blueprint: bp(HASH_A, "support-agent", "1.0.0"),
-    scores,
-    trace_id: "tr",
-    source_run_id: "run-1",
-    ...o,
-  });
+  grades: Record<string, number | null> = { exact: 1, contains: 1 },
+  patch?: (p: Record<string, unknown>) => void,
+) => w.hub.online.ingest(w.runner, onlineSample(grades, patch ? { patch } : {}));
 
 describe("sampling configs", () => {
-  it("are created and updated by an admin, listed, and disabled", async () => {
+  it("are created and updated by an admin, listed, served to runners in the runner's shape, and disabled", async () => {
     const w = await ready();
     const c1 = await w.hub.online.put(w.admin, "prod", cfg());
     expect(c1).toMatchObject({
       id: "prod",
       rate: 0.1,
       max_per_hour: 5,
-      redaction: "redact",
+      redaction: "phi",
       enabled: true,
       updated_by: "alice-admin",
     });
     const c2 = await w.hub.online.put(
       w.admin,
       "prod",
-      cfg({ rate: 0.5, redaction: "hash_only", alert_threshold: null }),
+      cfg({ rate: 0.5, redaction: "always", alert_threshold: null }),
     );
-    expect(c2).toMatchObject({ rate: 0.5, redaction: "hash_only", alert_threshold: null });
+    expect(c2).toMatchObject({ rate: 0.5, redaction: "always", alert_threshold: null });
     expect(await w.hub.online.list(w.builder)).toHaveLength(1);
     expect(await w.hub.online.list(w.runner)).toHaveLength(1);
+    expect(await w.hub.online.runnerConfigs(w.runner)).toEqual([
+      {
+        blueprint: "support-agent",
+        suite_ref: "smoke@1.0.0",
+        rate: 0.5,
+        max_per_hour: 5,
+        redaction: "always",
+      },
+    ]);
+    expect(await code(w.hub.online.runnerConfigs(w.builder))).toBe("forbidden:");
     expect((await w.hub.online.disable(w.admin, "prod")).enabled).toBe(false);
+    expect(await w.hub.online.runnerConfigs(w.runner)).toEqual([]);
     expect(await code(w.hub.online.disable(w.admin, "ghost"))).toBe("not_found:");
     expect(await code(w.hub.online.put(w.builder, "prod", cfg()))).toBe("forbidden:");
     expect(await code(w.hub.online.disable(w.builder, "prod"))).toBe("forbidden:");
@@ -90,23 +92,25 @@ describe("sampling configs", () => {
     expect(await t({ rate: 2 })).toMatch(/rate/);
     expect(await t({ max_per_hour: 0 })).toMatch(/max_per_hour/);
     expect(await t({ max_per_hour: 1.5 })).toMatch(/max_per_hour/);
-    expect(await t({ redaction: "none" })).toMatch(/redaction/);
+    expect(await t({ redaction: "redact" })).toMatch(/redaction/);
     expect(await t({ enabled: "yes" })).toMatch(/enabled/);
     expect(await t({ alert_threshold: 3 })).toMatch(/alert_threshold/);
   });
 });
 
 describe("ingestion", () => {
-  it("stores scores and ids only, weighted over the graders sent", async () => {
+  it("stores scores and ids only (never the sampled output, trace or review tasks), recomputing the score from the grades", async () => {
     const w = await ready();
     await w.hub.online.put(w.admin, "prod", cfg());
     const r = await ing(w, { exact: 1, contains: 0.5 });
     expect(r).toMatchObject({
       sampling_id: "prod",
       score: 0.75,
+      status: "complete",
       runner_id: "runner-1",
-      trace_id: "tr",
-      source_run_id: "run-1",
+      trace_id: "tr-online-1",
+      source_run_id: "run-prod-1",
+      scores: { exact: 1, contains: 0.5 },
     });
     expect(Object.keys(r).sort()).toEqual([
       "at",
@@ -117,59 +121,104 @@ describe("ingestion", () => {
       "score",
       "scores",
       "source_run_id",
+      "status",
       "suite_ref",
       "trace_id",
     ]);
-    expect((await ing(w, { exact: 0.2 })).score).toBe(0.2);
-  });
-
-  it("is limited to registered runners, enabled configs, the configured blueprint and the suite's automated graders", async () => {
-    const w = await ready();
-    await w.hub.online.put(w.admin, "prod", cfg());
-    expect(await code(w.hub.online.ingest(w.builder, {}))).toBe("forbidden:");
-    expect(
-      await code(w.hub.online.ingest(runnerOf(w.tenant, "stranger"), { sampling_id: "prod" })),
-    ).toBe("forbidden:");
-    const bad = (o: Record<string, unknown>) =>
-      code(
-        w.hub.online.ingest(w.runner, {
-          sampling_id: "prod",
-          blueprint: bp(),
-          scores: { exact: 1 },
-          ...o,
-        }),
-      );
-    expect(await bad({ sampling_id: 5 })).toMatch(/^invalid:sampling_id/);
-    expect(await bad({ sampling_id: "ghost" })).toBe("not_found:");
-    expect(await bad({ blueprint: bp(HASH_A, "other-agent") })).toMatch(/^invalid:blueprint/);
-    expect(await bad({ blueprint: { ...bp(), content_hash: "x" } })).toMatch(/^invalid:blueprint/);
-    expect(await bad({ scores: {} })).toMatch(/^invalid:scores/);
-    expect(await bad({ scores: 1 })).toMatch(/^invalid:scores/);
-    expect(await bad({ scores: { nope: 1 } })).toMatch(/scores.nope/);
-    expect(await bad({ scores: { exact: 3 } })).toMatch(/scores.exact/);
-    expect(await bad({ trace_id: 5 })).toMatch(/^invalid:trace_id/);
-    expect(await bad({ source_run_id: "x".repeat(101) })).toMatch(/^invalid:source_run_id/);
-    await w.hub.online.disable(w.admin, "prod");
-    expect(await bad({})).toBe("conflict:");
-    // human graders are not part of the online path
+    expect(JSON.stringify(await w.docs.find(w.tenant, "online"))).not.toContain("never stored");
+    // a human grade parks the sample without a score
     const w2 = world();
     await seedSuite(w2, {
       graders: [
-        { id: "exact", type: "deterministic", kind: "exact" },
-        { id: "human", type: "human", rubric: "ok?" },
+        { id: "exact", kind: "deterministic", weight: 1, config: { type: "exact" } },
+        { id: "human", kind: "human", weight: 1, config: { rubric: "ok?" } },
       ],
     });
     await registerRunner(w2);
     await w2.hub.online.put(w2.admin, "prod", cfg());
+    const p = await w2.hub.online.ingest(
+      w2.runner,
+      onlineSample({ exact: 1, human: null }, { kinds: { human: "human" } }),
+    );
+    expect(p).toMatchObject({ status: "pending_human", score: null, scores: { exact: 1 } });
+    expect((await w2.hub.online.summary(w2.admin, {}))[0]).toMatchObject({ count: 0, mean: null });
+  });
+
+  it("REJECTS a score or status that does not match the grades", async () => {
+    const w = await ready();
+    await w.hub.online.put(w.admin, "prod", cfg());
+    expect(await code(ing(w, { exact: 1, contains: 0.5 }, (p) => (p["score"] = 1)))).toBe(
+      "integrity_failed:mismatch.score",
+    );
+    expect(
+      await code(ing(w, { exact: 1, contains: 0.5 }, (p) => (p["status"] = "pending_human"))),
+    ).toBe("integrity_failed:mismatch.score");
+    expect(await code(ing(w, { exact: 1, contains: 0.5 }, (p) => (p["score"] = null)))).toBe(
+      "integrity_failed:mismatch.score",
+    );
+  });
+
+  it("is limited to registered runners, enabled configs, the configured blueprint and the suite's own graders", async () => {
+    const w = await ready();
+    await w.hub.online.put(w.admin, "prod", cfg());
+    expect(await code(w.hub.online.ingest(w.builder, {}))).toBe("forbidden:");
     expect(
       await code(
-        w2.hub.online.ingest(w2.runner, {
-          sampling_id: "prod",
-          blueprint: bp(),
-          scores: { human: 1 },
-        }),
+        w.hub.online.ingest(
+          runnerOf(w.tenant, "stranger"),
+          onlineSample({ exact: 1 }, { patch: (p) => (p["runner_id"] = "stranger") }),
+        ),
       ),
-    ).toMatch(/scores.human/);
+    ).toBe("forbidden:");
+    const bad = (
+      patch: (p: Record<string, unknown>) => void,
+      grades: Record<string, number | null> = { exact: 1, contains: 1 },
+    ) => code(ing(w, grades, patch));
+    expect(await bad((p) => (p["mode"] = "ci"))).toMatch(/^invalid:mode/);
+    expect(await bad((p) => (p["runner_id"] = "runner-9"))).toBe("integrity_failed:runner_id");
+    expect(await bad((p) => (p["blueprint"] = 5))).toMatch(/^invalid:blueprint/);
+    expect(
+      await bad(
+        (p) => (p["blueprint"] = { name: "support-agent", version: "", content_hash: "x" }),
+      ),
+    ).toMatch(/^invalid:blueprint/);
+    expect(
+      await bad(
+        (p) =>
+          (p["blueprint"] = { name: "other-agent", version: "1", content_hash: "a".repeat(64) }),
+      ),
+    ).toBe("not_found:");
+    expect(await bad((p) => (p["suite_ref"] = "other@1.0.0"))).toBe("not_found:");
+    expect(await bad((p) => (p["grades"] = []))).toMatch(/^invalid:grades/);
+    expect(await bad((p) => (p["grades"] = 5))).toMatch(/^invalid:grades/);
+    expect(
+      await bad((p) => ((p["grades"] as { grader_id: string }[])[0]!.grader_id = "ghost")),
+    ).toMatch(/^invalid:grades\[0\]/);
+    expect(await bad((p) => ((p["grades"] as { kind: string }[])[0]!.kind = "human"))).toMatch(
+      /^invalid:grades\[0\]/,
+    );
+    expect(await bad((p) => ((p["grades"] as { status: string }[])[0]!.status = "maybe"))).toMatch(
+      /grades\[0\]\.status/,
+    );
+    expect(
+      await bad((p) => ((p["grades"] as { status: string }[])[0]!.status = "pending")),
+    ).toMatch(/grades\[0\]\.status/);
+    expect(
+      await bad(
+        (p) => (p["grades"] = [...(p["grades"] as object[]), ...(p["grades"] as object[])]),
+        { exact: 1 },
+      ),
+    ).toMatch(/^invalid:grades/);
+    expect(
+      await bad((p) => (p["grades"] as object[]).push((p["grades"] as object[])[0]!), {
+        exact: 1,
+        contains: 1,
+      }),
+    ).toMatch(/^invalid:grades/);
+    expect(await bad((p) => (p["source_run_id"] = 5))).toMatch(/^invalid:source_run_id/);
+    expect(await bad((p) => (p["trace"] = "x"))).toBe("ok"); // a malformed trace only loses the trace id
+    await w.hub.online.disable(w.admin, "prod");
+    expect(await bad(() => undefined)).toBe("not_found:");
   });
 
   it("enforces the hourly cap and frees capacity as time passes", async () => {
@@ -187,8 +236,10 @@ describe("history and alerts", () => {
     const w = await ready();
     await w.hub.online.put(w.admin, "prod", cfg({ max_per_hour: 50 }));
     for (let i = 0; i < 4; i++) await ing(w, { exact: 0.2, contains: 0.2 });
-    const before = await w.hub.online.summary(w.admin, {});
-    expect(before[0]).toMatchObject({ count: 4, alerting: false });
+    expect((await w.hub.online.summary(w.admin, {}))[0]).toMatchObject({
+      count: 4,
+      alerting: false,
+    });
     await ing(w, { exact: 0.2, contains: 0.2 });
     await ing(w, { exact: 0.2, contains: 0.2 });
     const s = (
@@ -205,19 +256,17 @@ describe("history and alerts", () => {
       alert_threshold: 0.7,
     });
     expect(s?.recent).toHaveLength(6);
-    expect(await events(w, "evals.online.alert")).toHaveLength(1); // five low results raised it, once for the hour
+    expect(s?.recent[0]).toMatchObject({ score: 0.2, blueprint_version: "1.0.0" });
+    expect(await events(w, "evals.online.alert")).toHaveLength(1);
     w.clock.advance(HOUR);
     await ing(w, { exact: 0.2, contains: 0.2 });
     expect(await events(w, "evals.online.alert")).toHaveLength(2);
-    expect(s?.recent[0]).toMatchObject({ score: 0.2, blueprint_version: "1.0.0" });
     expect(await w.hub.online.summary(w.admin, { blueprint_name: "other" })).toEqual([]);
     expect(await w.hub.online.summary(w.admin, { suite_ref: "other@1.0.0" })).toEqual([]);
-    // good scores bring the window mean back up
     for (let i = 0; i < 20; i++) await ing(w, { exact: 1, contains: 1 });
     expect((await w.hub.online.summary(w.admin, {}))[0]?.alerting).toBe(false);
-    // the gate is unaffected by any of it
     const g = await w.hub.gate.check(w.builder, {
-      blueprint: bp(),
+      blueprint: { name: "support-agent", version: "1.0.0", content_hash: "a".repeat(64) },
       suites: [{ ref: "smoke@1.0.0" }],
     });
     expect(g.allowed).toBe(false);

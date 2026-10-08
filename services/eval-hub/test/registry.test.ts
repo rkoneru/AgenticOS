@@ -27,7 +27,7 @@ import {
   type HubSigningKey,
   type PublisherLookup,
 } from "../src/index.js";
-import { Clock, PROV, bp, caseResults, mean, seedSuite, world } from "./helpers.js";
+import { Clock, bp, caseResults, payloadFor, seedSuite, world } from "./helpers.js";
 import { randomBytes } from "node:crypto";
 const rid = (n = 6): string => Array.from(randomBytes(n), (b) => "cdfghjkpquxyz"[b % 13]).join("");
 
@@ -174,12 +174,7 @@ async function evalRun(
     blueprint: { ...bp(hash, name, version), namespace: s.ns },
   });
   const results = caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], score);
-  const per = results.map((r) => mean(Object.values(r["scores"] as Record<string, number>)));
-  return s.w.hub.runs.submitResults(s.w.runner, run.id, {
-    case_results: results,
-    scores: { overall: mean(per), per_grader: { exact: score, contains: score } },
-    provenance: PROV,
-  });
+  return s.w.hub.runs.submitResults(s.w.runner, run.id, await payloadFor(s.w, run, results));
 }
 
 const refusal = async (p: Promise<unknown>): Promise<RegistryError | undefined> => {
@@ -498,11 +493,11 @@ describe("eval attestations on the registry", () => {
       suite_ref: "smoke@1.0.0",
       blueprint: { ...bp(), namespace: "nope-ns" },
     });
-    const done = await w2.hub.runs.submitResults(w2.runner, run.id, {
-      case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], 1),
-      scores: { overall: 1 },
-      provenance: PROV,
-    });
+    const done = await w2.hub.runs.submitResults(
+      w2.runner,
+      run.id,
+      await payloadFor(w2, run, caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], 1)),
+    );
     expect(done.status).toBe("passed");
     const failed = (await s.w.audit.read(s.tenant)).filter(
       (x) => x.action === "evals.attestation.failed",

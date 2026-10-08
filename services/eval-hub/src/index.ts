@@ -3,6 +3,7 @@ export * from "./types.js";
 export * from "./authz.js";
 export * from "./docstore.js";
 export * from "./redact.js";
+export * from "./canonical.js";
 export * from "./graders.js";
 export * from "./scoring.js";
 export * from "./integrity.js";

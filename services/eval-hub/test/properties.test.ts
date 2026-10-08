@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 import { HubError } from "../src/index.js";
 import {
   DAY,
-  PROV,
   bp,
   caseResults,
-  mean,
+  payloadFor,
   publishers,
   registerRunner,
   runnerOf,
@@ -69,11 +68,11 @@ describe("gate properties", () => {
                 ["exact", "contains"],
                 s.score / 10,
               );
-              await w.hub.runs.submitResults(runner, run.id, {
-                case_results: results,
-                scores: { overall: s.score / 10 },
-                provenance: PROV,
-              });
+              await w.hub.runs.submitResults(
+                runner,
+                run.id,
+                await payloadFor(w, run, results, { runnerId: rid }),
+              );
             }
             model.push({
               hash,
@@ -126,11 +125,7 @@ describe("gate properties", () => {
           blueprint: bp(HA),
         });
         const results = caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], tenths / 10);
-        await a.hub.runs.submitResults(a.runner, run.id, {
-          case_results: results,
-          scores: { overall: tenths / 10 },
-          provenance: PROV,
-        });
+        await a.hub.runs.submitResults(a.runner, run.id, await payloadFor(a, run, results));
         expect(
           (
             await a.hub.gate.check(a.builder, {
@@ -175,8 +170,8 @@ describe("review properties", () => {
           const w = world({ publishers: publishers({ "support-agent@1.0.0": publisher }) });
           await seedSuite(w, {
             graders: [
-              { id: "exact", type: "deterministic", kind: "exact" },
-              { id: "h", type: "human", rubric: "ok?" },
+              { id: "exact", kind: "deterministic", config: { type: "exact" } },
+              { id: "h", kind: "human", config: { rubric: "ok?" } },
             ],
             cases: [{ id: "c1", input: "q" }],
           });
@@ -186,9 +181,28 @@ describe("review properties", () => {
             blueprint: bp(),
           });
           await w.hub.runs.claim(w.runner, queued.id);
-          await w.hub.runs.submitResults(w.runner, queued.id, {
-            case_results: caseResults(["c1"], ["exact", "h"], (_i, g) => (g === "h" ? null : 1)),
-            provenance: PROV,
+          await w.hub.runs.submitResults(
+            w.runner,
+            queued.id,
+            await payloadFor(
+              w,
+              queued,
+              caseResults(["c1"], ["exact", "h"], (_i, g) => (g === "h" ? null : 1), {
+                h: "human",
+              }),
+            ),
+          );
+          await w.hub.runs.createReviewTasks(w.runner, queued.id, {
+            tasks: [
+              {
+                case_id: "c1",
+                grader_id: "h",
+                rubric: "ok?",
+                input: "q",
+                output: "a",
+                expected: null,
+              },
+            ],
           });
           const task = (
             await w.hub.reviews.list(user(w.tenant, "operator", "someone-else"), {})
@@ -232,27 +246,26 @@ describe("integrity properties", () => {
         fc.double({ min: 0.001, max: 0.5, noNaN: true }),
         async (scores, delta) => {
           const w = world();
-          await seedSuite(w, { graders: [{ id: "exact", type: "deterministic", kind: "exact" }] });
+          await seedSuite(w, {
+            graders: [{ id: "exact", kind: "deterministic", config: { type: "exact" } }],
+          });
           await registerRunner(w);
           const ids = ["c1", "c2", "c3", "c4"];
-          const results = ids.map((id, i) => ({ case_id: id, scores: { exact: scores[i] } }));
-          const honest = mean(scores);
-          const start = () =>
-            w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() });
-          const lie = await start();
-          const claimed = honest + delta <= 1 ? honest + delta : honest - delta;
-          await expect(
-            w.hub.runs.submitResults(w.runner, lie.id, {
-              case_results: results,
-              scores: { overall: claimed },
-              provenance: PROV,
-            }),
-          ).rejects.toMatchObject({ code: "integrity_failed" });
-          const ok = await w.hub.runs.submitResults(w.runner, lie.id, {
-            case_results: results,
-            scores: { overall: honest },
-            provenance: PROV,
+          const results = caseResults(ids, ["exact"], (id) => scores[ids.indexOf(id)] as number);
+          const lie = await w.hub.runs.startAsRunner(w.runner, {
+            suite_ref: "smoke@1.0.0",
+            blueprint: bp(),
           });
+          const honestPayload = await payloadFor(w, lie, results);
+          const honest = (honestPayload["scores"] as { overall: number }).overall;
+          const claimed = honest + delta <= 1 ? honest + delta : honest - delta;
+          const forged = await payloadFor(w, lie, results, {
+            patch: (p) => ((p["scores"] as { overall: number }).overall = claimed),
+          });
+          await expect(w.hub.runs.submitResults(w.runner, lie.id, forged)).rejects.toMatchObject({
+            code: "integrity_failed",
+          });
+          const ok = await w.hub.runs.submitResults(w.runner, lie.id, honestPayload);
           expect(Math.abs((ok.scores?.overall ?? NaN) - honest)).toBeLessThan(1e-6);
           // the stored number is the hub's own, whatever the runner's float noise
           expect(ok.scores?.overall).toBe(Math.round((ok.scores?.overall as number) * 1e9) / 1e9);

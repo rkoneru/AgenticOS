@@ -19,6 +19,11 @@ import {
   bp,
   caseResults,
   hex,
+  payloadFor,
+  onlineSample,
+  DET,
+  DET2,
+  HUMAN,
   registerRunner,
   runWithScore,
   runnerOf,
@@ -26,7 +31,6 @@ import {
   user,
   world,
   type World,
-  PROV,
 } from "./helpers.js";
 
 const codes = (r: { reasons: { code: string }[] }): string[] => r.reasons.map((x) => x.code);
@@ -112,10 +116,7 @@ describe("allowing", () => {
     await w.hub.suites.create(w.builder, {
       ref: "smoke@1.2.0",
       dataset_ref: "ds@1",
-      graders: [
-        { id: "exact", type: "deterministic", kind: "exact" },
-        { id: "contains", type: "deterministic", kind: "contains" },
-      ],
+      graders: [DET, DET2],
       pass_threshold: 0.8,
     });
     await runWithScore(w, { suite: "smoke@1.2.0", score: 1 });
@@ -288,23 +289,23 @@ describe("blocking (fail closed)", () => {
 
   it("blocks while a human review of a newer run is pending", async () => {
     const w = world();
-    await seedSuite(w, {
-      graders: [
-        { id: "exact", type: "deterministic", kind: "exact" },
-        { id: "human", type: "human", rubric: "ok?", sla_hours: 24 },
-      ],
-    });
+    await seedSuite(w, { graders: [DET, HUMAN] });
     await registerRunner(w);
     const run = await w.hub.runs.startAsRunner(w.runner, {
       suite_ref: "smoke@1.0.0",
       blueprint: bp(),
     });
-    await w.hub.runs.submitResults(w.runner, run.id, {
-      case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], (_i, g) =>
-        g === "human" ? null : 1,
+    await w.hub.runs.submitResults(
+      w.runner,
+      run.id,
+      await payloadFor(
+        w,
+        run,
+        caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], (_i, g) =>
+          g === "human" ? null : 1,
+        ),
       ),
-      provenance: PROV,
-    });
+    );
     const r = await ask(w);
     expect(r.allowed).toBe(false);
     expect(codes(r)).toContain("run_in_progress");
@@ -343,11 +344,7 @@ describe("blocking (fail closed)", () => {
       max_per_hour: 100,
     });
     for (let i = 0; i < 6; i++)
-      await w.hub.online.ingest(w.runner, {
-        sampling_id: "prod-1",
-        blueprint: bp(),
-        scores: { exact: 1, contains: 1 },
-      });
+      await w.hub.online.ingest(w.runner, onlineSample({ exact: 1, contains: 1 }));
     const r = await ask(w);
     expect(r.allowed).toBe(false);
     expect(codes(r)).toEqual(["missing_run"]);

@@ -43,7 +43,7 @@ describe("integrity checks of stored runs", () => {
     const forged: EvalRunDoc = JSON.parse(JSON.stringify(run));
     (forged.scores as { per_case: Record<string, number> }).per_case["ghost"] = 1;
     forged.record_hash = recordHashOf(forged);
-    expect(verifyStoredRun(forged, suite)).toEqual(["recompute.per_case"]);
+    expect(verifyStoredRun(forged, suite)).toEqual(["recompute.per_case.ghost"]);
     const skewed: EvalRunDoc = JSON.parse(JSON.stringify(run));
     (skewed.scores as { per_case: Record<string, number> }).per_case["c1"] = 0.1;
     skewed.record_hash = recordHashOf(skewed);

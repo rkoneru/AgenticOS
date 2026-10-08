@@ -1,19 +1,26 @@
 {
-  "$comment": "Eval Hub wire examples v1 (docs/spec/eval-hub.md). Executed in order against the dev server by services/eval-hub/test/wire.test.ts; the Python runner (runtime/src/axis_runtime/evals) tests its client against the SAME file. snake_case JSON. Paths are relative to the hub base URL. `as` picks the bearer: admin | builder | reviewer | runner. A response matches when every key of the expected value exists in the actual one and matches; extra actual keys are allowed. Placeholders: <uuid> <iso> <hash> <string> <number> <integer> <boolean> <null> <any>; an array whose first element is \"<each>\" means every actual element matches the second. {{name}} in a path or request is replaced by a value captured earlier (`capture` maps a name to a dotted path in the response).",
+  "$comment": "Eval Hub wire examples v1 (docs/spec/eval-hub.md), in the shape the Python runner speaks (runtime/src/axis_runtime/evals, docs/spec/evals-runner.md; its own pinned copy is runtime/tests/fixtures/eval-hub-wire-examples.json). Executed in order against the dev server by services/eval-hub/test/dev-server.test.ts. snake_case JSON. Paths are relative to the hub base URL (/v1/evals). `as` picks the bearer: admin | builder | reviewer | runner | none. Runner POST/PUT bodies carry x-axis-runner-id and x-axis-runner-signature: v1=<hex HMAC-SHA256 of the exact body bytes under the runner's signing key (default: its token)>. A response matches when every key of the expected value exists in the actual one and matches; extra actual keys are allowed. Placeholders: <uuid> <iso> <hash> <string> <number> <integer> <boolean> <null> <any>; an array whose first element is \"<each>\" means every actual element matches the second. A string that is exactly {{name}} is replaced by the value captured earlier (typed), {{name}} inside a longer string by its text; `capture` maps a name to a dotted path in the response.",
   "version": 1,
   "base_path": "/v1/evals",
   "auth": {
     "scheme": "Authorization: Bearer <token>",
     "roles": {
       "admin": "tenant member, role admin: runners, baselines, sampling, review sweeps",
-      "builder": "tenant member, role builder: datasets, suites, queueing runs",
+      "builder": "tenant member, role builder: datasets, suites, queueing runs, reading",
       "reviewer": "tenant member with the reviewer role: human review only",
-      "runner": "a registered eval runner (runner_id comes from the credential): claim, results, fail, online results"
+      "runner": "a registered eval runner (runner_id comes from the credential): claim, results, review-tasks, online configs and results"
     }
   },
   "errors": {
     "shape": {
-      "error": { "code": "<string>", "message": "<string>", "checks": ["<each>", "<string>"] }
+      "error": {
+        "code": "<string>",
+        "message": "<string>",
+        "checks": [
+          "<each>",
+          "<string>"
+        ]
+      }
     },
     "codes": {
       "unauthenticated": 401,
@@ -32,7 +39,9 @@
       "as": "admin",
       "method": "PUT",
       "path": "/runners/ci-runner-1",
-      "request": { "description": "CI worker" },
+      "request": {
+        "description": "CI worker"
+      },
       "status": 200,
       "response": {
         "runner_id": "ci-runner-1",
@@ -55,19 +64,30 @@
         "cases": [
           {
             "id": "c1",
-            "input": { "question": "How do I reset my password?" },
-            "expected": "Use the reset link.",
-            "tags": ["account"],
-            "metadata": { "source": "tickets" }
+            "input": "How do I reset my password?",
+            "expected": {
+              "output": "Use the reset link."
+            },
+            "tags": [
+              "account"
+            ],
+            "metadata": {
+              "source": "tickets"
+            }
           },
           {
             "id": "c2",
-            "input": { "question": "Where is my invoice?" },
-            "expected": "Billing > Invoices."
+            "input": "Where is my invoice?",
+            "expected": {
+              "output": "Billing > Invoices."
+            }
           }
         ]
       },
       "status": 201,
+      "capture": {
+        "dataset_hash": "version_hash"
+      },
       "response": {
         "name": "support-qa",
         "version": 1,
@@ -76,33 +96,29 @@
         "redacted": false,
         "case_count": 2,
         "content_hash": "<hash>",
+        "version_hash": "<hash>",
         "created_at": "<iso>",
         "created_by": "<string>"
       }
     },
     {
-      "name": "get_dataset_version",
+      "name": "runner_gets_dataset",
       "as": "runner",
       "method": "GET",
-      "path": "/datasets/support-qa/versions/1",
+      "path": "/datasets/support-qa@1",
       "status": 200,
       "response": {
         "ref": "support-qa@1",
-        "content_hash": "<hash>",
+        "version_hash": "{{dataset_hash}}",
+        "phi": false,
         "cases": [
+          "<each>",
           {
-            "id": "c1",
-            "input": { "question": "How do I reset my password?" },
-            "expected": "Use the reset link.",
-            "tags": ["account"],
-            "metadata": { "source": "tickets" }
-          },
-          {
-            "id": "c2",
-            "input": { "question": "Where is my invoice?" },
-            "expected": "Billing > Invoices.",
-            "tags": [],
-            "metadata": {}
+            "id": "<string>",
+            "input": "<any>",
+            "expected": "<any>",
+            "tags": "<any>",
+            "metadata": "<any>"
           }
         ]
       }
@@ -116,20 +132,33 @@
         "ref": "support-smoke@1.0.0",
         "dataset_ref": "support-qa@1",
         "graders": [
-          { "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1 },
           {
-            "id": "contains",
-            "type": "deterministic",
-            "kind": "contains",
+            "id": "exact",
+            "kind": "deterministic",
+            "weight": 2,
+            "config": {
+              "type": "exact"
+            }
+          },
+          {
+            "id": "tone",
+            "kind": "model",
             "weight": 1,
-            "params": { "case_sensitive": false }
+            "config": {
+              "provider": "openai",
+              "model": "gpt-4o",
+              "rubric": "Polite and states the amount."
+            },
+            "min_mean": 0.5
           }
         ],
         "pass_threshold": 0.8,
         "tolerance": 0.02,
         "min_samples": 2,
         "max_age_days": 30,
-        "applies_to": []
+        "settings": {
+          "concurrency": 2
+        }
       },
       "status": 201,
       "response": {
@@ -137,23 +166,67 @@
         "name": "support-smoke",
         "version": "1.0.0",
         "dataset_ref": "support-qa@1",
-        "dataset_hash": "<hash>",
+        "dataset_hash": "{{dataset_hash}}",
         "pass_threshold": 0.8,
+        "min_case_score": null,
         "tolerance": 0.02,
         "required_for_release": true,
         "min_samples": 2,
         "max_age_days": 30,
         "regression_requires_significance": false,
         "alpha": 0.05,
+        "settings": {
+          "concurrency": 2
+        },
         "suite_hash": "<hash>",
         "graders": [
-          { "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1, "params": {} },
           {
-            "id": "contains",
-            "type": "deterministic",
-            "kind": "contains",
+            "id": "exact",
+            "kind": "deterministic",
+            "weight": 2,
+            "config": {
+              "type": "exact"
+            },
+            "min_mean": "<null>"
+          },
+          {
+            "id": "tone",
+            "kind": "model",
             "weight": 1,
-            "params": { "case_sensitive": false }
+            "config": {
+              "provider": "openai",
+              "model": "gpt-4o",
+              "rubric": "Polite and states the amount."
+            },
+            "min_mean": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "name": "runner_gets_suite",
+      "as": "runner",
+      "method": "GET",
+      "path": "/suites/support-smoke@1.0.0",
+      "status": 200,
+      "response": {
+        "ref": "support-smoke@1.0.0",
+        "dataset_ref": "support-qa@1",
+        "pass_threshold": 0.8,
+        "tolerance": 0.02,
+        "required_for_release": true,
+        "min_case_score": "<null>",
+        "settings": {
+          "concurrency": 2
+        },
+        "graders": [
+          "<each>",
+          {
+            "id": "<string>",
+            "kind": "<string>",
+            "weight": "<number>",
+            "config": "<any>",
+            "min_mean": "<any>"
           }
         ]
       }
@@ -174,13 +247,16 @@
         "mode": "ci"
       },
       "status": 202,
-      "capture": { "run_id": "id" },
+      "capture": {
+        "run_id": "id"
+      },
       "response": {
         "id": "<uuid>",
         "suite_ref": "support-smoke@1.0.0",
         "suite_hash": "<hash>",
         "dataset_ref": "support-qa@1",
-        "dataset_hash": "<hash>",
+        "dataset_hash": "{{dataset_hash}}",
+        "pass_threshold": 0.8,
         "blueprint": {
           "namespace": "acme",
           "name": "support-agent",
@@ -189,6 +265,7 @@
         },
         "blueprint_name": "support-agent",
         "mode": "ci",
+        "seed": "<integer>",
         "status": "queued",
         "requested_by": "<string>",
         "runner_id": "<null>",
@@ -203,31 +280,45 @@
       }
     },
     {
-      "name": "runner_polls_queue",
+      "name": "runner_claims_next_run",
       "as": "runner",
-      "method": "GET",
-      "path": "/runs?status=queued&limit=10",
+      "method": "POST",
+      "path": "/runner/claim",
+      "request": {
+        "runner_id": "ci-runner-1",
+        "runner_version": "1.0.0"
+      },
       "status": 200,
+      "capture": {
+        "seed": "run.seed"
+      },
       "response": {
-        "items": [
-          "<each>",
-          { "id": "<uuid>", "status": "queued", "suite_ref": "<string>", "case_count": 0 }
-        ],
-        "next_cursor": "<null>"
+        "run": {
+          "id": "{{run_id}}",
+          "tenant_id": "<uuid>",
+          "suite_ref": "support-smoke@1.0.0",
+          "blueprint": {
+            "name": "support-agent",
+            "version": "1.0.0",
+            "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "mode": "ci",
+          "seed": "<integer>"
+        }
       }
     },
     {
-      "name": "runner_claims_run",
+      "name": "runner_claims_when_nothing_is_queued",
       "as": "runner",
       "method": "POST",
-      "path": "/runs/{{run_id}}/claim",
-      "request": {},
+      "path": "/runner/claim",
+      "request": {
+        "runner_id": "ci-runner-1",
+        "runner_version": "1.0.0"
+      },
       "status": 200,
       "response": {
-        "id": "{{run_id}}",
-        "status": "running",
-        "runner_id": "ci-runner-1",
-        "started_at": "<iso>"
+        "run": "<null>"
       }
     },
     {
@@ -236,29 +327,120 @@
       "method": "POST",
       "path": "/runs/{{run_id}}/results",
       "request": {
+        "runner_id": "ci-runner-1",
+        "run_id": "{{run_id}}",
+        "mode": "ci",
+        "status": "completed",
+        "suite_ref": "support-smoke@1.0.0",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "started_at": "2026-10-08T12:00:00Z",
+        "finished_at": "2026-10-08T12:00:05Z",
+        "scores": {
+          "status": "complete",
+          "overall": 0.833333,
+          "per_grader": {
+            "exact": 0.75,
+            "tone": 1
+          },
+          "per_case": {
+            "c1": 1,
+            "c2": 0.666667
+          },
+          "passed": true,
+          "failures": [],
+          "ungraded": 0
+        },
         "case_results": [
           {
             "case_id": "c1",
-            "scores": { "exact": 1, "contains": 1 },
-            "cost_usd": 0.002,
-            "latency_ms": 840,
-            "trace_id": "0af7651916cd43dd8448eb211c80319c"
+            "status": "completed",
+            "attempts": 1,
+            "seed": 11,
+            "error": null,
+            "score": 1,
+            "output": "answer c1",
+            "grades": [
+              {
+                "grader_id": "exact",
+                "kind": "deterministic",
+                "status": "scored",
+                "score": 1,
+                "detail": "",
+                "provenance": {}
+              },
+              {
+                "grader_id": "tone",
+                "kind": "model",
+                "status": "scored",
+                "score": 1,
+                "detail": "",
+                "provenance": {}
+              }
+            ],
+            "trace": {
+              "trace_id": "trace-c1",
+              "cost_usd": "0.001000"
+            }
           },
           {
             "case_id": "c2",
-            "scores": { "exact": 0.5, "contains": 1 },
-            "cost_usd": 0.003,
-            "latency_ms": 910,
-            "trace_id": "b7ad6b7169203331b9aa4c3a1a2f3f42",
-            "error": null
+            "status": "completed",
+            "attempts": 1,
+            "seed": 11,
+            "error": null,
+            "score": 0.666667,
+            "output": "answer c2",
+            "grades": [
+              {
+                "grader_id": "exact",
+                "kind": "deterministic",
+                "status": "scored",
+                "score": 0.5,
+                "detail": "",
+                "provenance": {}
+              },
+              {
+                "grader_id": "tone",
+                "kind": "model",
+                "status": "scored",
+                "score": 1,
+                "detail": "",
+                "provenance": {}
+              }
+            ],
+            "trace": {
+              "trace_id": "trace-c2",
+              "cost_usd": "0.001000"
+            }
           }
         ],
-        "scores": { "overall": 0.875, "per_grader": { "exact": 0.75, "contains": 1 } },
-        "cost": { "total_usd": 0.005 },
+        "cost": {
+          "agent_usd": "0.003",
+          "judge_usd": "0.002",
+          "total_usd": "0.005",
+          "tokens": 120,
+          "judge_tokens": 40
+        },
         "provenance": {
-          "runner_version": "axis-runner/0.1.0",
-          "model_ids": ["scripted-model-1"],
-          "seed": 7
+          "runner_version": "1.0.0",
+          "runner_id": "ci-runner-1",
+          "aggregation_version": 1,
+          "seed": "{{seed}}",
+          "model_ids": [
+            "scripted/model-1"
+          ],
+          "blueprint_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "dataset_ref": "support-qa@1",
+          "dataset_version_hash": "{{dataset_hash}}",
+          "suite_ref": "support-smoke@1.0.0",
+          "judges": {},
+          "eval_mode": {
+            "allow_sandboxed": []
+          }
         }
       },
       "status": 200,
@@ -272,40 +454,62 @@
         "finished_at": "<iso>",
         "record_hash": "<hash>",
         "scores": {
-          "overall": 0.875,
-          "per_grader": { "exact": 0.75, "contains": 1 },
-          "per_case": { "c1": 1, "c2": 0.75 }
+          "status": "complete",
+          "overall": 0.833333,
+          "per_grader": {
+            "exact": 0.75,
+            "tone": 1
+          },
+          "per_case": {
+            "c1": 1,
+            "c2": 0.666667
+          },
+          "passed": true,
+          "failures": [],
+          "ungraded": 0
         },
-        "cost": { "total_usd": 0.005 },
+        "cost": {
+          "agent_usd": "0.003",
+          "judge_usd": "0.002",
+          "total_usd": "0.005",
+          "tokens": 120,
+          "judge_tokens": 40
+        },
         "provenance": {
-          "runner_version": "axis-runner/0.1.0",
-          "model_ids": ["scripted-model-1"],
-          "seed": "7"
+          "runner_version": "1.0.0",
+          "aggregation_version": 1,
+          "seed": "{{seed}}"
         },
         "case_results": [
           {
             "case_id": "c1",
-            "scores": { "exact": 1, "contains": 1 },
-            "case_score": 1,
-            "cost_usd": 0.002,
-            "latency_ms": 840,
-            "trace_id": "0af7651916cd43dd8448eb211c80319c",
-            "error": "<null>"
+            "status": "completed",
+            "score": 1,
+            "grades": [
+              "<each>",
+              {
+                "grader_id": "<string>",
+                "status": "scored"
+              }
+            ]
           },
           {
             "case_id": "c2",
-            "scores": { "exact": 0.5, "contains": 1 },
-            "case_score": 0.75,
-            "cost_usd": 0.003,
-            "latency_ms": 910,
-            "trace_id": "b7ad6b7169203331b9aa4c3a1a2f3f42",
-            "error": "<null>"
+            "status": "completed",
+            "score": 0.666667,
+            "grades": [
+              "<each>",
+              {
+                "grader_id": "<string>",
+                "status": "scored"
+              }
+            ]
           }
         ]
       }
     },
     {
-      "name": "tampered_aggregate_is_rejected",
+      "name": "runner_starts_a_run",
       "as": "runner",
       "method": "POST",
       "path": "/runs",
@@ -318,48 +522,178 @@
         }
       },
       "status": 201,
-      "capture": { "run2_id": "id" },
+      "capture": {
+        "run2_id": "id",
+        "seed2": "seed"
+      },
       "response": {
         "id": "<uuid>",
         "status": "running",
         "runner_id": "ci-runner-1",
-        "requested_by": "runner:ci-runner-1"
+        "requested_by": "runner:ci-runner-1",
+        "seed": "<integer>"
       }
     },
     {
-      "name": "integrity_failed",
+      "name": "integrity_failed_for_a_claimed_aggregate",
       "as": "runner",
       "method": "POST",
       "path": "/runs/{{run2_id}}/results",
       "request": {
+        "runner_id": "ci-runner-1",
+        "run_id": "{{run2_id}}",
+        "mode": "ci",
+        "status": "completed",
+        "suite_ref": "support-smoke@1.0.0",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.1.0",
+          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "started_at": "2026-10-08T12:00:00Z",
+        "finished_at": "2026-10-08T12:00:05Z",
+        "scores": {
+          "status": "complete",
+          "overall": 0.99,
+          "per_grader": {
+            "exact": 0,
+            "tone": 0
+          },
+          "per_case": {
+            "c1": 0,
+            "c2": 0
+          },
+          "passed": true,
+          "failures": [],
+          "ungraded": 0
+        },
         "case_results": [
-          { "case_id": "c1", "scores": { "exact": 0, "contains": 0 } },
-          { "case_id": "c2", "scores": { "exact": 0, "contains": 0 } }
+          {
+            "case_id": "c1",
+            "status": "completed",
+            "attempts": 1,
+            "seed": 11,
+            "error": null,
+            "score": 0,
+            "output": "answer c1",
+            "grades": [
+              {
+                "grader_id": "exact",
+                "kind": "deterministic",
+                "status": "scored",
+                "score": 0,
+                "detail": "",
+                "provenance": {}
+              },
+              {
+                "grader_id": "tone",
+                "kind": "model",
+                "status": "scored",
+                "score": 0,
+                "detail": "",
+                "provenance": {}
+              }
+            ],
+            "trace": {
+              "trace_id": "trace-c1",
+              "cost_usd": "0.001000"
+            }
+          },
+          {
+            "case_id": "c2",
+            "status": "completed",
+            "attempts": 1,
+            "seed": 11,
+            "error": null,
+            "score": 0,
+            "output": "answer c2",
+            "grades": [
+              {
+                "grader_id": "exact",
+                "kind": "deterministic",
+                "status": "scored",
+                "score": 0,
+                "detail": "",
+                "provenance": {}
+              },
+              {
+                "grader_id": "tone",
+                "kind": "model",
+                "status": "scored",
+                "score": 0,
+                "detail": "",
+                "provenance": {}
+              }
+            ],
+            "trace": {
+              "trace_id": "trace-c2",
+              "cost_usd": "0.001000"
+            }
+          }
         ],
-        "scores": { "overall": 0.99 },
-        "provenance": { "runner_version": "axis-runner/0.1.0", "model_ids": [], "seed": "1" }
+        "cost": {
+          "agent_usd": "0.003",
+          "judge_usd": "0.002",
+          "total_usd": "0.005",
+          "tokens": 120,
+          "judge_tokens": 40
+        },
+        "provenance": {
+          "runner_version": "1.0.0",
+          "runner_id": "ci-runner-1",
+          "aggregation_version": 1,
+          "seed": "{{seed2}}",
+          "model_ids": [
+            "scripted/model-1"
+          ],
+          "blueprint_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "dataset_ref": "support-qa@1",
+          "dataset_version_hash": "{{dataset_hash}}",
+          "suite_ref": "support-smoke@1.0.0",
+          "judges": {},
+          "eval_mode": {
+            "allow_sandboxed": []
+          }
+        }
       },
       "status": 422,
       "response": {
         "error": {
           "code": "integrity_failed",
           "message": "<string>",
-          "checks": ["mismatch.overall"]
+          "checks": [
+            "mismatch.overall",
+            "mismatch.passed",
+            "mismatch.failures"
+          ]
         }
       }
     },
     {
-      "name": "runner_reports_failure",
+      "name": "runner_reports_a_refused_run",
       "as": "runner",
       "method": "POST",
-      "path": "/runs/{{run2_id}}/fail",
-      "request": { "reason": "judge model unreachable" },
+      "path": "/runs/{{run2_id}}/results",
+      "request": {
+        "runner_id": "ci-runner-1",
+        "run_id": "{{run2_id}}",
+        "mode": "ci",
+        "status": "failed",
+        "suite_ref": "support-smoke@1.0.0",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.1.0",
+          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "finished_at": "2026-10-08T12:00:07Z",
+        "reason": "refused:blueprint_hash_mismatch"
+      },
       "status": 200,
       "response": {
         "id": "{{run2_id}}",
         "status": "errored",
         "passed": false,
-        "failure_reason": "judge model unreachable",
+        "failure_reason": "refused:blueprint_hash_mismatch",
         "record_hash": "<hash>"
       }
     },
@@ -372,11 +706,16 @@
       "response": {
         "id": "{{run_id}}",
         "status": "passed",
-        "case_results": ["<each>", { "case_id": "<string>" }]
+        "case_results": [
+          "<each>",
+          {
+            "case_id": "<string>"
+          }
+        ]
       }
     },
     {
-      "name": "gate_blocks_without_baseline_run",
+      "name": "gate_blocks_an_errored_run",
       "as": "builder",
       "method": "POST",
       "path": "/gate",
@@ -386,7 +725,12 @@
           "version": "1.1.0",
           "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         },
-        "suites": [{ "ref": "support-smoke@^1.0.0", "threshold": 0.8 }]
+        "suites": [
+          {
+            "ref": "support-smoke@^1.0.0",
+            "threshold": 0.8
+          }
+        ]
       },
       "status": 200,
       "response": {
@@ -395,10 +739,14 @@
           "namespace": "<null>",
           "name": "support-agent",
           "version": "1.1.0",
-          "content_hash": "<hash>"
+          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         },
         "reasons": [
-          { "code": "run_errored", "suite_ref": "support-smoke@^1.0.0", "message": "<string>" }
+          {
+            "code": "run_errored",
+            "suite_ref": "support-smoke@^1.0.0",
+            "message": "<string>"
+          }
         ],
         "runs": [
           {
@@ -423,7 +771,12 @@
           "version": "1.0.0",
           "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
-        "suites": [{ "ref": "support-smoke@1.0.0", "threshold": 0.8 }]
+        "suites": [
+          {
+            "ref": "support-smoke@1.0.0",
+            "threshold": 0.8
+          }
+        ]
       },
       "status": 200,
       "response": {
@@ -433,7 +786,7 @@
           {
             "suite_ref": "support-smoke@1.0.0",
             "run_id": "{{run_id}}",
-            "overall": 0.875,
+            "overall": 0.833333,
             "required_threshold": 0.8,
             "sample_size": 2,
             "finished_at": "<iso>",
@@ -451,14 +804,16 @@
       "as": "admin",
       "method": "POST",
       "path": "/baselines",
-      "request": { "run_id": "{{run_id}}" },
+      "request": {
+        "run_id": "{{run_id}}"
+      },
       "status": 201,
       "response": {
         "blueprint_name": "support-agent",
         "suite_ref": "support-smoke@1.0.0",
         "seq": 1,
         "run_id": "{{run_id}}",
-        "overall": 0.875,
+        "overall": 0.833333,
         "record_hash": "<hash>",
         "set_by": "<string>",
         "at": "<iso>"
@@ -489,7 +844,9 @@
       "method": "GET",
       "path": "/runs/{{run_id}}/comparison",
       "status": 200,
-      "response": { "comparison": "<null>" }
+      "response": {
+        "comparison": "<null>"
+      }
     },
     {
       "name": "create_human_suite",
@@ -500,13 +857,21 @@
         "ref": "support-human@1.0.0",
         "dataset_ref": "support-qa@1",
         "graders": [
-          { "id": "exact", "type": "deterministic", "kind": "exact" },
+          {
+            "id": "exact",
+            "kind": "deterministic",
+            "config": {
+              "type": "exact"
+            }
+          },
           {
             "id": "helpful",
-            "type": "human",
-            "rubric": "Is the answer helpful and polite?",
-            "sla_hours": 24,
-            "double_grade": false
+            "kind": "human",
+            "config": {
+              "rubric": "Is the answer helpful and polite?",
+              "sla_hours": 24,
+              "double_grade": false
+            }
           }
         ],
         "pass_threshold": 0.7
@@ -515,14 +880,26 @@
       "response": {
         "ref": "support-human@1.0.0",
         "graders": [
-          { "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1, "params": {} },
+          {
+            "id": "exact",
+            "kind": "deterministic",
+            "weight": 1,
+            "config": {
+              "type": "exact"
+            },
+            "min_mean": "<null>"
+          },
           {
             "id": "helpful",
-            "type": "human",
+            "kind": "human",
             "weight": 1,
-            "sla_hours": 24,
-            "double_grade": false,
-            "agreement_tolerance": 0.1
+            "config": {
+              "rubric": "Is the answer helpful and polite?",
+              "sla_hours": 24,
+              "double_grade": false,
+              "agreement_tolerance": 0.1
+            },
+            "min_mean": "<null>"
           }
         ]
       }
@@ -541,20 +918,131 @@
         }
       },
       "status": 201,
-      "capture": { "run3_id": "id" },
-      "response": { "id": "<uuid>", "status": "running" }
+      "capture": {
+        "run3_id": "id",
+        "seed3": "seed"
+      },
+      "response": {
+        "id": "<uuid>",
+        "status": "running",
+        "seed": "<integer>"
+      }
     },
     {
-      "name": "submit_with_human_pending",
+      "name": "submit_with_human_grades_pending",
       "as": "runner",
       "method": "POST",
       "path": "/runs/{{run3_id}}/results",
       "request": {
+        "runner_id": "ci-runner-1",
+        "run_id": "{{run3_id}}",
+        "mode": "ci",
+        "status": "pending_human",
+        "suite_ref": "support-human@1.0.0",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "started_at": "2026-10-08T12:00:00Z",
+        "finished_at": "2026-10-08T12:00:05Z",
+        "scores": {
+          "status": "pending_human",
+          "overall": null,
+          "per_grader": {},
+          "per_case": {},
+          "passed": null,
+          "failures": [],
+          "ungraded": 0
+        },
         "case_results": [
-          { "case_id": "c1", "scores": { "exact": 1, "helpful": null } },
-          { "case_id": "c2", "scores": { "exact": 1, "helpful": null } }
+          {
+            "case_id": "c1",
+            "status": "completed",
+            "attempts": 1,
+            "seed": 11,
+            "error": null,
+            "score": null,
+            "output": "answer c1",
+            "grades": [
+              {
+                "grader_id": "exact",
+                "kind": "deterministic",
+                "status": "scored",
+                "score": 1,
+                "detail": "",
+                "provenance": {}
+              },
+              {
+                "grader_id": "helpful",
+                "kind": "human",
+                "status": "pending",
+                "score": 0,
+                "detail": "awaiting_human_review",
+                "provenance": {}
+              }
+            ],
+            "trace": {
+              "trace_id": "trace-c1",
+              "cost_usd": "0.001000"
+            }
+          },
+          {
+            "case_id": "c2",
+            "status": "completed",
+            "attempts": 1,
+            "seed": 11,
+            "error": null,
+            "score": null,
+            "output": "answer c2",
+            "grades": [
+              {
+                "grader_id": "exact",
+                "kind": "deterministic",
+                "status": "scored",
+                "score": 1,
+                "detail": "",
+                "provenance": {}
+              },
+              {
+                "grader_id": "helpful",
+                "kind": "human",
+                "status": "pending",
+                "score": 0,
+                "detail": "awaiting_human_review",
+                "provenance": {}
+              }
+            ],
+            "trace": {
+              "trace_id": "trace-c2",
+              "cost_usd": "0.001000"
+            }
+          }
         ],
-        "provenance": { "runner_version": "axis-runner/0.1.0", "model_ids": [], "seed": "2" }
+        "cost": {
+          "agent_usd": "0.002",
+          "judge_usd": "0",
+          "total_usd": "0.002",
+          "tokens": 60,
+          "judge_tokens": 0
+        },
+        "provenance": {
+          "runner_version": "1.0.0",
+          "runner_id": "ci-runner-1",
+          "aggregation_version": 1,
+          "seed": "{{seed3}}",
+          "model_ids": [
+            "scripted/model-1"
+          ],
+          "blueprint_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "dataset_ref": "support-qa@1",
+          "dataset_version_hash": "{{dataset_hash}}",
+          "suite_ref": "support-human@1.0.0",
+          "judges": {},
+          "eval_mode": {
+            "allow_sandboxed": []
+          }
+        }
       },
       "status": 200,
       "response": {
@@ -566,17 +1054,82 @@
       }
     },
     {
+      "name": "runner_posts_review_tasks",
+      "as": "runner",
+      "method": "POST",
+      "path": "/runs/{{run3_id}}/review-tasks",
+      "request": {
+        "tasks": [
+          {
+            "case_id": "c1",
+            "grader_id": "helpful",
+            "rubric": "Is the answer helpful and polite?",
+            "input": "question c1",
+            "output": "answer c1",
+            "expected": null
+          },
+          {
+            "case_id": "c2",
+            "grader_id": "helpful",
+            "rubric": "Is the answer helpful and polite?",
+            "input": "question c2",
+            "output": "answer c2",
+            "expected": null
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "created": 2,
+        "existing": 0
+      }
+    },
+    {
+      "name": "runner_reposts_review_tasks_idempotently",
+      "as": "runner",
+      "method": "POST",
+      "path": "/runs/{{run3_id}}/review-tasks",
+      "request": {
+        "tasks": [
+          {
+            "case_id": "c1",
+            "grader_id": "helpful",
+            "rubric": "Is the answer helpful and polite?",
+            "input": "question c1",
+            "output": "answer c1",
+            "expected": null
+          },
+          {
+            "case_id": "c2",
+            "grader_id": "helpful",
+            "rubric": "Is the answer helpful and polite?",
+            "input": "question c2",
+            "output": "answer c2",
+            "expected": null
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "created": 0,
+        "existing": 2
+      }
+    },
+    {
       "name": "reviewer_lists_tasks",
       "as": "reviewer",
       "method": "GET",
       "path": "/reviews/tasks?state=open&run_id={{run3_id}}",
       "status": 200,
-      "capture": { "task_id": "items.0.id" },
+      "capture": {
+        "task_id": "items.0.id",
+        "task2_id": "items.1.id"
+      },
       "response": {
         "items": [
           "<each>",
           {
-            "id": "<uuid>",
+            "id": "<string>",
             "run_id": "{{run3_id}}",
             "case_id": "<string>",
             "grader_id": "helpful",
@@ -586,6 +1139,7 @@
             "sla_breached": false,
             "double_grade": false,
             "case_input": "<any>",
+            "case_output": "<string>",
             "case_expected": "<any>"
           }
         ]
@@ -610,12 +1164,18 @@
       "as": "reviewer",
       "method": "POST",
       "path": "/reviews/tasks/{{task_id}}/grade",
-      "request": { "score": 0.9, "comment": "Clear and polite." },
+      "request": {
+        "score": 0.9,
+        "comment": "Clear and polite."
+      },
       "status": 200,
       "response": {
         "id": "{{task_id}}",
         "state": "resolved",
-        "resolution": { "score": 0.9, "method": "single" },
+        "resolution": {
+          "score": 0.9,
+          "method": "single"
+        },
         "grades": [
           {
             "reviewer": "<string>",
@@ -623,6 +1183,81 @@
             "comment": "Clear and polite.",
             "at": "<iso>",
             "adjudication": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "run_still_waits_for_the_other_task",
+      "as": "builder",
+      "method": "GET",
+      "path": "/runs/{{run3_id}}",
+      "status": 200,
+      "response": {
+        "status": "running",
+        "pending_human": 1
+      }
+    },
+    {
+      "name": "reviewer_grades_last_task",
+      "as": "reviewer",
+      "method": "POST",
+      "path": "/reviews/tasks/{{task2_id}}/claim",
+      "request": {},
+      "status": 200,
+      "response": {
+        "state": "claimed"
+      }
+    },
+    {
+      "name": "reviewer_grades_last_task_2",
+      "as": "reviewer",
+      "method": "POST",
+      "path": "/reviews/tasks/{{task2_id}}/grade",
+      "request": {
+        "score": 0.9,
+        "comment": "Clear and polite."
+      },
+      "status": 200,
+      "response": {
+        "state": "resolved"
+      }
+    },
+    {
+      "name": "hub_finalizes_the_run_from_the_human_grades",
+      "as": "builder",
+      "method": "GET",
+      "path": "/runs/{{run3_id}}",
+      "status": 200,
+      "response": {
+        "id": "{{run3_id}}",
+        "status": "passed",
+        "passed": true,
+        "pending_human": 0,
+        "scores": {
+          "status": "complete",
+          "overall": 0.95,
+          "per_grader": {
+            "exact": 1,
+            "helpful": 0.9
+          },
+          "per_case": {
+            "c1": 0.95,
+            "c2": 0.95
+          },
+          "passed": true,
+          "failures": [],
+          "ungraded": 0
+        },
+        "case_results": [
+          "<each>",
+          {
+            "grades": [
+              "<each>",
+              {
+                "status": "scored"
+              }
+            ]
           }
         ]
       }
@@ -637,7 +1272,7 @@
         "suite_ref": "support-smoke@1.0.0",
         "rate": 0.05,
         "max_per_hour": 20,
-        "redaction": "redact",
+        "redaction": "phi",
         "alert_threshold": 0.7
       },
       "status": 200,
@@ -647,9 +1282,27 @@
         "suite_ref": "support-smoke@1.0.0",
         "rate": 0.05,
         "max_per_hour": 20,
-        "redaction": "redact",
+        "redaction": "phi",
         "enabled": true,
         "alert_threshold": 0.7
+      }
+    },
+    {
+      "name": "runner_reads_online_configs",
+      "as": "runner",
+      "method": "GET",
+      "path": "/online/configs",
+      "status": 200,
+      "response": {
+        "configs": [
+          {
+            "blueprint": "support-agent",
+            "suite_ref": "support-smoke@1.0.0",
+            "rate": 0.05,
+            "max_per_hour": 20,
+            "redaction": "phi"
+          }
+        ]
       }
     },
     {
@@ -658,26 +1311,66 @@
       "method": "POST",
       "path": "/online/results",
       "request": {
-        "sampling_id": "prod-support",
+        "mode": "online",
+        "runner_id": "ci-runner-1",
+        "suite_ref": "support-smoke@1.0.0",
+        "source_run_id": "run-prod-42",
         "blueprint": {
           "name": "support-agent",
           "version": "1.0.0",
           "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
-        "source_run_id": "run-prod-42",
-        "trace_id": "0af7651916cd43dd8448eb211c80319c",
-        "scores": { "exact": 1, "contains": 0.5 }
+        "completed_at": "2026-10-08T11:58:00Z",
+        "sampled_at": "2026-10-08T12:00:00Z",
+        "status": "complete",
+        "score": 0.666667,
+        "grades": [
+          {
+            "grader_id": "exact",
+            "kind": "deterministic",
+            "status": "scored",
+            "score": 0.5,
+            "detail": "",
+            "provenance": {}
+          },
+          {
+            "grader_id": "tone",
+            "kind": "model",
+            "status": "scored",
+            "score": 1,
+            "detail": "",
+            "provenance": {}
+          }
+        ],
+        "output": "(never stored by the hub)",
+        "trace": {
+          "trace_id": "0af7651916cd43dd8448eb211c80319c"
+        },
+        "review_tasks": [],
+        "provenance": {
+          "runner_version": "1.0.0",
+          "sampling": {
+            "rate": 0.05,
+            "max_per_hour": 20,
+            "redaction": "phi",
+            "redacted_phi": false
+          }
+        }
       },
       "status": 201,
       "response": {
         "id": "<uuid>",
         "sampling_id": "prod-support",
         "suite_ref": "support-smoke@1.0.0",
-        "score": 0.75,
-        "scores": { "exact": 1, "contains": 0.5 },
+        "score": 0.666667,
+        "status": "complete",
+        "scores": {
+          "exact": 0.5,
+          "tone": 1
+        },
         "runner_id": "ci-runner-1",
         "source_run_id": "run-prod-42",
-        "trace_id": "<string>",
+        "trace_id": "0af7651916cd43dd8448eb211c80319c",
         "at": "<iso>"
       }
     },
@@ -692,13 +1385,21 @@
           {
             "sampling_id": "prod-support",
             "count": 1,
-            "mean": 0.75,
+            "mean": 0.666667,
             "enabled": true,
             "alerting": false,
             "alert_threshold": 0.7,
-            "window": { "count": 1, "mean": 0.75 },
+            "window": {
+              "count": 1,
+              "mean": 0.666667
+            },
             "recent": [
-              { "at": "<iso>", "score": 0.75, "blueprint_version": "1.0.0", "trace_id": "<string>" }
+              {
+                "at": "<iso>",
+                "score": 0.666667,
+                "blueprint_version": "1.0.0",
+                "trace_id": "<string>"
+              }
             ]
           }
         ]
@@ -710,7 +1411,11 @@
       "method": "GET",
       "path": "/runs",
       "status": 401,
-      "response": { "error": { "code": "unauthenticated" } }
+      "response": {
+        "error": {
+          "code": "unauthenticated"
+        }
+      }
     },
     {
       "name": "builder_cannot_register_runners",
@@ -719,7 +1424,12 @@
       "path": "/runners/evil-runner",
       "request": {},
       "status": 403,
-      "response": { "error": { "code": "forbidden", "message": "<string>" } }
+      "response": {
+        "error": {
+          "code": "forbidden",
+          "message": "<string>"
+        }
+      }
     }
   ]
 }

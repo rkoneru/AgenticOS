@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { HubError } from "../src/index.js";
 import {
   HOUR,
-  PROV,
   bp,
   caseResults,
+  payloadFor,
   publishers,
   registerRunner,
+  runnerOf,
   seedSuite,
   user,
   world,
@@ -23,9 +24,24 @@ const code = async (p: Promise<unknown>): Promise<string> => {
 };
 
 const HUMAN_GRADERS = (extra: Record<string, unknown> = {}) => [
-  { id: "exact", type: "deterministic", kind: "exact" },
-  { id: "human", type: "human", rubric: "Is the answer helpful?", sla_hours: 24, ...extra },
+  { id: "exact", kind: "deterministic", weight: 1, config: { type: "exact" } },
+  {
+    id: "human",
+    kind: "human",
+    weight: 1,
+    config: { rubric: "Is the answer helpful?", sla_hours: 24, ...extra },
+  },
 ];
+
+const taskInput = (ids: string[]) =>
+  ids.map((id) => ({
+    case_id: id,
+    grader_id: "human",
+    rubric: "Is the answer helpful?",
+    input: `q ${id} [email]`,
+    output: `answer ${id}`,
+    expected: null,
+  }));
 
 async function awaiting(extra: Record<string, unknown> = {}, cases = 2) {
   const w = world({ publishers: publishers({ "support-agent@1.0.0": "pat-publisher" }) });
@@ -39,10 +55,16 @@ async function awaiting(extra: Record<string, unknown> = {}, cases = 2) {
     suite_ref: "smoke@1.0.0",
     blueprint: bp(),
   });
-  const pending = await w.hub.runs.submitResults(w.runner, run.id, {
-    case_results: caseResults(ids, ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
-    provenance: PROV,
-  });
+  const pending = await w.hub.runs.submitResults(
+    w.runner,
+    run.id,
+    await payloadFor(
+      w,
+      run,
+      caseResults(ids, ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
+    ),
+  );
+  await w.hub.runs.createReviewTasks(w.runner, run.id, { tasks: taskInput(ids) });
   return { w, run, pending, ids };
 }
 
@@ -64,33 +86,64 @@ describe("task creation", () => {
     expect(JSON.stringify(tasks[0]?.case_input)).toBeDefined();
   });
 
-  it("a runner cannot supply a human score", async () => {
+  it("a runner cannot supply a human score, and review tasks must name pending human cells of its own run", async () => {
     const w = world();
     await seedSuite(w, { graders: HUMAN_GRADERS() });
     await registerRunner(w);
+    await registerRunner(w, "runner-2");
     const run = await w.hub.runs.startAsRunner(w.runner, {
       suite_ref: "smoke@1.0.0",
       blueprint: bp(),
     });
+    const ids = ["c1", "c2", "c3", "c4"];
+    const scored = caseResults(ids, ["exact", "human"], 1); // human grade "scored" by the runner
     expect(
       await code(
-        w.hub.runs.submitResults(w.runner, run.id, {
-          case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], 1),
-          provenance: PROV,
-        }),
+        w.hub.runs.submitResults(
+          w.runner,
+          run.id,
+          await payloadFor(w, run, scored, { status: "completed" }),
+        ),
       ),
-    ).toMatch(/^invalid:case_results\[0\]\.scores\.human/);
+    ).toMatch(/^invalid:case_results\[0\]\.grades\[1\]\.status/);
+    // nothing pending yet: no task can be created
     expect(
-      await code(
-        w.hub.runs.submitResults(w.runner, run.id, {
-          case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], (_i, g) =>
-            g === "human" ? null : 1,
-          ),
-          scores: { overall: 1 },
-          provenance: PROV,
-        }),
+      await code(w.hub.runs.createReviewTasks(w.runner, run.id, { tasks: taskInput(ids) })),
+    ).toMatch(/^invalid:tasks\[0\]/);
+    await w.hub.runs.submitResults(
+      w.runner,
+      run.id,
+      await payloadFor(
+        w,
+        run,
+        caseResults(ids, ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
       ),
-    ).toMatch(/^invalid:scores/);
+    );
+    const t = (tasks: unknown, who = w.runner) =>
+      code(w.hub.runs.createReviewTasks(who, run.id, { tasks }));
+    expect(await t("x")).toMatch(/^invalid:tasks/);
+    expect(await t([])).toMatch(/^invalid:tasks/);
+    expect(await t([5])).toMatch(/^invalid:tasks\[0\]/);
+    expect(await t([{ case_id: "zzz", grader_id: "human" }])).toMatch(/^invalid:tasks\[0\]/);
+    expect(await t([{ case_id: "c1", grader_id: "exact" }])).toMatch(/^invalid:tasks\[0\]/); // not a human grader
+    expect(await t([{ ...taskInput(["c1"])[0], rubric: "" }])).toMatch(/rubric/);
+    expect(await t([{ ...taskInput(["c1"])[0], output: 5 }])).toMatch(/output/);
+    expect(await t([{ ...taskInput(["c1"])[0], input: "x".repeat(70_000) }])).toMatch(
+      /^invalid:tasks\[0\]/,
+    );
+    expect(await t(taskInput(["c1"]), runnerOf(w.tenant, "runner-2"))).toBe("forbidden:");
+    expect(await t(taskInput(["c1"]), w.builder as never)).toBe("forbidden:");
+    expect(
+      await w.hub.runs.createReviewTasks(w.runner, run.id, { tasks: taskInput(["c1", "c2"]) }),
+    ).toEqual({ created: 2, existing: 0 });
+    // idempotent: re-posting creates nothing new, and the rest can follow later
+    expect(await w.hub.runs.createReviewTasks(w.runner, run.id, { tasks: taskInput(ids) })).toEqual(
+      { created: 2, existing: 2 },
+    );
+    expect(await w.hub.reviews.list(rev(w, "rita"), {})).toHaveLength(4);
+    // the rubric defaults to the grader's own
+    const w3 = await awaiting({}, 1);
+    expect(await w3.w.hub.reviews.list(rev(w3.w, "rita"), {})).toHaveLength(1);
   });
 });
 
@@ -148,10 +201,16 @@ describe("separation of duties", () => {
     await registerRunner(w2);
     const q = await w2.hub.runs.request(w2.builder, { suite_ref: "smoke@1.0.0", blueprint: bp() });
     const claimed = await w2.hub.runs.claim(w2.runner, q.id);
-    await w2.hub.runs.submitResults(w2.runner, claimed.id, {
-      case_results: caseResults(["c1"], ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
-      provenance: PROV,
-    });
+    await w2.hub.runs.submitResults(
+      w2.runner,
+      claimed.id,
+      await payloadFor(
+        w2,
+        claimed,
+        caseResults(["c1"], ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
+      ),
+    );
+    await w2.hub.runs.createReviewTasks(w2.runner, claimed.id, { tasks: taskInput(["c1"]) });
     const starter = user(w2.tenant, "builder", "bob-builder");
     const task = (await w2.hub.reviews.list(rev(w2, "rita"), {}))[0] as {
       id: string;

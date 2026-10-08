@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { hashJson } from "@axis/contracts";
-import { HubError, parseGraders, redactJson } from "../src/index.js";
+import { HubError, canonicalAscii, parseGraders, redactJson } from "../src/index.js";
 import { CASES, events, DET, HUMAN, seedSuite, user, world } from "./helpers.js";
 
 const code = async (p: Promise<unknown>): Promise<string> => {
@@ -33,6 +35,47 @@ describe("datasets", () => {
     expect(await w.hub.datasets.list(w.admin, "nope")).toEqual([]);
     // there is no update path: the stored document is frozen
     await expect(w.docs.update(w.tenant, "datasets", "ds@1", 1, {})).rejects.toThrow(/immutable/);
+  });
+
+  it("hashes the cases exactly as the runner does (pinned by the runner's own fixture), sorted by id and ASCII-escaped", async () => {
+    const wire = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("./fixtures/eval-hub-wire-examples.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as {
+      dataset: { version_hash: string; cases: unknown[]; phi: boolean };
+    };
+    const w = world();
+    const v = await w.hub.datasets.create(w.builder, {
+      name: "refund-cases",
+      cases: wire.dataset.cases,
+    });
+    expect(v.version_hash).toBe(wire.dataset.version_hash);
+    expect(v.content_hash).toBe(wire.dataset.version_hash);
+    // the order the cases were listed in does not matter; non-ASCII and DEL are escaped like Python's ensure_ascii
+    const a = await w.hub.datasets.create(w.builder, {
+      name: "ord",
+      cases: [
+        { id: "b", input: "x" },
+        { id: "a", input: "caf\u00e9\u007f" },
+      ],
+    });
+    const b = await w.hub.datasets.create(w.builder, {
+      name: "ord2",
+      cases: [
+        { id: "a", input: "caf\u00e9\u007f" },
+        { id: "b", input: "x" },
+      ],
+    });
+    expect(a.version_hash).toBe(b.version_hash);
+    expect(canonicalAscii({ k: "caf\u00e9\u007f\n", n: [1, 2.5, null, true], z: {} })).toBe(
+      '{"k":"caf\\u00e9\\u007f\\n","n":[1,2.5,null,true],"z":{}}',
+    );
+    expect(() => canonicalAscii(Number.NaN)).toThrow();
+    expect(() => canonicalAscii(undefined)).toThrow();
+    // a missing `expected` is the wire's null
+    expect(a.cases[0]).toMatchObject({ id: "b", expected: null, tags: [], metadata: {} });
   });
 
   it("validates names and cases", async () => {
@@ -136,47 +179,59 @@ describe("datasets", () => {
 });
 
 describe("graders", () => {
-  it("accepts every deterministic kind, a model grader and a human grader", () => {
+  const d = (type: string, extra: Record<string, unknown> = {}) => ({
+    id: "g",
+    kind: "deterministic",
+    config: { type, ...extra },
+  });
+
+  it("accepts every deterministic type, a model grader and a human grader, in the runner's shape", () => {
     const gs = parseGraders([
-      { id: "g1", type: "deterministic", kind: "exact" },
-      { id: "g2", type: "deterministic", kind: "contains", params: { case_sensitive: false } },
-      { id: "g3", type: "deterministic", kind: "regex", params: { pattern: "^a+$", flags: "i" } },
+      ...[
+        "exact",
+        "contains",
+        "not_contains",
+        "json_schema",
+        "numeric_tolerance",
+        "tool_sequence",
+        "tool_subsequence",
+        "policy_decision",
+        "budget",
+      ].map((t, i) => ({
+        id: `g${i}`,
+        kind: "deterministic",
+        config: { type: t },
+      })),
       {
-        id: "g4",
-        type: "deterministic",
-        kind: "json_schema",
-        params: { schema: { type: "object" } },
+        id: "re",
+        kind: "deterministic",
+        weight: 2,
+        min_mean: 0.9,
+        config: { type: "regex", pattern: "^a+$" },
       },
       {
-        id: "g5",
-        type: "deterministic",
-        kind: "numeric_tolerance",
-        params: { abs: 0.5, rel: 0.1 },
+        id: "m1",
+        kind: "model",
+        weight: 2,
+        config: { provider: "openai", model: "judge-1", rubric: "Score faithfulness." },
       },
       {
-        id: "g6",
-        type: "deterministic",
-        kind: "tool_call_sequence",
-        params: { mode: "subsequence" },
+        id: "h1",
+        kind: "human",
+        config: { rubric: "Helpful?", double_grade: true, agreement_tolerance: 0.2 },
       },
-      { id: "g7", type: "deterministic", kind: "policy_decision", params: { expected: "DENY" } },
-      {
-        id: "g8",
-        type: "deterministic",
-        kind: "cost_latency_budget",
-        params: { max_cost_usd: 0.1, max_latency_ms: 5000 },
-      },
-      { id: "m1", type: "model", rubric: "Score faithfulness.", judge_model: "judge-1", weight: 2 },
-      { id: "h1", type: "human", rubric: "Helpful?", double_grade: true, agreement_tolerance: 0.2 },
     ]);
-    expect(gs).toHaveLength(10);
-    expect(gs[9]).toMatchObject({
+    expect(gs).toHaveLength(12);
+    expect(gs[9]).toMatchObject({ weight: 2, min_mean: 0.9 });
+    expect(gs[11]?.config).toMatchObject({
       sla_hours: 72,
       double_grade: true,
       agreement_tolerance: 0.2,
-      weight: 1,
     });
-    expect(gs[0]).toMatchObject({ weight: 1, params: {} });
+    expect(gs[0]).toMatchObject({ weight: 1, min_mean: null });
+    expect(
+      parseGraders([{ id: "h", kind: "human", config: { rubric: "r" } }])[0]?.config,
+    ).toMatchObject({ double_grade: false, agreement_tolerance: 0.1 });
   });
 
   it("rejects malformed configuration with the offending path", () => {
@@ -188,51 +243,42 @@ describe("graders", () => {
         return (x as HubError).checks.join(",");
       }
     };
-    const d = (extra: Record<string, unknown>) => [{ id: "g", type: "deterministic", ...extra }];
     expect(e("x")).toBe("graders");
     expect(e([])).toBe("graders");
     expect(e(new Array(21).fill(DET))).toBe("graders");
     expect(e([1])).toBe("graders[0]");
-    expect(e([{ id: "Bad", type: "model" }])).toBe("graders[0].id");
+    expect(e([{ id: "bad id", kind: "model" }])).toBe("graders[0].id");
     expect(e([DET, DET])).toBe("graders[1].id");
     expect(e([{ ...DET, weight: 0 }])).toBe("graders[0].weight");
     expect(e([{ ...DET, weight: 101 }])).toBe("graders[0].weight");
-    expect(e([{ id: "g", type: "x" }])).toBe("graders[0].type");
-    expect(e(d({ kind: "nope" }))).toBe("graders[0].kind");
-    expect(e(d({ kind: "exact", params: 5 }))).toBe("graders[0].params");
-    expect(e(d({ kind: "exact", params: { surprise: 1 } }))).toBe("graders[0].params.surprise");
-    expect(e(d({ kind: "exact", params: { trim: "yes" } }))).toBe("graders[0].params.trim");
-    expect(e(d({ kind: "contains", params: { case_sensitive: 1 } }))).toBe(
-      "graders[0].params.case_sensitive",
+    expect(e([{ ...DET, min_mean: 2 }])).toBe("graders[0].min_mean");
+    expect(e([{ id: "g", kind: "x" }])).toBe("graders[0].kind");
+    expect(e([{ ...DET, config: 5 }])).toBe("graders[0].config");
+    expect(e([{ ...DET, config: { type: "exact", blob: "x".repeat(21_000) } }])).toBe(
+      "graders[0].config",
     );
-    expect(e(d({ kind: "regex", params: {} }))).toBe("graders[0].params.pattern");
-    expect(e(d({ kind: "regex", params: { pattern: "x".repeat(201) } }))).toBe(
-      "graders[0].params.pattern",
+    expect(e([d("nope")])).toBe("graders[0].config.type");
+    expect(e([{ id: "g", kind: "deterministic" }])).toBe("graders[0].config.type");
+    expect(e([d("regex")])).toBe("graders[0].config.pattern");
+    expect(e([d("regex", { pattern: "x".repeat(1001) })])).toBe("graders[0].config.pattern");
+    expect(e([{ id: "m", kind: "model", config: { model: "m", rubric: "r" } }])).toBe(
+      "graders[0].config.provider",
     );
-    expect(e(d({ kind: "regex", params: { pattern: "(", flags: "" } }))).toBe(
-      "graders[0].params.pattern",
+    expect(e([{ id: "m", kind: "model", config: { provider: "p", rubric: "r" } }])).toBe(
+      "graders[0].config.model",
     );
-    expect(e(d({ kind: "regex", params: { pattern: "a", flags: "g" } }))).toBe(
-      "graders[0].params.flags",
+    expect(e([{ id: "m", kind: "model", config: { provider: "p", model: "m" } }])).toBe(
+      "graders[0].config.rubric",
     );
-    expect(e(d({ kind: "json_schema", params: { schema: [] } }))).toBe("graders[0].params.schema");
-    expect(e(d({ kind: "numeric_tolerance", params: {} }))).toBe("graders[0].params");
-    expect(e(d({ kind: "numeric_tolerance", params: { abs: -1 } }))).toBe("graders[0].params.abs");
-    expect(e(d({ kind: "tool_call_sequence", params: { mode: "any" } }))).toBe(
-      "graders[0].params.mode",
+    expect(e([{ id: "h", kind: "human", config: {} }])).toBe("graders[0].config.rubric");
+    expect(e([{ id: "h", kind: "human", config: { rubric: "r", sla_hours: 0 } }])).toBe(
+      "graders[0].config.sla_hours",
     );
-    expect(e(d({ kind: "policy_decision", params: { expected: "MAYBE" } }))).toBe(
-      "graders[0].params.expected",
+    expect(e([{ id: "h", kind: "human", config: { rubric: "r", double_grade: "y" } }])).toBe(
+      "graders[0].config.double_grade",
     );
-    expect(e(d({ kind: "cost_latency_budget", params: {} }))).toBe("graders[0].params");
-    expect(e([{ id: "m", type: "model", rubric: "", judge_model: "j" }])).toBe("graders[0].rubric");
-    expect(e([{ id: "m", type: "model", rubric: "r" }])).toBe("graders[0].judge_model");
-    expect(e([{ id: "h", type: "human", rubric: "r", sla_hours: 0 }])).toBe("graders[0].sla_hours");
-    expect(e([{ id: "h", type: "human", rubric: "r", double_grade: "y" }])).toBe(
-      "graders[0].double_grade",
-    );
-    expect(e([{ id: "h", type: "human", rubric: "r", agreement_tolerance: 2 }])).toBe(
-      "graders[0].agreement_tolerance",
+    expect(e([{ id: "h", kind: "human", config: { rubric: "r", agreement_tolerance: 2 } }])).toBe(
+      "graders[0].config.agreement_tolerance",
     );
   });
 });
