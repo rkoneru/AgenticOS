@@ -14,6 +14,8 @@ import {
 } from "./types.js";
 
 export interface PgRegistryOptions {
+  /** Residency guard (`@axis/data-governance/residency`): when set, every write for a tenant is refused unless this instance's region is allowed. */
+  residency?: { assertWrite(tenantId: string): Promise<void> };
   pool: PgPoolLike;
   /** Tests only: connect as a superuser and SET LOCAL ROLE axis_app per transaction. */
   role?: string;
@@ -299,6 +301,7 @@ export class PgRegistryStore implements RegistryStore {
   }
 
   async insertVersion(rec: VersionRecord, normalizedName: string): Promise<void> {
+    await this.o.residency?.assertWrite(rec.tenantId);
     try {
       await this.tx(rec.tenantId, async (c) => {
         const own = await c.query(

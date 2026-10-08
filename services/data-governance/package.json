@@ -38,6 +38,7 @@
     "@axis/memory": "workspace:*",
     "@axis/eval-hub": "workspace:*",
     "@axis/channels": "workspace:*",
-    "@axis/registry": "workspace:*"
+    "@axis/registry": "workspace:*",
+    "@axis/billing": "workspace:*"
   }
 }

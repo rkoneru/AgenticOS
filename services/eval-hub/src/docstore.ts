@@ -125,6 +125,8 @@ const toDoc = <T>(r: Row): Doc<T> => ({
 });
 
 export interface PgDocOptions {
+  /** Residency guard (`@axis/data-governance/residency`): when set, every write for a tenant is refused unless this instance's region is allowed. */
+  residency?: { assertWrite(tenantId: string): Promise<void> };
   pool: PgPoolLike;
   /** Tests only: `SET LOCAL ROLE` (production connects as axis_app). */
   role?: string;
@@ -146,6 +148,7 @@ export class PgDocStore implements DocStore {
     return r.rows[0] ? toDoc<T>(r.rows[0]) : undefined;
   }
   async insert<T>(tenantId: string, coll: string, key: string, data: T): Promise<Doc<T>> {
+    await this.o.residency?.assertWrite(tenantId);
     try {
       const r = await this.tx(tenantId, (c) =>
         c.query<Row>(
@@ -167,6 +170,7 @@ export class PgDocStore implements DocStore {
     expectRev: number,
     data: T,
   ): Promise<Doc<T>> {
+    await this.o.residency?.assertWrite(tenantId);
     try {
       const r = await this.tx(tenantId, (c) =>
         c.query<Row>(

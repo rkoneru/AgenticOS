@@ -34,6 +34,8 @@ export interface PgPoolLike {
 }
 
 export interface PgMemoryOptions {
+  /** Residency guard (`@axis/data-governance/residency`): when set, every write for a tenant is refused unless this instance's region is allowed. */
+  residency?: { assertWrite(tenantId: string): Promise<void> };
   pool: PgPoolLike;
   embedder: Embedder;
   /** Tests only: `SET LOCAL ROLE` for each transaction (production connects as axis_app). */
@@ -186,6 +188,7 @@ export class PgMemoryService {
     if (!(ENTRY_SCOPES as readonly string[]).includes(req.scope))
       throw new MemoryError("INVALID", `scope must be one of ${ENTRY_SCOPES.join(", ")}`);
     const principal = validatePrincipal(req.principal);
+    await this.o.residency?.assertWrite(tenantId);
     const owner = optionalName(req.ownerRef, "ownerRef");
     if (req.scope === "tenant" ? owner !== undefined : owner === undefined)
       throw new MemoryError(
@@ -240,6 +243,7 @@ export class PgMemoryService {
     if (!NAME_RE.test(req.kb))
       throw new MemoryError("INVALID", "knowledge base name must match ^[a-z][a-z0-9-]{1,62}$");
     const principal = validatePrincipal(req.principal);
+    await this.o.residency?.assertWrite(tenantId);
     if (req.acl === undefined) throw new MemoryError("INVALID", "acl is required for a document");
     const acl = canonicalAcl(req.acl);
     const rawSource = optionalName(req.source, "source");

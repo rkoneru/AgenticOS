@@ -15,6 +15,8 @@ export interface PgPoolLike {
 }
 
 export interface PgConversationStoreOptions {
+  /** Residency guard (`@axis/data-governance/residency`): when set, every write for a tenant is refused unless this instance's region is allowed. */
+  residency?: { assertWrite(tenantId: string): Promise<void> };
   pool: PgPoolLike;
   /** Tests only: `SET LOCAL ROLE` per transaction (production connects as axis_app). */
   role?: string;
@@ -105,7 +107,8 @@ export class PgConversationStore implements ConversationStore {
     return { identity: (await this.getIdentity(c, tenant, channel, ext))!, created: false };
   }
 
-  resolveIdentity(tenant: string, channel: ChannelId, externalId: string) {
+  async resolveIdentity(tenant: string, channel: ChannelId, externalId: string) {
+    await this.o.residency?.assertWrite(tenant);
     return this.tx(tenant, (c) => this.resolveIn(c, tenant, channel, externalId));
   }
 
@@ -231,7 +234,8 @@ export class PgConversationStore implements ConversationStore {
     });
   }
 
-  createConversation(tenant: string, endUserId: string, agent: AgentRef, channel: ChannelId) {
+  async createConversation(tenant: string, endUserId: string, agent: AgentRef, channel: ChannelId) {
+    await this.o.residency?.assertWrite(tenant);
     return this.tx(tenant, async (c) => {
       try {
         const { rows } = await c.query(
@@ -282,7 +286,8 @@ export class PgConversationStore implements ConversationStore {
     });
   }
 
-  appendMessage(tenant: string, m: NewMessage) {
+  async appendMessage(tenant: string, m: NewMessage) {
+    await this.o.residency?.assertWrite(tenant);
     return this.tx(tenant, async (c) => {
       try {
         const ins = await c.query(

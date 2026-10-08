@@ -482,6 +482,9 @@ importers:
       '@axis/audit':
         specifier: workspace:*
         version: link:../audit
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@axis/channels':
         specifier: workspace:*
         version: link:../channels
