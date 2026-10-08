@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const MIG = "../../packages/db/migrations/0016_compliance.sql";
+const MIG = "../../packages/db/migrations/0014_compliance.sql";
 // [file, from, to]
 const M = [
   // --- matrix checker: evidence must exist and mean something

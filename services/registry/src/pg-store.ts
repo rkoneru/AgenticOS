@@ -14,6 +14,8 @@ import {
 } from "./types.js";
 
 export interface PgRegistryOptions {
+  /** Residency guard (`@axis/data-governance/residency`): when set, every write for a tenant is refused unless this instance's region is allowed. */
+  residency?: { assertWrite(tenantId: string): Promise<void> };
   pool: PgPoolLike;
   /** Tests only: connect as a superuser and SET LOCAL ROLE axis_app per transaction. */
   role?: string;
@@ -110,7 +112,7 @@ const toEv = (r: EvRow): VersionEvent => ({
 const NS_SELECT = `SELECT n.*, EXISTS (SELECT 1 FROM registry_public_namespaces p WHERE p.namespace = n.namespace) AS is_public
                    FROM registry_namespaces n`;
 
-/** Postgres store. Tenant isolation is the database's job (forced RLS, migration 0020); this code never filters by tenant itself for reads. */
+/** Postgres store. Tenant isolation is the database's job (forced RLS, migration 0015); this code never filters by tenant itself for reads. */
 export class PgRegistryStore implements RegistryStore {
   constructor(private readonly o: PgRegistryOptions) {}
 
@@ -299,6 +301,7 @@ export class PgRegistryStore implements RegistryStore {
   }
 
   async insertVersion(rec: VersionRecord, normalizedName: string): Promise<void> {
+    await this.o.residency?.assertWrite(rec.tenantId);
     try {
       await this.tx(rec.tenantId, async (c) => {
         const own = await c.query(

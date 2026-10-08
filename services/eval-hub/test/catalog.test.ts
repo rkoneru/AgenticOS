@@ -364,3 +364,22 @@ describe("suites", () => {
     ).toBe("forbidden:");
   });
 });
+
+describe("dataset description in PHI mode (PHI canary regression)", () => {
+  it("is redacted before it is persisted", async () => {
+    const w = world();
+    const d = await w.hub.datasets.create(w.admin, {
+      name: "phi-desc",
+      phi: true,
+      description: "contact zelda@clinic.example or 123-45-6789",
+      cases: [{ id: "c1", input: "x", expected: "y" }],
+    });
+    expect(d.description).not.toMatch(/zelda|6789/);
+    const plain = await w.hub.datasets.create(w.admin, {
+      name: "plain-desc",
+      description: "keep zelda@clinic.example",
+      cases: [{ id: "c1", input: "x", expected: "y" }],
+    });
+    expect(plain.description).toContain("zelda@clinic.example");
+  });
+});

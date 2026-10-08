@@ -38,6 +38,8 @@ export interface PgPoolLike {
 }
 
 export interface PgLedgerOptions {
+  /** Residency guard (`@axis/data-governance/residency`): when set, every write for a tenant is refused unless this instance's region is allowed. */
+  residency?: { assertWrite(tenantId: string): Promise<void> };
   pool: PgPoolLike;
   signer: SealSigner;
   /** Tests only: `SET LOCAL ROLE` per transaction (production connects as axis_app). */
@@ -133,6 +135,7 @@ export class PgUsageLedger implements UsageLedger {
   ): Promise<AppendResult> {
     const now = this.now();
     const v = validateInput(input as AnyInput, now);
+    await this.o.residency?.assertWrite(v.tenantId);
     const hash = payloadHash(v);
     return this.tx(v.tenantId, async (c) => {
       await c.query("SELECT pg_advisory_xact_lock_shared($1, hashtext($2))", [

@@ -2,7 +2,7 @@ import { inTx, pgCode, type PgPoolLike } from "@axis/registry";
 import type { ClientBase } from "pg";
 
 /**
- * Document persistence (one table, forced RLS: migration 0016). Every call names the tenant, which the service takes from the
+ * Document persistence (one table, forced RLS: migration 0014). Every call names the tenant, which the service takes from the
  * CREDENTIAL; the database refuses anything else. Nothing is ever deleted. The memory store is the reference; both run one contract suite.
  *
  *  systems         : the inventory head of each AI system (optimistic revisions)
@@ -58,14 +58,14 @@ export interface DocStore {
 const matches = (data: Record<string, unknown>, f: Filter): boolean =>
   Object.entries(f).every(([k, v]) => data[k] === v);
 
-/** The immutability rules of migration 0016 (the database trigger is the enforcement; this mirrors it for the memory store). */
+/** The immutability rules of migration 0014 (the database trigger is the enforcement; this mirrors it for the memory store). */
 function frozen(coll: string, data: Record<string, unknown>): boolean {
   if (APPEND_ONLY.has(coll)) return true;
   if (coll === "assessments") return data["state"] === "approved" || data["state"] === "rejected";
   return false;
 }
 
-/** The independence rule of migration 0016: an approving or rejecting reviewer is never the author or a contributor. */
+/** The independence rule of migration 0014: an approving or rejecting reviewer is never the author or a contributor. */
 export function reviewerIndependent(data: Record<string, unknown>): boolean {
   const state = data["state"];
   if (state !== "approved" && state !== "rejected") return true;

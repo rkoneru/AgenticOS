@@ -3,7 +3,37 @@ import type { TranscriptMode } from "./types.js";
 /** A tenant-supplied hook (names, addresses: whatever the tenant's DLP catches) applied BEFORE persistence in PHI mode. */
 export type RedactionHook = (text: string) => string;
 
+// Unicode-hardened patterns (same construction as services/memory/src/redact.ts): any decimal digit script, invisible format characters
+// and unusual dashes between digits do not defeat the net (found by the PHI canary harness, services/data-governance).
+const FMT = "\\p{Cf}";
+const D = `\\p{Nd}[${FMT}]*`;
+const SEP = `[${FMT}\\s]{0,3}[\\-\\u2010-\\u2015\\u2212.\\s][${FMT}\\s]{0,3}`;
+const EDGE_BEFORE = "(?<![\\p{L}\\p{N}])";
+const EDGE_AFTER = "(?![\\p{L}\\p{N}])";
+const UNICODE_PATTERNS: [RegExp, string][] = [
+  [
+    new RegExp(`${EDGE_BEFORE}(?:${D}){3}${SEP}(?:${D}){2}${SEP}(?:${D}){4}${EDGE_AFTER}`, "gu"),
+    "[ssn]",
+  ],
+  [
+    new RegExp(
+      `(?:\\bSSN|\\bsocial\\s+security(?:\\s+(?:number|no\\.?|#))?)[^\\p{L}\\p{N}]{0,12}(?:${D}){9}${EDGE_AFTER}`,
+      "giu",
+    ),
+    "[ssn]",
+  ],
+  [/\bMRN\s*[:#]?\s*\d{5,}\b/gi, "[mrn]"],
+  [
+    new RegExp(
+      `${EDGE_BEFORE}(?:\\+?1${SEP})?\\(?(?:${D}){3}\\)?${SEP}(?:${D}){3}${SEP}(?:${D}){4}${EDGE_AFTER}`,
+      "gu",
+    ),
+    "[phone]",
+  ],
+];
+
 const PATTERNS: [RegExp, string][] = [
+  ...UNICODE_PATTERNS,
   [/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,}/g, "[email]"], // bounded: an unbounded run made this quadratic on long text
   [/\b\d{3}[-\s.]?\d{2}[-\s.]?\d{4}\b/g, "[ssn]"],
   [/\b(?:\d[ -]?){13,19}\b/g, "[card]"],

@@ -1,6 +1,6 @@
 # Threat model: compliance service (records, documentation, matrix)
 
-Scope: `services/compliance`, migration 0016, the gateway routes and adapters, the console pages. STRIDE per asset. Each threat names the mitigation
+Scope: `services/compliance`, migration 0014, the gateway routes and adapters, the console pages. STRIDE per asset. Each threat names the mitigation
 and the test that exercises it. Designed for / evidence-ready; the service produces evidence and must not be mistaken for a control that makes
 anything compliant.
 

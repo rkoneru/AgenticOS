@@ -132,7 +132,7 @@ Matrix version 1. Rows: 15 (Built 2, Prototype 6, Designed 3, Gap 4).
 
 - **Requirement (paraphrased):** Records of processing activities are maintained and available to the supervisory authority.
 - **AXIS mechanism:** The AI system inventory records purpose, owner, risk level, data categories and stakeholders per system and version; blueprints declare data and residency; the audit chain records what ran.
-- **Code:** `services/compliance/src/records/inventory.ts`, `packages/db/migrations/0016_compliance.sql`
+- **Code:** `services/compliance/src/records/inventory.ts`, `packages/db/migrations/0014_compliance.sql`
 - **Config / flags:** none
 - **Evidence:** test: `services/compliance/test/records.test.ts`; test: `services/compliance/test/stores.test.ts`
 - **Status:** Prototype

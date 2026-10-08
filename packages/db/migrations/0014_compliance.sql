@@ -1,4 +1,4 @@
--- 0016: Compliance records for services/compliance (docs/adr/0070). ADDITIVE: one new table with FORCED RLS, tenant path only.
+-- 0014: Compliance records for services/compliance (docs/adr/0070). ADDITIVE: one new table with FORCED RLS, tenant path only.
 -- Collections: systems (AI system inventory heads), system_versions (append-only snapshots), assessments (AI impact assessment
 -- versions, `<id>@<n>`), documents (generated, sealed technical documentation).
 -- Tenant isolation is at the database: a row is visible and writable only when tenant_id = the transaction's tenant (set by the
