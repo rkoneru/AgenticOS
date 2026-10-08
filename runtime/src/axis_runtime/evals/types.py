@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any, Literal
 
 RUNNER_VERSION = "1.0.0"
@@ -33,8 +34,90 @@ class WireError(ValueError):
     """A hub payload is malformed. The message names the field, never echoes its value."""
 
 
+_MAX_SAFE = 2**53
+
+
+def js_number(value: int | float) -> str:
+    """The ECMAScript ``Number::toString`` of a finite number (what ``JSON.stringify`` prints).
+
+    Integral floats print as integers (``1.0`` is ``1``), ``1e-07`` is ``1e-7``, ``1e16`` is
+    ``10000000000000000``, ``1e21`` is ``1e+21``; ``-0.0`` is ``0``. Integers beyond 2**53 go
+    through a double, exactly as they do in JavaScript.
+    """
+    if isinstance(value, int):
+        if -_MAX_SAFE <= value <= _MAX_SAFE:
+            return str(value)
+        value = float(value)
+    if value != value or value in (float("inf"), float("-inf")):
+        raise ValueError("canonical: non-finite number")
+    if value == 0:
+        return "0"
+    sign = "-" if value < 0 else ""
+    # repr() is the shortest round-trip digit string, the same digits JavaScript prints
+    _, dig, exp = Decimal(repr(abs(value))).as_tuple()
+    digits = "".join(map(str, dig)).rstrip("0") or "0"
+    n = len(dig) + int(exp)  # value = 0.<digits> * 10**n
+    k = len(digits)
+    if k <= n <= 21:
+        out = digits + "0" * (n - k)
+    elif 0 < n <= 21:
+        out = digits[:n] + "." + digits[n:]
+    elif -6 < n <= 0:
+        out = "0." + "0" * (-n) + digits
+    else:
+        e = n - 1
+        out = (
+            digits[0]
+            + ("." + digits[1:] if k > 1 else "")
+            + "e"
+            + ("+" if e >= 0 else "-")
+            + str(abs(e))
+        )
+    return sign + out
+
+
+def _canon(value: object, out: list[str]) -> None:
+    if value is None:
+        out.append("null")
+    elif value is True:
+        out.append("true")
+    elif value is False:
+        out.append("false")
+    elif isinstance(value, str):
+        out.append(json.dumps(value, ensure_ascii=True))
+    elif isinstance(value, int | float):
+        out.append(js_number(value))
+    elif isinstance(value, Mapping):
+        out.append("{")
+        for i, k in enumerate(sorted(value, key=lambda x: str(x).encode("utf-16-be"))):
+            if not isinstance(k, str):
+                raise TypeError("canonical: object keys must be strings")
+            if i:
+                out.append(",")
+            out.append(json.dumps(k, ensure_ascii=True) + ":")
+            _canon(value[k], out)
+        out.append("}")
+    elif isinstance(value, list | tuple):
+        out.append("[")
+        for i, item in enumerate(value):
+            if i:
+                out.append(",")
+            _canon(item, out)
+        out.append("]")
+    else:
+        raise TypeError(f"canonical: unsupported value {type(value).__name__}")
+
+
 def canonical(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    """Canonical JSON, byte-identical to the hub's ``canonicalAscii``.
+
+    Sorted keys (UTF-16 order), no whitespace, ASCII-escaped strings, numbers printed as JavaScript
+    prints them (so ``1.0`` and ``1`` hash alike). Shared vectors:
+    ``tests/fixtures/eval-canonical-vectors.json``.
+    """
+    out: list[str] = []
+    _canon(value, out)
+    return "".join(out)
 
 
 def _obj(raw: object, path: str) -> Mapping[str, Any]:
