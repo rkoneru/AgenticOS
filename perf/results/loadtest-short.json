@@ -1,0 +1,664 @@
+{
+  "generatedAt": "2026-10-08T19:12:21.673Z",
+  "profile": "short",
+  "machine": {
+    "platform": "linux",
+    "release": "6.18.44-fc-v80",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "memGiB": 15.7,
+    "node": "v22.22.2",
+    "note": "load generator, gateway, kernel, run service, control plane and Postgres all share this one machine"
+  },
+  "scenarios": [
+    {
+      "name": "me",
+      "description": "GET /me (API-key auth)",
+      "result": {
+        "rate": 300,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 2991,
+        "sent": 2991,
+        "completed": 2991,
+        "ok": 2991,
+        "errors": 0,
+        "shed": 0,
+        "errorsByLabel": {},
+        "achievedRate": 299.1,
+        "latency": {
+          "count": 2991,
+          "min": 1834,
+          "mean": 15361.46,
+          "p50": 10759,
+          "p90": 33247,
+          "p95": 45599,
+          "p99": 63455,
+          "p999": 83775,
+          "max": 113692
+        },
+        "service": {
+          "count": 2991,
+          "min": 2881,
+          "mean": 15164.71,
+          "p50": 10591,
+          "p90": 32687,
+          "p95": 45375,
+          "p99": 62719,
+          "p999": 83007,
+          "max": 111916
+        },
+        "maxGeneratorLagMs": 30.67,
+        "unfinished": 0
+      }
+    },
+    {
+      "name": "auditList",
+      "description": "GET /audit/events?limit=50",
+      "result": {
+        "rate": 60,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 590,
+        "sent": 590,
+        "completed": 590,
+        "ok": 590,
+        "errors": 0,
+        "shed": 0,
+        "errorsByLabel": {},
+        "achievedRate": 59,
+        "latency": {
+          "count": 590,
+          "min": 2505,
+          "mean": 9352.99,
+          "p50": 7647,
+          "p90": 15735,
+          "p95": 20575,
+          "p99": 38463,
+          "p999": 65170,
+          "max": 65170
+        },
+        "service": {
+          "count": 590,
+          "min": 3170,
+          "mean": 9312.44,
+          "p50": 7731,
+          "p90": 15295,
+          "p95": 18463,
+          "p99": 38943,
+          "p999": 60246,
+          "max": 60246
+        },
+        "maxGeneratorLagMs": 15.88,
+        "unfinished": 0
+      }
+    },
+    {
+      "name": "auditVerify",
+      "description": "GET /audit/verify (whole chain)",
+      "result": {
+        "rate": 5,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 59,
+        "sent": 59,
+        "completed": 59,
+        "ok": 59,
+        "errors": 0,
+        "shed": 0,
+        "errorsByLabel": {},
+        "achievedRate": 5.9,
+        "latency": {
+          "count": 59,
+          "min": 5397,
+          "mean": 10314.03,
+          "p50": 9519,
+          "p90": 14799,
+          "p95": 17519,
+          "p99": 19627,
+          "p999": 19627,
+          "max": 19627
+        },
+        "service": {
+          "count": 59,
+          "min": 5911,
+          "mean": 10451.76,
+          "p50": 9815,
+          "p90": 14351,
+          "p95": 18015,
+          "p99": 19558,
+          "p999": 19558,
+          "max": 19558
+        },
+        "maxGeneratorLagMs": 2.17,
+        "unfinished": 0
+      }
+    },
+    {
+      "name": "registryResolve",
+      "description": "GET /registry/resolve (verified resolve)",
+      "result": {
+        "rate": 60,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 590,
+        "sent": 590,
+        "completed": 590,
+        "ok": 590,
+        "errors": 0,
+        "shed": 0,
+        "errorsByLabel": {},
+        "achievedRate": 59,
+        "latency": {
+          "count": 590,
+          "min": 4543,
+          "mean": 13391.41,
+          "p50": 11871,
+          "p90": 21343,
+          "p95": 26191,
+          "p99": 36895,
+          "p999": 44110,
+          "max": 44110
+        },
+        "service": {
+          "count": 590,
+          "min": 5548,
+          "mean": 13538.59,
+          "p50": 11847,
+          "p90": 21567,
+          "p95": 26031,
+          "p99": 35071,
+          "p999": 44023,
+          "max": 44023
+        },
+        "maxGeneratorLagMs": 4.44,
+        "unfinished": 0
+      }
+    },
+    {
+      "name": "runStartAck",
+      "description": "POST /runs -> 202 (run start latency)",
+      "result": {
+        "rate": 20,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 206,
+        "sent": 206,
+        "completed": 206,
+        "ok": 206,
+        "errors": 0,
+        "shed": 0,
+        "errorsByLabel": {},
+        "achievedRate": 20.6,
+        "latency": {
+          "count": 206,
+          "min": 17852,
+          "mean": 39790.73,
+          "p50": 34463,
+          "p90": 66943,
+          "p95": 76479,
+          "p99": 99519,
+          "p999": 119786,
+          "max": 119786
+        },
+        "service": {
+          "count": 206,
+          "min": 18123,
+          "mean": 39839.69,
+          "p50": 34335,
+          "p90": 66495,
+          "p95": 76223,
+          "p99": 99135,
+          "p999": 119308,
+          "max": 119308
+        },
+        "maxGeneratorLagMs": 4.03,
+        "unfinished": 0
+      }
+    },
+    {
+      "name": "runComplete",
+      "description": "POST /runs and poll until terminated (1 gated model call)",
+      "result": {
+        "rate": 10,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 98,
+        "sent": 98,
+        "completed": 98,
+        "ok": 98,
+        "errors": 0,
+        "shed": 0,
+        "errorsByLabel": {},
+        "achievedRate": 9.8,
+        "latency": {
+          "count": 98,
+          "min": 38339,
+          "mean": 85817.87,
+          "p50": 81663,
+          "p90": 111423,
+          "p95": 130687,
+          "p99": 148040,
+          "p999": 148040,
+          "max": 148040
+        },
+        "service": {
+          "count": 98,
+          "min": 37581,
+          "mean": 85900.46,
+          "p50": 81727,
+          "p90": 111551,
+          "p95": 130687,
+          "p99": 148724,
+          "p999": 148724,
+          "max": 148724
+        },
+        "maxGeneratorLagMs": 2.48,
+        "unfinished": 0
+      }
+    },
+    {
+      "name": "gate",
+      "description": "gRPC GateService.Evaluate (ALLOW, Wasm policy, audit row in Postgres)",
+      "result": {
+        "rate": 400,
+        "arrival": "poisson",
+        "warmupMs": 3000,
+        "durationMs": 10000,
+        "scheduled": 3953,
+        "sent": 3943,
+        "completed": 3943,
+        "ok": 0,
+        "errors": 3953,
+        "shed": 10,
+        "errorsByLabel": {
+          "decision_DECISION_DENY": 47,
+          "Error": 3896,
+          "shed": 10
+        },
+        "achievedRate": 394.3,
+        "latency": {
+          "count": 3943,
+          "min": 261855,
+          "mean": 3838468.35,
+          "p50": 5001215,
+          "p90": 5005311,
+          "p95": 5025791,
+          "p99": 5218303,
+          "p999": 5255167,
+          "max": 5260589
+        },
+        "service": {
+          "count": 3943,
+          "min": 261279,
+          "mean": 3835415.09,
+          "p50": 5001215,
+          "p90": 5005311,
+          "p95": 5017599,
+          "p99": 5156863,
+          "p999": 5246975,
+          "max": 5249383
+        },
+        "maxGeneratorLagMs": 259.28,
+        "unfinished": 0
+      }
+    }
+  ],
+  "extra": {
+    "sseFanOut": [
+      {
+        "subscribers": 10,
+        "error": "Error: no pending approval for the fan-out run"
+      },
+      {
+        "subscribers": 100,
+        "connected": 16,
+        "completed": 16,
+        "eventsPerSubscriberMin": 23,
+        "eventsPerSubscriberMax": 23,
+        "deliveryMs": {
+          "p50": 121.8,
+          "p95": 140.6,
+          "p99": 140.6,
+          "max": 140.6
+        },
+        "failed": 84
+      },
+      {
+        "subscribers": 500,
+        "connected": 16,
+        "completed": 16,
+        "eventsPerSubscriberMin": 23,
+        "eventsPerSubscriberMax": 23,
+        "deliveryMs": {
+          "p50": 257.6,
+          "p95": 275.3,
+          "p99": 275.3,
+          "max": 275.3
+        },
+        "failed": 484
+      }
+    ],
+    "auditAppendSingleChain": {
+      "events": 5000,
+      "concurrency": 1,
+      "tenants": 1,
+      "appendSeconds": 17.98,
+      "appendsPerSec": 278.02,
+      "appendLatencyUs": {
+        "count": 5000,
+        "min": 1238,
+        "mean": 3592.07,
+        "p50": 2649,
+        "p90": 6947,
+        "p95": 8035,
+        "p99": 12071,
+        "p999": 51711,
+        "max": 112685
+      },
+      "errors": {},
+      "verifySeconds": 0.11,
+      "verifyEventsPerSec": 47095.89,
+      "verifyOk": true
+    },
+    "auditAppendConcurrentSameChain": {
+      "events": 5000,
+      "concurrency": 8,
+      "tenants": 1,
+      "appendSeconds": 20.08,
+      "appendsPerSec": 249.03,
+      "appendLatencyUs": {
+        "count": 5000,
+        "min": 4569,
+        "mean": 32099.02,
+        "p50": 28783,
+        "p90": 49407,
+        "p95": 57471,
+        "p99": 71103,
+        "p999": 103231,
+        "max": 111347
+      },
+      "errors": {},
+      "verifySeconds": 0.11,
+      "verifyEventsPerSec": 43954.96,
+      "verifyOk": true
+    },
+    "auditAppendManyChains": {
+      "events": 5000,
+      "concurrency": 8,
+      "tenants": 8,
+      "appendSeconds": 9.23,
+      "appendsPerSec": 541.96,
+      "appendLatencyUs": {
+        "count": 5000,
+        "min": 1775,
+        "mean": 14750.92,
+        "p50": 11223,
+        "p90": 28591,
+        "p95": 37279,
+        "p99": 55135,
+        "p999": 88703,
+        "max": 132305
+      },
+      "errors": {},
+      "verifySeconds": 0.18,
+      "verifyEventsPerSec": 27345.35,
+      "verifyOk": true
+    },
+    "auditVerify": {
+      "events": 100000,
+      "seedSeconds": 14.51,
+      "verifySeconds": 3.38,
+      "verifyOk": true,
+      "verifySecondsPer100k": 3.38
+    },
+    "k6": [
+      {
+        "script": "gateway.js",
+        "status": "ran",
+        "exitCode": 99,
+        "version": "k6 v0.54.0 (commit/baba871c8a, go1.23.1, linux/amd64)",
+        "metrics": {
+          "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0
+          },
+          "http_req_duration{scenario:auth_me}": {
+            "avg": 1485.294545221813,
+            "min": 155.439218,
+            "med": 1562.671434,
+            "max": 2094.390545,
+            "p(90)": 1978.0045684,
+            "p(95)": 2010.3169392,
+            "thresholds": {
+              "p(99)<200": true
+            }
+          },
+          "http_req_connecting": {
+            "p(95)": 0.1712479499999999,
+            "avg": 0.10220047391304345,
+            "min": 0,
+            "med": 0,
+            "max": 22.199789,
+            "p(90)": 0.13605130000000001
+          },
+          "dropped_iterations": {
+            "count": 154,
+            "rate": 8.456722294998372
+          },
+          "iteration_duration": {
+            "p(95)": 2956.0952311,
+            "avg": 1701.6592438400992,
+            "min": 156.075556,
+            "med": 1617.932299,
+            "max": 9521.576028,
+            "p(90)": 2405.1231766
+          },
+          "data_received": {
+            "count": 14496566,
+            "rate": 796061.2525526971
+          },
+          "iterations": {
+            "rate": 113.67152695225083,
+            "count": 2070
+          },
+          "http_req_receiving": {
+            "p(90)": 0.22013040000000006,
+            "p(95)": 0.3540800999999999,
+            "avg": 0.14455167971014474,
+            "min": 0.016894,
+            "med": 0.0849255,
+            "max": 12.423835
+          },
+          "http_req_duration": {
+            "avg": 1701.244160883575,
+            "min": 155.439218,
+            "med": 1617.386842,
+            "max": 9520.804348,
+            "p(90)": 2404.9133617,
+            "p(95)": 2955.71705825
+          },
+          "http_reqs": {
+            "count": 2070,
+            "rate": 113.67152695225083
+          },
+          "http_req_sending": {
+            "p(90)": 0.08232010000000001,
+            "p(95)": 0.12031149999999999,
+            "avg": 0.04809981835748784,
+            "min": 0.00486,
+            "med": 0.021383,
+            "max": 10.647836
+          },
+          "vus": {
+            "value": 8,
+            "min": 8,
+            "max": 311
+          },
+          "checks": {
+            "passes": 2070,
+            "fails": 0,
+            "value": 1
+          },
+          "data_sent": {
+            "count": 459727,
+            "rate": 25245.347860472182
+          },
+          "http_req_blocked": {
+            "p(90)": 0.21885040000000022,
+            "p(95)": 0.31550169999999994,
+            "avg": 0.1327856425120773,
+            "min": 0.001889,
+            "med": 0.007232,
+            "max": 22.332907
+          },
+          "http_req_duration{scenario:registry_resolve}": {
+            "med": 2644.073279,
+            "max": 3353.943253,
+            "p(90)": 3119.265672,
+            "p(95)": 3207.2355079999998,
+            "avg": 2445.9743936975947,
+            "min": 638.384999,
+            "thresholds": {
+              "p(99)<200": true
+            }
+          },
+          "http_req_failed": {
+            "passes": 0,
+            "fails": 2070,
+            "thresholds": {
+              "rate<0.01": false
+            },
+            "value": 0
+          },
+          "http_req_duration{scenario:audit_list}": {
+            "max": 2070.284362,
+            "p(90)": 1973.9647226000002,
+            "p(95)": 2015.7226137,
+            "avg": 1477.361033796666,
+            "min": 332.526495,
+            "med": 1551.9841615,
+            "thresholds": {
+              "p(99)<200": true
+            }
+          },
+          "http_req_duration{expected_response:true}": {
+            "p(90)": 2404.9133617,
+            "p(95)": 2955.71705825,
+            "avg": 1701.244160883575,
+            "min": 155.439218,
+            "med": 1617.386842,
+            "max": 9520.804348
+          },
+          "http_req_waiting": {
+            "avg": 1701.0515093855108,
+            "min": 155.202158,
+            "med": 1617.2524485,
+            "max": 9520.635673,
+            "p(90)": 2404.6946293,
+            "p(95)": 2955.61086255
+          },
+          "http_req_duration{scenario:run_start}": {
+            "med": 1606.047932,
+            "max": 2089.113962,
+            "p(90)": 2013.236355,
+            "p(95)": 2050.8928255,
+            "avg": 1523.898073395605,
+            "min": 456.625573,
+            "thresholds": {
+              "p(99)<200": true
+            }
+          },
+          "vus_max": {
+            "max": 400,
+            "value": 400,
+            "min": 254
+          }
+        },
+        "reason": "time=\"2026-10-08T19:12:21Z\" level=error msg=\"thresholds on metrics 'http_req_duration{scenario:audit_list}, http_req_duration{scenario:auth_me}, http_req_duration{scenario:registry_resolve}, http_req_duration{scenario:run_start}' have been crossed\"\n"
+      },
+      {
+        "script": "gate-grpc.js",
+        "status": "ran",
+        "exitCode": 107,
+        "version": "k6 v0.54.0 (commit/baba871c8a, go1.23.1, linux/amd64)",
+        "reason": "time=\"2026-10-08T19:12:21Z\" level=error msg=\"GoError: stat /home/user/AgenticOS/.claude/worktrees/p9-resilience/perf/k6/proto/axis/runtime/v1/gate.proto: no such file or directory\\n\\tat reflect.methodValueCall (native)\\n\\tat file:///home/user/AgenticOS/.claude/worktrees/p9-resilience/perf/k6/gate-grpc.js:7:12(23)\\n\" hint=\"script exception\"\n"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "gate.grpc.p99",
+      "title": "gate decision over gRPC",
+      "target": "gate adds < 25 ms p99 to a tool call",
+      "measured": null,
+      "unit": "ms",
+      "bound": "max",
+      "limit": 25,
+      "note": "400/s, ALLOW with a Postgres audit row per call",
+      "verdict": "Not measured"
+    },
+    {
+      "id": "api.me.p99",
+      "title": "API p99 (auth only)",
+      "target": "control-plane API p99 < 200 ms",
+      "measured": 63.46,
+      "unit": "ms",
+      "bound": "max",
+      "limit": 200,
+      "note": "300/s on one small machine; the 1k RPS part of the target is NOT demonstrated",
+      "verdict": "Met"
+    },
+    {
+      "id": "api.auditList.p99",
+      "title": "audit list p99",
+      "target": "API p99 < 200 ms",
+      "measured": 38.46,
+      "unit": "ms",
+      "bound": "max",
+      "limit": 200,
+      "verdict": "Met"
+    },
+    {
+      "id": "api.registryResolve.p99",
+      "title": "registry resolve p99",
+      "target": "API p99 < 200 ms",
+      "measured": 36.9,
+      "unit": "ms",
+      "bound": "max",
+      "limit": 200,
+      "verdict": "Met"
+    },
+    {
+      "id": "run.start.p99",
+      "title": "run start acknowledgement p99",
+      "target": "proposed: < 200 ms",
+      "measured": 99.52,
+      "unit": "ms",
+      "bound": "max",
+      "limit": 200,
+      "verdict": "Met"
+    },
+    {
+      "id": "audit.verify.100k",
+      "title": "verify 100k events (one chain)",
+      "target": "proposed: < 30 s",
+      "measured": 3.38,
+      "unit": "s",
+      "bound": "max",
+      "limit": 30,
+      "verdict": "Met"
+    }
+  ]
+}

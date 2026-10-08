@@ -50,7 +50,7 @@ const killKey = (
 
 /** Single-process implementation (dev/test). NOT suitable for multi-instance deployments. */
 export class MemoryKillSwitchStore implements KillSwitchStore {
-  private readonly engaged = new Set<string>();
+  protected readonly engaged = new Set<string>();
 
   isEngaged(scope: KillScope, t: KillTarget): Promise<boolean> {
     const target = scope === "agent" ? t.agent : t.tool;

@@ -24,6 +24,7 @@ import { WasmPolicyEngine } from "./engine.js";
 import { ReloadingTokenTable, TenantBundleEngine } from "./tenant-engine.js";
 import { RiskKernel } from "./kernel.js";
 import { MemoryAuditSink } from "./memory-sink.js";
+import { FileKillSwitchStore } from "./file-kill-switch.js";
 import { MemoryCounterStore, MemoryKillSwitchStore } from "./stores.js";
 
 // AXIS_POLICY_BUNDLE (one wasm bundle for every tenant) XOR AXIS_POLICY_BUNDLE_DIR (DEV, Phase 6: `<tenant uuid>.tar.gz` per tenant,
@@ -49,7 +50,12 @@ const audit: AuditSink = pgUrl
       ...(process.env["AXIS_AUDIT_PG_ROLE"] ? { role: process.env["AXIS_AUDIT_PG_ROLE"] } : {}),
     })
   : new MemoryAuditSink();
-const killSwitches = new MemoryKillSwitchStore();
+// AXIS_RK_KILL_STATE_FILE: engaged kill-switches survive a restart (single instance; Redis is the multi-instance answer, docs/NEEDS.md).
+// Without it the state is in memory and a restart RELEASES every switch (dev only).
+const killStateFile = process.env["AXIS_RK_KILL_STATE_FILE"];
+const killSwitches = killStateFile
+  ? new FileKillSwitchStore(killStateFile)
+  : new MemoryKillSwitchStore();
 const counters = new MemoryCounterStore();
 // AXIS_APPROVALS_HMAC_KEY (hex, >= 32 bytes): wires an in-process approvals service (in-memory store, same audit chain) into the
 // kernel's requester/verifier ports. Without it REQUIRE_APPROVAL yields an empty approval_id (clients DENY).

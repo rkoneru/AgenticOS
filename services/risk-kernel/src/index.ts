@@ -1,5 +1,6 @@
 export * from "./types.js";
 export * from "./stores.js";
+export * from "./file-kill-switch.js";
 export * from "./gates.js";
 export * from "./engine.js";
 export * from "./tenant-engine.js";
