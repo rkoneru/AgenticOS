@@ -23,9 +23,14 @@ export interface ScoredCase {
 }
 
 /** Throws when a case lacks a grader's score (callers validate completeness first; this keeps the arithmetic honest). */
-export function aggregate(graders: readonly Pick<Grader, "id" | "weight">[], cases: readonly ScoredCase[]): RunScores {
+export function aggregate(
+  graders: readonly Pick<Grader, "id" | "weight">[],
+  cases: readonly ScoredCase[],
+): RunScores {
   const gs = [...graders].sort(byId);
-  const cs = [...cases].sort((a, b) => (a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0));
+  const cs = [...cases].sort((a, b) =>
+    a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0,
+  );
   if (gs.length === 0 || cs.length === 0) throw new Error("aggregate: no graders or no cases");
   const wsum = gs.reduce((s, g) => s + g.weight, 0);
   const per_case: Record<string, number> = {};
@@ -63,8 +68,7 @@ export function mismatches(
     if (typeof pg !== "object" || pg === null || Array.isArray(pg)) bad.push("per_grader");
     else {
       const m = pg as Record<string, unknown>;
-      for (const k of Object.keys(m))
-        if (!(k in computed.per_grader)) bad.push(`per_grader.${k}`);
+      for (const k of Object.keys(m)) if (!(k in computed.per_grader)) bad.push(`per_grader.${k}`);
       for (const [k, v] of Object.entries(computed.per_grader))
         if (!close(m[k], v)) bad.push(`per_grader.${k}`);
     }
@@ -103,7 +107,15 @@ export function pairedSignFlip(
   const n = diffs.length;
   const mean = n === 0 ? 0 : diffs.reduce((s, x) => s + x, 0) / n;
   if (d.length === 0)
-    return { test: "paired_sign_flip", method: "degenerate", n, mean_diff: round9(mean), p_value: 1, alpha, significant: false };
+    return {
+      test: "paired_sign_flip",
+      method: "degenerate",
+      n,
+      mean_diff: round9(mean),
+      p_value: 1,
+      alpha,
+      significant: false,
+    };
   const obs = Math.abs(d.reduce((s, x) => s + x, 0));
   let p: number;
   let method: Significance["method"];
@@ -113,7 +125,8 @@ export function pairedSignFlip(
     const total = 1 << d.length;
     for (let mask = 0; mask < total; mask++) {
       let s = 0;
-      for (let i = 0; i < d.length; i++) s += (mask >> i) & 1 ? (d[i] as number) : -(d[i] as number);
+      for (let i = 0; i < d.length; i++)
+        s += (mask >> i) & 1 ? (d[i] as number) : -(d[i] as number);
       if (Math.abs(s) >= obs) ge++;
     }
     p = ge / total;
@@ -178,7 +191,9 @@ export function compareRuns(
     const b = base.scores.per_grader[g];
     if (b !== undefined) per_grader_delta[g] = round9(v - b);
   }
-  const diffs = ids.map((id) => (cand.scores.per_case[id] as number) - (base.scores.per_case[id] as number));
+  const diffs = ids.map(
+    (id) => (cand.scores.per_case[id] as number) - (base.scores.per_case[id] as number),
+  );
   const significance = pairedSignFlip(diffs, o.alpha, `${cand.record_hash}:${base.record_hash}`);
   // 1e-9 absorbs the 9-decimal rounding: "exactly the tolerance" is not a regression.
   const regression = delta < -o.tolerance - 1e-9;

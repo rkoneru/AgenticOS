@@ -1,10 +1,5 @@
 import { invalid } from "./errors.js";
-import {
-  DETERMINISTIC_KINDS,
-  GRADER_ID_RE,
-  type DeterministicKind,
-  type Grader,
-} from "./types.js";
+import { DETERMINISTIC_KINDS, GRADER_ID_RE, type DeterministicKind, type Grader } from "./types.js";
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -32,12 +27,17 @@ function numberIn(v: unknown, path: string, min: number, max: number): number {
 }
 
 /** Validates the parameters of one deterministic kind. Unknown parameters are refused (a typo must not silently weaken a grader). */
-function deterministicParams(kind: DeterministicKind, raw: unknown, path: string): Record<string, unknown> {
+function deterministicParams(
+  kind: DeterministicKind,
+  raw: unknown,
+  path: string,
+): Record<string, unknown> {
   const p = raw === undefined ? {} : raw;
   if (!isObj(p)) throw invalid("params must be an object", [`${path}.params`]);
   const only = (allowed: string[]): void => {
     for (const k of Object.keys(p))
-      if (!allowed.includes(k)) throw invalid(`unknown parameter ${k} for ${kind}`, [`${path}.params.${k}`]);
+      if (!allowed.includes(k))
+        throw invalid(`unknown parameter ${k} for ${kind}`, [`${path}.params.${k}`]);
   };
   switch (kind) {
     case "exact":
@@ -55,8 +55,11 @@ function deterministicParams(kind: DeterministicKind, raw: unknown, path: string
       only(["pattern", "flags"]);
       const pattern = reqString(p["pattern"], `${path}.params.pattern`, 200);
       const flags =
-        p["flags"] === undefined || p["flags"] === "" ? "" : reqString(p["flags"], `${path}.params.flags`, 4);
-      if (!/^[imsu]*$/.test(flags)) throw invalid("flags may contain only i, m, s, u", [`${path}.params.flags`]);
+        p["flags"] === undefined || p["flags"] === ""
+          ? ""
+          : reqString(p["flags"], `${path}.params.flags`, 4);
+      if (!/^[imsu]*$/.test(flags))
+        throw invalid("flags may contain only i, m, s, u", [`${path}.params.flags`]);
       try {
         new RegExp(pattern, flags);
       } catch {
@@ -67,7 +70,9 @@ function deterministicParams(kind: DeterministicKind, raw: unknown, path: string
     case "json_schema":
       only(["schema"]);
       if (!isObj(p["schema"]) || JSON.stringify(p["schema"]).length > 20_000)
-        throw invalid("schema must be a JSON object of at most 20000 characters", [`${path}.params.schema`]);
+        throw invalid("schema must be a JSON object of at most 20000 characters", [
+          `${path}.params.schema`,
+        ]);
       return { schema: p["schema"] };
     case "numeric_tolerance": {
       only(["abs", "rel"]);
@@ -89,16 +94,27 @@ function deterministicParams(kind: DeterministicKind, raw: unknown, path: string
       only(["expected"]);
       const e = p["expected"];
       if (e !== undefined && e !== "ALLOW" && e !== "DENY" && e !== "REQUIRE_APPROVAL")
-        throw invalid("expected must be ALLOW, DENY or REQUIRE_APPROVAL", [`${path}.params.expected`]);
+        throw invalid("expected must be ALLOW, DENY or REQUIRE_APPROVAL", [
+          `${path}.params.expected`,
+        ]);
       return e === undefined ? {} : { expected: e };
     }
     case "cost_latency_budget": {
       only(["max_cost_usd", "max_latency_ms"]);
       if (p["max_cost_usd"] === undefined && p["max_latency_ms"] === undefined)
-        throw invalid("cost_latency_budget needs max_cost_usd and/or max_latency_ms", [`${path}.params`]);
+        throw invalid("cost_latency_budget needs max_cost_usd and/or max_latency_ms", [
+          `${path}.params`,
+        ]);
       const out: Record<string, unknown> = {};
-      if (p["max_cost_usd"] !== undefined) out["max_cost_usd"] = numberIn(p["max_cost_usd"], `${path}.params.max_cost_usd`, 0, 1e9);
-      if (p["max_latency_ms"] !== undefined) out["max_latency_ms"] = numberIn(p["max_latency_ms"], `${path}.params.max_latency_ms`, 0, 1e9);
+      if (p["max_cost_usd"] !== undefined)
+        out["max_cost_usd"] = numberIn(p["max_cost_usd"], `${path}.params.max_cost_usd`, 0, 1e9);
+      if (p["max_latency_ms"] !== undefined)
+        out["max_latency_ms"] = numberIn(
+          p["max_latency_ms"],
+          `${path}.params.max_latency_ms`,
+          0,
+          1e9,
+        );
       return out;
     }
   }
@@ -124,7 +140,13 @@ export function parseGraders(raw: unknown): Grader[] {
         if (typeof kind !== "string" || !(DETERMINISTIC_KINDS as readonly string[]).includes(kind))
           throw invalid(`kind must be one of ${DETERMINISTIC_KINDS.join(", ")}`, [`${path}.kind`]);
         const k = kind as DeterministicKind;
-        return { id, type: "deterministic", kind: k, weight, params: deterministicParams(k, g["params"], path) };
+        return {
+          id,
+          type: "deterministic",
+          kind: k,
+          weight,
+          params: deterministicParams(k, g["params"], path),
+        };
       }
       case "model":
         return {
@@ -135,10 +157,14 @@ export function parseGraders(raw: unknown): Grader[] {
           weight,
         };
       case "human": {
-        const sla = g["sla_hours"] === undefined ? 72 : numberIn(g["sla_hours"], `${path}.sla_hours`, 1, 720);
+        const sla =
+          g["sla_hours"] === undefined ? 72 : numberIn(g["sla_hours"], `${path}.sla_hours`, 1, 720);
         if (g["double_grade"] !== undefined && typeof g["double_grade"] !== "boolean")
           throw invalid("double_grade must be a boolean", [`${path}.double_grade`]);
-        const tol = g["agreement_tolerance"] === undefined ? 0.1 : numberIn(g["agreement_tolerance"], `${path}.agreement_tolerance`, 0, 1);
+        const tol =
+          g["agreement_tolerance"] === undefined
+            ? 0.1
+            : numberIn(g["agreement_tolerance"], `${path}.agreement_tolerance`, 0, 1);
         return {
           id,
           type: "human",

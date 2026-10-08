@@ -29,12 +29,14 @@ export class ReviewService {
   private view(t: ReviewTaskDoc): TaskView {
     return {
       ...t,
-      sla_breached: t.resolution === null && this.c.now().getTime() > new Date(t.sla_deadline).getTime(),
+      sla_breached:
+        t.resolution === null && this.c.now().getTime() > new Date(t.sla_deadline).getTime(),
     };
   }
 
   private blocked(t: ReviewTaskDoc, who: string): string | undefined {
-    if (t.conflicts.includes(who)) return "the starter or publisher of this blueprint cannot review it";
+    if (t.conflicts.includes(who))
+      return "the starter or publisher of this blueprint cannot review it";
     if (t.skipped_by.includes(who)) return "you skipped this task";
     if (t.grades.some((g) => g.reviewer === who)) return "you already graded this task";
     return undefined;
@@ -49,11 +51,25 @@ export class ReviewService {
     const filter: Record<string, string> = {};
     if (q.state) filter["state"] = q.state;
     if (q.run_id) filter["run_id"] = q.run_id;
-    const all = (await this.c.docs.find<ReviewTaskDoc>(p.tenantId, "tasks", filter)).map((d) => d.data);
+    const all = (await this.c.docs.find<ReviewTaskDoc>(p.tenantId, "tasks", filter)).map(
+      (d) => d.data,
+    );
     return all
-      .filter((x) => !x.conflicts.includes(t.subject) && (q.all === true || this.blocked(x, t.subject) === undefined))
+      .filter(
+        (x) =>
+          !x.conflicts.includes(t.subject) &&
+          (q.all === true || this.blocked(x, t.subject) === undefined),
+      )
       .map((x) => this.view(x))
-      .sort((a, b) => (a.sla_deadline === b.sla_deadline ? (a.id < b.id ? -1 : 1) : a.sla_deadline < b.sla_deadline ? -1 : 1));
+      .sort((a, b) =>
+        a.sla_deadline === b.sla_deadline
+          ? a.id < b.id
+            ? -1
+            : 1
+          : a.sla_deadline < b.sla_deadline
+            ? -1
+            : 1,
+      );
   }
 
   async get(p: HubPrincipal, id: string): Promise<TaskView> {
@@ -91,7 +107,8 @@ export class ReviewService {
       const why = this.blocked(t, who.subject);
       if (why !== undefined) throw forbidden(why);
       if (t.state === "resolved") throw conflict("task is resolved");
-      if (this.claimLive(t) && t.claimed_by !== who.subject) throw conflict("task is claimed by someone else");
+      if (this.claimLive(t) && t.claimed_by !== who.subject)
+        throw conflict("task is claimed by someone else");
       const next: ReviewTaskDoc = {
         ...t,
         state: t.state === "needs_adjudication" ? "needs_adjudication" : "claimed",
@@ -103,7 +120,11 @@ export class ReviewService {
     });
   }
 
-  async grade(p: HubPrincipal, id: string, input: { score: unknown; comment: unknown }): Promise<TaskView> {
+  async grade(
+    p: HubPrincipal,
+    id: string,
+    input: { score: unknown; comment: unknown },
+  ): Promise<TaskView> {
     let who: TenantActor;
     try {
       who = requireTenant(p, "evals.review");
@@ -129,7 +150,13 @@ export class ReviewService {
       const grades = [
         ...t.grades,
         // Reviewers' comments can quote PHI from the case: the persisted comment passes the same net as everything else.
-        { reviewer: who.subject, score, comment: redactPatterns(comment), at: iso(this.c.now()), adjudication },
+        {
+          reviewer: who.subject,
+          score,
+          comment: redactPatterns(comment),
+          at: iso(this.c.now()),
+          adjudication,
+        },
       ];
       let next: ReviewTaskDoc = { ...t, grades, claimed_by: null, claim_expires_at: null };
       const resolve = (s: number, method: "single" | "agreed" | "adjudicated"): void => {
@@ -145,7 +172,8 @@ export class ReviewService {
       else if (grades.length === 1) next = { ...next, state: "open" };
       else {
         const [a, b] = grades as unknown as [{ score: number }, { score: number }];
-        if (Math.abs(a.score - b.score) <= t.agreement_tolerance + 1e-12) resolve((a.score + b.score) / 2, "agreed");
+        if (Math.abs(a.score - b.score) <= t.agreement_tolerance + 1e-12)
+          resolve((a.score + b.score) / 2, "agreed");
         else next = { ...next, state: "needs_adjudication" };
       }
       await guarded(() => this.c.docs.update(p.tenantId, "tasks", id, d.rev, next), "review task");
@@ -195,9 +223,18 @@ export class ReviewService {
       const now = this.c.now().getTime();
       for (const d of await this.c.docs.find<ReviewTaskDoc>(p.tenantId, "tasks")) {
         const t = d.data;
-        if (t.resolution !== null || t.sla_breached_at !== null || now <= new Date(t.sla_deadline).getTime()) continue;
+        if (
+          t.resolution !== null ||
+          t.sla_breached_at !== null ||
+          now <= new Date(t.sla_deadline).getTime()
+        )
+          continue;
         await guarded(
-          () => this.c.docs.update(p.tenantId, "tasks", t.id, d.rev, { ...t, sla_breached_at: iso(this.c.now()) }),
+          () =>
+            this.c.docs.update(p.tenantId, "tasks", t.id, d.rev, {
+              ...t,
+              sla_breached_at: iso(this.c.now()),
+            }),
           "review task",
         );
         await this.c.audit.record({

@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { HubError, recordHashOf, verifyStoredRun, type EvalRunDoc } from "../src/index.js";
 import { hashJson } from "@axis/contracts";
-import { events, HASH_A, HASH_B, PROV, bp, caseResults, mean, registerRunner, runWithScore, runnerOf, seedSuite, user, world } from "./helpers.js";
+import {
+  events,
+  HASH_A,
+  HASH_B,
+  PROV,
+  bp,
+  caseResults,
+  mean,
+  registerRunner,
+  runWithScore,
+  runnerOf,
+  seedSuite,
+  user,
+  world,
+} from "./helpers.js";
 
 const code = async (p: Promise<unknown>): Promise<string> => {
   try {
@@ -15,11 +29,19 @@ const code = async (p: Promise<unknown>): Promise<string> => {
 const submit = (
   w: ReturnType<typeof world>,
   runId: string,
-  o: { results?: unknown; scores?: unknown; cost?: unknown; provenance?: unknown; runner?: ReturnType<typeof runnerOf> } = {},
+  o: {
+    results?: unknown;
+    scores?: unknown;
+    cost?: unknown;
+    provenance?: unknown;
+    runner?: ReturnType<typeof runnerOf>;
+  } = {},
 ) =>
   w.hub.runs.submitResults(o.runner ?? w.runner, runId, {
     case_results: o.results ?? caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], 1),
-    ...("scores" in o ? { scores: o.scores } : { scores: { overall: 1, per_grader: { exact: 1, contains: 1 } } }),
+    ...("scores" in o
+      ? { scores: o.scores }
+      : { scores: { overall: 1, per_grader: { exact: 1, contains: 1 } } }),
     ...("cost" in o ? { cost: o.cost } : {}),
     provenance: "provenance" in o ? o.provenance : PROV,
   } as never);
@@ -54,12 +76,20 @@ describe("runners", () => {
   it("an unregistered or revoked runner can start, claim and submit nothing", async () => {
     const w = world();
     await seedSuite(w);
-    expect(await code(w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() }))).toBe("forbidden:");
+    expect(
+      await code(w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() })),
+    ).toBe("forbidden:");
     await registerRunner(w);
-    const run = await w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() });
+    const run = await w.hub.runs.startAsRunner(w.runner, {
+      suite_ref: "smoke@1.0.0",
+      blueprint: bp(),
+    });
     await w.hub.runs.revokeRunner(w.admin, "runner-1");
     expect(await code(submit(w, run.id))).toBe("forbidden:");
-    const queued = await w.hub.runs.request(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp(HASH_B) });
+    const queued = await w.hub.runs.request(w.builder, {
+      suite_ref: "smoke@1.0.0",
+      blueprint: bp(HASH_B),
+    });
     expect(await code(w.hub.runs.claim(w.runner, queued.id))).toBe("forbidden:");
     expect(await code(w.hub.runs.fail(w.runner, run.id, "x"))).toBe("forbidden:");
   });
@@ -71,8 +101,18 @@ describe("starting and claiming", () => {
     await seedSuite(w);
     await registerRunner(w);
     await registerRunner(w, "runner-2");
-    const q = await w.hub.runs.request(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp(HASH_A, "support-agent", "1.0.0", "acme"), mode: "manual" });
-    expect(q).toMatchObject({ status: "queued", runner_id: null, requested_by: "bob-builder", mode: "manual", blueprint_name: "support-agent" });
+    const q = await w.hub.runs.request(w.builder, {
+      suite_ref: "smoke@1.0.0",
+      blueprint: bp(HASH_A, "support-agent", "1.0.0", "acme"),
+      mode: "manual",
+    });
+    expect(q).toMatchObject({
+      status: "queued",
+      runner_id: null,
+      requested_by: "bob-builder",
+      mode: "manual",
+      blueprint_name: "support-agent",
+    });
     expect(q.blueprint.namespace).toBe("acme");
     const mine = await w.hub.runs.list(w.runner, { status: "queued" });
     expect(mine.items.map((r) => r.id)).toEqual([q.id]);
@@ -86,7 +126,10 @@ describe("starting and claiming", () => {
     const w = world();
     await seedSuite(w);
     await registerRunner(w);
-    const req = (o: Record<string, unknown>) => code(w.hub.runs.request(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp(), ...o } as never));
+    const req = (o: Record<string, unknown>) =>
+      code(
+        w.hub.runs.request(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp(), ...o } as never),
+      );
     expect(await req({ suite_ref: "bad" })).toMatch(/^invalid:suite_ref/);
     expect(await req({ suite_ref: "other@1.0.0" })).toMatch(/^invalid:suite_ref/);
     expect(await req({ blueprint: 5 })).toMatch(/^invalid:blueprint/);
@@ -95,9 +138,19 @@ describe("starting and claiming", () => {
     expect(await req({ blueprint: { ...bp(), content_hash: "abc" } })).toMatch(/content_hash/);
     expect(await req({ blueprint: { ...bp(), namespace: "Bad Ns" } })).toMatch(/namespace/);
     expect(await req({ mode: "online" })).toMatch(/^invalid:mode/);
-    expect(await code(w.hub.runs.request(user(w.tenant, "viewer"), { suite_ref: "smoke@1.0.0", blueprint: bp() }))).toBe("forbidden:");
-    expect(await code(w.hub.runs.request(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() }))).toBe("forbidden:");
-    expect(await code(w.hub.runs.startAsRunner(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp() }))).toBe("forbidden:");
+    expect(
+      await code(
+        w.hub.runs.request(user(w.tenant, "viewer"), { suite_ref: "smoke@1.0.0", blueprint: bp() }),
+      ),
+    ).toBe("forbidden:");
+    expect(
+      await code(w.hub.runs.request(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() })),
+    ).toBe("forbidden:");
+    expect(
+      await code(
+        w.hub.runs.startAsRunner(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp() }),
+      ),
+    ).toBe("forbidden:");
     expect(await code(w.hub.runs.claim(w.builder, "x"))).toBe("forbidden:");
   });
 });
@@ -107,7 +160,13 @@ describe("submitting results: the hub recomputes", () => {
     const w = world();
     const run = await started(w);
     const done = await submit(w, run.id, { cost: { total_usd: 0.04 } });
-    expect(done).toMatchObject({ status: "passed", passed: true, pending_human: 0, sample_size: 4, provenance: { seed: "7" } });
+    expect(done).toMatchObject({
+      status: "passed",
+      passed: true,
+      pending_human: 0,
+      sample_size: 4,
+      provenance: { seed: "7" },
+    });
     expect(done.scores?.overall).toBe(1);
     expect(done.cost.total_usd).toBe(0.04);
     expect(done.record_hash).toBe(recordHashOf(done));
@@ -116,7 +175,14 @@ describe("submitting results: the hub recomputes", () => {
     const fin = await events(w, "evals.run.final");
     expect(fin).toHaveLength(1);
     expect(fin[0]).toMatchObject({ decision: "ALLOW" });
-    expect(fin[0]?.outputs_hash).toBe(hashJson({ status: "passed", overall: 1, record_hash: done.record_hash, runner_id: "runner-1" }));
+    expect(fin[0]?.outputs_hash).toBe(
+      hashJson({
+        status: "passed",
+        overall: 1,
+        record_hash: done.record_hash,
+        runner_id: "runner-1",
+      }),
+    );
     expect(await w.audit.verify(w.tenant)).toMatchObject({ ok: true });
     expect(await code(submit(w, run.id))).toBe("conflict:"); // finished runs are closed
     const suite = await w.hub.suites.get(w.admin, "smoke@1.0.0");
@@ -135,10 +201,28 @@ describe("submitting results: the hub recomputes", () => {
     const w = world();
     const run = await started(w);
     const results = caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], 0.5);
-    expect(await code(submit(w, run.id, { results, scores: { overall: 1, per_grader: { exact: 0.5, contains: 0.5 } } }))).toBe("integrity_failed:mismatch.overall");
-    expect(await code(submit(w, run.id, { results, scores: { overall: 0.5, per_grader: { exact: 0.9, contains: 0.5 } } }))).toBe("integrity_failed:mismatch.per_grader.exact");
-    expect(await code(submit(w, run.id, { results, scores: {} }))).toBe("integrity_failed:mismatch.overall");
-    expect(await code(submit(w, run.id, { results, scores: undefined }))).toMatch(/^invalid:scores/);
+    expect(
+      await code(
+        submit(w, run.id, {
+          results,
+          scores: { overall: 1, per_grader: { exact: 0.5, contains: 0.5 } },
+        }),
+      ),
+    ).toBe("integrity_failed:mismatch.overall");
+    expect(
+      await code(
+        submit(w, run.id, {
+          results,
+          scores: { overall: 0.5, per_grader: { exact: 0.9, contains: 0.5 } },
+        }),
+      ),
+    ).toBe("integrity_failed:mismatch.per_grader.exact");
+    expect(await code(submit(w, run.id, { results, scores: {} }))).toBe(
+      "integrity_failed:mismatch.overall",
+    );
+    expect(await code(submit(w, run.id, { results, scores: undefined }))).toMatch(
+      /^invalid:scores/,
+    );
     expect(await code(submit(w, run.id, { results, scores: "1" }))).toMatch(/^invalid:scores/);
     // nothing was stored by the failed attempts, the run is still open and accepts the honest submission
     expect((await w.hub.runs.get(w.admin, run.id)).status).toBe("running");
@@ -149,38 +233,68 @@ describe("submitting results: the hub recomputes", () => {
   it("rejects a mismatched cost claim", async () => {
     const w = world();
     const run = await started(w);
-    expect(await code(submit(w, run.id, { cost: { total_usd: 99 } }))).toBe("integrity_failed:cost.total_usd");
+    expect(await code(submit(w, run.id, { cost: { total_usd: 99 } }))).toBe(
+      "integrity_failed:cost.total_usd",
+    );
     expect(await code(submit(w, run.id, { cost: "free" }))).toBe("integrity_failed:cost.total_usd");
   });
 
   it("rejects incomplete, duplicate, unknown or out-of-range results", async () => {
     const w = world();
     const run = await started(w);
-    const all = caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], 1) as { case_id: string; scores: Record<string, unknown> }[];
+    const all = caseResults(["c1", "c2", "c3", "c4"], ["exact", "contains"], 1) as {
+      case_id: string;
+      scores: Record<string, unknown>;
+    }[];
     const t = (results: unknown) => code(submit(w, run.id, { results }));
     expect(await t("x")).toMatch(/^invalid:case_results/);
     expect(await t(all.slice(0, 3))).toMatch(/^invalid:case_results/);
     expect(await t([...all, all[0]])).toMatch(/duplicate|invalid/);
-    expect(await t([{ ...all[0], case_id: "zzz" }, ...all.slice(1)])).toMatch(/case_results\[0\].case_id/);
+    expect(await t([{ ...all[0], case_id: "zzz" }, ...all.slice(1)])).toMatch(
+      /case_results\[0\].case_id/,
+    );
     expect(await t([5, ...all.slice(1)])).toMatch(/case_results\[0\]/);
     expect(await t([{ ...all[0], scores: 5 }, ...all.slice(1)])).toMatch(/scores/);
-    expect(await t([{ ...all[0], scores: { exact: 1, contains: 1, extra: 1 } }, ...all.slice(1)])).toMatch(/scores.extra/);
-    expect(await t([{ ...all[0], scores: { exact: 1 } }, ...all.slice(1)])).toMatch(/scores.contains/);
-    expect(await t([{ ...all[0], scores: { exact: 1.2, contains: 1 } }, ...all.slice(1)])).toMatch(/scores.exact/);
-    expect(await t([{ ...all[0], scores: { exact: Number.NaN, contains: 1 } }, ...all.slice(1)])).toMatch(/scores.exact/);
+    expect(
+      await t([{ ...all[0], scores: { exact: 1, contains: 1, extra: 1 } }, ...all.slice(1)]),
+    ).toMatch(/scores.extra/);
+    expect(await t([{ ...all[0], scores: { exact: 1 } }, ...all.slice(1)])).toMatch(
+      /scores.contains/,
+    );
+    expect(await t([{ ...all[0], scores: { exact: 1.2, contains: 1 } }, ...all.slice(1)])).toMatch(
+      /scores.exact/,
+    );
+    expect(
+      await t([{ ...all[0], scores: { exact: Number.NaN, contains: 1 } }, ...all.slice(1)]),
+    ).toMatch(/scores.exact/);
     expect(await t([{ ...all[0], cost_usd: -1 }, ...all.slice(1)])).toMatch(/cost_usd/);
     expect(await t([{ ...all[0], latency_ms: "x" }, ...all.slice(1)])).toMatch(/latency_ms/);
     expect(await t([{ ...all[0], trace_id: 5 }, ...all.slice(1)])).toMatch(/trace_id/);
     expect(await t([{ ...all[0], error: 5 }, ...all.slice(1)])).toMatch(/error/);
-    const good = [{ ...all[0], latency_ms: 12, trace_id: "tr1", error: "judge timeout" }, ...all.slice(1)];
+    const good = [
+      { ...all[0], latency_ms: 12, trace_id: "tr1", error: "judge timeout" },
+      ...all.slice(1),
+    ];
     const done = await submit(w, run.id, { results: good });
-    expect(done.case_results[0]).toMatchObject({ latency_ms: 12, trace_id: "tr1", error: "judge timeout" });
+    expect(done.case_results[0]).toMatchObject({
+      latency_ms: 12,
+      trace_id: "tr1",
+      error: "judge timeout",
+    });
   });
 
   it("requires provenance", async () => {
     const w = world();
     const run = await started(w);
-    for (const p of [undefined, "x", { ...PROV, runner_version: "" }, { ...PROV, model_ids: "m" }, { ...PROV, model_ids: [1] }, { ...PROV, seed: undefined }, { ...PROV, seed: {} }])
+    for (const p of [
+      undefined,
+      "x",
+      { ...PROV, runner_version: "" },
+      { ...PROV, model_ids: "m" },
+      { ...PROV, model_ids: [1] },
+      { ...PROV, seed: undefined },
+      { ...PROV, seed: {} },
+    ])
       expect(await code(submit(w, run.id, { provenance: p }))).toMatch(/^invalid:provenance/);
   });
 
@@ -188,10 +302,15 @@ describe("submitting results: the hub recomputes", () => {
     const w = world();
     const run = await started(w);
     await registerRunner(w, "runner-2");
-    expect(await code(submit(w, run.id, { runner: runnerOf(w.tenant, "runner-2") }))).toBe("forbidden:");
+    expect(await code(submit(w, run.id, { runner: runnerOf(w.tenant, "runner-2") }))).toBe(
+      "forbidden:",
+    );
     expect(await code(submit(w, "ghost"))).toBe("not_found:");
     expect(await code(w.hub.runs.submitResults(w.builder, run.id, {} as never))).toBe("forbidden:");
-    const queued = await w.hub.runs.request(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp(HASH_B) });
+    const queued = await w.hub.runs.request(w.builder, {
+      suite_ref: "smoke@1.0.0",
+      blueprint: bp(HASH_B),
+    });
     expect(await code(submit(w, queued.id))).toBe("conflict:");
   });
 
@@ -199,7 +318,10 @@ describe("submitting results: the hub recomputes", () => {
     const w = world();
     const run = await started(w);
     const d = await w.docs.get(w.tenant, "runs", run.id);
-    await w.docs.update(w.tenant, "runs", run.id, d?.rev as number, { ...(d?.data as object), suite_hash: "0".repeat(64) });
+    await w.docs.update(w.tenant, "runs", run.id, d?.rev as number, {
+      ...(d?.data as object),
+      suite_hash: "0".repeat(64),
+    });
     expect(await code(submit(w, run.id))).toBe("integrity_failed:suite_hash");
   });
 
@@ -208,14 +330,23 @@ describe("submitting results: the hub recomputes", () => {
     const run = await started(w);
     await expect(w.hub.runs.fail(w.runner, run.id, "")).rejects.toThrow(/reason/);
     const f = await w.hub.runs.fail(w.runner, run.id, "judge model unreachable");
-    expect(f).toMatchObject({ status: "errored", passed: false, failure_reason: "judge model unreachable" });
+    expect(f).toMatchObject({
+      status: "errored",
+      passed: false,
+      failure_reason: "judge model unreachable",
+    });
     expect(f.record_hash).toBe(recordHashOf(f));
     expect(await code(submit(w, run.id))).toBe("conflict:");
     expect(await code(w.hub.runs.fail(w.runner, run.id, "again"))).toBe("conflict:");
     expect(await code(w.hub.runs.fail(w.runner, "ghost", "x"))).toBe("not_found:");
     await registerRunner(w, "runner-2");
-    const other = await w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp(HASH_B) });
-    expect(await code(w.hub.runs.fail(runnerOf(w.tenant, "runner-2"), other.id, "x"))).toBe("forbidden:");
+    const other = await w.hub.runs.startAsRunner(w.runner, {
+      suite_ref: "smoke@1.0.0",
+      blueprint: bp(HASH_B),
+    });
+    expect(await code(w.hub.runs.fail(runnerOf(w.tenant, "runner-2"), other.id, "x"))).toBe(
+      "forbidden:",
+    );
   });
 });
 
@@ -227,7 +358,9 @@ describe("a finished run cannot be changed", () => {
       return runWithScore(w, { hash: HASH_B, score: 0.5 });
     })();
     const d = await w.docs.get<EvalRunDoc>(w.tenant, "runs", done.id);
-    await expect(w.docs.update(w.tenant, "runs", done.id, d?.rev as number, { ...done, status: "passed" })).rejects.toThrow(/immutable/);
+    await expect(
+      w.docs.update(w.tenant, "runs", done.id, d?.rev as number, { ...done, status: "passed" }),
+    ).rejects.toThrow(/immutable/);
     const suite = await w.hub.suites.get(w.admin, "smoke@1.0.0");
     const forged: EvalRunDoc = JSON.parse(JSON.stringify(done));
     forged.scores = { ...(forged.scores as NonNullable<EvalRunDoc["scores"]>), overall: 0.99 };
@@ -249,7 +382,11 @@ describe("a finished run cannot be changed", () => {
     pending.record_hash = recordHashOf(pending);
     expect(verifyStoredRun(pending, suite)).toContain("recompute");
     const wrongSuite = { ...suite, suite_hash: "1".repeat(64), dataset_hash: "2".repeat(64) };
-    expect(verifyStoredRun(done, wrongSuite)).toEqual(expect.arrayContaining(["suite_hash", "dataset_hash", "record_hash"].filter((x) => x !== "record_hash")));
+    expect(verifyStoredRun(done, wrongSuite)).toEqual(
+      expect.arrayContaining(
+        ["suite_hash", "dataset_hash", "record_hash"].filter((x) => x !== "record_hash"),
+      ),
+    );
     const hashMismatch: EvalRunDoc = JSON.parse(JSON.stringify(done));
     hashMismatch.content_hash = HASH_A;
     hashMismatch.record_hash = recordHashOf(hashMismatch);
@@ -258,7 +395,11 @@ describe("a finished run cannot be changed", () => {
     short.sample_size = 9;
     short.record_hash = recordHashOf(short);
     expect(verifyStoredRun(short, suite)).toContain("sample_size");
-    const errored: EvalRunDoc = { ...JSON.parse(JSON.stringify(done)), status: "errored", scores: null };
+    const errored: EvalRunDoc = {
+      ...JSON.parse(JSON.stringify(done)),
+      status: "errored",
+      scores: null,
+    };
     errored.record_hash = recordHashOf(errored);
     expect(verifyStoredRun(errored, suite)).toEqual([]);
   });
@@ -272,7 +413,14 @@ describe("listing and tenancy", () => {
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) {
       w.clock.advance(1000);
-      ids.push((await w.hub.runs.request(w.builder, { suite_ref: "smoke@1.0.0", blueprint: bp(i % 2 ? HASH_A : HASH_B) })).id);
+      ids.push(
+        (
+          await w.hub.runs.request(w.builder, {
+            suite_ref: "smoke@1.0.0",
+            blueprint: bp(i % 2 ? HASH_A : HASH_B),
+          })
+        ).id,
+      );
     }
     const p1 = await w.hub.runs.list(w.admin, { limit: 2 });
     expect(p1.items.map((r) => r.id)).toEqual([ids[4], ids[3]]);
@@ -284,7 +432,15 @@ describe("listing and tenancy", () => {
     expect(p3.next_cursor).toBeNull();
     expect((await w.hub.runs.list(w.admin, { content_hash: HASH_A })).items).toHaveLength(2);
     expect((await w.hub.runs.list(w.admin, { status: "running" })).items).toHaveLength(0);
-    expect((await w.hub.runs.list(w.admin, { suite_ref: "smoke@1.0.0", blueprint_name: "support-agent", mode: "ci" })).items).toHaveLength(5);
+    expect(
+      (
+        await w.hub.runs.list(w.admin, {
+          suite_ref: "smoke@1.0.0",
+          blueprint_name: "support-agent",
+          mode: "ci",
+        })
+      ).items,
+    ).toHaveLength(5);
     expect(await code(w.hub.runs.list(w.admin, { status: 5 as never }))).toMatch(/^invalid/);
     expect(await code(w.hub.runs.list(w.admin, { cursor: "AAAA" }))).toMatch(/^invalid:cursor/);
     expect((await w.hub.runs.list(w.admin, { limit: 0 })).items).toHaveLength(1);
@@ -297,7 +453,14 @@ describe("listing and tenancy", () => {
     expect(await code(w.hub.runs.get(other, run.id))).toBe("not_found:");
     expect((await w.hub.runs.list(other)).items).toEqual([]);
     expect(await code(w.hub.runs.get(user(w.tenant, "viewer"), run.id))).toBe("ok");
-    expect(await code(w.hub.runs.get({ kind: "platform", service: "registry", subject: "x", tenantId: w.tenant }, run.id))).toBe("forbidden:");
+    expect(
+      await code(
+        w.hub.runs.get(
+          { kind: "platform", service: "registry", subject: "x", tenantId: w.tenant },
+          run.id,
+        ),
+      ),
+    ).toBe("forbidden:");
     void mean;
   });
 

@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { HubError } from "../src/index.js";
-import { HOUR, PROV, bp, caseResults, publishers, registerRunner, seedSuite, user, world, type World } from "./helpers.js";
+import {
+  HOUR,
+  PROV,
+  bp,
+  caseResults,
+  publishers,
+  registerRunner,
+  seedSuite,
+  user,
+  world,
+  type World,
+} from "./helpers.js";
 
 const code = async (p: Promise<unknown>): Promise<string> => {
   try {
@@ -19,9 +30,15 @@ const HUMAN_GRADERS = (extra: Record<string, unknown> = {}) => [
 async function awaiting(extra: Record<string, unknown> = {}, cases = 2) {
   const w = world({ publishers: publishers({ "support-agent@1.0.0": "pat-publisher" }) });
   const ids = Array.from({ length: cases }, (_, i) => `c${i + 1}`);
-  await seedSuite(w, { graders: HUMAN_GRADERS(extra), cases: ids.map((id) => ({ id, input: `q ${id} jane@example.com`, expected: "a" })) });
+  await seedSuite(w, {
+    graders: HUMAN_GRADERS(extra),
+    cases: ids.map((id) => ({ id, input: `q ${id} jane@example.com`, expected: "a" })),
+  });
   await registerRunner(w);
-  const run = await w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() });
+  const run = await w.hub.runs.startAsRunner(w.runner, {
+    suite_ref: "smoke@1.0.0",
+    blueprint: bp(),
+  });
   const pending = await w.hub.runs.submitResults(w.runner, run.id, {
     case_results: caseResults(ids, ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
     provenance: PROV,
@@ -37,7 +54,12 @@ describe("task creation", () => {
     expect(pending).toMatchObject({ status: "running", pending_human: 3, scores: null });
     const tasks = await w.hub.reviews.list(rev(w, "rita"), {});
     expect(tasks).toHaveLength(3);
-    expect(tasks[0]).toMatchObject({ state: "open", grader_id: "human", sla_breached: false, conflicts: ["runner:runner-1", "pat-publisher"] });
+    expect(tasks[0]).toMatchObject({
+      state: "open",
+      grader_id: "human",
+      sla_breached: false,
+      conflicts: ["runner:runner-1", "pat-publisher"],
+    });
     expect(tasks[0]?.sla_deadline).toBe(new Date(w.clock.t.getTime() + 24 * HOUR).toISOString());
     expect(JSON.stringify(tasks[0]?.case_input)).toBeDefined();
   });
@@ -46,9 +68,29 @@ describe("task creation", () => {
     const w = world();
     await seedSuite(w, { graders: HUMAN_GRADERS() });
     await registerRunner(w);
-    const run = await w.hub.runs.startAsRunner(w.runner, { suite_ref: "smoke@1.0.0", blueprint: bp() });
-    expect(await code(w.hub.runs.submitResults(w.runner, run.id, { case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], 1), provenance: PROV }))).toMatch(/^invalid:case_results\[0\]\.scores\.human/);
-    expect(await code(w.hub.runs.submitResults(w.runner, run.id, { case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], (_i, g) => (g === "human" ? null : 1)), scores: { overall: 1 }, provenance: PROV }))).toMatch(/^invalid:scores/);
+    const run = await w.hub.runs.startAsRunner(w.runner, {
+      suite_ref: "smoke@1.0.0",
+      blueprint: bp(),
+    });
+    expect(
+      await code(
+        w.hub.runs.submitResults(w.runner, run.id, {
+          case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], 1),
+          provenance: PROV,
+        }),
+      ),
+    ).toMatch(/^invalid:case_results\[0\]\.scores\.human/);
+    expect(
+      await code(
+        w.hub.runs.submitResults(w.runner, run.id, {
+          case_results: caseResults(["c1", "c2", "c3", "c4"], ["exact", "human"], (_i, g) =>
+            g === "human" ? null : 1,
+          ),
+          scores: { overall: 1 },
+          provenance: PROV,
+        }),
+      ),
+    ).toMatch(/^invalid:scores/);
   });
 });
 
@@ -58,7 +100,10 @@ describe("single grading", () => {
     const r = rev(w, "rita");
     const [t1, t2] = await w.hub.reviews.list(r, {});
     await w.hub.reviews.claim(r, (t1 as { id: string }).id);
-    const g1 = await w.hub.reviews.grade(r, (t1 as { id: string }).id, { score: 1, comment: "Great answer for jane@example.com" });
+    const g1 = await w.hub.reviews.grade(r, (t1 as { id: string }).id, {
+      score: 1,
+      comment: "Great answer for jane@example.com",
+    });
     expect(g1).toMatchObject({ state: "resolved", resolution: { score: 1, method: "single" } });
     expect(g1.grades[0]?.comment).toContain("[email]");
     expect(g1.grades[0]?.comment).not.toContain("jane@example.com");
@@ -94,16 +139,24 @@ describe("separation of duties", () => {
     const any = (await w.hub.reviews.list(rev(w, "rita"), {}))[0] as { id: string };
     expect(await code(w.hub.reviews.get(pub, any.id))).toBe("not_found:");
     expect(await code(w.hub.reviews.claim(pub, any.id))).toBe("forbidden:");
-    expect(await code(w.hub.reviews.grade(pub, any.id, { score: 1, comment: "mine" }))).toBe("forbidden:");
+    expect(await code(w.hub.reviews.grade(pub, any.id, { score: 1, comment: "mine" }))).toBe(
+      "forbidden:",
+    );
     // a task whose run was started by a member excludes that member
     const w2 = world();
     await seedSuite(w2, { graders: HUMAN_GRADERS(), cases: [{ id: "c1", input: "q" }] });
     await registerRunner(w2);
     const q = await w2.hub.runs.request(w2.builder, { suite_ref: "smoke@1.0.0", blueprint: bp() });
     const claimed = await w2.hub.runs.claim(w2.runner, q.id);
-    await w2.hub.runs.submitResults(w2.runner, claimed.id, { case_results: caseResults(["c1"], ["exact", "human"], (_i, g) => (g === "human" ? null : 1)), provenance: PROV });
+    await w2.hub.runs.submitResults(w2.runner, claimed.id, {
+      case_results: caseResults(["c1"], ["exact", "human"], (_i, g) => (g === "human" ? null : 1)),
+      provenance: PROV,
+    });
     const starter = user(w2.tenant, "builder", "bob-builder");
-    const task = (await w2.hub.reviews.list(rev(w2, "rita"), {}))[0] as { id: string; conflicts: string[] };
+    const task = (await w2.hub.reviews.list(rev(w2, "rita"), {}))[0] as {
+      id: string;
+      conflicts: string[];
+    };
     expect(task.conflicts).toContain("bob-builder");
     expect(await code(w2.hub.reviews.claim(starter, task.id))).toBe("forbidden:");
     expect(await code(w2.hub.reviews.claim(rev(w2, "rita"), task.id))).toBe("ok");
@@ -115,9 +168,17 @@ describe("separation of duties", () => {
     expect(await code(w.hub.reviews.claim(user(w.tenant, "viewer"), t.id))).toBe("forbidden:");
     expect(await code(w.hub.reviews.claim(w.runner, t.id))).toBe("forbidden:");
     expect(await code(w.hub.reviews.list(user(w.tenant, "viewer"), {}))).toBe("forbidden:");
-    expect(await code(w.hub.reviews.claim(user("00000000-0000-4000-8000-0000000000cc", "operator"), t.id))).toBe("not_found:");
-    expect(await code(w.hub.reviews.claim(user(w.tenant, "reviewer", "rev-only"), t.id))).toBe("ok");
-    expect(await code(w.hub.reviews.grade(w.runner, t.id, { score: 1, comment: "x" }))).toBe("forbidden:");
+    expect(
+      await code(
+        w.hub.reviews.claim(user("00000000-0000-4000-8000-0000000000cc", "operator"), t.id),
+      ),
+    ).toBe("not_found:");
+    expect(await code(w.hub.reviews.claim(user(w.tenant, "reviewer", "rev-only"), t.id))).toBe(
+      "ok",
+    );
+    expect(await code(w.hub.reviews.grade(w.runner, t.id, { score: 1, comment: "x" }))).toBe(
+      "forbidden:",
+    );
     expect(await code(w.hub.reviews.skip(w.runner, t.id, "x"))).toBe("forbidden:");
     expect(await code(w.hub.reviews.sweep(user(w.tenant, "reviewer")))).toBe("forbidden:");
   });
@@ -131,11 +192,15 @@ describe("claims, skipping and validation", () => {
     const t = (await w.hub.reviews.list(a, {}))[0] as { id: string };
     await w.hub.reviews.claim(a, t.id);
     expect(await code(w.hub.reviews.claim(b, t.id))).toBe("conflict:");
-    expect(await code(w.hub.reviews.grade(b, t.id, { score: 1, comment: "x" }))).toMatch(/^conflict/);
+    expect(await code(w.hub.reviews.grade(b, t.id, { score: 1, comment: "x" }))).toMatch(
+      /^conflict/,
+    );
     expect(await code(w.hub.reviews.skip(b, t.id, "no"))).toBe("conflict:");
     expect(await code(w.hub.reviews.claim(a, t.id))).toBe("ok"); // re-claim by the holder extends
     w.clock.advance(31 * 60_000);
-    expect(await code(w.hub.reviews.grade(a, t.id, { score: 1, comment: "late" }))).toMatch(/^conflict/);
+    expect(await code(w.hub.reviews.grade(a, t.id, { score: 1, comment: "late" }))).toMatch(
+      /^conflict/,
+    );
     expect(await code(w.hub.reviews.claim(b, t.id))).toBe("ok"); // expired claim is taken over
   });
 
@@ -157,10 +222,18 @@ describe("claims, skipping and validation", () => {
     const a = rev(w, "ann");
     const t = (await w.hub.reviews.list(a, {}))[0] as { id: string };
     await w.hub.reviews.claim(a, t.id);
-    for (const g of [{ score: 2, comment: "x" }, { score: "1", comment: "x" }, { score: 0.5, comment: "" }, { score: 0.5, comment: 5 }, { score: 0.5, comment: "x".repeat(2001) }])
+    for (const g of [
+      { score: 2, comment: "x" },
+      { score: "1", comment: "x" },
+      { score: 0.5, comment: "" },
+      { score: 0.5, comment: 5 },
+      { score: 0.5, comment: "x".repeat(2001) },
+    ])
       expect(await code(w.hub.reviews.grade(a, t.id, g as never))).toMatch(/^invalid/);
     await w.hub.reviews.grade(a, t.id, { score: 1, comment: "fine" });
-    expect(await code(w.hub.reviews.grade(a, t.id, { score: 1, comment: "again" }))).toBe("forbidden:");
+    expect(await code(w.hub.reviews.grade(a, t.id, { score: 1, comment: "again" }))).toBe(
+      "forbidden:",
+    );
     expect(await code(w.hub.reviews.claim(rev(w, "ben"), t.id))).toBe("conflict:");
     expect(await code(w.hub.reviews.skip(rev(w, "ben"), t.id, "x"))).toBe("conflict:");
     expect(await code(w.hub.reviews.get(a, "bad id"))).toBe("not_found:");
@@ -178,7 +251,10 @@ describe("double grading and adjudication", () => {
     const b = rev(w, "ben");
     const t = (await w.hub.reviews.list(a, {}))[0] as { id: string };
     await w.hub.reviews.claim(a, t.id);
-    expect(await w.hub.reviews.grade(a, t.id, { score: 0.8, comment: "good" })).toMatchObject({ state: "open", resolution: null });
+    expect(await w.hub.reviews.grade(a, t.id, { score: 0.8, comment: "good" })).toMatchObject({
+      state: "open",
+      resolution: null,
+    });
     // ann cannot grade it twice; ben can
     expect(await code(w.hub.reviews.claim(a, t.id))).toBe("forbidden:");
     expect((await w.hub.reviews.list(a, {})).map((x) => x.id)).not.toContain(t.id);
@@ -190,7 +266,11 @@ describe("double grading and adjudication", () => {
 
   it("grades that disagree need a THIRD, different reviewer whose grade decides", async () => {
     const { w, run } = await awaiting({ double_grade: true, agreement_tolerance: 0.1 }, 1);
-    const [a, b, c] = ["ann", "ben", "cy"].map((n) => rev(w, n)) as [ReturnType<typeof rev>, ReturnType<typeof rev>, ReturnType<typeof rev>];
+    const [a, b, c] = ["ann", "ben", "cy"].map((n) => rev(w, n)) as [
+      ReturnType<typeof rev>,
+      ReturnType<typeof rev>,
+      ReturnType<typeof rev>,
+    ];
     const t = (await w.hub.reviews.list(a, {}))[0] as { id: string };
     await w.hub.reviews.claim(a, t.id);
     await w.hub.reviews.grade(a, t.id, { score: 0, comment: "bad" });
@@ -201,14 +281,21 @@ describe("double grading and adjudication", () => {
     // the two graders are excluded from the adjudication
     expect(await code(w.hub.reviews.claim(a, t.id))).toBe("forbidden:");
     expect(await code(w.hub.reviews.claim(b, t.id))).toBe("forbidden:");
-    expect((await w.hub.reviews.list(c, { state: "needs_adjudication" })).map((x) => x.id)).toEqual([t.id]);
+    expect((await w.hub.reviews.list(c, { state: "needs_adjudication" })).map((x) => x.id)).toEqual(
+      [t.id],
+    );
     await w.hub.reviews.claim(c, t.id);
     // skipping an adjudication keeps it waiting for an adjudicator
-    expect(await w.hub.reviews.skip(c, t.id, "conflict of interest")).toMatchObject({ state: "needs_adjudication" });
+    expect(await w.hub.reviews.skip(c, t.id, "conflict of interest")).toMatchObject({
+      state: "needs_adjudication",
+    });
     const d = rev(w, "dee");
     await w.hub.reviews.claim(d, t.id);
     const fin = await w.hub.reviews.grade(d, t.id, { score: 0.9, comment: "decisive" });
-    expect(fin).toMatchObject({ state: "resolved", resolution: { score: 0.9, method: "adjudicated" } });
+    expect(fin).toMatchObject({
+      state: "resolved",
+      resolution: { score: 0.9, method: "adjudicated" },
+    });
     expect(fin.grades.map((g) => g.adjudication)).toEqual([false, false, true]);
     expect((await w.hub.runs.get(w.admin, run.id)).status).toBe("passed");
   });

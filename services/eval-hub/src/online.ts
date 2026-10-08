@@ -67,11 +67,16 @@ export class OnlineService {
     if (typeof cap !== "number" || !Number.isInteger(cap) || cap < 1 || cap > 100_000)
       throw invalid("max_per_hour must be an integer in [1, 100000]", ["max_per_hour"]);
     const red = input["redaction"] === undefined ? "redact" : input["redaction"];
-    if (red !== "redact" && red !== "hash_only") throw invalid("redaction must be redact or hash_only", ["redaction"]);
+    if (red !== "redact" && red !== "hash_only")
+      throw invalid("redaction must be redact or hash_only", ["redaction"]);
     if (input["enabled"] !== undefined && typeof input["enabled"] !== "boolean")
       throw invalid("enabled must be a boolean", ["enabled"]);
     const at = input["alert_threshold"];
-    if (at !== undefined && at !== null && (typeof at !== "number" || !Number.isFinite(at) || at < 0 || at > 1))
+    if (
+      at !== undefined &&
+      at !== null &&
+      (typeof at !== "number" || !Number.isFinite(at) || at < 0 || at > 1)
+    )
       throw invalid("alert_threshold must be a number in [0, 1] or null", ["alert_threshold"]);
     const suite = await this.c.docs.get<Suite>(p.tenantId, "suites", input["suite_ref"]);
     if (!suite) throw invalid("suite not found", ["suite_ref"]);
@@ -87,12 +92,22 @@ export class OnlineService {
       updated_by: (p as { subject: string }).subject,
       updated_at: iso(this.c.now()),
     };
-    return mutate(this.c, p, "evals.sampling.put", { id, suite_ref: rec.suite_ref, rate, max_per_hour: cap }, async () => {
-      const cur = await this.c.docs.get<SamplingConfig>(p.tenantId, "sampling", id);
-      if (cur) await guarded(() => this.c.docs.update(p.tenantId, "sampling", id, cur.rev, rec), "sampling");
-      else await guarded(() => this.c.docs.insert(p.tenantId, "sampling", id, rec), "sampling");
-      return rec;
-    });
+    return mutate(
+      this.c,
+      p,
+      "evals.sampling.put",
+      { id, suite_ref: rec.suite_ref, rate, max_per_hour: cap },
+      async () => {
+        const cur = await this.c.docs.get<SamplingConfig>(p.tenantId, "sampling", id);
+        if (cur)
+          await guarded(
+            () => this.c.docs.update(p.tenantId, "sampling", id, cur.rev, rec),
+            "sampling",
+          );
+        else await guarded(() => this.c.docs.insert(p.tenantId, "sampling", id, rec), "sampling");
+        return rec;
+      },
+    );
   }
 
   async disable(p: HubPrincipal, id: string): Promise<SamplingConfig> {
@@ -104,8 +119,16 @@ export class OnlineService {
     return mutate(this.c, p, "evals.sampling.disable", { id }, async () => {
       const cur = await this.c.docs.get<SamplingConfig>(p.tenantId, "sampling", id);
       if (!cur) throw notFound("sampling config not found");
-      const next = { ...cur.data, enabled: false, updated_by: (p as { subject: string }).subject, updated_at: iso(this.c.now()) };
-      await guarded(() => this.c.docs.update(p.tenantId, "sampling", id, cur.rev, next), "sampling");
+      const next = {
+        ...cur.data,
+        enabled: false,
+        updated_by: (p as { subject: string }).subject,
+        updated_at: iso(this.c.now()),
+      };
+      await guarded(
+        () => this.c.docs.update(p.tenantId, "sampling", id, cur.rev, next),
+        "sampling",
+      );
       return next;
     });
   }
@@ -118,75 +141,94 @@ export class OnlineService {
   /** A registered runner posts the scores of one sampled production run. */
   async ingest(p: HubPrincipal, input: Record<string, unknown>): Promise<OnlineResult> {
     const r = requireRunner(p);
-    return mutate(this.c, p, "evals.online.ingest", { sampling_id: input["sampling_id"] ?? null }, async () => {
-      if (!(await this.runs.runnerActive(p.tenantId, r.runnerId)))
-        throw new HubError("forbidden", "runner is not registered for this tenant");
-      const sid = input["sampling_id"];
-      if (typeof sid !== "string" || !ID_RE.test(sid)) throw invalid("sampling_id is required", ["sampling_id"]);
-      const cfgDoc = await this.c.docs.get<SamplingConfig>(p.tenantId, "sampling", sid);
-      if (!cfgDoc) throw notFound("sampling config not found");
-      const cfg = cfgDoc.data;
-      if (!cfg.enabled) throw conflict("sampling is disabled");
-      const b = input["blueprint"];
-      if (
-        !isObj(b) ||
-        b["name"] !== cfg.blueprint_name ||
-        typeof b["version"] !== "string" ||
-        b["version"].length === 0 ||
-        b["version"].length > 64 ||
-        typeof b["content_hash"] !== "string" ||
-        !HASH_RE.test(b["content_hash"])
-      )
-        throw invalid("blueprint must name the configured blueprint with a version and content_hash", ["blueprint"]);
-      const suiteDoc = await this.c.docs.get<Suite>(p.tenantId, "suites", cfg.suite_ref);
-      if (!suiteDoc) throw notFound("suite not found");
-      const graders = suiteDoc.data.graders.filter((g) => g.type !== "human");
-      const sc = input["scores"];
-      if (!isObj(sc) || Object.keys(sc).length === 0) throw invalid("scores are required", ["scores"]);
-      const scores: Record<string, number> = {};
-      for (const [k, v] of Object.entries(sc)) {
-        if (!graders.some((g) => g.id === k)) throw invalid(`${k} is not an automated grader of the suite`, [`scores.${k}`]);
-        if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1)
-          throw invalid(`score for ${k} must be a number in [0, 1]`, [`scores.${k}`]);
-        scores[k] = v;
-      }
-      for (const k of ["source_run_id", "trace_id"])
-        if (input[k] !== undefined && input[k] !== null && (typeof input[k] !== "string" || (input[k] as string).length > 100))
-          throw invalid(`${k} is malformed`, [k]);
-      const now = this.c.now();
-      const recent = (await this.c.docs.find<OnlineResult>(p.tenantId, "online", { sampling_id: sid })).filter(
-        (d) => new Date(d.data.at).getTime() > now.getTime() - HOUR_MS,
-      );
-      if (recent.length >= cfg.max_per_hour)
-        throw new HubError("rate_limited", "the hourly sampling cap of this config is reached");
-      let wsum = 0;
-      let total = 0;
-      for (const g of graders)
-        if (g.id in scores) {
-          wsum += g.weight;
-          total += g.weight * (scores[g.id] as number);
+    return mutate(
+      this.c,
+      p,
+      "evals.online.ingest",
+      { sampling_id: input["sampling_id"] ?? null },
+      async () => {
+        if (!(await this.runs.runnerActive(p.tenantId, r.runnerId)))
+          throw new HubError("forbidden", "runner is not registered for this tenant");
+        const sid = input["sampling_id"];
+        if (typeof sid !== "string" || !ID_RE.test(sid))
+          throw invalid("sampling_id is required", ["sampling_id"]);
+        const cfgDoc = await this.c.docs.get<SamplingConfig>(p.tenantId, "sampling", sid);
+        if (!cfgDoc) throw notFound("sampling config not found");
+        const cfg = cfgDoc.data;
+        if (!cfg.enabled) throw conflict("sampling is disabled");
+        const b = input["blueprint"];
+        if (
+          !isObj(b) ||
+          b["name"] !== cfg.blueprint_name ||
+          typeof b["version"] !== "string" ||
+          b["version"].length === 0 ||
+          b["version"].length > 64 ||
+          typeof b["content_hash"] !== "string" ||
+          !HASH_RE.test(b["content_hash"])
+        )
+          throw invalid(
+            "blueprint must name the configured blueprint with a version and content_hash",
+            ["blueprint"],
+          );
+        const suiteDoc = await this.c.docs.get<Suite>(p.tenantId, "suites", cfg.suite_ref);
+        if (!suiteDoc) throw notFound("suite not found");
+        const graders = suiteDoc.data.graders.filter((g) => g.type !== "human");
+        const sc = input["scores"];
+        if (!isObj(sc) || Object.keys(sc).length === 0)
+          throw invalid("scores are required", ["scores"]);
+        const scores: Record<string, number> = {};
+        for (const [k, v] of Object.entries(sc)) {
+          if (!graders.some((g) => g.id === k))
+            throw invalid(`${k} is not an automated grader of the suite`, [`scores.${k}`]);
+          if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1)
+            throw invalid(`score for ${k} must be a number in [0, 1]`, [`scores.${k}`]);
+          scores[k] = v;
         }
-      const rec: OnlineResult = {
-        id: this.c.newId(),
-        sampling_id: sid,
-        blueprint: {
-          namespace: null,
-          name: cfg.blueprint_name,
-          version: b["version"],
-          content_hash: b["content_hash"],
-        },
-        suite_ref: cfg.suite_ref,
-        source_run_id: (input["source_run_id"] as string | null | undefined) ?? null,
-        trace_id: (input["trace_id"] as string | null | undefined) ?? null,
-        scores,
-        score: round9(total / wsum),
-        runner_id: r.runnerId,
-        at: iso(now),
-      };
-      await guarded(() => this.c.docs.insert(p.tenantId, "online", `${rec.at}|${rec.id}`, rec), "online result");
-      await this.maybeAlert(p.tenantId, cfg, now);
-      return rec;
-    });
+        for (const k of ["source_run_id", "trace_id"])
+          if (
+            input[k] !== undefined &&
+            input[k] !== null &&
+            (typeof input[k] !== "string" || (input[k] as string).length > 100)
+          )
+            throw invalid(`${k} is malformed`, [k]);
+        const now = this.c.now();
+        const recent = (
+          await this.c.docs.find<OnlineResult>(p.tenantId, "online", { sampling_id: sid })
+        ).filter((d) => new Date(d.data.at).getTime() > now.getTime() - HOUR_MS);
+        if (recent.length >= cfg.max_per_hour)
+          throw new HubError("rate_limited", "the hourly sampling cap of this config is reached");
+        let wsum = 0;
+        let total = 0;
+        for (const g of graders)
+          if (g.id in scores) {
+            wsum += g.weight;
+            total += g.weight * (scores[g.id] as number);
+          }
+        const rec: OnlineResult = {
+          id: this.c.newId(),
+          sampling_id: sid,
+          blueprint: {
+            namespace: null,
+            name: cfg.blueprint_name,
+            version: b["version"],
+            content_hash: b["content_hash"],
+          },
+          suite_ref: cfg.suite_ref,
+          source_run_id: (input["source_run_id"] as string | null | undefined) ?? null,
+          trace_id: (input["trace_id"] as string | null | undefined) ?? null,
+          scores,
+          score: round9(total / wsum),
+          runner_id: r.runnerId,
+          at: iso(now),
+        };
+        await guarded(
+          () => this.c.docs.insert(p.tenantId, "online", `${rec.at}|${rec.id}`, rec),
+          "online result",
+        );
+        await this.maybeAlert(p.tenantId, cfg, now);
+        return rec;
+      },
+    );
   }
 
   private async results(tenantId: string, sid: string): Promise<OnlineResult[]> {
@@ -217,7 +259,10 @@ export class OnlineService {
     });
   }
 
-  async summary(p: HubPrincipal, q: { blueprint_name?: unknown; suite_ref?: unknown }): Promise<OnlineSummary[]> {
+  async summary(
+    p: HubPrincipal,
+    q: { blueprint_name?: unknown; suite_ref?: unknown },
+  ): Promise<OnlineSummary[]> {
     requireReader(p);
     const out: OnlineSummary[] = [];
     for (const d of await this.c.docs.find<SamplingConfig>(p.tenantId, "sampling")) {
@@ -238,11 +283,20 @@ export class OnlineService {
         mean: mean(all),
         window: { count: win.length, mean: wm },
         alert_threshold: cfg.alert_threshold,
-        alerting: cfg.alert_threshold !== null && win.length >= ALERT_MIN && wm !== null && wm < cfg.alert_threshold,
+        alerting:
+          cfg.alert_threshold !== null &&
+          win.length >= ALERT_MIN &&
+          wm !== null &&
+          wm < cfg.alert_threshold,
         recent: all
           .slice(-50)
           .reverse()
-          .map((x) => ({ at: x.at, score: x.score, blueprint_version: x.blueprint.version, trace_id: x.trace_id })),
+          .map((x) => ({
+            at: x.at,
+            score: x.score,
+            blueprint_version: x.blueprint.version,
+            trace_id: x.trace_id,
+          })),
       });
     }
     return out.sort((a, b) => (a.sampling_id < b.sampling_id ? -1 : 1));

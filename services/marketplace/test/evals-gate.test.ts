@@ -7,10 +7,18 @@ const rid = (t: string, ns: string, name: string, v: string): string => `${t}|${
 const SUITES = { evals: { suites: [{ ref: "smoke@1.0.0", threshold: 0.8 }] } };
 const blocked: EvalGateResult = {
   allowed: false,
-  reasons: [{ code: "below_threshold", suite_ref: "smoke@1.0.0", message: "score 0.5 is below the required 0.8" }],
+  reasons: [
+    {
+      code: "below_threshold",
+      suite_ref: "smoke@1.0.0",
+      message: "score 0.5 is below the required 0.8",
+    },
+  ],
 };
 
-function gate(result: () => EvalGateResult | Promise<EvalGateResult>): EvalGatePort & { calls: EvalGateInput[] } {
+function gate(
+  result: () => EvalGateResult | Promise<EvalGateResult>,
+): EvalGatePort & { calls: EvalGateInput[] } {
   const calls: EvalGateInput[] = [];
   return { calls, check: (i) => (calls.push(i), Promise.resolve().then(result)) };
 }
@@ -21,13 +29,23 @@ describe("marketplace submit-for-review is gated by the Eval Hub", () => {
     const env = makeEnv({ evalGate: g });
     const pub = await Pub.create(env);
     await pub.publish(ablDoc("helper-agent", "1.0.0", SUITES));
-    await expect(env.mp.reviews.submit(pub.b, { namespace: pub.namespace, name: "helper-agent", version: "1.0.0" })).rejects.toMatchObject({
+    await expect(
+      env.mp.reviews.submit(pub.b, {
+        namespace: pub.namespace,
+        name: "helper-agent",
+        version: "1.0.0",
+      }),
+    ).rejects.toMatchObject({
       code: "evals_gate_failed",
       status: 409,
       reasons: blocked.reasons,
     });
     expect(g.calls).toHaveLength(1);
-    expect(g.calls[0]).toMatchObject({ purpose: "marketplace_submit", tenantId: pub.tenantId, suites: [{ ref: "smoke@1.0.0", threshold: 0.8 }] });
+    expect(g.calls[0]).toMatchObject({
+      purpose: "marketplace_submit",
+      tenantId: pub.tenantId,
+      suites: [{ ref: "smoke@1.0.0", threshold: 0.8 }],
+    });
     expect(await env.mp.reviews.mine(pub.b)).toEqual([]);
     expect(await env.mp.reviews.queue(reviewer())).toEqual([]);
   });
@@ -38,19 +56,40 @@ describe("marketplace submit-for-review is gated by the Eval Hub", () => {
     const env = makeEnv({ evalGate: g });
     const pub = await Pub.create(env);
     await pub.publish(ablDoc("helper-agent", "1.0.0", SUITES));
-    const rv = await env.mp.reviews.submit(pub.b, { namespace: pub.namespace, name: "helper-agent", version: "1.0.0" });
+    const rv = await env.mp.reviews.submit(pub.b, {
+      namespace: pub.namespace,
+      name: "helper-agent",
+      version: "1.0.0",
+    });
     expect(rv.state).toBe("in_review");
     // between submission and approval the evals regress: the approval is refused and the review stays open
     state = blocked;
     const id = rid(pub.tenantId, pub.namespace, "helper-agent", "1.0.0");
-    await expect(env.mp.reviews.decide(reviewer("rev-2"), id, { decision: "approve", note: "reviewed scan and blueprint" })).rejects.toMatchObject({ code: "evals_gate_failed" });
+    await expect(
+      env.mp.reviews.decide(reviewer("rev-2"), id, {
+        decision: "approve",
+        note: "reviewed scan and blueprint",
+      }),
+    ).rejects.toMatchObject({ code: "evals_gate_failed" });
     expect((await env.mp.reviews.get(reviewer("rev-2"), id)).state).toBe("in_review");
-    expect(await env.registry.listVersions({ tenantId: null }, pub.namespace, "helper-agent")).toEqual([]);
+    expect(
+      await env.registry.listVersions({ tenantId: null }, pub.namespace, "helper-agent"),
+    ).toEqual([]);
     state = { allowed: true, reasons: [] };
-    const ok = await env.mp.reviews.decide(reviewer("rev-2"), id, { decision: "approve", note: "reviewed scan and blueprint" });
+    const ok = await env.mp.reviews.decide(reviewer("rev-2"), id, {
+      decision: "approve",
+      note: "reviewed scan and blueprint",
+    });
     expect(ok.state).toBe("approved");
-    expect(await env.registry.listVersions({ tenantId: null }, pub.namespace, "helper-agent")).toHaveLength(1);
-    expect(g.calls.map((c) => c.purpose)).toEqual(["marketplace_submit", "release", "release", "release"]);
+    expect(
+      await env.registry.listVersions({ tenantId: null }, pub.namespace, "helper-agent"),
+    ).toHaveLength(1);
+    expect(g.calls.map((c) => c.purpose)).toEqual([
+      "marketplace_submit",
+      "release",
+      "release",
+      "release",
+    ]);
   });
 
   it("a blueprint without declared suites is never gated; a marketplace with no gate wired refuses one that declares evals", async () => {
@@ -58,13 +97,27 @@ describe("marketplace submit-for-review is gated by the Eval Hub", () => {
     const env = makeEnv({ evalGate: g });
     const pub = await Pub.create(env);
     await pub.publish(ablDoc("plain-agent", "1.0.0"));
-    expect((await env.mp.reviews.submit(pub.b, { namespace: pub.namespace, name: "plain-agent", version: "1.0.0" })).state).toBe("in_review");
+    expect(
+      (
+        await env.mp.reviews.submit(pub.b, {
+          namespace: pub.namespace,
+          name: "plain-agent",
+          version: "1.0.0",
+        })
+      ).state,
+    ).toBe("in_review");
     expect(g.calls).toEqual([]);
 
     const env2 = makeEnv(); // default: the registry's deny-all gate
     const pub2 = await Pub.create(env2);
     await pub2.publish(ablDoc("helper-agent", "1.0.0", SUITES));
-    await expect(env2.mp.reviews.submit(pub2.b, { namespace: pub2.namespace, name: "helper-agent", version: "1.0.0" })).rejects.toMatchObject({
+    await expect(
+      env2.mp.reviews.submit(pub2.b, {
+        namespace: pub2.namespace,
+        name: "helper-agent",
+        version: "1.0.0",
+      }),
+    ).rejects.toMatchObject({
       code: "evals_gate_failed",
       reasons: [{ code: "gate_unavailable" }],
     });
@@ -74,6 +127,12 @@ describe("marketplace submit-for-review is gated by the Eval Hub", () => {
     const env = makeEnv({ evalGate: { check: () => Promise.reject(new Error("hub down")) } });
     const pub = await Pub.create(env);
     await pub.publish(ablDoc("helper-agent", "1.0.0", SUITES));
-    await expect(env.mp.reviews.submit(pub.b, { namespace: pub.namespace, name: "helper-agent", version: "1.0.0" })).rejects.toMatchObject({ code: "evals_gate_failed" });
+    await expect(
+      env.mp.reviews.submit(pub.b, {
+        namespace: pub.namespace,
+        name: "helper-agent",
+        version: "1.0.0",
+      }),
+    ).rejects.toMatchObject({ code: "evals_gate_failed" });
   });
 });

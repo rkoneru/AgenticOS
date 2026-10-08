@@ -157,14 +157,20 @@ export function storeContract(name: string, env: () => Promise<ContractEnv>): vo
       await store.addAttestation(att("r1"));
       await store.addAttestation(att("r2"));
       await expect(store.addAttestation(att("r1"))).rejects.toMatchObject({ what: "version" });
-      expect((await store.attestations({ tenantId: a }, ns, "agent-one", "1.0.0")).map((x) => x.runId)).toEqual(["r1", "r2"]);
+      expect(
+        (await store.attestations({ tenantId: a }, ns, "agent-one", "1.0.0")).map((x) => x.runId),
+      ).toEqual(["r1", "r2"]);
       expect(await store.attestations({ tenantId: a }, ns, "agent-one", "1.1.0")).toEqual([]);
-      expect((await store.attestations({ tenantId: a }, ns, "agent-one", "1.0.0"))[0]).toMatchObject({ overall: 0.9, attachedAt: T0, envelope: { payload: "p" } });
+      expect(
+        (await store.attestations({ tenantId: a }, ns, "agent-one", "1.0.0"))[0],
+      ).toMatchObject({ overall: 0.9, attachedAt: T0, envelope: { payload: "p" } });
       // invisible to other tenants and to anonymous readers until the version is released
       expect(await store.attestations({ tenantId: b }, ns, "agent-one", "1.0.0")).toEqual([]);
       expect(await store.attestations({ tenantId: null }, ns, "agent-one", "1.0.0")).toEqual([]);
       await store.setVersionPublic(a, ns, "agent-one", "1.0.0", "m", T0);
-      expect(await store.attestations({ tenantId: null }, ns, "agent-one", "1.0.0")).toHaveLength(2);
+      expect(await store.attestations({ tenantId: null }, ns, "agent-one", "1.0.0")).toHaveLength(
+        2,
+      );
       expect(await store.attestations({ tenantId: b }, ns, "agent-one", "1.1.0")).toEqual([]);
     });
 

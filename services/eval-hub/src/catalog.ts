@@ -28,12 +28,17 @@ export function parseCases(raw: unknown, max: number): EvalCase[] {
     const path = `cases[${i}]`;
     if (!isObj(x)) throw invalid("case must be an object", [path]);
     const id = x["id"];
-    if (typeof id !== "string" || !ID_RE.test(id)) throw invalid("case id is malformed", [`${path}.id`]);
+    if (typeof id !== "string" || !ID_RE.test(id))
+      throw invalid("case id is malformed", [`${path}.id`]);
     if (seen.has(id)) throw invalid(`duplicate case id ${id}`, [`${path}.id`]);
     seen.add(id);
     if (x["input"] === undefined) throw invalid("case input is required", [`${path}.input`]);
     const tags = x["tags"] === undefined ? [] : x["tags"];
-    if (!Array.isArray(tags) || tags.length > 20 || tags.some((t) => typeof t !== "string" || t.length > 60))
+    if (
+      !Array.isArray(tags) ||
+      tags.length > 20 ||
+      tags.some((t) => typeof t !== "string" || t.length > 60)
+    )
       throw invalid("tags must be up to 20 short strings", [`${path}.tags`]);
     const metadata = x["metadata"] === undefined ? {} : x["metadata"];
     if (!isObj(metadata)) throw invalid("metadata must be an object", [`${path}.metadata`]);
@@ -70,7 +75,10 @@ export class DatasetService {
       throw invalid("dataset name must match [a-z][a-z0-9-]{1,62}", ["name"]);
     if (input.phi !== undefined && typeof input.phi !== "boolean")
       throw invalid("phi must be a boolean", ["phi"]);
-    if (input.description !== undefined && (typeof input.description !== "string" || input.description.length > 2000))
+    if (
+      input.description !== undefined &&
+      (typeof input.description !== "string" || input.description.length > 2000)
+    )
       throw invalid("description must be a string of at most 2000 characters", ["description"]);
     const cases = parseCases(input.cases, this.c.maxCases);
     const name = input.name;
@@ -104,7 +112,9 @@ export class DatasetService {
     if (!m) throw notFound("dataset not found");
     let key = ref;
     if (m[2] === "latest") {
-      const all = await this.c.docs.find<DatasetVersion>(p.tenantId, "datasets", { name: m[1] as string });
+      const all = await this.c.docs.find<DatasetVersion>(p.tenantId, "datasets", {
+        name: m[1] as string,
+      });
       const top = all.map((d) => d.data).sort((a, b) => b.version - a.version)[0];
       if (!top) throw notFound("dataset not found");
       return top;
@@ -118,7 +128,11 @@ export class DatasetService {
   /** Versions of every dataset, without their cases. */
   async list(p: HubPrincipal, name?: string): Promise<Omit<DatasetVersion, "cases">[]> {
     requireReader(p);
-    const all = await this.c.docs.find<DatasetVersion>(p.tenantId, "datasets", name ? { name } : {});
+    const all = await this.c.docs.find<DatasetVersion>(
+      p.tenantId,
+      "datasets",
+      name ? { name } : {},
+    );
     return all
       .map((d) => {
         const { cases: _cases, ...rest } = d.data;
@@ -166,21 +180,28 @@ export class SuiteService {
       throw invalid("dataset_ref must be name@<integer version>", ["dataset_ref"]);
     const graders = parseGraders(input.graders);
     const pass_threshold = num(input.pass_threshold, "pass_threshold", 0, 1, NaN);
-    if (Number.isNaN(pass_threshold)) throw invalid("pass_threshold is required", ["pass_threshold"]);
+    if (Number.isNaN(pass_threshold))
+      throw invalid("pass_threshold is required", ["pass_threshold"]);
     const tolerance = num(input.tolerance, "tolerance", 0, 1, 0.02);
     const alpha = num(input.alpha, "alpha", 0.0001, 0.5, 0.05);
     const max_age_days = num(input.max_age_days, "max_age_days", 1, 365, 30);
-    if (!Number.isInteger(max_age_days)) throw invalid("max_age_days must be an integer", ["max_age_days"]);
+    if (!Number.isInteger(max_age_days))
+      throw invalid("max_age_days must be an integer", ["max_age_days"]);
     let min_samples: number | null = null;
     if (input.min_samples !== undefined) {
       min_samples = num(input.min_samples, "min_samples", 1, 100_000, 1);
-      if (!Number.isInteger(min_samples)) throw invalid("min_samples must be an integer", ["min_samples"]);
+      if (!Number.isInteger(min_samples))
+        throw invalid("min_samples must be an integer", ["min_samples"]);
     }
     for (const k of ["required_for_release", "regression_requires_significance"] as const)
       if (input[k] !== undefined && typeof input[k] !== "boolean")
         throw invalid(`${k} must be a boolean`, [k]);
     const applies = input.applies_to === undefined ? [] : input.applies_to;
-    if (!Array.isArray(applies) || applies.length > 50 || applies.some((a) => typeof a !== "string" || !NAME_RE.test(a)))
+    if (
+      !Array.isArray(applies) ||
+      applies.length > 50 ||
+      applies.some((a) => typeof a !== "string" || !NAME_RE.test(a))
+    )
       throw invalid("applies_to must be up to 50 blueprint names", ["applies_to"]);
     const tenantId = p.tenantId;
     const ds = await this.c.docs.get<DatasetVersion>(tenantId, "datasets", input.dataset_ref);
@@ -209,10 +230,16 @@ export class SuiteService {
       created_at: iso(this.c.now()),
       created_by: (p as { subject: string }).subject,
     };
-    return mutate(this.c, p, "evals.suite.create", { ref: rec.ref, suite_hash: rec.suite_hash }, async () => {
-      await guarded(() => this.c.docs.insert(tenantId, "suites", rec.ref, rec), "suite");
-      return rec;
-    });
+    return mutate(
+      this.c,
+      p,
+      "evals.suite.create",
+      { ref: rec.ref, suite_hash: rec.suite_hash },
+      async () => {
+        await guarded(() => this.c.docs.insert(tenantId, "suites", rec.ref, rec), "suite");
+        return rec;
+      },
+    );
   }
 
   async get(p: HubPrincipal, ref: string): Promise<Suite> {

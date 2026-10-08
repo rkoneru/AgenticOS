@@ -403,28 +403,64 @@ export class PgRegistryStore implements RegistryStore {
         if (own.rowCount === 0) throw new StoreForbidden("not the version owner");
         await c.query(
           "INSERT INTO registry_eval_attestations (tenant_id, namespace, name, version, run_id, suite_ref, content_hash, overall, envelope, attached_at, attached_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)",
-          [a.tenantId, a.namespace, a.name, a.version, a.runId, a.suiteRef, a.contentHash, a.overall, JSON.stringify(a.envelope), a.attachedAt, a.attachedBy],
+          [
+            a.tenantId,
+            a.namespace,
+            a.name,
+            a.version,
+            a.runId,
+            a.suiteRef,
+            a.contentHash,
+            a.overall,
+            JSON.stringify(a.envelope),
+            a.attachedAt,
+            a.attachedBy,
+          ],
         );
       });
     } catch (err) {
       if (err instanceof StoreForbidden) throw err;
-      if (pgCode(err) === "23505") throw new StoreConflict("version", "attestation exists for this run");
+      if (pgCode(err) === "23505")
+        throw new StoreConflict("version", "attestation exists for this run");
       PgRegistryStore.rls(err);
     }
   }
-  async attestations(viewer: Viewer, ns: string, name: string, version: string): Promise<EvalAttestationRecord[]> {
+  async attestations(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<EvalAttestationRecord[]> {
     const r = await this.tx(viewer.tenantId, (c) =>
       c.query<{
-        tenant_id: string; namespace: string; name: string; version: string; run_id: string; suite_ref: string;
-        content_hash: string; overall: number; envelope: EvalAttestationRecord["envelope"]; attached_at: Date; attached_by: string;
+        tenant_id: string;
+        namespace: string;
+        name: string;
+        version: string;
+        run_id: string;
+        suite_ref: string;
+        content_hash: string;
+        overall: number;
+        envelope: EvalAttestationRecord["envelope"];
+        attached_at: Date;
+        attached_by: string;
       }>(
         "SELECT * FROM registry_eval_attestations WHERE namespace = $1 AND name = $2 AND version = $3 ORDER BY seq",
         [ns, name, version],
       ),
     );
     return r.rows.map((x) => ({
-      tenantId: x.tenant_id, namespace: x.namespace, name: x.name, version: x.version, runId: x.run_id, suiteRef: x.suite_ref,
-      contentHash: x.content_hash, overall: x.overall, envelope: x.envelope, attachedAt: x.attached_at, attachedBy: x.attached_by,
+      tenantId: x.tenant_id,
+      namespace: x.namespace,
+      name: x.name,
+      version: x.version,
+      runId: x.run_id,
+      suiteRef: x.suite_ref,
+      contentHash: x.content_hash,
+      overall: x.overall,
+      envelope: x.envelope,
+      attachedAt: x.attached_at,
+      attachedBy: x.attached_by,
     }));
   }
   async appendEvent(e: VersionEvent): Promise<void> {

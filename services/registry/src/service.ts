@@ -272,7 +272,14 @@ export class RegistryService {
     if (!(await this.store.getVersion({ tenantId: owner }, namespace, name, version)))
       throw notFound("version not found");
     // The eval gate runs BEFORE anything becomes public. A blueprint that declares no suites is not gated.
-    await this.requireEvalGate({ tenantId: owner, namespace, name, version, purpose: "release", actor: p.subject });
+    await this.requireEvalGate({
+      tenantId: owner,
+      namespace,
+      name,
+      version,
+      purpose: "release",
+      actor: p.subject,
+    });
     await this.setNamespacePublic(p, namespace);
     await this.mutate(
       owner,
@@ -281,7 +288,14 @@ export class RegistryService {
       { namespace, name, version },
       () => this.store.setVersionPublic(owner, namespace, name, version, p.subject, this.now()),
     );
-    await this.afterRelease({ tenantId: owner, namespace, name, version, purpose: "release", actor: p.subject });
+    await this.afterRelease({
+      tenantId: owner,
+      namespace,
+      name,
+      version,
+      purpose: "release",
+      actor: p.subject,
+    });
   }
 
   private async gateInput(g: {
@@ -292,11 +306,18 @@ export class RegistryService {
     purpose: "release" | "marketplace_submit";
     actor: string;
   }): Promise<import("./eval-gate.js").EvalGateInput | undefined> {
-    const row = await this.store.getVersion({ tenantId: g.tenantId }, g.namespace, g.name, g.version);
+    const row = await this.store.getVersion(
+      { tenantId: g.tenantId },
+      g.namespace,
+      g.name,
+      g.version,
+    );
     if (!row) throw notFound("version not found");
     let suites: { ref: string; threshold: number }[] = [];
     try {
-      const abl = JSON.parse(row.record.abl) as { spec?: { evals?: { suites?: { ref: string; threshold: number }[] } } };
+      const abl = JSON.parse(row.record.abl) as {
+        spec?: { evals?: { suites?: { ref: string; threshold: number }[] } };
+      };
       suites = abl.spec?.evals?.suites ?? [];
     } catch {
       throw invalid("stored blueprint is not readable"); // fail closed: an unreadable ABL cannot be shown to declare no suites
@@ -304,7 +325,12 @@ export class RegistryService {
     if (suites.length === 0) return undefined;
     return {
       tenantId: g.tenantId,
-      blueprint: { namespace: g.namespace, name: g.name, version: g.version, contentHash: row.record.contentHash },
+      blueprint: {
+        namespace: g.namespace,
+        name: g.name,
+        version: g.version,
+        contentHash: row.record.contentHash,
+      },
       suites: suites.map((x) => ({ ref: x.ref, threshold: x.threshold })),
       actor: g.actor,
       purpose: g.purpose,
@@ -329,7 +355,10 @@ export class RegistryService {
     try {
       const r = await this.evalGate.check(input);
       if (r && r.allowed === true) return;
-      reasons = Array.isArray(r?.reasons) && r.reasons.length > 0 ? r.reasons : [{ code: "not_allowed", message: "the eval gate did not allow this version" }];
+      reasons =
+        Array.isArray(r?.reasons) && r.reasons.length > 0
+          ? r.reasons
+          : [{ code: "not_allowed", message: "the eval gate did not allow this version" }];
     } catch {
       reasons = [{ code: "gate_unavailable", message: "the eval gate could not be reached" }];
     }
@@ -343,7 +372,12 @@ export class RegistryService {
         inputs: { namespace: g.namespace, name: g.name, version: g.version },
       })
       .catch(() => undefined);
-    throw new RegistryError("evals_gate_failed", "the eval gate did not allow this version", reasons.map((x) => x.code), reasons);
+    throw new RegistryError(
+      "evals_gate_failed",
+      "the eval gate did not allow this version",
+      reasons.map((x) => x.code),
+      reasons,
+    );
   }
 
   private async afterRelease(g: Parameters<RegistryService["requireEvalGate"]>[0]): Promise<void> {
@@ -368,7 +402,12 @@ export class RegistryService {
     requirePlatform(p, "eval-hub");
     const owner = await this.store.ownerOf(ref.namespace);
     if (!owner) throw notFound("namespace not found");
-    const row = await this.store.getVersion({ tenantId: owner }, ref.namespace, ref.name, ref.version);
+    const row = await this.store.getVersion(
+      { tenantId: owner },
+      ref.namespace,
+      ref.name,
+      ref.version,
+    );
     if (!row) throw notFound("version not found");
     if (!isEnvelope(envelope)) throw invalid("attestation is not a DSSE envelope");
     const v = verifyEvalAttestation(envelope, this.hubKeys);
@@ -378,7 +417,9 @@ export class RegistryService {
       subj?.name !== `${ref.namespace}/${ref.name}@${ref.version}` ||
       subj.digest.sha256 !== row.record.contentHash
     )
-      throw new RegistryError("verification_failed", "attestation is about a different blueprint", ["attestation_subject"]);
+      throw new RegistryError("verification_failed", "attestation is about a different blueprint", [
+        "attestation_subject",
+      ]);
     const rec: EvalAttestationRecord = {
       tenantId: owner,
       ...ref,
@@ -390,19 +431,30 @@ export class RegistryService {
       attachedAt: this.now(),
       attachedBy: p.subject,
     };
-    return this.mutate(owner, p.subject, "registry.eval_attestation.attach", { ...ref, run: rec.runId }, async () => {
-      try {
-        await this.store.addAttestation(rec);
-      } catch (e) {
-        if (e instanceof StoreConflict) throw conflict(e.message);
-        throw e;
-      }
-      return rec;
-    });
+    return this.mutate(
+      owner,
+      p.subject,
+      "registry.eval_attestation.attach",
+      { ...ref, run: rec.runId },
+      async () => {
+        try {
+          await this.store.addAttestation(rec);
+        } catch (e) {
+          if (e instanceof StoreConflict) throw conflict(e.message);
+          throw e;
+        }
+        return rec;
+      },
+    );
   }
 
   /** Attestations of one version (same visibility as the version). */
-  async evalAttestations(viewer: Viewer, ns: string, name: string, version: string): Promise<EvalAttestationRecord[]> {
+  async evalAttestations(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<EvalAttestationRecord[]> {
     return this.store.attestations(viewer, ns, name, version);
   }
 

@@ -41,7 +41,9 @@ export interface HubDevServerDeps {
 }
 
 /** A run without its per-case rows (lists); the detail endpoint returns everything. */
-export const runSummary = (r: EvalRunDoc): Omit<EvalRunDoc, "case_results"> & { case_count: number } => {
+export const runSummary = (
+  r: EvalRunDoc,
+): Omit<EvalRunDoc, "case_results"> & { case_count: number } => {
   const { case_results, ...rest } = r;
   return { ...rest, case_count: case_results.length };
 };
@@ -66,7 +68,11 @@ const q = (u: URL, k: string): string | undefined => u.searchParams.get(k) ?? un
 export function createHubDevServer(deps: HubDevServerDeps): http.Server {
   refuseProduction("eval-hub");
   const auth = staticTokenAuthenticator(deps.tokens);
-  const limiter = new RateLimiter(deps.rateLimit?.max ?? 600, deps.rateLimit?.windowMs ?? 60_000, deps.now);
+  const limiter = new RateLimiter(
+    deps.rateLimit?.max ?? 600,
+    deps.rateLimit?.windowMs ?? 60_000,
+    deps.now,
+  );
   const h = deps.hub;
 
   const handle = async (
@@ -97,14 +103,18 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           void _c;
           return [201, rest];
         }
-        if (r.length === 1 && m === "GET") return [200, { items: await h.datasets.list(p, q(url, "name")) }];
+        if (r.length === 1 && m === "GET")
+          return [200, { items: await h.datasets.list(p, q(url, "name")) }];
         if (r.length === 4 && r[2] === "versions" && m === "GET")
           return [200, await h.datasets.get(p, `${r[1]}@${r[3]}`)];
         break;
       }
       case "suites": {
         if (r.length === 1 && m === "POST")
-          return [201, await h.suites.create(p, body as unknown as Parameters<typeof h.suites.create>[1])];
+          return [
+            201,
+            await h.suites.create(p, body as unknown as Parameters<typeof h.suites.create>[1]),
+          ];
         if (r.length === 1 && m === "GET") return [200, { items: await h.suites.list(p) }];
         if (r.length === 2 && m === "GET") return [200, await h.suites.get(p, r[1] as string)];
         break;
@@ -127,7 +137,9 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
           const page = await h.runs.list(p, {
             ...(q(url, "status") ? { status: q(url, "status") as string } : {}),
             ...(q(url, "suite_ref") ? { suite_ref: q(url, "suite_ref") as string } : {}),
-            ...(q(url, "blueprint_name") ? { blueprint_name: q(url, "blueprint_name") as string } : {}),
+            ...(q(url, "blueprint_name")
+              ? { blueprint_name: q(url, "blueprint_name") as string }
+              : {}),
             ...(q(url, "content_hash") ? { content_hash: q(url, "content_hash") as string } : {}),
             ...(q(url, "mode") ? { mode: q(url, "mode") as string } : {}),
             ...(limit ? { limit: Number(limit) } : {}),
@@ -137,7 +149,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
         }
         const id = r[1] as string;
         if (r.length === 2 && m === "GET") return [200, await h.runs.get(p, id)];
-        if (r.length === 3 && m === "POST" && r[2] === "claim") return [200, await h.runs.claim(p, id)];
+        if (r.length === 3 && m === "POST" && r[2] === "claim")
+          return [200, await h.runs.claim(p, id)];
         if (r.length === 3 && m === "POST" && r[2] === "results")
           return [200, await h.runs.submitResults(p, id, body as never)];
         if (r.length === 3 && m === "POST" && r[2] === "fail")
@@ -149,7 +162,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
         break;
       }
       case "baselines": {
-        if (r.length === 1 && m === "POST") return [201, await h.baselines.set(p, { run_id: body["run_id"] })];
+        if (r.length === 1 && m === "POST")
+          return [201, await h.baselines.set(p, { run_id: body["run_id"] })];
         if (r.length === 1 && m === "GET")
           return [
             200,
@@ -167,7 +181,8 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
         break;
       }
       case "reviews": {
-        if (r[1] === "sweep" && r.length === 2 && m === "POST") return [200, { marked: await h.reviews.sweep(p)}];
+        if (r[1] === "sweep" && r.length === 2 && m === "POST")
+          return [200, { marked: await h.reviews.sweep(p) }];
         if (r[1] === "tasks") {
           if (r.length === 2 && m === "GET")
             return [
@@ -182,9 +197,13 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
             ];
           const id = r[2] as string;
           if (r.length === 3 && m === "GET") return [200, await h.reviews.get(p, id)];
-          if (r.length === 4 && m === "POST" && r[3] === "claim") return [200, await h.reviews.claim(p, id)];
+          if (r.length === 4 && m === "POST" && r[3] === "claim")
+            return [200, await h.reviews.claim(p, id)];
           if (r.length === 4 && m === "POST" && r[3] === "grade")
-            return [200, await h.reviews.grade(p, id, { score: body["score"], comment: body["comment"] })];
+            return [
+              200,
+              await h.reviews.grade(p, id, { score: body["score"], comment: body["comment"] }),
+            ];
           if (r.length === 4 && m === "POST" && r[3] === "skip")
             return [200, await h.reviews.skip(p, id, body["reason"])];
         }
@@ -192,13 +211,15 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
       }
       case "sampling": {
         if (r.length === 1 && m === "GET") return [200, { items: await h.online.list(p) }];
-        if (r.length === 2 && m === "PUT") return [200, await h.online.put(p, r[1] as string, body)];
+        if (r.length === 2 && m === "PUT")
+          return [200, await h.online.put(p, r[1] as string, body)];
         if (r.length === 3 && r[2] === "disable" && m === "POST")
           return [200, await h.online.disable(p, r[1] as string)];
         break;
       }
       case "online": {
-        if (r[1] === "results" && r.length === 2 && m === "POST") return [201, await h.online.ingest(p, body)];
+        if (r[1] === "results" && r.length === 2 && m === "POST")
+          return [201, await h.online.ingest(p, body)];
         if (r[1] === "summary" && r.length === 2 && m === "GET")
           return [
             200,
@@ -223,11 +244,21 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
         const who = a.kind === "tenant" ? a.subject : a.runnerId;
         const wait = limiter.check(`${a.tenantId}:${who}`);
         if (wait > 0)
-          return sendJson(res, 429, { error: { code: "rate_limited" } }, { "retry-after": String(Math.ceil(wait / 1000)) });
+          return sendJson(
+            res,
+            429,
+            { error: { code: "rate_limited" } },
+            { "retry-after": String(Math.ceil(wait / 1000)) },
+          );
         const p: HubPrincipal = a.kind === "tenant" ? { ...a } : { ...a };
         const hasBody = rq.method === "POST" || rq.method === "PUT";
         const body = hasBody ? await readJson(rq) : {};
-        const [status, json] = await handle(rq.method ?? "GET", new URL(rq.url ?? "/", "http://localhost"), p, body);
+        const [status, json] = await handle(
+          rq.method ?? "GET",
+          new URL(rq.url ?? "/", "http://localhost"),
+          p,
+          body,
+        );
         sendJson(res, status, json);
       } catch (err) {
         sendError(res, err);

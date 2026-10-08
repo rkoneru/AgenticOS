@@ -92,7 +92,8 @@ export class MemoryDocStore implements DocStore {
   ): Promise<Doc<T>> {
     const cur = this.rows.get(this.k(tenantId, coll, key));
     if (!cur) return Promise.reject(new DocForbidden("no such document"));
-    if (frozen(coll, cur.data)) return Promise.reject(new DocForbidden(`${coll} document is immutable`));
+    if (frozen(coll, cur.data))
+      return Promise.reject(new DocForbidden(`${coll} document is immutable`));
     if (cur.rev !== expectRev) return Promise.reject(new DocConflict("stale revision"));
     cur.rev++;
     cur.data = structuredClone(data) as Record<string, unknown>;

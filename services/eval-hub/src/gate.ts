@@ -87,13 +87,16 @@ export class GateService {
     if (typeof b["version"] !== "string" || b["version"] === "" || b["version"].length > 64)
       throw invalid("blueprint.version is malformed", ["blueprint.version"]);
     if (typeof b["content_hash"] !== "string" || !HASH_RE.test(b["content_hash"]))
-      throw invalid("blueprint.content_hash must be a SHA-256 hex digest", ["blueprint.content_hash"]);
+      throw invalid("blueprint.content_hash must be a SHA-256 hex digest", [
+        "blueprint.content_hash",
+      ]);
     const ns = b["namespace"];
     if (ns !== undefined && ns !== null && (typeof ns !== "string" || !NAME_RE.test(ns)))
       throw invalid("blueprint.namespace is malformed", ["blueprint.namespace"]);
     const suites = new Map<string, number | undefined>();
     const raw = req.suites === undefined ? [] : req.suites;
-    if (!Array.isArray(raw) || raw.length > 50) throw invalid("suites must be an array of up to 50", ["suites"]);
+    if (!Array.isArray(raw) || raw.length > 50)
+      throw invalid("suites must be an array of up to 50", ["suites"]);
     raw.forEach((s: unknown, i) => {
       if (!isObj(s) || typeof s["ref"] !== "string" || !GATE_REF_RE.test(s["ref"]))
         throw invalid("suite ref must be [namespace/]name@version-or-range", [`suites[${i}].ref`]);
@@ -101,7 +104,12 @@ export class GateService {
       if (t !== undefined && (typeof t !== "number" || !Number.isFinite(t) || t < 0 || t > 1))
         throw invalid("threshold must be a number in [0, 1]", [`suites[${i}].threshold`]);
       const prev = suites.get(s["ref"]);
-      suites.set(s["ref"], prev === undefined ? (t as number | undefined) : Math.max(prev, (t as number | undefined) ?? 0));
+      suites.set(
+        s["ref"],
+        prev === undefined
+          ? (t as number | undefined)
+          : Math.max(prev, (t as number | undefined) ?? 0),
+      );
     });
     return {
       bp: {
@@ -122,20 +130,36 @@ export class GateService {
     const tenantId = p.tenantId;
     // Tenant-required suites: added even if the blueprint did not declare them.
     for (const s of await this.c.docs.find<Suite>(tenantId, "suites"))
-      if (s.data.required_for_release && s.data.applies_to.includes(bp.name) && !suites.has(s.data.ref))
+      if (
+        s.data.required_for_release &&
+        s.data.applies_to.includes(bp.name) &&
+        !suites.has(s.data.ref)
+      )
         suites.set(s.data.ref, s.data.pass_threshold);
 
     const reasons: GateReason[] = [];
     const runs: GateRunSummary[] = [];
     for (const [ref, declared] of [...suites.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
       try {
-        const out = await this.evaluate(tenantId, bp, ref, declared, await this.resolve(tenantId, ref));
+        const out = await this.evaluate(
+          tenantId,
+          bp,
+          ref,
+          declared,
+          await this.resolve(tenantId, ref),
+        );
         reasons.push(...out.reasons);
         runs.push(out.run);
       } catch (e) {
         // Fail closed on anything unexpected, without leaking it.
-        this.c.log?.("gate evaluation failed", { error: e instanceof Error ? e.message : String(e) });
-        reasons.push({ code: "gate_error", suite_ref: ref, message: "the suite could not be evaluated" });
+        this.c.log?.("gate evaluation failed", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+        reasons.push({
+          code: "gate_error",
+          suite_ref: ref,
+          message: "the suite could not be evaluated",
+        });
         runs.push(emptyRun(ref, declared ?? 0));
       }
     }
@@ -154,7 +178,10 @@ export class GateService {
       decision: result.allowed ? "ALLOW" : "DENY",
       reason: result.allowed
         ? `blueprint=${bp.name}@${bp.version} suites=${runs.length}`
-        : `blueprint=${bp.name}@${bp.version} blocked=${[...new Set(reasons.map((r) => r.code))].join(",")}`.slice(0, 900),
+        : `blueprint=${bp.name}@${bp.version} blocked=${[...new Set(reasons.map((r) => r.code))].join(",")}`.slice(
+            0,
+            900,
+          ),
       inputs: { blueprint: bp, suites: [...suites.entries()].map(([ref, t]) => [ref, t ?? null]) },
       outputs: { allowed: result.allowed, runs: runs.map((r) => r.run_id) },
     });
@@ -189,8 +216,10 @@ export class GateService {
   ): Promise<{ reasons: GateReason[]; run: GateRunSummary }> {
     const reasons: GateReason[] = [];
     const ref = exact ?? raw;
-    const fail = (code: string, message: string): void => void reasons.push({ code, suite_ref: raw, message });
-    const sd = exact === undefined ? undefined : await this.c.docs.get<Suite>(tenantId, "suites", exact);
+    const fail = (code: string, message: string): void =>
+      void reasons.push({ code, suite_ref: raw, message });
+    const sd =
+      exact === undefined ? undefined : await this.c.docs.get<Suite>(tenantId, "suites", exact);
     if (!sd) {
       fail("suite_not_found", `suite ${raw} does not exist for this tenant`);
       return { reasons, run: emptyRun(raw, declared ?? 0) };
@@ -199,27 +228,53 @@ export class GateService {
     const required = Math.max(declared ?? 0, suite.pass_threshold);
     const summary = emptyRun(ref, required);
 
-    const sameSuite = (await this.c.docs.find<EvalRunDoc>(tenantId, "runs", { suite_ref: ref, blueprint_name: bp.name }))
+    const sameSuite = (
+      await this.c.docs.find<EvalRunDoc>(tenantId, "runs", {
+        suite_ref: ref,
+        blueprint_name: bp.name,
+      })
+    )
       .map((d) => d.data)
       .filter((r) => r.mode === "ci" || r.mode === "manual");
     const forHash = sameSuite.filter((r) => r.content_hash === bp.content_hash);
-    const finals = forHash.filter((r) => r.status === "passed" || r.status === "failed" || r.status === "errored");
+    const finals = forHash.filter(
+      (r) => r.status === "passed" || r.status === "failed" || r.status === "errored",
+    );
     const trusted: EvalRunDoc[] = [];
     for (const r of finals)
-      if (r.runner_id !== null && (await this.runs.runnerActive(tenantId, r.runner_id))) trusted.push(r);
-    trusted.sort((a, b) => ((a.finished_at as string) === (b.finished_at as string) ? (a.id < b.id ? 1 : -1) : (a.finished_at as string) < (b.finished_at as string) ? 1 : -1));
+      if (r.runner_id !== null && (await this.runs.runnerActive(tenantId, r.runner_id)))
+        trusted.push(r);
+    trusted.sort((a, b) =>
+      (a.finished_at as string) === (b.finished_at as string)
+        ? a.id < b.id
+          ? 1
+          : -1
+        : (a.finished_at as string) < (b.finished_at as string)
+          ? 1
+          : -1,
+    );
     const latest = trusted[0];
 
     const waiting = forHash.filter((r) => r.status === "running" && r.pending_human > 0);
-    if (waiting.length > 0 && (!latest || waiting.some((w) => w.created_at > (latest.finished_at as string))))
+    if (
+      waiting.length > 0 &&
+      (!latest || waiting.some((w) => w.created_at > (latest.finished_at as string)))
+    )
       fail("run_in_progress", "a run for this blueprint is waiting for human review");
 
     if (!latest) {
       if (finals.length > 0)
-        fail("runner_not_registered", "the runs for this blueprint came from a runner that is not (or no longer) registered");
+        fail(
+          "runner_not_registered",
+          "the runs for this blueprint came from a runner that is not (or no longer) registered",
+        );
       else if (sameSuite.length > 0 && waiting.length === 0)
-        fail("no_run_for_content_hash", "runs exist only for a different version of this blueprint's content");
-      else if (waiting.length === 0) fail("missing_run", `no finished run of ${ref} for this blueprint version`);
+        fail(
+          "no_run_for_content_hash",
+          "runs exist only for a different version of this blueprint's content",
+        );
+      else if (waiting.length === 0)
+        fail("missing_run", `no finished run of ${ref} for this blueprint version`);
       return { reasons, run: summary };
     }
 
@@ -247,9 +302,13 @@ export class GateService {
     }
     const needed = Math.max(1, suite.min_samples ?? ds.data.case_count);
     if (latest.sample_size < needed)
-      fail("insufficient_samples", `the run covers ${latest.sample_size} cases, ${needed} are required`);
+      fail(
+        "insufficient_samples",
+        `the run covers ${latest.sample_size} cases, ${needed} are required`,
+      );
     const overall = (latest.scores as NonNullable<EvalRunDoc["scores"]>).overall;
-    if (overall < required) fail("below_threshold", `score ${overall} is below the required ${required}`);
+    if (overall < required)
+      fail("below_threshold", `score ${overall} is below the required ${required}`);
 
     let cmp: Comparison | undefined;
     try {
@@ -263,9 +322,13 @@ export class GateService {
       summary.delta = cmp.delta;
       summary.regression = cmp.regression;
       summary.p_value = cmp.significance?.p_value ?? null;
-      if (!cmp.comparable) fail("baseline_invalid", "the baseline cannot be verified or compared with this run");
+      if (!cmp.comparable)
+        fail("baseline_invalid", "the baseline cannot be verified or compared with this run");
       else if (cmp.blocking)
-        fail("regression", `score dropped by ${-(cmp.delta as number)} vs the baseline (tolerance ${cmp.tolerance})`);
+        fail(
+          "regression",
+          `score dropped by ${-(cmp.delta as number)} vs the baseline (tolerance ${cmp.tolerance})`,
+        );
     }
     return { reasons, run: summary };
   }

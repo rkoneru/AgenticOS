@@ -28,7 +28,11 @@ export class BaselineService {
       .sort((a, b) => a.seq - b.seq);
   }
 
-  async current(tenantId: string, name: string, suiteRef: string): Promise<BaselineDoc | undefined> {
+  async current(
+    tenantId: string,
+    name: string,
+    suiteRef: string,
+  ): Promise<BaselineDoc | undefined> {
     const h = await this.history(tenantId, name, suiteRef);
     return h[h.length - 1];
   }
@@ -70,13 +74,22 @@ export class BaselineService {
       at: iso(this.c.now()),
     };
     await guarded(
-      () => this.c.docs.insert(tenantId, "baselines", keyOf(rec.blueprint_name, rec.suite_ref, seq), rec),
+      () =>
+        this.c.docs.insert(
+          tenantId,
+          "baselines",
+          keyOf(rec.blueprint_name, rec.suite_ref, seq),
+          rec,
+        ),
       "baseline",
     );
     return rec;
   }
 
-  async list(p: HubPrincipal, q: { blueprint_name?: unknown; suite_ref?: unknown }): Promise<BaselineDoc[]> {
+  async list(
+    p: HubPrincipal,
+    q: { blueprint_name?: unknown; suite_ref?: unknown },
+  ): Promise<BaselineDoc[]> {
     requireReader(p);
     if (typeof q.blueprint_name !== "string" || !NAME_RE.test(q.blueprint_name))
       throw invalid("blueprint_name is required", ["blueprint_name"]);
@@ -105,11 +118,32 @@ export class BaselineService {
     const bd = await this.c.docs.get<EvalRunDoc>(tenantId, "runs", base.run_id);
     if (!bd || !bd.data.scores || !run.scores) return bad;
     const b = bd.data;
-    if (b.status !== "passed" || b.record_hash !== base.record_hash || verifyStoredRun(b, suite).length > 0) return bad;
+    if (
+      b.status !== "passed" ||
+      b.record_hash !== base.record_hash ||
+      verifyStoredRun(b, suite).length > 0
+    )
+      return bad;
     return compareRuns(
-      { id: run.id, record_hash: run.record_hash as string, suite_hash: run.suite_hash, dataset_hash: run.dataset_hash, scores: run.scores },
-      { id: b.id, record_hash: b.record_hash as string, suite_hash: b.suite_hash, dataset_hash: b.dataset_hash, scores: b.scores as NonNullable<EvalRunDoc["scores"]> },
-      { tolerance: suite.tolerance, alpha: suite.alpha, requiresSignificance: suite.regression_requires_significance },
+      {
+        id: run.id,
+        record_hash: run.record_hash as string,
+        suite_hash: run.suite_hash,
+        dataset_hash: run.dataset_hash,
+        scores: run.scores,
+      },
+      {
+        id: b.id,
+        record_hash: b.record_hash as string,
+        suite_hash: b.suite_hash,
+        dataset_hash: b.dataset_hash,
+        scores: b.scores as NonNullable<EvalRunDoc["scores"]>,
+      },
+      {
+        tolerance: suite.tolerance,
+        alpha: suite.alpha,
+        requiresSignificance: suite.regression_requires_significance,
+      },
     );
   }
 
@@ -120,7 +154,8 @@ export class BaselineService {
     if (!d) throw notFound("run not found");
     const s = await this.c.docs.get<Suite>(p.tenantId, "suites", d.data.suite_ref);
     if (!s) throw notFound("suite not found");
-    if (d.data.status !== "passed" && d.data.status !== "failed") throw conflict("run is not finished");
+    if (d.data.status !== "passed" && d.data.status !== "failed")
+      throw conflict("run is not finished");
     return (await this.compare(p.tenantId, d.data, s.data)) ?? null;
   }
 }

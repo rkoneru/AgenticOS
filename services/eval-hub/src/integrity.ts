@@ -21,7 +21,8 @@ export function verifyStoredRun(run: EvalRunDoc, suite: Suite): string[] {
   if (run.content_hash !== run.blueprint.content_hash) bad.push("content_hash");
   if (run.status === "errored") return bad;
   if (run.scores === null) return [...bad, "scores_missing"];
-  if (run.case_results.length === 0 || run.sample_size !== run.case_results.length) bad.push("sample_size");
+  if (run.case_results.length === 0 || run.sample_size !== run.case_results.length)
+    bad.push("sample_size");
   try {
     const scored = run.case_results.map((c) => {
       const scores: Record<string, number> = {};
@@ -32,14 +33,19 @@ export function verifyStoredRun(run: EvalRunDoc, suite: Suite): string[] {
       return { case_id: c.case_id, scores };
     });
     const again = aggregate(suite.graders, scored);
-    for (const m of mismatches({ overall: run.scores.overall, per_grader: run.scores.per_grader }, again))
+    for (const m of mismatches(
+      { overall: run.scores.overall, per_grader: run.scores.per_grader },
+      again,
+    ))
       bad.push(`recompute.${m}`);
     for (const [id, v] of Object.entries(again.per_case))
-      if (Math.abs((run.scores.per_case[id] ?? NaN) - v) > SCORE_EPSILON) bad.push(`recompute.per_case.${id}`);
+      if (Math.abs((run.scores.per_case[id] ?? NaN) - v) > SCORE_EPSILON)
+        bad.push(`recompute.per_case.${id}`);
     if (Object.keys(run.scores.per_case).length !== Object.keys(again.per_case).length)
       bad.push("recompute.per_case");
     const shouldPass = again.overall >= suite.pass_threshold;
-    if (run.passed !== shouldPass || run.status !== (shouldPass ? "passed" : "failed")) bad.push("status");
+    if (run.passed !== shouldPass || run.status !== (shouldPass ? "passed" : "failed"))
+      bad.push("status");
   } catch {
     bad.push("recompute");
   }

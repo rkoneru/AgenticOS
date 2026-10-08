@@ -71,7 +71,12 @@ export interface RegistryStore {
   listNames(viewer: Viewer, ns: string): Promise<string[]>;
   /** Append-only; owner context only; one per (version, run): a duplicate throws StoreConflict("version"). */
   addAttestation(a: EvalAttestationRecord): Promise<void>;
-  attestations(viewer: Viewer, ns: string, name: string, version: string): Promise<EvalAttestationRecord[]>;
+  attestations(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<EvalAttestationRecord[]>;
   appendEvent(e: VersionEvent): Promise<void>;
   events(viewer: Viewer, ns: string, name: string, version: string): Promise<VersionEvent[]>;
 }

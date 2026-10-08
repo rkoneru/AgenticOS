@@ -78,11 +78,25 @@ export async function mutate<T>(
 ): Promise<T> {
   const actor = actorOf(p);
   const tenantId = p.tenantId;
-  await c.audit.record({ tenantId, actor, action, decision: "ALLOW", reason: "authorized", inputs: detail });
+  await c.audit.record({
+    tenantId,
+    actor,
+    action,
+    decision: "ALLOW",
+    reason: "authorized",
+    inputs: detail,
+  });
   try {
     const out = await fn();
     await c.audit
-      .record({ tenantId, actor, action: `${action}.done`, decision: "ALLOW", reason: "ok", inputs: detail })
+      .record({
+        tenantId,
+        actor,
+        action: `${action}.done`,
+        decision: "ALLOW",
+        reason: "ok",
+        inputs: detail,
+      })
       .catch(() => undefined);
     return out;
   } catch (err) {
@@ -103,7 +117,12 @@ export async function mutate<T>(
 }
 
 /** Audits a refused call (authorization failure) and rethrows. */
-export async function denyAudit(c: Ctx, p: HubPrincipal, action: string, err: unknown): Promise<never> {
+export async function denyAudit(
+  c: Ctx,
+  p: HubPrincipal,
+  action: string,
+  err: unknown,
+): Promise<never> {
   if (p && typeof p.tenantId === "string")
     await c.audit
       .record({

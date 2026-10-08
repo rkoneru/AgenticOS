@@ -3,7 +3,15 @@ import { attestationFor, type AttestationSink, type HubSigningKey } from "./atte
 import { actorOf, requireReader, requireRunner, requireTenant } from "./authz.js";
 import { denyAudit, guarded, iso, mutate, type Ctx } from "./context.js";
 import type { Doc } from "./docstore.js";
-import { HubError, conflict, forbidden, integrityFailed, invalid, notFound } from "./errors.js";
+import {
+  HubError,
+  conflict,
+  forbidden,
+  integrityFailed,
+  invalid,
+  notFound,
+  unavailable,
+} from "./errors.js";
 import { recordHashOf } from "./integrity.js";
 import {
   HASH_RE,
@@ -76,7 +84,11 @@ export class RunService {
 
   // ---------------------------------------------------------------- runners
   /** Registers (or re-registers an unknown id) an eval runner for the tenant. A revoked id can never be used again. */
-  async registerRunner(p: HubPrincipal, runnerId: string, description?: unknown): Promise<RunnerDoc> {
+  async registerRunner(
+    p: HubPrincipal,
+    runnerId: string,
+    description?: unknown,
+  ): Promise<RunnerDoc> {
     try {
       requireTenant(p, "evals.admin");
     } catch (e) {
@@ -114,7 +126,10 @@ export class RunService {
         revoked_at: iso(this.c.now()),
         revoked_by: (p as { subject: string }).subject,
       };
-      await guarded(() => this.c.docs.update(p.tenantId, "runners", runnerId, d.rev, next), "runner");
+      await guarded(
+        () => this.c.docs.update(p.tenantId, "runners", runnerId, d.rev, next),
+        "runner",
+      );
       return next;
     });
   }
@@ -136,7 +151,11 @@ export class RunService {
   }
 
   // ---------------------------------------------------------------- starting runs
-  private parseStart(input: StartInput): { suiteRef: string; blueprint: BlueprintRef; mode: RunMode } {
+  private parseStart(input: StartInput): {
+    suiteRef: string;
+    blueprint: BlueprintRef;
+    mode: RunMode;
+  } {
     if (typeof input.suite_ref !== "string" || !SUITE_REF_RE.test(input.suite_ref))
       throw invalid("suite_ref must be name@version", ["suite_ref"]);
     const b = input.blueprint;
@@ -146,12 +165,20 @@ export class RunService {
     if (typeof b["version"] !== "string" || b["version"].length === 0 || b["version"].length > 64)
       throw invalid("blueprint.version is malformed", ["blueprint.version"]);
     if (typeof b["content_hash"] !== "string" || !HASH_RE.test(b["content_hash"]))
-      throw invalid("blueprint.content_hash must be a SHA-256 hex digest", ["blueprint.content_hash"]);
-    if (b["namespace"] !== undefined && b["namespace"] !== null && (typeof b["namespace"] !== "string" || !NAME_RE.test(b["namespace"])))
+      throw invalid("blueprint.content_hash must be a SHA-256 hex digest", [
+        "blueprint.content_hash",
+      ]);
+    if (
+      b["namespace"] !== undefined &&
+      b["namespace"] !== null &&
+      (typeof b["namespace"] !== "string" || !NAME_RE.test(b["namespace"]))
+    )
       throw invalid("blueprint.namespace is malformed", ["blueprint.namespace"]);
     const mode = input.mode === undefined ? "ci" : input.mode;
     if (mode !== "ci" && mode !== "manual")
-      throw invalid("mode must be ci or manual (online results use the sampling endpoint)", ["mode"]);
+      throw invalid("mode must be ci or manual (online results use the sampling endpoint)", [
+        "mode",
+      ]);
     return {
       suiteRef: input.suite_ref,
       mode,
@@ -174,11 +201,13 @@ export class RunService {
     if (!suiteDoc) throw invalid("suite not found", ["suite_ref"]);
     const suite = suiteDoc.data;
     const now = iso(this.c.now());
+    // Who published the blueprint decides who may NOT review it. When a lookup is wired and cannot answer, the run is not created
+    // (fail-closed): a missing answer must not silently let the publisher into the review queue. `null` = not a registry blueprint.
     let publisher: string | null = null;
     try {
       publisher = (await this.c.publishers?.publisherOf(tenantId, parsed.blueprint)) ?? null;
     } catch {
-      publisher = null; // the lookup is advisory; review tasks fail closed when it is unknown (see ReviewService)
+      throw unavailable("the blueprint's publisher could not be determined");
     }
     const run: EvalRunDoc = {
       id: this.c.newId(),
@@ -219,8 +248,12 @@ export class RunService {
       return denyAudit(this.c, p, "evals.run.request", e);
     }
     const parsed = this.parseStart(input);
-    return mutate(this.c, p, "evals.run.request", { suite_ref: parsed.suiteRef, content_hash: parsed.blueprint.content_hash }, () =>
-      this.newRun(p.tenantId, (p as { subject: string }).subject, null, parsed),
+    return mutate(
+      this.c,
+      p,
+      "evals.run.request",
+      { suite_ref: parsed.suiteRef, content_hash: parsed.blueprint.content_hash },
+      () => this.newRun(p.tenantId, (p as { subject: string }).subject, null, parsed),
     );
   }
 
@@ -229,8 +262,12 @@ export class RunService {
     const r = requireRunner(p);
     await this.requireActiveRunner(r);
     const parsed = this.parseStart(input);
-    return mutate(this.c, p, "evals.run.start", { suite_ref: parsed.suiteRef, content_hash: parsed.blueprint.content_hash }, () =>
-      this.newRun(p.tenantId, `runner:${r.runnerId}`, r.runnerId, parsed),
+    return mutate(
+      this.c,
+      p,
+      "evals.run.start",
+      { suite_ref: parsed.suiteRef, content_hash: parsed.blueprint.content_hash },
+      () => this.newRun(p.tenantId, `runner:${r.runnerId}`, r.runnerId, parsed),
     );
   }
 
@@ -254,7 +291,11 @@ export class RunService {
   }
 
   // ---------------------------------------------------------------- results
-  private async load(tenantId: string, suiteRef: string, run: EvalRunDoc): Promise<{ suite: Suite; dataset: DatasetVersion }> {
+  private async load(
+    tenantId: string,
+    suiteRef: string,
+    run: EvalRunDoc,
+  ): Promise<{ suite: Suite; dataset: DatasetVersion }> {
     const s = await this.c.docs.get<Suite>(tenantId, "suites", suiteRef);
     if (!s) throw notFound("suite not found");
     if (s.data.suite_hash !== run.suite_hash || s.data.dataset_hash !== run.dataset_hash)
@@ -271,10 +312,17 @@ export class RunService {
     if (typeof v !== "string" || v === "" || v.length > 100)
       throw invalid("provenance.runner_version is required", ["provenance.runner_version"]);
     const ids = raw["model_ids"];
-    if (!Array.isArray(ids) || ids.length > 20 || ids.some((x) => typeof x !== "string" || x === "" || x.length > 200))
+    if (
+      !Array.isArray(ids) ||
+      ids.length > 20 ||
+      ids.some((x) => typeof x !== "string" || x === "" || x.length > 200)
+    )
       throw invalid("provenance.model_ids must be an array of model ids", ["provenance.model_ids"]);
     const seed = raw["seed"];
-    if (!(typeof seed === "string" || (typeof seed === "number" && Number.isFinite(seed))) || String(seed).length > 100)
+    if (
+      !(typeof seed === "string" || (typeof seed === "number" && Number.isFinite(seed))) ||
+      String(seed).length > 100
+    )
       throw invalid("provenance.seed is required", ["provenance.seed"]);
     return { runner_version: v, model_ids: ids as string[], seed: String(seed) };
   }
@@ -289,7 +337,8 @@ export class RunService {
       const path = `case_results[${i}]`;
       if (!isObj(x)) throw invalid("case result must be an object", [path]);
       const id = x["case_id"];
-      if (typeof id !== "string" || !want.has(id)) throw invalid("case_id is not in the dataset", [`${path}.case_id`]);
+      if (typeof id !== "string" || !want.has(id))
+        throw invalid("case_id is not in the dataset", [`${path}.case_id`]);
       if (seen.has(id)) throw invalid(`duplicate result for case ${id}`, [`${path}.case_id`]);
       seen.add(id);
       const sc = x["scores"];
@@ -301,11 +350,15 @@ export class RunService {
         const v = sc[g.id];
         if (human.has(g.id)) {
           if (v !== undefined && v !== null)
-            throw invalid("human grader scores come only from the review queue", [`${path}.scores.${g.id}`]);
+            throw invalid("human grader scores come only from the review queue", [
+              `${path}.scores.${g.id}`,
+            ]);
           scores[g.id] = null;
         } else {
           if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1)
-            throw invalid(`score for ${g.id} must be a number in [0, 1]`, [`${path}.scores.${g.id}`]);
+            throw invalid(`score for ${g.id} must be a number in [0, 1]`, [
+              `${path}.scores.${g.id}`,
+            ]);
           scores[g.id] = v;
         }
       }
@@ -313,7 +366,11 @@ export class RunService {
       if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0 || cost > 1e6)
         throw invalid("cost_usd must be a non-negative number", [`${path}.cost_usd`]);
       const lat = x["latency_ms"];
-      if (lat !== undefined && lat !== null && (typeof lat !== "number" || !Number.isFinite(lat) || lat < 0))
+      if (
+        lat !== undefined &&
+        lat !== null &&
+        (typeof lat !== "number" || !Number.isFinite(lat) || lat < 0)
+      )
         throw invalid("latency_ms must be a non-negative number", [`${path}.latency_ms`]);
       const tr = x["trace_id"];
       if (tr !== undefined && tr !== null && (typeof tr !== "string" || tr.length > 100))
@@ -333,7 +390,9 @@ export class RunService {
     });
     const missing = [...want].filter((id) => !seen.has(id));
     if (missing.length > 0)
-      throw invalid(`results must cover every case of the dataset (missing ${missing.length})`, ["case_results"]);
+      throw invalid(`results must cover every case of the dataset (missing ${missing.length})`, [
+        "case_results",
+      ]);
     return out.sort((a, b) => (a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0));
   }
 
@@ -359,21 +418,31 @@ export class RunService {
       if (input.cost !== undefined) {
         const claim = isObj(input.cost) ? input.cost["total_usd"] : undefined;
         if (typeof claim !== "number" || Math.abs(claim - total) > 1e-6)
-          throw integrityFailed("claimed cost does not equal the sum of the case costs", ["cost.total_usd"]);
+          throw integrityFailed("claimed cost does not equal the sum of the case costs", [
+            "cost.total_usd",
+          ]);
       }
       let scores: EvalRunDoc["scores"] = null;
       if (pending === 0) {
         const claimed = input.scores;
-        if (!isObj(claimed)) throw invalid("scores (overall) is required when no human grader is involved", ["scores"]);
+        if (!isObj(claimed))
+          throw invalid("scores (overall) is required when no human grader is involved", [
+            "scores",
+          ]);
         scores = aggregate(
           suite.graders,
           results.map((x) => ({ case_id: x.case_id, scores: x.scores as Record<string, number> })),
         );
         const bad = mismatches(claimed, scores);
         if (bad.length > 0)
-          throw integrityFailed("the submitted aggregate does not match the per-case results", bad.map((b) => `mismatch.${b}`));
+          throw integrityFailed(
+            "the submitted aggregate does not match the per-case results",
+            bad.map((b) => `mismatch.${b}`),
+          );
       } else if (input.scores !== undefined) {
-        throw invalid("send no aggregate while human grading is pending; the hub computes it", ["scores"]);
+        throw invalid("send no aggregate while human grading is pending; the hub computes it", [
+          "scores",
+        ]);
       }
       const base: EvalRunDoc = {
         ...d.data,
@@ -388,7 +457,13 @@ export class RunService {
         await this.createTasks(p.tenantId, base, suite, dataset);
         return base;
       }
-      return this.finalize(p.tenantId, d.rev, base, suite, scores as NonNullable<EvalRunDoc["scores"]>);
+      return this.finalize(
+        p.tenantId,
+        d.rev,
+        base,
+        suite,
+        scores as NonNullable<EvalRunDoc["scores"]>,
+      );
     });
   }
 
@@ -450,7 +525,10 @@ export class RunService {
       passed,
       finished_at: iso(this.c.now()),
       scores,
-      case_results: run.case_results.map((x) => ({ ...x, case_score: scores.per_case[x.case_id] ?? null })),
+      case_results: run.case_results.map((x) => ({
+        ...x,
+        case_score: scores.per_case[x.case_id] ?? null,
+      })),
       pending_human: 0,
     };
     final.record_hash = recordHashOf(final);
@@ -494,9 +572,16 @@ export class RunService {
   }
 
   // ---------------------------------------------------------------- human review plumbing
-  private async createTasks(tenantId: string, run: EvalRunDoc, suite: Suite, dataset: DatasetVersion): Promise<void> {
+  private async createTasks(
+    tenantId: string,
+    run: EvalRunDoc,
+    suite: Suite,
+    dataset: DatasetVersion,
+  ): Promise<void> {
     const byId = new Map(dataset.cases.map((x) => [x.id, x]));
-    const conflicts = [run.requested_by, run.publisher].filter((x): x is string => typeof x === "string");
+    const conflicts = [run.requested_by, run.publisher].filter(
+      (x): x is string => typeof x === "string",
+    );
     const created = this.c.now();
     for (const g of suite.graders) {
       if (g.type !== "human") continue;
@@ -536,7 +621,9 @@ export class RunService {
     for (let attempt = 0; attempt < 5; attempt++) {
       const d = await this.c.docs.get<EvalRunDoc>(tenantId, "runs", runId);
       if (!d || d.data.status !== "running") return;
-      const tasks = (await this.c.docs.find<ReviewTaskDoc>(tenantId, "tasks", { run_id: runId })).map((t) => t.data);
+      const tasks = (
+        await this.c.docs.find<ReviewTaskDoc>(tenantId, "tasks", { run_id: runId })
+      ).map((t) => t.data);
       const { suite } = await this.load(tenantId, d.data.suite_ref, d.data);
       const results = d.data.case_results.map((x) => ({ ...x, scores: { ...x.scores } }));
       let open = 0;
@@ -575,7 +662,10 @@ export class RunService {
   }
 
   /** Newest first. `limit` <= 200 (default 50); `cursor` is opaque. */
-  async list(p: HubPrincipal, f: ListFilter = {}): Promise<{ items: EvalRunDoc[]; next_cursor: string | null }> {
+  async list(
+    p: HubPrincipal,
+    f: ListFilter = {},
+  ): Promise<{ items: EvalRunDoc[]; next_cursor: string | null }> {
     requireReader(p);
     const filter: Record<string, string> = {};
     for (const k of ["status", "suite_ref", "blueprint_name", "content_hash", "mode"] as const) {
@@ -588,7 +678,15 @@ export class RunService {
     const limit = Math.min(Math.max(Math.trunc(f.limit ?? 50), 1), 200);
     let items = (await this.c.docs.find<EvalRunDoc>(p.tenantId, "runs", filter))
       .map((d: Doc<EvalRunDoc>) => d.data)
-      .sort((a, b) => (a.created_at === b.created_at ? (a.id < b.id ? 1 : -1) : a.created_at < b.created_at ? 1 : -1));
+      .sort((a, b) =>
+        a.created_at === b.created_at
+          ? a.id < b.id
+            ? 1
+            : -1
+          : a.created_at < b.created_at
+            ? 1
+            : -1,
+      );
     if (f.cursor !== undefined) {
       const [at, id] = decodeCursor(f.cursor);
       items = items.filter((r) => r.created_at < at || (r.created_at === at && r.id < id));

@@ -26,15 +26,28 @@ describe("aggregate", () => {
   });
 
   it("does not depend on the order of cases or graders (property)", () => {
-    const arb = fc.array(fc.tuple(fc.double({ min: 0, max: 1, noNaN: true }), fc.double({ min: 0, max: 1, noNaN: true })), {
-      minLength: 1,
-      maxLength: 30,
-    });
+    const arb = fc.array(
+      fc.tuple(
+        fc.double({ min: 0, max: 1, noNaN: true }),
+        fc.double({ min: 0, max: 1, noNaN: true }),
+      ),
+      {
+        minLength: 1,
+        maxLength: 30,
+      },
+    );
     fc.assert(
       fc.property(arb, fc.integer({ min: 0, max: 1000 }), (rows, seed) => {
-        const cases = rows.map(([a, b], i) => ({ case_id: `c${String(i).padStart(3, "0")}`, scores: { a, b } }));
+        const cases = rows.map(([a, b], i) => ({
+          case_id: `c${String(i).padStart(3, "0")}`,
+          scores: { a, b },
+        }));
         const base = aggregate(G, cases);
-        const shuffled = [...cases].sort((x, y) => ((x.case_id.length * 31 + seed) % 7) - ((y.case_id.length * 17 + seed) % 5) || (x.case_id < y.case_id ? 1 : -1));
+        const shuffled = [...cases].sort(
+          (x, y) =>
+            ((x.case_id.length * 31 + seed) % 7) - ((y.case_id.length * 17 + seed) % 5) ||
+            (x.case_id < y.case_id ? 1 : -1),
+        );
         const other = aggregate([...G].reverse(), shuffled);
         expect(other).toEqual(base);
         expect(base.overall).toBeGreaterThanOrEqual(0);
@@ -48,17 +61,29 @@ describe("aggregate", () => {
 describe("mismatches", () => {
   const computed = aggregate(G, [{ case_id: "c1", scores: { a: 1, b: 0.5 } }]);
   it("accepts a consistent claim (within the rounding epsilon)", () => {
-    expect(mismatches({ overall: computed.overall + 1e-7, per_grader: computed.per_grader }, computed)).toEqual([]);
+    expect(
+      mismatches({ overall: computed.overall + 1e-7, per_grader: computed.per_grader }, computed),
+    ).toEqual([]);
     expect(mismatches({ overall: computed.overall }, computed)).toEqual([]);
   });
   it("names every disagreement", () => {
     expect(mismatches({ overall: 0.99 }, computed)).toEqual(["overall"]);
     expect(mismatches({ overall: "x" }, computed)).toEqual(["overall"]);
-    expect(mismatches({ overall: computed.overall, per_grader: { a: 0, b: 0.5 } }, computed)).toEqual(["per_grader.a"]);
-    expect(mismatches({ overall: computed.overall, per_grader: { a: 1, b: 0.5, zzz: 1 } }, computed)).toEqual(["per_grader.zzz"]);
-    expect(mismatches({ overall: computed.overall, per_grader: { a: 1 } }, computed)).toEqual(["per_grader.b"]);
-    expect(mismatches({ overall: computed.overall, per_grader: [1] }, computed)).toEqual(["per_grader"]);
-    expect(mismatches({ overall: computed.overall, per_grader: null }, computed)).toEqual(["per_grader"]);
+    expect(
+      mismatches({ overall: computed.overall, per_grader: { a: 0, b: 0.5 } }, computed),
+    ).toEqual(["per_grader.a"]);
+    expect(
+      mismatches({ overall: computed.overall, per_grader: { a: 1, b: 0.5, zzz: 1 } }, computed),
+    ).toEqual(["per_grader.zzz"]);
+    expect(mismatches({ overall: computed.overall, per_grader: { a: 1 } }, computed)).toEqual([
+      "per_grader.b",
+    ]);
+    expect(mismatches({ overall: computed.overall, per_grader: [1] }, computed)).toEqual([
+      "per_grader",
+    ]);
+    expect(mismatches({ overall: computed.overall, per_grader: null }, computed)).toEqual([
+      "per_grader",
+    ]);
   });
 });
 
@@ -84,7 +109,13 @@ describe("pairedSignFlip", () => {
 
   it("is symmetric in the sign of the differences", () => {
     const d = [0.3, -0.1, 0.2, 0.05, -0.4, 0.15];
-    expect(pairedSignFlip(d, 0.05, "s").p_value).toBe(pairedSignFlip(d.map((x) => -x), 0.05, "s").p_value);
+    expect(pairedSignFlip(d, 0.05, "s").p_value).toBe(
+      pairedSignFlip(
+        d.map((x) => -x),
+        0.05,
+        "s",
+      ).p_value,
+    );
   });
 
   it("uses a seeded Monte Carlo test above 16 non-zero pairs, reproducibly", () => {
@@ -94,20 +125,32 @@ describe("pairedSignFlip", () => {
     expect(a).toEqual(b);
     expect(a.method).toBe("monte_carlo");
     expect(a.significant).toBe(true);
-    const flat = pairedSignFlip(Array.from({ length: 40 }, (_, i) => (i % 2 ? 0.1 : -0.1)), 0.05, "seed-1");
+    const flat = pairedSignFlip(
+      Array.from({ length: 40 }, (_, i) => (i % 2 ? 0.1 : -0.1)),
+      0.05,
+      "seed-1",
+    );
     expect(flat.p_value).toBeGreaterThan(0.5);
   });
 });
 
 describe("compareRuns", () => {
-  const mk = (id: string, perCase: Record<string, number>, over: Partial<{ suite_hash: string; dataset_hash: string }> = {}) => {
+  const mk = (
+    id: string,
+    perCase: Record<string, number>,
+    over: Partial<{ suite_hash: string; dataset_hash: string }> = {},
+  ) => {
     const vals = Object.values(perCase);
     return {
       id,
       record_hash: id.repeat(8),
       suite_hash: over.suite_hash ?? "s",
       dataset_hash: over.dataset_hash ?? "d",
-      scores: { overall: round9(vals.reduce((a, b) => a + b, 0) / vals.length), per_grader: { g: 0.5 }, per_case: perCase },
+      scores: {
+        overall: round9(vals.reduce((a, b) => a + b, 0) / vals.length),
+        per_grader: { g: 0.5 },
+        per_case: perCase,
+      },
     };
   };
   const o = { tolerance: 0.05, alpha: 0.05, requiresSignificance: false };
@@ -115,7 +158,12 @@ describe("compareRuns", () => {
 
   it("a drop of exactly the tolerance is not a regression; more is", () => {
     const edge = compareRuns(mk("e", { c1: 0.85, c2: 0.85, c3: 0.85, c4: 0.85 }), base, o);
-    expect(edge).toMatchObject({ comparable: true, regression: false, blocking: false, delta: -0.05 });
+    expect(edge).toMatchObject({
+      comparable: true,
+      regression: false,
+      blocking: false,
+      delta: -0.05,
+    });
     const worse = compareRuns(mk("w", { c1: 0.8, c2: 0.85, c3: 0.85, c4: 0.85 }), base, o);
     expect(worse).toMatchObject({ regression: true, blocking: true });
     expect(worse.delta).toBeCloseTo(-0.0625, 9);
@@ -135,15 +183,19 @@ describe("compareRuns", () => {
   });
 
   it("is not comparable across suite or dataset versions, or different cases", () => {
-    expect(compareRuns(mk("x", { c1: 1 }, { suite_hash: "other" }), base, o).comparable).toBe(false);
-    expect(compareRuns(mk("x", { c1: 1 }, { dataset_hash: "other" }), base, o).comparable).toBe(false);
+    expect(compareRuns(mk("x", { c1: 1 }, { suite_hash: "other" }), base, o).comparable).toBe(
+      false,
+    );
+    expect(compareRuns(mk("x", { c1: 1 }, { dataset_hash: "other" }), base, o).comparable).toBe(
+      false,
+    );
     expect(compareRuns(mk("x", { c1: 1, c2: 1, c3: 1, c9: 1 }), base, o).comparable).toBe(false);
     expect(compareRuns(mk("x", {}), mk("y", {}), o).comparable).toBe(false);
   });
 
   it("reports per-grader deltas for graders both runs have", () => {
     const c = mk("c", { c1: 0.9, c2: 0.9, c3: 0.9, c4: 0.9 });
-    c.scores.per_grader = { g: 0.7, extra: 1 };
+    (c.scores as { per_grader: Record<string, number> }).per_grader = { g: 0.7, extra: 1 };
     expect(compareRuns(c, base, o).per_grader_delta).toEqual({ g: 0.2 });
   });
 });

@@ -99,8 +99,7 @@ export interface TrustedHubKey {
 }
 
 export type EvalAttestationVerdict =
-  | { ok: true; statement: EvalStatement }
-  | { ok: false; reason: string };
+  { ok: true; statement: EvalStatement } | { ok: false; reason: string };
 
 /** Verifies an envelope against the trusted hub keys, and that it is a well-formed eval statement. Never throws. */
 export function verifyEvalAttestation(

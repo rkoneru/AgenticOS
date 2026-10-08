@@ -18,7 +18,8 @@ import {
 } from "../src/index.js";
 
 export const hex = (n: number): string => randomBytes(n / 2).toString("hex");
-export const newPool = (max = 10): pg.Pool => new pg.Pool({ connectionString: inject("dbUrl"), max });
+export const newPool = (max = 10): pg.Pool =>
+  new pg.Pool({ connectionString: inject("dbUrl"), max });
 
 export class Clock {
   constructor(public t: Date) {}
@@ -37,14 +38,18 @@ export async function adminClient(): Promise<pg.Client> {
 }
 export async function newTenantRow(admin: pg.Client): Promise<string> {
   const id = randomUUID();
-  await admin.query("INSERT INTO tenants (id, slug, name, region) VALUES ($1, $2, $2, 'us-east-1')", [
-    id,
-    `t-${hex(10)}`,
-  ]);
+  await admin.query(
+    "INSERT INTO tenants (id, slug, name, region) VALUES ($1, $2, $2, 'us-east-1')",
+    [id, `t-${hex(10)}`],
+  );
   return id;
 }
 
-export const user = (tenantId: string, role: HubRole = "admin", subject = `user-${role}`): HubPrincipal => ({
+export const user = (
+  tenantId: string,
+  role: HubRole = "admin",
+  subject = `user-${role}`,
+): HubPrincipal => ({
   kind: "tenant",
   tenantId,
   subject,
@@ -58,7 +63,12 @@ export const runnerOf = (tenantId: string, runnerId = "runner-1"): HubPrincipal 
 
 export const HASH_A = "a".repeat(64);
 export const HASH_B = "b".repeat(64);
-export const bp = (hash = HASH_A, name = "support-agent", version = "1.0.0", namespace: string | null = null): BlueprintRef => ({
+export const bp = (
+  hash = HASH_A,
+  name = "support-agent",
+  version = "1.0.0",
+  namespace: string | null = null,
+): BlueprintRef => ({
   namespace,
   name,
   version,
@@ -81,7 +91,13 @@ export const publishers = (m: Record<string, string>): PublisherLookup => ({
 });
 
 export function world(
-  o: { docs?: DocStore; tenant?: string; publishers?: PublisherLookup; start?: string; sink?: never } = {},
+  o: {
+    docs?: DocStore;
+    tenant?: string;
+    publishers?: PublisherLookup;
+    start?: string;
+    sink?: never;
+  } = {},
 ): World {
   const clock = new Clock(new Date(o.start ?? "2026-10-08T12:00:00Z"));
   const audit = new MemoryAuditLog({ now: clock.now });
@@ -113,7 +129,13 @@ export const CASES = ["c1", "c2", "c3", "c4"].map((id) => ({
 
 export const DET = { id: "exact", type: "deterministic", kind: "exact", weight: 1 };
 export const DET2 = { id: "contains", type: "deterministic", kind: "contains", weight: 1 };
-export const HUMAN = { id: "human", type: "human", rubric: "Is the answer helpful?", weight: 1, sla_hours: 24 };
+export const HUMAN = {
+  id: "human",
+  type: "human",
+  rubric: "Is the answer helpful?",
+  weight: 1,
+  sla_hours: 24,
+};
 
 /** dataset `ds@1` with CASES and suite `smoke@1.0.0` (graders given), pass_threshold 0.8. */
 export async function seedSuite(
@@ -128,7 +150,11 @@ export async function seedSuite(
     ref?: string;
   } = {},
 ): Promise<Suite> {
-  await w.hub.datasets.create(w.builder, { name: "ds", cases: o.cases ?? CASES, ...(o.phi ? { phi: true } : {}) });
+  await w.hub.datasets.create(w.builder, {
+    name: "ds",
+    cases: o.cases ?? CASES,
+    ...(o.phi ? { phi: true } : {}),
+  });
   const latest = await w.hub.datasets.get(w.builder, "ds@latest");
   return w.hub.suites.create(w.builder, {
     ref: o.ref ?? "smoke@1.0.0",
@@ -154,7 +180,9 @@ export function caseResults(
 ): Record<string, unknown>[] {
   return ids.map((id) => ({
     case_id: id,
-    scores: Object.fromEntries(graders.map((g) => [g, typeof score === "number" ? score : score(id, g)])),
+    scores: Object.fromEntries(
+      graders.map((g) => [g, typeof score === "number" ? score : score(id, g)]),
+    ),
     cost_usd: 0.01,
   }));
 }
@@ -179,13 +207,21 @@ export async function runWithScore(
   const runner = o.runner ?? w.runner;
   const run = await w.hub.runs.startAsRunner(runner, {
     suite_ref: o.suite ?? "smoke@1.0.0",
-    blueprint: bp(o.hash ?? HASH_A, o.name ?? "support-agent", o.version ?? "1.0.0", o.namespace ?? null),
+    blueprint: bp(
+      o.hash ?? HASH_A,
+      o.name ?? "support-agent",
+      o.version ?? "1.0.0",
+      o.namespace ?? null,
+    ),
   });
   const score = o.score ?? 1;
   const results = caseResults(["c1", "c2", "c3", "c4"], graders, score);
   const per = results.map((r) => mean(Object.values(r["scores"] as Record<string, number>)));
   const perGrader = Object.fromEntries(
-    graders.map((g) => [g, mean(results.map((r) => (r["scores"] as Record<string, number>)[g] as number))]),
+    graders.map((g) => [
+      g,
+      mean(results.map((r) => (r["scores"] as Record<string, number>)[g] as number)),
+    ]),
   );
   return w.hub.runs.submitResults(runner, run.id, {
     case_results: results,

@@ -12,8 +12,19 @@
     }
   },
   "errors": {
-    "shape": { "error": { "code": "<string>", "message": "<string>", "checks": ["<each>", "<string>"] } },
-    "codes": { "unauthenticated": 401, "forbidden": 403, "not_found": 404, "conflict": 409, "invalid": 422, "integrity_failed": 422, "rate_limited": 429, "unavailable": 503 }
+    "shape": {
+      "error": { "code": "<string>", "message": "<string>", "checks": ["<each>", "<string>"] }
+    },
+    "codes": {
+      "unauthenticated": 401,
+      "forbidden": 403,
+      "not_found": 404,
+      "conflict": 409,
+      "invalid": 422,
+      "integrity_failed": 422,
+      "rate_limited": 429,
+      "unavailable": 503
+    }
   },
   "examples": [
     {
@@ -23,7 +34,14 @@
       "path": "/runners/ci-runner-1",
       "request": { "description": "CI worker" },
       "status": 200,
-      "response": { "runner_id": "ci-runner-1", "description": "CI worker", "registered_by": "<string>", "registered_at": "<iso>", "revoked_at": "<null>", "revoked_by": "<null>" }
+      "response": {
+        "runner_id": "ci-runner-1",
+        "description": "CI worker",
+        "registered_by": "<string>",
+        "registered_at": "<iso>",
+        "revoked_at": "<null>",
+        "revoked_by": "<null>"
+      }
     },
     {
       "name": "create_dataset",
@@ -35,12 +53,32 @@
         "description": "Support questions",
         "phi": false,
         "cases": [
-          { "id": "c1", "input": { "question": "How do I reset my password?" }, "expected": "Use the reset link.", "tags": ["account"], "metadata": { "source": "tickets" } },
-          { "id": "c2", "input": { "question": "Where is my invoice?" }, "expected": "Billing > Invoices." }
+          {
+            "id": "c1",
+            "input": { "question": "How do I reset my password?" },
+            "expected": "Use the reset link.",
+            "tags": ["account"],
+            "metadata": { "source": "tickets" }
+          },
+          {
+            "id": "c2",
+            "input": { "question": "Where is my invoice?" },
+            "expected": "Billing > Invoices."
+          }
         ]
       },
       "status": 201,
-      "response": { "name": "support-qa", "version": 1, "ref": "support-qa@1", "phi": false, "redacted": false, "case_count": 2, "content_hash": "<hash>", "created_at": "<iso>", "created_by": "<string>" }
+      "response": {
+        "name": "support-qa",
+        "version": 1,
+        "ref": "support-qa@1",
+        "phi": false,
+        "redacted": false,
+        "case_count": 2,
+        "content_hash": "<hash>",
+        "created_at": "<iso>",
+        "created_by": "<string>"
+      }
     },
     {
       "name": "get_dataset_version",
@@ -52,8 +90,20 @@
         "ref": "support-qa@1",
         "content_hash": "<hash>",
         "cases": [
-          { "id": "c1", "input": { "question": "How do I reset my password?" }, "expected": "Use the reset link.", "tags": ["account"], "metadata": { "source": "tickets" } },
-          { "id": "c2", "input": { "question": "Where is my invoice?" }, "expected": "Billing > Invoices.", "tags": [], "metadata": {} }
+          {
+            "id": "c1",
+            "input": { "question": "How do I reset my password?" },
+            "expected": "Use the reset link.",
+            "tags": ["account"],
+            "metadata": { "source": "tickets" }
+          },
+          {
+            "id": "c2",
+            "input": { "question": "Where is my invoice?" },
+            "expected": "Billing > Invoices.",
+            "tags": [],
+            "metadata": {}
+          }
         ]
       }
     },
@@ -67,7 +117,13 @@
         "dataset_ref": "support-qa@1",
         "graders": [
           { "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1 },
-          { "id": "contains", "type": "deterministic", "kind": "contains", "weight": 1, "params": { "case_sensitive": false } }
+          {
+            "id": "contains",
+            "type": "deterministic",
+            "kind": "contains",
+            "weight": 1,
+            "params": { "case_sensitive": false }
+          }
         ],
         "pass_threshold": 0.8,
         "tolerance": 0.02,
@@ -92,7 +148,13 @@
         "suite_hash": "<hash>",
         "graders": [
           { "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1, "params": {} },
-          { "id": "contains", "type": "deterministic", "kind": "contains", "weight": 1, "params": { "case_sensitive": false } }
+          {
+            "id": "contains",
+            "type": "deterministic",
+            "kind": "contains",
+            "weight": 1,
+            "params": { "case_sensitive": false }
+          }
         ]
       }
     },
@@ -101,7 +163,16 @@
       "as": "builder",
       "method": "POST",
       "path": "/runs",
-      "request": { "suite_ref": "support-smoke@1.0.0", "blueprint": { "namespace": "acme", "name": "support-agent", "version": "1.0.0", "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "mode": "ci" },
+      "request": {
+        "suite_ref": "support-smoke@1.0.0",
+        "blueprint": {
+          "namespace": "acme",
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "mode": "ci"
+      },
       "status": 202,
       "capture": { "run_id": "id" },
       "response": {
@@ -110,7 +181,12 @@
         "suite_hash": "<hash>",
         "dataset_ref": "support-qa@1",
         "dataset_hash": "<hash>",
-        "blueprint": { "namespace": "acme", "name": "support-agent", "version": "1.0.0", "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        "blueprint": {
+          "namespace": "acme",
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
         "blueprint_name": "support-agent",
         "mode": "ci",
         "status": "queued",
@@ -132,7 +208,13 @@
       "method": "GET",
       "path": "/runs?status=queued&limit=10",
       "status": 200,
-      "response": { "items": ["<each>", { "id": "<uuid>", "status": "queued", "suite_ref": "<string>", "case_count": 0 }], "next_cursor": "<null>" }
+      "response": {
+        "items": [
+          "<each>",
+          { "id": "<uuid>", "status": "queued", "suite_ref": "<string>", "case_count": 0 }
+        ],
+        "next_cursor": "<null>"
+      }
     },
     {
       "name": "runner_claims_run",
@@ -141,7 +223,12 @@
       "path": "/runs/{{run_id}}/claim",
       "request": {},
       "status": 200,
-      "response": { "id": "{{run_id}}", "status": "running", "runner_id": "ci-runner-1", "started_at": "<iso>" }
+      "response": {
+        "id": "{{run_id}}",
+        "status": "running",
+        "runner_id": "ci-runner-1",
+        "started_at": "<iso>"
+      }
     },
     {
       "name": "runner_submits_results",
@@ -150,12 +237,29 @@
       "path": "/runs/{{run_id}}/results",
       "request": {
         "case_results": [
-          { "case_id": "c1", "scores": { "exact": 1, "contains": 1 }, "cost_usd": 0.002, "latency_ms": 840, "trace_id": "0af7651916cd43dd8448eb211c80319c" },
-          { "case_id": "c2", "scores": { "exact": 0.5, "contains": 1 }, "cost_usd": 0.003, "latency_ms": 910, "trace_id": "b7ad6b7169203331b9aa4c3a1a2f3f42", "error": null }
+          {
+            "case_id": "c1",
+            "scores": { "exact": 1, "contains": 1 },
+            "cost_usd": 0.002,
+            "latency_ms": 840,
+            "trace_id": "0af7651916cd43dd8448eb211c80319c"
+          },
+          {
+            "case_id": "c2",
+            "scores": { "exact": 0.5, "contains": 1 },
+            "cost_usd": 0.003,
+            "latency_ms": 910,
+            "trace_id": "b7ad6b7169203331b9aa4c3a1a2f3f42",
+            "error": null
+          }
         ],
         "scores": { "overall": 0.875, "per_grader": { "exact": 0.75, "contains": 1 } },
         "cost": { "total_usd": 0.005 },
-        "provenance": { "runner_version": "axis-runner/0.1.0", "model_ids": ["scripted-model-1"], "seed": 7 }
+        "provenance": {
+          "runner_version": "axis-runner/0.1.0",
+          "model_ids": ["scripted-model-1"],
+          "seed": 7
+        }
       },
       "status": 200,
       "response": {
@@ -167,12 +271,36 @@
         "pending_human": 0,
         "finished_at": "<iso>",
         "record_hash": "<hash>",
-        "scores": { "overall": 0.875, "per_grader": { "exact": 0.75, "contains": 1 }, "per_case": { "c1": 1, "c2": 0.75 } },
+        "scores": {
+          "overall": 0.875,
+          "per_grader": { "exact": 0.75, "contains": 1 },
+          "per_case": { "c1": 1, "c2": 0.75 }
+        },
         "cost": { "total_usd": 0.005 },
-        "provenance": { "runner_version": "axis-runner/0.1.0", "model_ids": ["scripted-model-1"], "seed": "7" },
+        "provenance": {
+          "runner_version": "axis-runner/0.1.0",
+          "model_ids": ["scripted-model-1"],
+          "seed": "7"
+        },
         "case_results": [
-          { "case_id": "c1", "scores": { "exact": 1, "contains": 1 }, "case_score": 1, "cost_usd": 0.002, "latency_ms": 840, "trace_id": "0af7651916cd43dd8448eb211c80319c", "error": "<null>" },
-          { "case_id": "c2", "scores": { "exact": 0.5, "contains": 1 }, "case_score": 0.75, "cost_usd": 0.003, "latency_ms": 910, "trace_id": "b7ad6b7169203331b9aa4c3a1a2f3f42", "error": "<null>" }
+          {
+            "case_id": "c1",
+            "scores": { "exact": 1, "contains": 1 },
+            "case_score": 1,
+            "cost_usd": 0.002,
+            "latency_ms": 840,
+            "trace_id": "0af7651916cd43dd8448eb211c80319c",
+            "error": "<null>"
+          },
+          {
+            "case_id": "c2",
+            "scores": { "exact": 0.5, "contains": 1 },
+            "case_score": 0.75,
+            "cost_usd": 0.003,
+            "latency_ms": 910,
+            "trace_id": "b7ad6b7169203331b9aa4c3a1a2f3f42",
+            "error": "<null>"
+          }
         ]
       }
     },
@@ -181,10 +309,22 @@
       "as": "runner",
       "method": "POST",
       "path": "/runs",
-      "request": { "suite_ref": "support-smoke@1.0.0", "blueprint": { "name": "support-agent", "version": "1.1.0", "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } },
+      "request": {
+        "suite_ref": "support-smoke@1.0.0",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.1.0",
+          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
       "status": 201,
       "capture": { "run2_id": "id" },
-      "response": { "id": "<uuid>", "status": "running", "runner_id": "ci-runner-1", "requested_by": "runner:ci-runner-1" }
+      "response": {
+        "id": "<uuid>",
+        "status": "running",
+        "runner_id": "ci-runner-1",
+        "requested_by": "runner:ci-runner-1"
+      }
     },
     {
       "name": "integrity_failed",
@@ -200,7 +340,13 @@
         "provenance": { "runner_version": "axis-runner/0.1.0", "model_ids": [], "seed": "1" }
       },
       "status": 422,
-      "response": { "error": { "code": "integrity_failed", "message": "<string>", "checks": ["mismatch.overall"] } }
+      "response": {
+        "error": {
+          "code": "integrity_failed",
+          "message": "<string>",
+          "checks": ["mismatch.overall"]
+        }
+      }
     },
     {
       "name": "runner_reports_failure",
@@ -209,7 +355,13 @@
       "path": "/runs/{{run2_id}}/fail",
       "request": { "reason": "judge model unreachable" },
       "status": 200,
-      "response": { "id": "{{run2_id}}", "status": "errored", "passed": false, "failure_reason": "judge model unreachable", "record_hash": "<hash>" }
+      "response": {
+        "id": "{{run2_id}}",
+        "status": "errored",
+        "passed": false,
+        "failure_reason": "judge model unreachable",
+        "record_hash": "<hash>"
+      }
     },
     {
       "name": "get_run",
@@ -217,20 +369,45 @@
       "method": "GET",
       "path": "/runs/{{run_id}}",
       "status": 200,
-      "response": { "id": "{{run_id}}", "status": "passed", "case_results": ["<each>", { "case_id": "<string>" }] }
+      "response": {
+        "id": "{{run_id}}",
+        "status": "passed",
+        "case_results": ["<each>", { "case_id": "<string>" }]
+      }
     },
     {
       "name": "gate_blocks_without_baseline_run",
       "as": "builder",
       "method": "POST",
       "path": "/gate",
-      "request": { "blueprint": { "name": "support-agent", "version": "1.1.0", "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }, "suites": [{ "ref": "support-smoke@^1.0.0", "threshold": 0.8 }] },
+      "request": {
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.1.0",
+          "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "suites": [{ "ref": "support-smoke@^1.0.0", "threshold": 0.8 }]
+      },
       "status": 200,
       "response": {
         "allowed": false,
-        "blueprint": { "namespace": "<null>", "name": "support-agent", "version": "1.1.0", "content_hash": "<hash>" },
-        "reasons": [{ "code": "run_errored", "suite_ref": "support-smoke@^1.0.0", "message": "<string>" }],
-        "runs": [{ "suite_ref": "support-smoke@1.0.0", "run_id": "{{run2_id}}", "overall": "<null>", "required_threshold": 0.8 }],
+        "blueprint": {
+          "namespace": "<null>",
+          "name": "support-agent",
+          "version": "1.1.0",
+          "content_hash": "<hash>"
+        },
+        "reasons": [
+          { "code": "run_errored", "suite_ref": "support-smoke@^1.0.0", "message": "<string>" }
+        ],
+        "runs": [
+          {
+            "suite_ref": "support-smoke@1.0.0",
+            "run_id": "{{run2_id}}",
+            "overall": "<null>",
+            "required_threshold": 0.8
+          }
+        ],
         "checked_at": "<iso>"
       }
     },
@@ -239,12 +416,33 @@
       "as": "builder",
       "method": "POST",
       "path": "/gate",
-      "request": { "blueprint": { "namespace": "acme", "name": "support-agent", "version": "1.0.0", "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "suites": [{ "ref": "support-smoke@1.0.0", "threshold": 0.8 }] },
+      "request": {
+        "blueprint": {
+          "namespace": "acme",
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "suites": [{ "ref": "support-smoke@1.0.0", "threshold": 0.8 }]
+      },
       "status": 200,
       "response": {
         "allowed": true,
         "reasons": [],
-        "runs": [{ "suite_ref": "support-smoke@1.0.0", "run_id": "{{run_id}}", "overall": 0.875, "required_threshold": 0.8, "sample_size": 2, "finished_at": "<iso>", "baseline_run_id": "<null>", "delta": "<null>", "regression": "<null>", "p_value": "<null>" }],
+        "runs": [
+          {
+            "suite_ref": "support-smoke@1.0.0",
+            "run_id": "{{run_id}}",
+            "overall": 0.875,
+            "required_threshold": 0.8,
+            "sample_size": 2,
+            "finished_at": "<iso>",
+            "baseline_run_id": "<null>",
+            "delta": "<null>",
+            "regression": "<null>",
+            "p_value": "<null>"
+          }
+        ],
         "checked_at": "<iso>"
       }
     },
@@ -255,7 +453,16 @@
       "path": "/baselines",
       "request": { "run_id": "{{run_id}}" },
       "status": 201,
-      "response": { "blueprint_name": "support-agent", "suite_ref": "support-smoke@1.0.0", "seq": 1, "run_id": "{{run_id}}", "overall": 0.875, "record_hash": "<hash>", "set_by": "<string>", "at": "<iso>" }
+      "response": {
+        "blueprint_name": "support-agent",
+        "suite_ref": "support-smoke@1.0.0",
+        "seq": 1,
+        "run_id": "{{run_id}}",
+        "overall": 0.875,
+        "record_hash": "<hash>",
+        "set_by": "<string>",
+        "at": "<iso>"
+      }
     },
     {
       "name": "list_runs_by_blueprint",
@@ -263,7 +470,18 @@
       "method": "GET",
       "path": "/runs?blueprint_name=support-agent&suite_ref=support-smoke@1.0.0",
       "status": 200,
-      "response": { "items": ["<each>", { "id": "<uuid>", "status": "<string>", "blueprint_name": "support-agent", "case_count": "<integer>" }], "next_cursor": "<null>" }
+      "response": {
+        "items": [
+          "<each>",
+          {
+            "id": "<uuid>",
+            "status": "<string>",
+            "blueprint_name": "support-agent",
+            "case_count": "<integer>"
+          }
+        ],
+        "next_cursor": "<null>"
+      }
     },
     {
       "name": "run_comparison",
@@ -283,19 +501,45 @@
         "dataset_ref": "support-qa@1",
         "graders": [
           { "id": "exact", "type": "deterministic", "kind": "exact" },
-          { "id": "helpful", "type": "human", "rubric": "Is the answer helpful and polite?", "sla_hours": 24, "double_grade": false }
+          {
+            "id": "helpful",
+            "type": "human",
+            "rubric": "Is the answer helpful and polite?",
+            "sla_hours": 24,
+            "double_grade": false
+          }
         ],
         "pass_threshold": 0.7
       },
       "status": 201,
-      "response": { "ref": "support-human@1.0.0", "graders": [{ "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1, "params": {} }, { "id": "helpful", "type": "human", "weight": 1, "sla_hours": 24, "double_grade": false, "agreement_tolerance": 0.1 }] }
+      "response": {
+        "ref": "support-human@1.0.0",
+        "graders": [
+          { "id": "exact", "type": "deterministic", "kind": "exact", "weight": 1, "params": {} },
+          {
+            "id": "helpful",
+            "type": "human",
+            "weight": 1,
+            "sla_hours": 24,
+            "double_grade": false,
+            "agreement_tolerance": 0.1
+          }
+        ]
+      }
     },
     {
       "name": "start_human_run",
       "as": "runner",
       "method": "POST",
       "path": "/runs",
-      "request": { "suite_ref": "support-human@1.0.0", "blueprint": { "name": "support-agent", "version": "1.0.0", "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } },
+      "request": {
+        "suite_ref": "support-human@1.0.0",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
       "status": 201,
       "capture": { "run3_id": "id" },
       "response": { "id": "<uuid>", "status": "running" }
@@ -313,7 +557,13 @@
         "provenance": { "runner_version": "axis-runner/0.1.0", "model_ids": [], "seed": "2" }
       },
       "status": 200,
-      "response": { "id": "{{run3_id}}", "status": "running", "pending_human": 2, "scores": "<null>", "record_hash": "<null>" }
+      "response": {
+        "id": "{{run3_id}}",
+        "status": "running",
+        "pending_human": 2,
+        "scores": "<null>",
+        "record_hash": "<null>"
+      }
     },
     {
       "name": "reviewer_lists_tasks",
@@ -322,7 +572,24 @@
       "path": "/reviews/tasks?state=open&run_id={{run3_id}}",
       "status": 200,
       "capture": { "task_id": "items.0.id" },
-      "response": { "items": ["<each>", { "id": "<uuid>", "run_id": "{{run3_id}}", "case_id": "<string>", "grader_id": "helpful", "rubric": "<string>", "state": "open", "sla_deadline": "<iso>", "sla_breached": false, "double_grade": false, "case_input": "<any>", "case_expected": "<any>" }] }
+      "response": {
+        "items": [
+          "<each>",
+          {
+            "id": "<uuid>",
+            "run_id": "{{run3_id}}",
+            "case_id": "<string>",
+            "grader_id": "helpful",
+            "rubric": "<string>",
+            "state": "open",
+            "sla_deadline": "<iso>",
+            "sla_breached": false,
+            "double_grade": false,
+            "case_input": "<any>",
+            "case_expected": "<any>"
+          }
+        ]
+      }
     },
     {
       "name": "reviewer_claims_task",
@@ -331,7 +598,12 @@
       "path": "/reviews/tasks/{{task_id}}/claim",
       "request": {},
       "status": 200,
-      "response": { "id": "{{task_id}}", "state": "claimed", "claimed_by": "<string>", "claim_expires_at": "<iso>" }
+      "response": {
+        "id": "{{task_id}}",
+        "state": "claimed",
+        "claimed_by": "<string>",
+        "claim_expires_at": "<iso>"
+      }
     },
     {
       "name": "reviewer_grades_task",
@@ -340,25 +612,74 @@
       "path": "/reviews/tasks/{{task_id}}/grade",
       "request": { "score": 0.9, "comment": "Clear and polite." },
       "status": 200,
-      "response": { "id": "{{task_id}}", "state": "resolved", "resolution": { "score": 0.9, "method": "single" }, "grades": [{ "reviewer": "<string>", "score": 0.9, "comment": "Clear and polite.", "at": "<iso>", "adjudication": false }] }
+      "response": {
+        "id": "{{task_id}}",
+        "state": "resolved",
+        "resolution": { "score": 0.9, "method": "single" },
+        "grades": [
+          {
+            "reviewer": "<string>",
+            "score": 0.9,
+            "comment": "Clear and polite.",
+            "at": "<iso>",
+            "adjudication": false
+          }
+        ]
+      }
     },
     {
       "name": "put_sampling",
       "as": "admin",
       "method": "PUT",
       "path": "/sampling/prod-support",
-      "request": { "blueprint_name": "support-agent", "suite_ref": "support-smoke@1.0.0", "rate": 0.05, "max_per_hour": 20, "redaction": "redact", "alert_threshold": 0.7 },
+      "request": {
+        "blueprint_name": "support-agent",
+        "suite_ref": "support-smoke@1.0.0",
+        "rate": 0.05,
+        "max_per_hour": 20,
+        "redaction": "redact",
+        "alert_threshold": 0.7
+      },
       "status": 200,
-      "response": { "id": "prod-support", "blueprint_name": "support-agent", "suite_ref": "support-smoke@1.0.0", "rate": 0.05, "max_per_hour": 20, "redaction": "redact", "enabled": true, "alert_threshold": 0.7 }
+      "response": {
+        "id": "prod-support",
+        "blueprint_name": "support-agent",
+        "suite_ref": "support-smoke@1.0.0",
+        "rate": 0.05,
+        "max_per_hour": 20,
+        "redaction": "redact",
+        "enabled": true,
+        "alert_threshold": 0.7
+      }
     },
     {
       "name": "online_result",
       "as": "runner",
       "method": "POST",
       "path": "/online/results",
-      "request": { "sampling_id": "prod-support", "blueprint": { "name": "support-agent", "version": "1.0.0", "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "source_run_id": "run-prod-42", "trace_id": "0af7651916cd43dd8448eb211c80319c", "scores": { "exact": 1, "contains": 0.5 } },
+      "request": {
+        "sampling_id": "prod-support",
+        "blueprint": {
+          "name": "support-agent",
+          "version": "1.0.0",
+          "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "source_run_id": "run-prod-42",
+        "trace_id": "0af7651916cd43dd8448eb211c80319c",
+        "scores": { "exact": 1, "contains": 0.5 }
+      },
       "status": 201,
-      "response": { "id": "<uuid>", "sampling_id": "prod-support", "suite_ref": "support-smoke@1.0.0", "score": 0.75, "scores": { "exact": 1, "contains": 0.5 }, "runner_id": "ci-runner-1", "source_run_id": "run-prod-42", "trace_id": "<string>", "at": "<iso>" }
+      "response": {
+        "id": "<uuid>",
+        "sampling_id": "prod-support",
+        "suite_ref": "support-smoke@1.0.0",
+        "score": 0.75,
+        "scores": { "exact": 1, "contains": 0.5 },
+        "runner_id": "ci-runner-1",
+        "source_run_id": "run-prod-42",
+        "trace_id": "<string>",
+        "at": "<iso>"
+      }
     },
     {
       "name": "online_summary",
@@ -366,7 +687,22 @@
       "method": "GET",
       "path": "/online/summary?blueprint_name=support-agent",
       "status": 200,
-      "response": { "items": [{ "sampling_id": "prod-support", "count": 1, "mean": 0.75, "enabled": true, "alerting": false, "alert_threshold": 0.7, "window": { "count": 1, "mean": 0.75 }, "recent": [{ "at": "<iso>", "score": 0.75, "blueprint_version": "1.0.0", "trace_id": "<string>" }] }] }
+      "response": {
+        "items": [
+          {
+            "sampling_id": "prod-support",
+            "count": 1,
+            "mean": 0.75,
+            "enabled": true,
+            "alerting": false,
+            "alert_threshold": 0.7,
+            "window": { "count": 1, "mean": 0.75 },
+            "recent": [
+              { "at": "<iso>", "score": 0.75, "blueprint_version": "1.0.0", "trace_id": "<string>" }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "unauthenticated",
