@@ -202,7 +202,7 @@ class Emitter {
           this.issue(`${path}/value`, "POLICY_BAD_VALUE", "exists takes an optional boolean");
         }
         const defined = `d${id}`;
-        this.lines.push(`${defined} if { v := ${ref} }`);
+        this.lines.push(`${defined} if { _ := ${ref} }`);
         this.lines.push(
           v === false ? `${node.t} if { not ${defined} }` : `${node.t} if { ${defined} }`,
         );
