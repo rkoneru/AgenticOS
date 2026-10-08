@@ -43,10 +43,19 @@ regression (baseline invalid = blocked). A newer run awaiting human review is `r
 `below_threshold`, `run_failed`, `regression`, `baseline_invalid`, `integrity_failed`, `suite_not_found`, `gate_error`. Any error ->
 deny. Every decision is audited first; an audit failure means no decision is returned.
 
+## Integration rules (ADR 0058, 0059)
+
+- With a hub wired the registry and marketplace ALWAYS ask the gate (tenant-required suites included); the gateway's `POST /evals/gate` always adds the
+  suites the stored ABL declares and rejects a content hash that is not the stored one (422).
+- Runner surface (`createHubDevServer` with `authenticate` and `manifests`): `GET /v1/evals/runner/manifest` serves a compiled manifest only to a runner
+  holding a running run of that version. Hosted by the standalone gateway on a second loopback port.
+- Online results with a human grader queue review tasks (`run_id` `online:<id>`), appended as a completed record when resolved; still never read by the gate.
+- `GET /v1/registry/blueprints/{ns}/{name}/versions/{v}/eval-attestations` returns attestations re-verified on read.
+
 ## Registry and marketplace hooks
 
 `EvalGatePort` (default `DENY_ALL_EVAL_GATE`). `RegistryService.setVersionPublic`, marketplace `submit` and `decide` (approval) call it;
-refusal is 409 `evals_gate_failed` with `reasons`. A blueprint declaring no suites is allowed. Eval-result attestations (DSSE, Ed25519)
+refusal is 409 `evals_gate_failed` with `reasons`. With no hub wired, a blueprint declaring no suites is allowed. Eval-result attestations (DSSE, Ed25519)
 are attached append-only to registry versions after verification against the trusted hub key, subject = ns/name@version + content hash.
 
 ## Human review

@@ -1,7 +1,6 @@
 # Eval runner, graders and online sampler
 
-Status: **Prototype** (built and tested against a scripted model, a scripted gate and an in-memory hub; no live provider, no running
-Eval Hub yet) · Code: `runtime/src/axis_runtime/evals/`, launcher `runtime/scripts/eval_runner.py` · Tests: `runtime/tests/test_evals_*.py`,
+Status: **Prototype** (tested against a scripted model, a scripted gate and an in-memory hub, and end to end with the real hub and kernel in `make e2e-phase8`; no live provider) · Code: `runtime/src/axis_runtime/evals/`, launcher `runtime/scripts/eval_runner.py` · Tests: `runtime/tests/test_evals_*.py`,
 mutation check `runtime/tests/mutation_evals.py` (52 mutants) · Shared vectors: `runtime/tests/fixtures/eval-aggregation-vectors.json` ·
 Wire examples: `runtime/tests/fixtures/eval-hub-wire-examples.json` · Plan: `docs/plans/phase-8.md` (component B) · Gaps: `docs/NEEDS.md` #306-#324.
 
@@ -225,7 +224,7 @@ review_tasks, provenance.sampling}`);
 outside the scanned package because it constructs the `ModelGateway`, the gRPC gate client and reads files and the environment; a
 `python -m axis_runtime.evals` module would have to do the same inside `src/axis_runtime`, which the bypass scanner forbids. The only
 scanner grant is `httpx` in `evals/hubclient.py` (documented in `tests/bypass_scan.py`). It polls for queued runs of one tenant;
-there is no online-mode entry point yet because no production run-log reader exists (NEEDS #318).
+`--online` (or `"mode": "online"`) runs the sampler over the run service's read-only feed `GET /v1/completed-runs` (`run_service_url`, `run_read_token`); without `manifest_dir` the manifest comes from the hub (`HttpManifestSource`).
 
 ## 11. Verification
 
