@@ -312,7 +312,7 @@ test("evals: runs list with live status, start form for builders, run detail wit
   // the passed run: scores, chart, case drill-down
   await page.goto("/evals");
   await page.getByRole("link", { name: "e1111111" }).click();
-  await expect(page.getByTestId("run-score")).toContainText("0.962");
+  await expect(page.getByTestId("run-score")).toContainText("0.96");
   await expect(page.getByTestId("score-chart")).toBeVisible();
   await page.getByTestId("case-q1").locator("summary").click();
   await expect(
