@@ -1,4 +1,4 @@
-.PHONY: e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: loadtest chaos dr-drill e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -161,3 +161,10 @@ console-e2e:
 
 docs-build:
 	pnpm --filter @axis/docs-site build
+
+# Phase 9 D: load test of the REAL stack (docs/runbooks/loadtest.md). Open-model Node harness (executed) + the committed k6 scripts (run when
+# perf/install-k6.sh has installed k6). ~2-3 minutes. Writes perf/results/loadtest-short.{json,md}. Same prerequisites as e2e-core.
+loadtest:
+	pnpm build
+	bash perf/install-k6.sh || true
+	bash infra/scripts/with-pg.sh uv run python e2e/interfaces_stack.py --out /tmp/axis-loadtest-stack.json --gateway-env GW_RATE_BURST=1000000 --gateway-env GW_RATE_PER_SEC=1000000 -- pnpm --filter @axis/perf exec tsx src/cli.ts --stack /tmp/axis-loadtest-stack.json --out $(CURDIR)/perf/results --profile short --k6

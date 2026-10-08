@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { runAuditBench, runVerifyBench } from "./audit-bench.js";
 import { runOpenLoad, type LoadResult } from "./openload.js";
 import { check, machine, renderMarkdown, type Report, type ScenarioReport } from "./report.js";
+import { runK6 } from "./k6.js";
 import * as sc from "./scenarios.js";
 import { readStack, seedRegistry, setupTenant } from "./stack.js";
 
@@ -161,6 +162,13 @@ extra["auditAppendManyChains"] = await runAuditBench(
 console.error("audit verify ...");
 const verify = await runVerifyBench(info.db_url, profile.verifyEvents);
 extra["auditVerify"] = verify;
+
+if (process.argv.includes("--k6")) {
+  extra["k6"] = [
+    runK6("gateway.js", info, tenant, { REG_REF: ref, RATE: "100", DURATION: "15s" }),
+    runK6("gate-grpc.js", info, tenant, { RATE: "200", DURATION: "15s" }),
+  ];
+}
 
 const byName = (n: string): LoadResult => scenarios.find((s) => s.name === n)?.result as LoadResult;
 const p = (n: string, q: "p95" | "p99"): number =>
