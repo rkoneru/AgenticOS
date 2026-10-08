@@ -105,8 +105,7 @@ const ops = {
   assessmentGet: () => ax.compliance.assessments.get(a.id, a.version),
   assessmentList: () => ax.compliance.assessments.list(a.params ?? {}),
   assessmentSubmit: () => ax.compliance.assessments.submit(a.id, a.expected),
-  assessmentReview: () =>
-    ax.compliance.assessments.review(a.id, a.expected, a.decision, a.comment),
+  assessmentReview: () => ax.compliance.assessments.review(a.id, a.expected, a.decision, a.comment),
   docGenerate: () => ax.compliance.documents.generate(a.blueprint),
   docGet: () => ax.compliance.documents.get(a.id),
   docList: () => ax.compliance.documents.list(a.params ?? {}),
