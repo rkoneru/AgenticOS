@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Phase 2 exit (test_phase2_core_loop.py): ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Phase 3 exit (test_phase3_orchestration.py): multi-agent TKI run, budgets, NEXUS stage metrics, approvals end to end. Phase 5 exit (test_phase5_channels.py): one agent on web, Slack, SMS, email and voice; continuity, isolation, gated replies, transcripts in the audit chain. Phase 6 exit (test_phase6_saas.py): SSO signup, BYO key + tenant policy + budgets, metered usage that equals the audit/run log, invoice reconciliation, RBAC and cross-tenant attacks. Phase 7 exit (test_phase7_interfaces.py): every core workflow through the console, the CLI and both SDKs against the real gateway (interfaces-stack.mjs).",
+  "description": "Phase 2 exit (test_phase2_core_loop.py): ABL agent -> Python runtime -> real Risk Kernel (gRPC) -> Postgres audit. Phase 3 exit (test_phase3_orchestration.py): multi-agent TKI run, budgets, NEXUS stage metrics, approvals end to end. Phase 5 exit (test_phase5_channels.py): one agent on web, Slack, SMS, email and voice; continuity, isolation, gated replies, transcripts in the audit chain. Phase 6 exit (test_phase6_saas.py): SSO signup, BYO key + tenant policy + budgets, metered usage that equals the audit/run log, invoice reconciliation, RBAC and cross-tenant attacks. Phase 7 exit (test_phase7_interfaces.py): every core workflow through the console, the CLI and both SDKs against the real gateway (interfaces-stack.mjs). Phase 8 exit (test_phase8_evals.py): blueprint releases blocked when evals regress, eval history per version, on the real stack with a real eval runner.",
   "dependencies": {
     "@axis/abl": "workspace:*",
     "@axis/api-gateway": "workspace:*",
@@ -12,6 +12,7 @@
     "@axis/channels": "workspace:*",
     "@axis/contracts": "workspace:*",
     "@axis/control-plane": "workspace:*",
+    "@axis/eval-hub": "workspace:*",
     "@axis/marketplace": "workspace:*",
     "@axis/registry": "workspace:*",
     "@axis/risk-kernel": "workspace:*",

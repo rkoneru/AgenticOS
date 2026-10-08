@@ -102,6 +102,9 @@ class Stack:
     console_origin: str
     ops_token: str
     platform_token: str
+    #: the Eval Hub's runner-facing surface (served by the gateway process)
+    eval_hub: str = ""
+    control_plane_url: str = ""
     procs: list[subprocess.Popen[str]] = field(default_factory=list)
 
     def ops(self, op: str, /, **body: Any) -> dict[str, Any]:
@@ -113,6 +116,16 @@ class Stack:
         )
         assert r.status_code == 200, (op, r.status_code, r.text)
         return r.json()  # type: ignore[no-any-return]
+
+    def ops_raw(self, op: str, /, **body: Any) -> tuple[int, dict[str, Any]]:
+        """Like ``ops`` but returns the refusal (status, json) instead of asserting success."""
+        r = httpx.post(
+            f"{self.ops_url}/ops/{op}",
+            json=body,
+            headers={"authorization": f"Bearer {self.ops_token}"},
+            timeout=120,
+        )
+        return r.status_code, r.json()
 
     def provision(
         self, slug: str, *, pack: dict[str, Any] | None = None, byo_key: bool = True
@@ -138,6 +151,76 @@ class Stack:
     def member(self, tenant_id: str, role: str) -> dict[str, Any]:
         return self.ops("member", tenant_id=tenant_id, role=role)
 
+    def runner_credentials(self, tenant: dict[str, Any], runner_id: str) -> dict[str, Any]:
+        """Runner token (hub), read token (run-service feed) and the tenant's service tokens for one runner process."""
+        return self.ops(
+            "eval/runner-credentials", tenant_id=tenant["tenant_id"], runner_id=runner_id
+        )
+
+    def start_runner(
+        self,
+        tenant: dict[str, Any],
+        runner_id: str,
+        *,
+        online: bool = False,
+        judge_log: Path | None = None,
+        creds: dict[str, Any] | None = None,
+        poll: float = 0.4,
+    ) -> EvalRunner:
+        """Start the REAL eval runner for ``tenant`` (scripted models; the kernel gates every call). It is not registered with the hub:
+        registering is the tenant admin's act (``axis evals runners register``)."""
+        creds = creds or self.runner_credentials(tenant, runner_id)
+        tag = f"{runner_id}-{'online' if online else 'ci'}-{secrets.token_hex(2)}"
+        cfg = self.work / f"runner-{tag}.json"
+        cfg.write_text(
+            json.dumps(
+                {
+                    "tenant_id": tenant["tenant_id"],
+                    "hub_url": self.eval_hub,
+                    "runner_id": runner_id,
+                    "runner_token": creds["runner_token"],
+                    "kernel_target": self.kernel_target,
+                    "kernel_token": creds["kernel_token"],
+                    "control_plane_url": self.control_plane_url,
+                    "runtime_token": creds["runtime_token"],
+                    "poll_interval": poll,
+                    "online_poll_interval": poll,
+                    "mode": "online" if online else "ci",
+                    "run_service_url": self.run_service,
+                    "run_read_token": creds.get("read_token"),
+                }
+            )
+        )
+        err = self.work / f"runner-{tag}.err"
+        env = {"EVAL_RUNNER_CONFIG": str(cfg)}
+        if judge_log is not None:
+            env["JUDGE_LOG"] = str(judge_log)
+        proc = subprocess.Popen(
+            [
+                "uv",
+                "run",
+                "python",
+                "e2e/scripts/eval_runner_e2e.py",
+                *(["--online"] if online else []),
+            ],
+            cwd=ROOT,
+            env={**os.environ, **env},
+            stdout=subprocess.DEVNULL,
+            stderr=err.open("w"),
+            text=True,
+            start_new_session=True,
+        )
+        self.procs.append(proc)
+        return EvalRunner(
+            proc,
+            runner_id,
+            tenant["tenant_id"],
+            creds["runner_token"],
+            creds.get("read_token"),
+            err,
+            online,
+        )
+
     def info(self) -> dict[str, Any]:
         return {
             "gateway": self.gateway,
@@ -148,9 +231,40 @@ class Stack:
             "idp": self.idp,
             "run_service": self.run_service,
             "console_origin": self.console_origin,
+            "eval_hub": self.eval_hub,
             "db_url": self.db_url,
             "byo_key": BYO_KEY,
         }
+
+
+@dataclass
+class EvalRunner:
+    """A real ``eval_runner`` process of one tenant (its credentials, config and stderr)."""
+
+    proc: subprocess.Popen[str]
+    runner_id: str
+    tenant_id: str
+    runner_token: str
+    read_token: str | None
+    err: Path
+    online: bool = False
+
+    def alive(self) -> bool:
+        return self.proc.poll() is None
+
+    def stop(self) -> None:
+        if self.proc.poll() is None:
+            try:
+                os.killpg(self.proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                return
+            try:
+                self.proc.wait(20)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+
+    def stderr(self) -> str:
+        return self.err.read_text() if self.err.exists() else ""
 
 
 def _free_port() -> int:
@@ -177,6 +291,7 @@ def boot(
         )
         files = {n: work / f"{n}.json" for n in (
             "kernel_principals", "gw_run", "run_tokens", "gw_kernel", "run_kernel", "run_runtime", "run_ingest",
+            "eval_runner", "run_read",
         )}  # fmt: skip
         for p in files.values():
             p.write_text("{}")
@@ -253,6 +368,7 @@ def boot(
                     "runtime_tokens_file": str(files["run_runtime"]),
                     "ingest_tokens_file": str(files["run_ingest"]),
                     "approval_tokens_file": str(files["run_kernel"]),
+                    "read_tokens_file": str(files["run_read"]),
                 }
             )  # fmt: skip
         )
@@ -276,6 +392,7 @@ def boot(
                 "GW_APPROVALS_URL": f"http://127.0.0.1:{approvals_port}",
                 "GW_APPROVALS_TOKENS_FILE": str(files["gw_kernel"]), "GW_BUNDLE_DIR": str(bundle_dir),
                 "GW_RATE_BURST": "2000", "GW_RATE_PER_SEC": "1000",
+                "GW_EVAL_RUNNER_TOKENS_FILE": str(files["eval_runner"]), "GW_EVAL_RUNNER_PORT": "0",
             },
             work / "gateway.err",
             "port",
@@ -288,6 +405,7 @@ def boot(
             run_service=run_service, kernel_target=kernel_target,
             approvals_bridge=f"http://127.0.0.1:{approvals_port}", console_origin=console_origin,
             ops_token=ops_token, platform_token=platform_token, procs=procs,
+            eval_hub=f"http://127.0.0.1:{ginfo['eval_runner_port']}", control_plane_url=cp,
         )  # fmt: skip
     finally:
         for p in reversed(procs):

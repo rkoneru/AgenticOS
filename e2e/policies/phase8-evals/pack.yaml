@@ -1,0 +1,38 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: tenant-evals
+  version: 1.0.0
+  description: "Phase 8 e2e fixture (not a shipped pack): the tenant pack of the eval suite. Production agents may call the model and read claims, a payout needs a human, a wire transfer is forbidden, and the eval judge may make its gated model call (the rule shipped as policies/eval-judge)."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+  rules:
+    - id: allow-agent-model-calls
+      enforcementPoints: [model_call]
+      when: { field: agent.name, op: in, value: [answer-agent, probe-agent] }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-eval-judge-model-calls
+      enforcementPoints: [model_call]
+      when: { field: agent.name, op: eq, value: eval-judge }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-claim-lookup
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: lookup-claim }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: approve-payouts
+      priority: 200
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: file-payout }
+      gates: [tenant-kill]
+      decision: REQUIRE_APPROVAL
+      approval: { roles: [admin, owner, operator], slaSeconds: 120, escalateTo: [] }
+    - id: deny-wire-funds
+      priority: 400
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: wire-funds }
+      decision: DENY

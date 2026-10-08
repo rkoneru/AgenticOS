@@ -28,6 +28,10 @@ from axis_runtime.runserver import RunServer, RunServerConfig, RunService  # noq
 from axis_runtime.tools import ToolRegistry  # noqa: E402
 from run_server import Wiring, wired_factory  # noqa: E402
 
+PHI_ANSWER = (
+    "Patient John Smith (SSN 123-45-6789, phone 415-555-0100) has an open claim. "
+    "A specialist will contact you within 2 days. Thank you for your patience."
+)
 XSS = '<img src=x onerror="window.__xss=1"><script>window.__xss=1</script>'
 
 
@@ -105,6 +109,16 @@ def script(body: dict[str, Any]) -> dict[str, Any]:
         return _turn(f"output: {XSS}", prompt=30, completion=15)
     if ask.startswith("slow"):
         return _turn("slow answer")
+    # Phase 8: production answers the eval suite's online sampler grades
+    if ask.startswith("answer claim"):
+        n = ask.rsplit(" ", 1)[-1]
+        return _turn(
+            f"Claim {n} is open. A specialist will contact you within 2 days. Thank you for your patience."
+        )
+    if ask.startswith("terse claim"):
+        return _turn("Open.")
+    if ask.startswith("phi claim"):
+        return _turn(PHI_ANSWER)
     return _turn(f"echo: {ask}")
 
 
@@ -170,7 +184,14 @@ async def main() -> None:
     # the token tables are files the harness rewrites as tenants are created (a tenant added after start gets credentials)
     tables = {
         k: Path(cfg[f"{k}_file"])
-        for k in ("tokens", "kernel_tokens", "runtime_tokens", "ingest_tokens", "approval_tokens")
+        for k in (
+            "tokens",
+            "kernel_tokens",
+            "runtime_tokens",
+            "ingest_tokens",
+            "approval_tokens",
+            "read_tokens",
+        )
         if f"{k}_file" in cfg
     }
 
@@ -214,7 +235,10 @@ async def main() -> None:
     provider = Provider()
     factory = wired_factory(wiring, model_transport=provider, tools_factory=tools)
     server_tokens = live.get("tokens", cfg.get("tokens", {}))
-    server = RunServer(RunService(factory), RunServerConfig(tokens=server_tokens))
+    server = RunServer(
+        RunService(factory),
+        RunServerConfig(tokens=server_tokens, read_tokens=live.get("read_tokens", {})),
+    )
     port = await server.start(port=int(cfg.get("port", 0)))
     print(json.dumps({"port": port}), flush=True)
     await asyncio.Event().wait()
