@@ -18,3 +18,4 @@ export { EvalHubProvider } from "./providers/evalhub.js";
 export { RunLogsProvider, SUBJECT_KEYS } from "./providers/runlogs.js";
 export { ApprovalsProvider } from "./providers/approvals.js";
 export type { ApprovalLike, ApprovalsPort } from "./providers/approvals.js";
+export * from "./dev-server.js";

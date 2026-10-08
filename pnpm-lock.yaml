@@ -469,6 +469,9 @@ importers:
 
   services/data-governance:
     dependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@axis/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -479,9 +482,6 @@ importers:
         specifier: ^8.13.0
         version: 8.23.1
     devDependencies:
-      '@axis/audit':
-        specifier: workspace:*
-        version: link:../audit
       '@axis/billing':
         specifier: workspace:*
         version: link:../billing
