@@ -323,6 +323,33 @@ describe("double grading and adjudication", () => {
     expect((await w.hub.runs.get(w.admin, run.id)).status).toBe("passed");
   });
 
+  it("a second reviewer cannot see the first reviewer's score or comment before grading", async () => {
+    const { w } = await awaiting({ double_grade: true, agreement_tolerance: 0.1 }, 1);
+    const [a, b, c] = ["ann", "ben", "cy"].map((n) => rev(w, n)) as [
+      ReturnType<typeof rev>,
+      ReturnType<typeof rev>,
+      ReturnType<typeof rev>,
+    ];
+    const t = (await w.hub.reviews.list(a, {}))[0] as { id: string };
+    await w.hub.reviews.claim(a, t.id);
+    const own = await w.hub.reviews.grade(a, t.id, { score: 0.2, comment: "first opinion" });
+    expect(own.grades.map((g) => g.reviewer)).toEqual(["ann"]); // the grader sees their own
+    const seen = [
+      await w.hub.reviews.get(b, t.id),
+      ...(await w.hub.reviews.list(b, { all: true })),
+      await w.hub.reviews.claim(b, t.id),
+    ].filter((x) => x.id === t.id);
+    expect(seen.length).toBe(3);
+    for (const v of seen) {
+      expect(v.grades).toEqual([]);
+      expect(JSON.stringify(v)).not.toContain("first opinion");
+    }
+    const disputed = await w.hub.reviews.grade(b, t.id, { score: 1, comment: "second opinion" });
+    expect(disputed.state).toBe("needs_adjudication");
+    // an adjudicator is told of the disagreement: both grades are shown
+    expect((await w.hub.reviews.get(c, t.id)).grades.length).toBe(2);
+  });
+
   it("grades that disagree need a THIRD, different reviewer whose grade decides", async () => {
     const { w, run } = await awaiting({ double_grade: true, agreement_tolerance: 0.1 }, 1);
     const [a, b, c] = ["ann", "ben", "cy"].map((n) => rev(w, n)) as [
