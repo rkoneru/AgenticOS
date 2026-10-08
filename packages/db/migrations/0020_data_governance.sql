@@ -29,7 +29,7 @@ CREATE TABLE governance_subjects (
   PRIMARY KEY (tenant_id, subject_id),
   CHECK ((salt IS NULL) = (shredded_at IS NOT NULL))
 );
-SELECT axis.enable_tenant_rls('governance_subjects', 'tenant_id', 'SELECT, INSERT, UPDATE');
+SELECT axis.enable_tenant_rls('governance_subjects', 'tenant_id', 'SELECT');
 
 -- lookup_hmac = HMAC-SHA256(per-tenant lookup key, kind || 0x00 || normalised value). Deleting these rows is the crypto-shred: after it
 -- nothing maps an identifier to the subject id that audit events carry (ADR-0080).
@@ -43,7 +43,7 @@ CREATE TABLE governance_subject_identifiers (
   FOREIGN KEY (tenant_id, subject_id) REFERENCES governance_subjects (tenant_id, subject_id)
 );
 CREATE INDEX governance_subject_identifiers_subject_idx ON governance_subject_identifiers (tenant_id, subject_id);
-SELECT axis.enable_tenant_rls('governance_subject_identifiers', 'tenant_id', 'SELECT, INSERT, DELETE');
+SELECT axis.enable_tenant_rls('governance_subject_identifiers', 'tenant_id', 'SELECT');
 
 -- Data-subject requests. `sealed_identifiers` is AES-256-GCM ciphertext (tenant key) so a crashed erase can resume; it is NULLed when the
 -- request completes. `subject_ref` is the keyed pseudonym used in audit events.
@@ -69,7 +69,7 @@ CREATE TABLE governance_requests (
   PRIMARY KEY (tenant_id, id)
 );
 CREATE INDEX governance_requests_due_idx ON governance_requests (tenant_id, status, due_at);
-SELECT axis.enable_tenant_rls('governance_requests', 'tenant_id', 'SELECT, INSERT, UPDATE');
+SELECT axis.enable_tenant_rls('governance_requests', 'tenant_id', 'SELECT');
 
 -- One row per (request, provider, phase): the resume point. Re-running a completed step is a no-op.
 CREATE TABLE governance_steps (
@@ -83,7 +83,7 @@ CREATE TABLE governance_steps (
   PRIMARY KEY (tenant_id, request_id, provider, phase),
   FOREIGN KEY (tenant_id, request_id) REFERENCES governance_requests (tenant_id, id)
 );
-SELECT axis.enable_tenant_rls('governance_steps', 'tenant_id', 'SELECT, INSERT, UPDATE');
+SELECT axis.enable_tenant_rls('governance_steps', 'tenant_id', 'SELECT');
 
 -- Legal holds (suspend purge/erase of the matching data) and restrictions (Art. 18: stop processing). Identifiers are sealed.
 CREATE TABLE governance_holds (
@@ -105,7 +105,7 @@ CREATE TABLE governance_holds (
   CHECK (kind = 'legal_hold' OR scope = 'subject')
 );
 CREATE INDEX governance_holds_active_idx ON governance_holds (tenant_id, kind) WHERE released_at IS NULL;
-SELECT axis.enable_tenant_rls('governance_holds', 'tenant_id', 'SELECT, INSERT, UPDATE');
+SELECT axis.enable_tenant_rls('governance_holds', 'tenant_id', 'SELECT');
 
 CREATE TABLE governance_retention_policies (
   tenant_id   uuid NOT NULL REFERENCES tenants (id),
@@ -115,7 +115,7 @@ CREATE TABLE governance_retention_policies (
   updated_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, data_class)
 );
-SELECT axis.enable_tenant_rls('governance_retention_policies', 'tenant_id', 'SELECT, INSERT, UPDATE');
+SELECT axis.enable_tenant_rls('governance_retention_policies', 'tenant_id', 'SELECT');
 
 CREATE TABLE governance_retention_runs (
   tenant_id    uuid NOT NULL REFERENCES tenants (id),
@@ -126,7 +126,7 @@ CREATE TABLE governance_retention_runs (
   report       jsonb NOT NULL DEFAULT '{}',
   PRIMARY KEY (tenant_id, id)
 );
-SELECT axis.enable_tenant_rls('governance_retention_runs', 'tenant_id', 'SELECT, INSERT, UPDATE');
+SELECT axis.enable_tenant_rls('governance_retention_runs', 'tenant_id', 'SELECT');
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON governance_subjects, governance_subject_identifiers, governance_requests, governance_steps,
   governance_holds, governance_retention_policies, governance_retention_runs TO axis_governance;
@@ -191,6 +191,47 @@ BEGIN
   END IF;
   IF NEW.tenant_id <> OLD.tenant_id OR NEW.coll <> OLD.coll OR NEW.key <> OLD.key OR NEW.rev <> OLD.rev + 1 THEN
     RAISE EXCEPTION 'stale or identity-changing update' USING ERRCODE = 'serialization_failure';
+  END IF;
+  RETURN NEW;
+END $$;
+
+-- runs: a TERMINATED run is absorbing and `input` is immutable (0004). The governance role may scrub `input` (and only `input`) of a run.
+CREATE OR REPLACE FUNCTION axis.terminal_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  IF OLD.state = 'terminated' THEN
+    IF current_user = 'axis_governance' AND TG_TABLE_NAME = 'runs'
+       AND (pg_catalog.to_jsonb(NEW) - 'input') = (pg_catalog.to_jsonb(OLD) - 'input') THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION '% is terminated; no further changes', TG_TABLE_NAME USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION axis.immutable_columns_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE col text;
+BEGIN
+  FOREACH col IN ARRAY TG_ARGV LOOP
+    IF current_user = 'axis_governance' AND TG_TABLE_NAME = 'runs' AND col = 'input' THEN CONTINUE; END IF;
+    IF pg_catalog.to_jsonb(NEW) -> col IS DISTINCT FROM pg_catalog.to_jsonb(OLD) -> col THEN
+      RAISE EXCEPTION '%.% is immutable', TG_TABLE_NAME, col USING ERRCODE = 'check_violation';
+    END IF;
+  END LOOP;
+  RETURN NEW;
+END $$;
+
+-- approvals: a decided approval is final (0004). The governance role may pseudonymise `decided_by` and drop the free-text `comment`.
+CREATE OR REPLACE FUNCTION axis.approval_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+  IF OLD.status NOT IN ('pending', 'escalated') THEN
+    IF current_user = 'axis_governance'
+       AND (pg_catalog.to_jsonb(NEW) - 'decided_by' - 'comment') = (pg_catalog.to_jsonb(OLD) - 'decided_by' - 'comment') THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'approval already %', OLD.status USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;
 END $$;

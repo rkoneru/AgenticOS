@@ -115,8 +115,8 @@ export class RunLogsProvider implements SubjectDataProvider {
       const v = this.values(ids);
       const runs = await this.runIds(c, ids);
       const e1 = await c.query(
-        "UPDATE run_events SET data = $3::jsonb WHERE run_id = ANY($1::uuid[]) AND data <> $3::jsonb",
-        [runs, 0, ERASED],
+        "UPDATE run_events SET data = $2::jsonb WHERE run_id = ANY($1::uuid[]) AND data <> $2::jsonb",
+        [runs, ERASED],
       );
       const e2 = await c.query(
         `UPDATE run_events ev SET data = $3::jsonb WHERE ${RunLogsProvider.EV} AND data <> $3::jsonb`,
@@ -142,7 +142,7 @@ export class RunLogsProvider implements SubjectDataProvider {
   async purge(ctx: ProviderContext, req: PurgeRequest): Promise<PurgeResult> {
     const prot = req.protect.subjects.flatMap((g) => this.values(g));
     return governedTx(this.o, ctx.tenantId, async (c) => {
-      const old = `r.state = 'terminated' AND r.created_at < $1 AND r.input <> $3::jsonb AND r.input <> $4::jsonb`;
+      const old = `r.state = 'terminated' AND r.created_at < $1 AND r.input <> $3::jsonb AND r.input <> $4::jsonb AND cardinality($2::text[]) >= 0 AND cardinality($5::text[]) >= 0`;
       const protectedRun = `EXISTS (SELECT 1 FROM jsonb_each_text(r.input) e WHERE e.key = ANY($5) AND e.value = ANY($2))`;
       const p = [req.olderThan, prot, ERASED, PURGED, SUBJECT_KEYS];
       const matched = Number(

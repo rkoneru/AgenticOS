@@ -120,7 +120,7 @@ export class MembersProvider implements SubjectDataProvider {
           [m.id, ctx.now],
         );
         await c.query(
-          "UPDATE api_keys SET revoked_at = $2 WHERE (owner_member_id = $1 OR created_by = $1) AND revoked_at IS NULL",
+          "UPDATE api_keys SET revoked_at = COALESCE(revoked_at, $2), name = 'revoked (owner erased)' WHERE owner_member_id = $1 OR created_by = $1",
           [m.id, ctx.now],
         );
         if (!already) erased++;

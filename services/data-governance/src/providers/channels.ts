@@ -91,7 +91,9 @@ export class ChannelsProvider implements SubjectDataProvider {
 
   private async counts(c: ClientBase, eu: string[]): Promise<{ total: number }> {
     const q = async (sql: string): Promise<number> =>
-      Number(((await c.query(sql, [eu, VOICE])).rows[0] as { n: string }).n);
+      Number(
+        ((await c.query(sql, sql.includes("$2") ? [eu, VOICE] : [eu])).rows[0] as { n: string }).n,
+      );
     const msg = this.voiceOnly
       ? "SELECT count(*) n FROM conversation_messages WHERE channel = $2 AND conversation_id IN (SELECT id FROM conversations WHERE end_user_id = ANY($1::uuid[]))"
       : "SELECT count(*) n FROM conversation_messages WHERE conversation_id IN (SELECT id FROM conversations WHERE end_user_id = ANY($1::uuid[]))";
@@ -189,7 +191,7 @@ export class ChannelsProvider implements SubjectDataProvider {
       // wantVoice: only voice messages; otherwise (conversation class): everything that is not voice.
       const cond = wantVoice ? "m.channel = $3" : "m.channel <> $3";
       const base = `FROM conversation_messages m JOIN conversations v ON v.tenant_id = m.tenant_id AND v.id = m.conversation_id
-                     WHERE m.created_at < $1 AND ${cond}`;
+                     WHERE m.created_at < $1 AND cardinality($2::uuid[]) >= 0 AND ${cond}`;
       const matched = Number(
         (
           (await c.query(`SELECT count(*) n ${base}`, [req.olderThan, prot, VOICE])).rows[0] as {

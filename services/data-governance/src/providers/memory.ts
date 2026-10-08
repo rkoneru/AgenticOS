@@ -123,7 +123,7 @@ export class MemoryProvider implements SubjectDataProvider {
     return governedTx(this.o, ctx.tenantId, async (c: ClientBase) => {
       const n = async (sql: string): Promise<number> =>
         Number(((await c.query(sql, [req.olderThan, prot])).rows[0] as { n: string }).n);
-      const where = "created_at < $1";
+      const where = "created_at < $1 AND cardinality($2::text[]) >= 0";
       const guard = "(subject IS NULL OR NOT subject = ANY($2))";
       const matched =
         (await n(`SELECT count(*) n FROM memory_chunks WHERE ${where}`)) +
