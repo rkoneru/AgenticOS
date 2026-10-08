@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { ApprovalError } from "@axis/approvals";
 import { describe, expect, it } from "vitest";
 import { HttpApprovalsClient } from "../src/adapters/approvals-http.js";
-import { ConfigError, TokenTable, configFromEnv } from "../src/standalone.js";
+import { ConfigError, RunnerTokenTable, TokenTable, configFromEnv } from "../src/standalone.js";
 
 const HEX = "a".repeat(64);
 const good = (): Record<string, string> => ({
@@ -102,6 +102,61 @@ describe("TokenTable", () => {
     writeFileSync(f, "{ not json");
     utimesSync(f, new Date(), new Date(Date.now() + 10_000));
     expect(t.get("a")).toBeUndefined();
+  });
+});
+
+describe("eval runner surface", () => {
+  it("is off by default and configured by a tokens file", () => {
+    expect(configFromEnv(good()).evalRunner).toBeUndefined();
+    expect(
+      configFromEnv({
+        ...good(),
+        GW_EVAL_RUNNER_TOKENS_FILE: "/tmp/r.json",
+        GW_EVAL_RUNNER_PORT: "4100",
+      }).evalRunner,
+    ).toEqual({ tokensFile: "/tmp/r.json", port: 4100 });
+    expect(() =>
+      configFromEnv({ ...good(), GW_EVAL_RUNNER_TOKENS_FILE: "/x", GW_EVAL_RUNNER_PORT: "99999" }),
+    ).toThrow(/GW_EVAL_RUNNER_PORT/);
+  });
+  it("RunnerTokenTable authenticates by token digest, follows the file and ignores malformed entries", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gw-rtok-"));
+    const f = join(dir, "r.json");
+    const t = new RunnerTokenTable(f);
+    expect(t.authenticate("Bearer x")).toBeUndefined(); // missing file
+    writeFileSync(
+      f,
+      JSON.stringify({
+        "rk-1": { tenantId: "t1", runnerId: "r1" },
+        "rk-2": { tenantId: "t2", runnerId: "r2", signingKey: "sig" },
+        "rk-bad": { tenantId: "t3" },
+        "rk-str": "nope",
+      }),
+    );
+    expect(t.authenticate("Bearer rk-1")).toEqual({ tenantId: "t1", runnerId: "r1" });
+    expect(t.authenticate("Bearer rk-2")).toEqual({
+      tenantId: "t2",
+      runnerId: "r2",
+      signingKey: "sig",
+    });
+    for (const a of [
+      undefined,
+      "",
+      "rk-1",
+      "Basic rk-1",
+      "Bearer ",
+      "Bearer rk-bad",
+      "Bearer rk-str",
+      "Bearer rk-3",
+    ])
+      expect(t.authenticate(a), String(a)).toBeUndefined();
+    writeFileSync(f, JSON.stringify({ "rk-3": { tenantId: "t9", runnerId: "r9" } }));
+    utimesSync(f, new Date(), new Date(Date.now() + 5000));
+    expect(t.authenticate("Bearer rk-3")).toEqual({ tenantId: "t9", runnerId: "r9" });
+    expect(t.authenticate("Bearer rk-1")).toBeUndefined();
+    writeFileSync(f, "{ not json");
+    utimesSync(f, new Date(), new Date(Date.now() + 10_000));
+    expect(t.authenticate("Bearer rk-3")).toBeUndefined();
   });
 });
 

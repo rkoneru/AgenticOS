@@ -9,7 +9,13 @@ import { startStandalone } from "./standalone-wire.js";
 
 try {
   const running = await startStandalone(configFromEnv(process.env));
-  console.log(JSON.stringify({ event: "listening", port: running.port }));
+  console.log(
+    JSON.stringify({
+      event: "listening",
+      port: running.port,
+      ...(running.evalRunnerPort !== undefined ? { eval_runner_port: running.evalRunnerPort } : {}),
+    }),
+  );
   for (const sig of ["SIGTERM", "SIGINT"] as const)
     process.on(sig, () => void running.close().finally(() => process.exit(0)));
 } catch (e) {

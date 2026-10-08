@@ -15,23 +15,27 @@ import {
   FakeIdentityProver,
   createMarketplace,
 } from "@axis/marketplace";
-import { PgDocStore as PgEvalDocStore, createEvalHub } from "@axis/eval-hub";
+import { PgDocStore as PgEvalDocStore, createEvalHub, createHubDevServer } from "@axis/eval-hub";
+import { compileAbl } from "@axis/abl";
 import {
   PgRegistryStore,
   RegistryService,
   ServiceAudit,
   generatePublisherKey,
+  listenLoopback,
 } from "@axis/registry";
 import pg from "pg";
 import { HttpApprovalsClient } from "./adapters/approvals-http.js";
 import type { GatewayOptions } from "./context.js";
 import { wireGateway } from "./dev-wire.js";
 import type { Gateway } from "./server.js";
-import { TokenTable, type StandaloneConfig } from "./standalone.js";
+import { RunnerTokenTable, TokenTable, type StandaloneConfig } from "./standalone.js";
 
 export interface RunningGateway {
   gateway: Gateway;
   port: number;
+  /** The Eval Hub's runner-facing loopback port (only with `GW_EVAL_RUNNER_TOKENS_FILE`). */
+  evalRunnerPort?: number;
   close(): Promise<void>;
 }
 
@@ -118,7 +122,7 @@ export async function startStandalone(
     signer: new HmacSealSigner(Buffer.from(c.sealKey, "utf8")),
     ...role,
   });
-  const { gateway } = wireGateway(
+  const { gateway, deps } = wireGateway(
     {
       controlPlane: cp,
       authorizer,
@@ -155,11 +159,45 @@ export async function startStandalone(
     },
   );
   const port = await gateway.listen(c.port, c.host);
+  let runnerServer: ReturnType<typeof createHubDevServer> | undefined;
+  let evalRunnerPort: number | undefined;
+  if (c.evalRunner) {
+    const table = new RunnerTokenTable(c.evalRunner.tokensFile);
+    runnerServer = createHubDevServer({
+      hub: evals,
+      tokens: {},
+      authenticate: (authorization) => {
+        const cred = table.authenticate(authorization);
+        return cred === undefined ? undefined : { kind: "runner", ...cred };
+      },
+      // The compiled manifest of a stored blueprint version, for the runner that is executing it. A registry version is re-verified
+      // (hash, signature, provenance) on every read; a tenant-local blueprint comes from the gateway's own store.
+      manifests: {
+        manifest: async (tenantId, ref) => {
+          try {
+            const abl =
+              ref.namespace === null
+                ? (await deps.blueprints.get(tenantId, ref.name, ref.version))?.abl
+                : (await registry.getVersion({ tenantId }, ref.namespace, ref.name, ref.version))
+                    .abl;
+            if (abl === undefined) return undefined;
+            const r = compileAbl(abl);
+            return r.ok ? r.manifest : undefined;
+          } catch {
+            return undefined;
+          }
+        },
+      },
+    });
+    evalRunnerPort = await listenLoopback(runnerServer, c.evalRunner.port);
+  }
   return {
     gateway,
     port,
+    ...(evalRunnerPort !== undefined ? { evalRunnerPort } : {}),
     close: async () => {
       await gateway.close();
+      if (runnerServer) await new Promise<void>((r) => runnerServer?.close(() => r()));
       await pool.end();
     },
   };

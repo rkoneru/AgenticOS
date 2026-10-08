@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { isIP } from "node:net";
 
@@ -24,6 +25,12 @@ export interface StandaloneConfig {
   approvals: { url: string; tokensFile: string };
   bundleDir: string | undefined;
   rate: { burst: number; perSecond: number } | undefined;
+  /**
+   * The Eval Hub's RUNNER-facing HTTP surface (claim, suites, datasets, results, manifests, online). Off unless a tokens file is given.
+   * The tenant-facing evals API stays on the gateway port; this second loopback listener exists because runners authenticate with
+   * runner credentials (token + signed body), not with API keys.
+   */
+  evalRunner: { tokensFile: string; port: number } | undefined;
 }
 
 const HEX64 = /^[0-9a-f]{64}$/i;
@@ -106,7 +113,59 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
     approvals: { url: url("GW_APPROVALS_URL"), tokensFile: need("GW_APPROVALS_TOKENS_FILE") },
     bundleDir: env["GW_BUNDLE_DIR"] || undefined,
     rate,
+    evalRunner: env["GW_EVAL_RUNNER_TOKENS_FILE"]
+      ? {
+          tokensFile: env["GW_EVAL_RUNNER_TOKENS_FILE"],
+          port: int("GW_EVAL_RUNNER_PORT", 0, 0, 65535),
+        }
+      : undefined,
   };
+}
+
+/** A runner credential: who it is, for which tenant, and the key its request bodies are signed with (default: the token). */
+export interface RunnerCredential {
+  tenantId: string;
+  runnerId: string;
+  signingKey?: string;
+}
+
+/** `{ "<token>": {tenantId, runnerId, signingKey?} }` re-read when the file changes. Lookups compare digests in constant time. */
+export class RunnerTokenTable {
+  private stamp = "";
+  private entries: { h: Buffer; cred: RunnerCredential }[] = [];
+  constructor(private readonly path: string) {}
+  authenticate(authorization: string | undefined): RunnerCredential | undefined {
+    if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) return undefined;
+    try {
+      const st = statSync(this.path);
+      const m = `${st.mtimeMs}:${st.size}:${st.ino}`;
+      if (m !== this.stamp) {
+        const j = JSON.parse(readFileSync(this.path, "utf8")) as Record<string, unknown>;
+        this.entries = Object.entries(j).flatMap(([tok, v]) => {
+          const o = v as Partial<RunnerCredential> | null;
+          return o && typeof o.tenantId === "string" && typeof o.runnerId === "string"
+            ? [
+                {
+                  h: createHash("sha256").update(tok).digest(),
+                  cred: {
+                    tenantId: o.tenantId,
+                    runnerId: o.runnerId,
+                    ...(typeof o.signingKey === "string" ? { signingKey: o.signingKey } : {}),
+                  },
+                },
+              ]
+            : [];
+        });
+        this.stamp = m;
+      }
+    } catch {
+      return undefined;
+    }
+    const h = createHash("sha256").update(authorization.slice(7)).digest();
+    let found: RunnerCredential | undefined;
+    for (const e of this.entries) if (timingSafeEqual(e.h, h)) found = e.cred;
+    return found;
+  }
 }
 
 /** `{ "<tenant uuid>": "<token>" }` re-read when the file changes (tenants are created after the gateway started). */

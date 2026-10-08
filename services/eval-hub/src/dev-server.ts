@@ -48,6 +48,8 @@ export interface ManifestSource {
 export interface HubDevServerDeps {
   hub: EvalHub;
   tokens: Record<string, DevAuth>;
+  /** Replaces the static `tokens` lookup (tokens that appear while the server runs, e.g. a runner provisioned for a new tenant). */
+  authenticate?: (authorization: string | undefined) => DevAuth | undefined;
   /** Enables `GET /v1/evals/runner/manifest?name=&version=[&namespace=]` for runners that hold a running run of that version. */
   manifests?: ManifestSource;
   rateLimit?: { max: number; windowMs: number };
@@ -119,7 +121,7 @@ const q = (u: URL, k: string): string | undefined => u.searchParams.get(k) ?? un
 
 export function createHubDevServer(deps: HubDevServerDeps): http.Server {
   refuseProduction("eval-hub");
-  const auth = staticTokenAuthenticator(deps.tokens);
+  const auth = deps.authenticate ?? staticTokenAuthenticator(deps.tokens);
   const limiter = new RateLimiter(
     deps.rateLimit?.max ?? 600,
     deps.rateLimit?.windowMs ?? 60_000,
