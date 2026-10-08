@@ -51,7 +51,7 @@ const fail = async (p: Promise<unknown>): Promise<RegistryError> => {
 };
 
 describe("the eval gate port", () => {
-  it("is asked with the suites of the STORED blueprint, only when it declares some", async () => {
+  it("is asked with the suites of the STORED blueprint; with a hub wired it is asked even when none are declared (tenant-required suites)", async () => {
     const seen: EvalGateInput[] = [];
     const gate: EvalGatePort = {
       check: (i) => (seen.push(i), Promise.resolve({ allowed: true, reasons: [] })),
@@ -60,7 +60,9 @@ describe("the eval gate port", () => {
     await pub.publish(withSuites("agent-one", "1.0.0", [{ ref: "smoke@1.0.0", threshold: 0.8 }]));
     await pub.publish(withSuites("agent-two", "1.0.0", []));
     await svc.setVersionPublic(MARKET, pub.namespace, "agent-two", "1.0.0");
-    expect(seen).toEqual([]);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ suites: [], blueprint: { name: "agent-two" } });
+    seen.length = 0;
     await svc.setVersionPublic(MARKET, pub.namespace, "agent-one", "1.0.0");
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
@@ -74,6 +76,26 @@ describe("the eval gate port", () => {
       name: "agent-one",
       version: "1.0.0",
     });
+  });
+
+  it("a wired hub that refuses blocks a blueprint that declares no suites (a tenant-required suite is missing a run)", async () => {
+    const { svc, pub } = await setup({
+      check: () =>
+        Promise.resolve({
+          allowed: false,
+          reasons: [{ code: "missing_run", suite_ref: "house@1.0.0", message: "no run" }],
+        }),
+    });
+    await pub.publish(withSuites("agent-two", "1.0.0", []));
+    const e = await fail(svc.setVersionPublic(MARKET, pub.namespace, "agent-two", "1.0.0"));
+    expect(e).toMatchObject({ code: "evals_gate_failed", checks: ["missing_run"] });
+  });
+
+  it("without a wired hub a blueprint that declares no suites is released (nothing could know of a requirement)", async () => {
+    const { svc, pub } = await setup();
+    await pub.publish(withSuites("agent-two", "1.0.0", []));
+    await svc.setVersionPublic(MARKET, pub.namespace, "agent-two", "1.0.0");
+    expect((await svc.listVersions({ tenantId: null }, pub.namespace, "agent-two")).length).toBe(1);
   });
 
   it("refuses with evals_gate_failed (409) and the reasons; the version stays private; the refusal is audited", async () => {
