@@ -46,6 +46,8 @@ const PATTERN_SAMPLES: Record<string, string> = {
   "^[0-9a-f]{64}$": "a".repeat(64),
   "^[0-9a-f]{32}$": "b".repeat(32),
   "^[a-z][a-z0-9-]{1,62}$": "sample-name",
+  "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$": "sample-id",
+  "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$": "sample-id",
 };
 
 export function synthesize(schema: Record<string, unknown>): unknown {
