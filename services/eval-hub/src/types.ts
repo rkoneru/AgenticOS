@@ -316,4 +316,6 @@ export interface OnlineResult {
   status: "complete" | "pending_human";
   runner_id: string;
   at: string;
+  /** Set on the record that completes a `pending_human` result once its review tasks resolved (the pending record is append-only). */
+  resolves?: string | null;
 }

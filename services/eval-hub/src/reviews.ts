@@ -2,6 +2,7 @@ import { redactPatterns } from "@axis/channels";
 import { requireTenant } from "./authz.js";
 import { denyAudit, guarded, iso, mutate, type Ctx } from "./context.js";
 import { conflict, forbidden, invalid, notFound } from "./errors.js";
+import type { OnlineService } from "./online.js";
 import type { RunService } from "./runs.js";
 import { ID_RE, type HubPrincipal, type ReviewTaskDoc, type TenantActor } from "./types.js";
 
@@ -21,10 +22,17 @@ const MAX_COMMENT = 2000;
  *  - every transition is audited; SLA breaches are recorded once (`sweep`) and shown on every view.
  */
 export class ReviewService {
+  private online?: OnlineService;
+
   constructor(
     private readonly c: Ctx,
     private readonly runs: RunService,
   ) {}
+
+  /** Wired by `createEvalHub`: tasks of sampled production results (`run_id` = `online:<result id>`) resolve there, never on a run. */
+  attachOnline(o: OnlineService): void {
+    this.online = o;
+  }
 
   private view(t: ReviewTaskDoc): TaskView {
     return {
@@ -180,7 +188,11 @@ export class ReviewService {
       if (next.state === "resolved") resolvedRun = next.run_id;
       return this.view(next);
     });
-    if (resolvedRun !== undefined) await this.runs.humanResolved(p.tenantId, resolvedRun);
+    if (resolvedRun !== undefined) {
+      if (resolvedRun.startsWith("online:"))
+        await this.online?.humanResolved(p.tenantId, resolvedRun.slice("online:".length));
+      else await this.runs.humanResolved(p.tenantId, resolvedRun);
+    }
     return out;
   }
 

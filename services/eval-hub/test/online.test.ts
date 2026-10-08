@@ -144,6 +144,64 @@ describe("ingestion", () => {
     expect((await w2.hub.online.summary(w2.admin, {}))[0]).toMatchObject({ count: 0, mean: null });
   });
 
+  it("queues review tasks for a pending human grade (redacted again, publisher excluded) and appends the completed record when they resolve", async () => {
+    const w = world({ publishers: { publisherOf: () => Promise.resolve("pat-publisher") } });
+    await seedSuite(w, {
+      graders: [
+        { id: "exact", kind: "deterministic", weight: 1, config: { type: "exact" } },
+        { id: "human", kind: "human", weight: 1, config: { rubric: "ok?", sla_hours: 2 } },
+      ],
+    });
+    await registerRunner(w);
+    await w.hub.online.put(w.admin, "prod", cfg());
+    const reviewer = user(w.tenant, "reviewer", "rita-reviewer");
+    const pending = await w.hub.online.ingest(
+      w.runner,
+      onlineSample(
+        { exact: 1, human: null },
+        {
+          kinds: { human: "human" },
+          patch: (p) =>
+            (p["review_tasks"] = [
+              {
+                case_id: "run-prod-1",
+                grader_id: "human",
+                rubric: "ok?",
+                input: "call me at 415-555-0100",
+                output: "SSN 123-45-6789 on file",
+                expected: null,
+              },
+            ]),
+        },
+      ),
+    );
+    expect(pending.status).toBe("pending_human");
+    const tasks = await w.hub.reviews.list(reviewer, {});
+    expect(tasks).toHaveLength(1);
+    const t = tasks[0] as (typeof tasks)[number];
+    expect(t.run_id).toBe(`online:${pending.id}`);
+    expect(t.conflicts).toEqual(["pat-publisher"]);
+    expect(JSON.stringify(t)).not.toContain("123-45-6789");
+    expect(JSON.stringify(t)).not.toContain("415-555-0100");
+    // the publisher cannot take it
+    expect(await code(w.hub.reviews.claim(user(w.tenant, "reviewer", "pat-publisher"), t.id))).toBe(
+      "forbidden:",
+    );
+    await w.hub.reviews.claim(reviewer, t.id);
+    expect((await w.hub.online.summary(w.admin, {}))[0]).toMatchObject({ count: 0 });
+    await w.hub.reviews.grade(reviewer, t.id, { score: 0.5, comment: "fine" });
+    // (1 + 0.5) / 2: the completed record is appended; the pending one is untouched
+    expect((await w.hub.online.summary(w.admin, {}))[0]).toMatchObject({ count: 1, mean: 0.75 });
+    const rows = await w.docs.find(w.tenant, "online");
+    expect(rows).toHaveLength(2);
+    // online data never reaches the gate: the gate stays blocked without a ci run
+    const gate = await w.hub.gate.check(w.admin, {
+      blueprint: { name: "support-agent", version: "1.0.0", content_hash: "a".repeat(64) },
+      suites: [{ ref: "smoke@1.0.0" }],
+    });
+    expect(gate.allowed).toBe(false);
+  });
+
   it("REJECTS a score or status that does not match the grades", async () => {
     const w = await ready();
     await w.hub.online.put(w.admin, "prod", cfg());
