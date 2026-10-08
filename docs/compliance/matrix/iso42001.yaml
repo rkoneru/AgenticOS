@@ -169,6 +169,7 @@ rows:
       [services/compliance/src/records/assessments.ts, packages/db/migrations/0016_compliance.sql]
     config: []
     evidence:
+      - { kind: make, ref: e2e-compliance }
       - { kind: test, ref: services/compliance/test/records.test.ts }
       - { kind: test, ref: services/compliance/test/stores.test.ts }
       - { kind: test, ref: services/compliance/test/properties.test.ts }

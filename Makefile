@@ -1,4 +1,4 @@
-.PHONY: compliance-check e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: compliance-check e2e-compliance e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -168,3 +168,10 @@ docs-build:
 compliance-check:
 	pnpm --filter @axis/compliance build
 	node services/compliance/dist/cli.js check $(ARGS)
+
+# Compliance on the REAL stack (the Phase 7 stack: Postgres 16 with forced RLS, the standalone gateway, registry, Eval Hub, audit chain) through the
+# TS SDK, the Python SDK and the CLI: inventory, independent review (the author is refused), overdue detection, sealed documentation from real
+# records (idempotent, changes with activity, fails verification when altered), cross-tenant and scope checks, audit chain. Same prerequisites as e2e-phase7.
+e2e-compliance:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_compliance.py -p no:cacheprovider --no-cov

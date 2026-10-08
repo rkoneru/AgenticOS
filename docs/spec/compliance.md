@@ -123,5 +123,5 @@ builder. Review: owner, admin, auditor. API-key scopes `compliance:read` and `co
 
 `services/compliance`: 120+ tests, memory and real Postgres 16 as the application role; property tests for determinism, seal tamper detection
 (every single value of a document), tenant isolation and reviewer independence; mutation script with about 55 safety mutants. Gateway: the
-contract test covers all 75 operations; `test/compliance.test.ts` covers the workflow, scopes, tenancy and the sources. See also
+contract test covers all 75 operations; `test/compliance.test.ts` covers the workflow, scopes, tenancy and the sources. `make e2e-compliance` runs the workflow on the real stack (Postgres 16 with forced RLS, the standalone gateway, the registry, the Eval Hub, the audit chain) through the TS SDK, the Python SDK and the CLI, including a document altered behind the service; `apps/console/e2e-real/compliance.spec.ts` covers the console pages on the same stack. See also
 `docs/runbooks/compliance.md` and `docs/security/compliance-threat-model.md`.

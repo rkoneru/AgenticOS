@@ -50,6 +50,7 @@ rows:
       ]
     config: []
     evidence:
+      - { kind: make, ref: e2e-compliance }
       - { kind: test, ref: services/compliance/test/docgen.test.ts }
       - { kind: test, ref: services/compliance/test/properties.test.ts }
     status: Built
@@ -148,6 +149,7 @@ rows:
     code: [services/compliance/src/records/assessments.ts, apps/console/app]
     config: []
     evidence:
+      - { kind: make, ref: e2e-compliance }
       - { kind: test, ref: services/compliance/test/records.test.ts }
       - { kind: test, ref: services/compliance/test/properties.test.ts }
     status: Prototype

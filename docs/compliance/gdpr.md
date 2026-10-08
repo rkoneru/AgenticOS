@@ -23,7 +23,7 @@ Matrix version 1. Rows: 15 (Built 2, Prototype 6, Designed 3, Gap 4).
 | GDPR-Art30 | Records of processing activities are maintained and available to the supervisory authority. | Prototype | `services/compliance/test/records.test.ts`<br>`services/compliance/test/stores.test.ts` |
 | GDPR-Art32 | Technical and organisational measures give a level of security appropriate to the risk. | Prototype | `services/control-plane/test/crypto.test.ts`<br>`services/audit/test/checkpoint.test.ts`<br>`e2e-phase6` |
 | GDPR-Art33-34 | A personal data breach is notified to the supervisory authority within 72 hours and, where risk is high, to the data subjects. | Designed | `docs/runbooks/audit.md` |
-| GDPR-Art35 | A data protection impact assessment is made before processing that is likely to result in a high risk. | Prototype | `services/compliance/test/records.test.ts`<br>`services/compliance/test/properties.test.ts` |
+| GDPR-Art35 | A data protection impact assessment is made before processing that is likely to result in a high risk. | Prototype | `e2e-compliance`<br>`services/compliance/test/records.test.ts`<br>`services/compliance/test/properties.test.ts` |
 | GDPR-Art44-49 | Personal data is transferred outside the EEA only under an adequacy decision, safeguards or a listed derogation. | Designed | `packages/abl/test/lint.test.ts` |
 
 ## Controls
@@ -164,7 +164,7 @@ Matrix version 1. Rows: 15 (Built 2, Prototype 6, Designed 3, Gap 4).
 - **AXIS mechanism:** AI impact assessment records link a system and its blueprint versions to affected groups, risks, mitigations and a review date, with an independent reviewer and overdue detection.
 - **Code:** `services/compliance/src/records/assessments.ts`, `services/compliance/src/records/states.ts`
 - **Config / flags:** none
-- **Evidence:** test: `services/compliance/test/records.test.ts`; test: `services/compliance/test/properties.test.ts`
+- **Evidence:** make: `e2e-compliance`; test: `services/compliance/test/records.test.ts`; test: `services/compliance/test/properties.test.ts`
 - **Status:** Prototype
 - **Notes and limits:** The record is an AI impact assessment, not a templated DPIA; prior consultation with the authority and DPO advice are not modelled.
 

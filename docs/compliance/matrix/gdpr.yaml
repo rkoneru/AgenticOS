@@ -187,6 +187,7 @@ rows:
       [services/compliance/src/records/assessments.ts, services/compliance/src/records/states.ts]
     config: []
     evidence:
+      - { kind: make, ref: e2e-compliance }
       - { kind: test, ref: services/compliance/test/records.test.ts }
       - { kind: test, ref: services/compliance/test/properties.test.ts }
     status: Prototype
