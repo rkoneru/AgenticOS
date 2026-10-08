@@ -202,6 +202,17 @@ export async function seedTenant(
     "INSERT INTO eval_hub_docs (tenant_id, coll, key, rev, data) VALUES ($1, 'runs', 'seed-run', 1, '{\"status\": \"queued\"}')",
     [t],
   );
+  const subj = await q("INSERT INTO governance_subjects (tenant_id, salt) VALUES ($1, decode($2, 'hex')) RETURNING subject_id", [t, H("5")]);
+  const subjectId = subj.rows[0].subject_id as string;
+  await q("INSERT INTO governance_subject_identifiers (tenant_id, lookup_hmac, subject_id, kind) VALUES ($1, $2, $3, 'email')", [t, H("4"), subjectId]);
+  await q(
+    "INSERT INTO governance_requests (tenant_id, id, kind, subject_id, subject_ref, status, received_at, due_at, requested_by) VALUES ($1, gen_random_uuid(), 'erase', $2, 'sub_' || substr($3, 1, 32), 'received', now(), now() + interval '30 days', 'seed')",
+    [t, subjectId, H("3")],
+  );
+  await q("INSERT INTO governance_steps (tenant_id, request_id, provider, phase, status) SELECT tenant_id, id, 'seed', 'erase', 'done' FROM governance_requests WHERE tenant_id = $1", [t]);
+  await q("INSERT INTO governance_holds (tenant_id, id, kind, scope, reason, placed_by, placed_at) VALUES ($1, gen_random_uuid(), 'legal_hold', 'tenant', 'seed hold', 'seed', now())", [t]);
+  await q("INSERT INTO governance_retention_policies (tenant_id, data_class, days, updated_by) VALUES ($1, 'run_logs', 90, 'seed')", [t]);
+  await q("INSERT INTO governance_retention_runs (tenant_id, id, dry_run, started_at) VALUES ($1, gen_random_uuid(), true, now())", [t]);
   await q(
     "INSERT INTO registry_eval_attestations (tenant_id, namespace, name, version, run_id, suite_ref, content_hash, overall, envelope, attached_at, attached_by) VALUES ($2, $1, 'seed-agent', '1.0.0', 'seed-run', 'smoke@1', $3, 0.9, '{}', now(), 'seed')",
     [`seedns-${slug}`, t, H("6")],
