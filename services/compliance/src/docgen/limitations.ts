@@ -1,3 +1,4 @@
+import type { ComplianceActor } from "../authz.js";
 import type { BlueprintRef } from "../types.js";
 import {
   missing,
@@ -35,8 +36,8 @@ export function parseNeeds(text: string): Limitation[] {
 /** The platform's known limitations as the repository records them (docs/NEEDS.md), read through a function so tests need no disk. */
 export class NeedsLimitations implements LimitationsSourcePort {
   constructor(private readonly readText: () => string | undefined) {}
-  list(_tenantId: string, _bp: BlueprintRef): Promise<Sourced<Limitation[]>> {
-    void _tenantId;
+  list(_actor: ComplianceActor, _bp: BlueprintRef): Promise<Sourced<Limitation[]>> {
+    void _actor;
     void _bp;
     let text: string | undefined;
     try {

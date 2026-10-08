@@ -9,6 +9,13 @@ import { redactText } from "./redact.js";
 import { GeneratedApi } from "./generated/client.js";
 import { DEFAULT_BASE_URL, OPERATIONS } from "./generated/operations.js";
 import type {
+  ComplianceImpactAssessmentInput,
+  ComplianceImpactAssessmentUpdate,
+  ComplianceSystemInput,
+  ComplianceSystemUpdate,
+  ListComplianceDocumentsParams,
+  ListComplianceImpactAssessmentsParams,
+  ListComplianceSystemsParams,
   Approval,
   ApprovalPage,
   ApprovalStatus,
@@ -861,6 +868,146 @@ export class Marketplace {
  * The AXIS client. The tenant is always derived from the credential by the server: there is deliberately no
  * tenant option, and passing one is an error.
  */
+type IdemArgs = { idempotencyKey?: string | undefined };
+/** The fields of an update without the optimistic-concurrency token (the SDK takes it as an argument, never inside the patch). */
+type Patch<T extends { expected_version: number }> = Omit<T, "expected_version">;
+
+/** AI system inventory (ISO/IEC 42001 asset register). Every change is a new version; nothing is deleted. */
+export class ComplianceSystems {
+  constructor(private readonly ax: Axis) {}
+  list(args: ListComplianceSystemsParams = {}, options?: Opts) {
+    return this.ax.api.listComplianceSystems(pick(args), options);
+  }
+  create(body: ComplianceSystemInput, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.createComplianceSystem(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  /** The latest version, or an earlier one with `version`. */
+  get(systemId: string, version?: number, options?: Opts) {
+    return this.ax.api.getComplianceSystem(pick({ systemId, version }), options);
+  }
+  /** `expectedVersion` is the version you read; a stale one is a 409 conflict. */
+  update(
+    systemId: string,
+    expectedVersion: number,
+    patch: Patch<ComplianceSystemUpdate>,
+    options?: Opts,
+  ) {
+    return this.ax.api.updateComplianceSystem(
+      { systemId, body: { ...patch, expected_version: expectedVersion } },
+      options,
+    );
+  }
+}
+
+/** AI impact assessments with an independent review: draft, submit, approve or reject; a reviewed version never changes. */
+export class ComplianceAssessments {
+  constructor(private readonly ax: Axis) {}
+  list(args: ListComplianceImpactAssessmentsParams = {}, options?: Opts) {
+    return this.ax.api.listComplianceImpactAssessments(pick(args), options);
+  }
+  create(body: ComplianceImpactAssessmentInput, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.createComplianceImpactAssessment(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  get(assessmentId: string, version?: number, options?: Opts) {
+    return this.ax.api.getComplianceImpactAssessment(pick({ assessmentId, version }), options);
+  }
+  /** Edits the draft in place; when the latest version was approved or rejected it starts the next version. */
+  revise(
+    assessmentId: string,
+    expectedVersion: number,
+    patch: Patch<ComplianceImpactAssessmentUpdate>,
+    options?: Opts,
+  ) {
+    return this.ax.api.reviseComplianceImpactAssessment(
+      { assessmentId, body: { ...patch, expected_version: expectedVersion } },
+      options,
+    );
+  }
+  submit(assessmentId: string, expectedVersion: number, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.submitComplianceImpactAssessment(
+      pick({
+        assessmentId,
+        body: { expected_version: expectedVersion },
+        idempotencyKey: args.idempotencyKey,
+      }),
+      options,
+    );
+  }
+  withdraw(assessmentId: string, expectedVersion: number, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.withdrawComplianceImpactAssessment(
+      pick({
+        assessmentId,
+        body: { expected_version: expectedVersion },
+        idempotencyKey: args.idempotencyKey,
+      }),
+      options,
+    );
+  }
+  /** The reviewer is never the author, a contributor or the submitter (403). A rejection needs a comment. */
+  review(
+    assessmentId: string,
+    expectedVersion: number,
+    decision: "approve" | "reject",
+    comment?: string,
+    args: IdemArgs = {},
+    options?: Opts,
+  ) {
+    return this.ax.api.reviewComplianceImpactAssessment(
+      pick({
+        assessmentId,
+        body: pick({ expected_version: expectedVersion, decision, comment }),
+        idempotencyKey: args.idempotencyKey,
+      }),
+      options,
+    );
+  }
+  approve(assessmentId: string, expectedVersion: number, comment?: string, options?: Opts) {
+    return this.review(assessmentId, expectedVersion, "approve", comment, {}, options);
+  }
+  reject(assessmentId: string, expectedVersion: number, comment: string, options?: Opts) {
+    return this.review(assessmentId, expectedVersion, "reject", comment, {}, options);
+  }
+}
+
+/** Sealed technical documentation (EU AI Act Annex IV structure), designed for and evidence-ready toward it; not a conformity assessment. */
+export class ComplianceDocuments {
+  constructor(private readonly ax: Axis) {}
+  /** Assembles the document from the platform's records. Missing sources are gaps in the document. `created` is false when nothing changed. */
+  generate(blueprint: BlueprintRef, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.generateComplianceDocument(
+      pick({
+        body: { blueprint: parseBlueprintRef(blueprint) },
+        idempotencyKey: args.idempotencyKey,
+      }),
+      options,
+    );
+  }
+  list(args: ListComplianceDocumentsParams = {}, options?: Opts) {
+    return this.ax.api.listComplianceDocuments(pick(args), options);
+  }
+  /** The document and a fresh verification of its content hash, Markdown and seal. */
+  get(documentId: string, options?: Opts) {
+    return this.ax.api.getComplianceDocument({ documentId }, options);
+  }
+}
+
+export class Compliance {
+  readonly systems: ComplianceSystems;
+  readonly assessments: ComplianceAssessments;
+  readonly documents: ComplianceDocuments;
+  constructor(ax: Axis) {
+    this.systems = new ComplianceSystems(ax);
+    this.assessments = new ComplianceAssessments(ax);
+    this.documents = new ComplianceDocuments(ax);
+  }
+}
+
 export class Axis {
   readonly transport: HttpTransport;
   /** One method per operationId (generated). */
@@ -874,6 +1021,7 @@ export class Axis {
   readonly usage: Usage;
   readonly evals: Evals;
   readonly registry: Registry;
+  readonly compliance: Compliance;
   readonly marketplace: Marketplace;
   readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
@@ -915,6 +1063,7 @@ export class Axis {
     this.usage = new Usage(this);
     this.evals = new Evals(this);
     this.registry = new Registry(this);
+    this.compliance = new Compliance(this);
     this.marketplace = new Marketplace(this);
   }
 

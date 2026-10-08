@@ -28,6 +28,7 @@ _PATTERN_SAMPLES = {
     "^[a-z][a-z0-9-]{1,62}$": "sample-name",
     "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$": "sample-id",
     "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$": "sample-id",
+    r"^\d{4}-\d{2}-\d{2}$": "2026-12-31",
 }
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
@@ -246,6 +247,8 @@ class MockServer:
                     continue
                 t = p["schema"].get("type")
                 val: Any = int(raw_v) if t == "integer" and raw_v.lstrip("-").isdigit() else raw_v
+                if t == "boolean" and raw_v in ("true", "false"):
+                    val = raw_v == "true"
                 if validate(p["schema"], val):
                     bad(f"query {p['name']}={raw_v} invalid")
             if p["in"] == "header":

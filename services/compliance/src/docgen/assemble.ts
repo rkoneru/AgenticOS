@@ -449,6 +449,7 @@ export function assemble(input: AssembleInput): DocBody {
         event_count: a.event_count,
         head_seq: a.head_seq,
         head_hash: a.head_hash,
+        window_from_seq: a.window_from_seq,
         first_event_at: a.first_ts,
         last_event_at: a.last_ts,
         by_decision: sortedRecord(a.by_decision),

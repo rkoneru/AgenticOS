@@ -1,7 +1,11 @@
 import type { AblDocument } from "@axis/abl";
+import type { ComplianceActor } from "../authz.js";
 import type { BlueprintRef } from "../types.js";
 
 /**
+ * Every source is asked on behalf of the CALLER (`actor`: tenant, subject and role from the credential). A source reads that tenant's
+ * records only and never takes a tenant from anywhere else.
+ *
  * A data source that may be unavailable. The generator NEVER invents data for a missing source and never drops it silently: an
  * unavailable source becomes an explicit gap in the document.
  */
@@ -38,7 +42,7 @@ export interface BlueprintSnapshot {
 }
 
 export interface BlueprintSourcePort {
-  get(tenantId: string, ref: BlueprintRef): Promise<Sourced<BlueprintSnapshot>>;
+  get(actor: ComplianceActor, ref: BlueprintRef): Promise<Sourced<BlueprintSnapshot>>;
 }
 
 export interface EvalRunInfo {
@@ -82,7 +86,7 @@ export interface EvalEvidence {
 }
 export interface EvalSourcePort {
   evidence(
-    tenantId: string,
+    actor: ComplianceActor,
     bp: BlueprintRef & { content_hash: string },
     declared: { ref: string; threshold: number }[],
   ): Promise<Sourced<EvalEvidence>>;
@@ -95,13 +99,15 @@ export interface PolicyPackInfo {
   active_since: string | null;
 }
 export interface PolicySourcePort {
-  activePacks(tenantId: string): Promise<Sourced<PolicyPackInfo[]>>;
+  activePacks(actor: ComplianceActor): Promise<Sourced<PolicyPackInfo[]>>;
 }
 
 export interface AuditStats {
   event_count: number;
   head_seq: number;
   head_hash: string | null;
+  /** The events counted and verified: `[from_seq, head_seq]`. A long chain is summarised over its most recent window. */
+  window_from_seq: number;
   first_ts: string | null;
   last_ts: string | null;
   by_decision: Record<string, number>;
@@ -109,7 +115,7 @@ export interface AuditStats {
   chain: { verified: boolean; checked_through_seq: number; reason: string | null };
 }
 export interface AuditSourcePort {
-  statistics(tenantId: string): Promise<Sourced<AuditStats>>;
+  statistics(actor: ComplianceActor): Promise<Sourced<AuditStats>>;
 }
 
 export interface Limitation {
@@ -119,7 +125,7 @@ export interface Limitation {
   evidence: string | null;
 }
 export interface LimitationsSourcePort {
-  list(tenantId: string, bp: BlueprintRef): Promise<Sourced<Limitation[]>>;
+  list(actor: ComplianceActor, bp: BlueprintRef): Promise<Sourced<Limitation[]>>;
 }
 
 export interface SourcePorts {

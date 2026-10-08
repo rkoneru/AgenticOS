@@ -537,7 +537,7 @@ describe("NeedsLimitations", () => {
     expect(items[0]).toMatchObject({ title: "Single instance", evidence: "services/x" });
   });
   it("is a gap when the file is missing, unreadable or empty", async () => {
-    const run = (f: () => string | undefined) => new NeedsLimitations(f).list(T1, REF);
+    const run = (f: () => string | undefined) => new NeedsLimitations(f).list(user(T1), REF);
     expect(await run(() => text)).toMatchObject({ ok: true });
     expect(await run(() => undefined)).toMatchObject({ ok: false });
     expect(

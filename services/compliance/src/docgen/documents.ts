@@ -100,12 +100,12 @@ export class DocumentService {
       { blueprint: r.name, version: r.version },
       async () => {
         const t = p.tenantId;
-        const blueprint = await safely("blueprint", () => this.ports.blueprints.get(t, r));
+        const blueprint = await safely("blueprint", () => this.ports.blueprints.get(p, r));
         const declared = blueprint.ok ? (blueprint.value.abl.spec.evals?.suites ?? []) : [];
         const evals = blueprint.ok
           ? await safely("evals", () =>
               this.ports.evals.evidence(
-                t,
+                p,
                 {
                   ...r,
                   content_hash: (blueprint as { ok: true; value: { content_hash: string } }).value
@@ -116,9 +116,9 @@ export class DocumentService {
             )
           : missing<never>("evals not read: the blueprint source is unavailable");
         const [policies, audit, limitations] = await Promise.all([
-          safely("policies", () => this.ports.policies.activePacks(t)),
-          safely("audit", () => this.ports.audit.statistics(t)),
-          safely("limitations", () => this.ports.limitations.list(t, r)),
+          safely("policies", () => this.ports.policies.activePacks(p)),
+          safely("audit", () => this.ports.audit.statistics(p)),
+          safely("limitations", () => this.ports.limitations.list(p, r)),
         ]);
         const body = assemble({ ref: r, blueprint, evals, policies, audit, limitations });
         const existing = (

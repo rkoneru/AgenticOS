@@ -178,6 +178,51 @@ ERGONOMIC = {
         "acme", "agent-one", "1.0.0", "a" * 64, "digest"
     ),
     "uninstallMarketplaceListing": lambda ax: ax.marketplace.uninstall("acme", "agent-one"),
+    "listComplianceSystems": lambda ax: ax.compliance.systems.list(risk_level="high"),
+    "createComplianceSystem": lambda ax: ax.compliance.systems.create(
+        {
+            "name": "Claims triage",
+            "purpose": "Routes claims",
+            "owner": "owner@example.test",
+            "risk_level": "high",
+        }
+    ),
+    "getComplianceSystem": lambda ax: ax.compliance.systems.get("claims-triage", version=1),
+    "updateComplianceSystem": lambda ax: ax.compliance.systems.update(
+        "claims-triage", 1, {"lifecycle_stage": "deployed"}
+    ),
+    "listComplianceImpactAssessments": lambda ax: ax.compliance.assessments.list(
+        system_id="claims-triage", overdue=True
+    ),
+    "createComplianceImpactAssessment": lambda ax: ax.compliance.assessments.create(
+        {
+            "system_id": "claims-triage",
+            "title": "Impact",
+            "risk_rating": "high",
+            "intended_use": "Routing",
+            "review_due": "2027-01-01",
+        }
+    ),
+    "getComplianceImpactAssessment": lambda ax: ax.compliance.assessments.get(
+        "assessment-1", version=2
+    ),
+    "reviseComplianceImpactAssessment": lambda ax: ax.compliance.assessments.revise(
+        "assessment-1", 1, {"title": "Retitled"}
+    ),
+    "submitComplianceImpactAssessment": lambda ax: ax.compliance.assessments.submit(
+        "assessment-1", 1
+    ),
+    "withdrawComplianceImpactAssessment": lambda ax: ax.compliance.assessments.withdraw(
+        "assessment-1", 1
+    ),
+    "reviewComplianceImpactAssessment": lambda ax: ax.compliance.assessments.review(
+        "assessment-1", 1, "approve", "reviewed"
+    ),
+    "listComplianceDocuments": lambda ax: ax.compliance.documents.list(
+        blueprint_name="agent-one", blueprint_version="1.0.0"
+    ),
+    "generateComplianceDocument": lambda ax: ax.compliance.documents.generate("agent-one@1.0.0"),
+    "getComplianceDocument": lambda ax: ax.compliance.documents.get("cdoc-abc"),
 }
 
 

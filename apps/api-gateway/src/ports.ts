@@ -497,3 +497,41 @@ export interface EvalsPort {
 }
 export type EvalRunDto = { id: string; suite: string; status: string } & Record<string, unknown>;
 export type EvalRunDetailDto = EvalRunDto & { case_results: unknown[] };
+
+// ---- compliance -----------------------------------------------------------------------------------------------------------
+
+type Rec = Record<string, unknown>;
+
+/**
+ * AI system inventory, AI impact assessments and sealed technical documentation (wire shapes = OpenAPI 1.5.0). The tenant, the member
+ * and the role come from the principal and nothing else.
+ */
+export interface CompliancePort {
+  listSystems(p: Principal, q: { risk_level?: string; lifecycle_stage?: string }): Promise<Rec[]>;
+  createSystem(p: Principal, body: Rec): Promise<Rec>;
+  getSystem(p: Principal, id: string, version?: number): Promise<Rec>;
+  updateSystem(p: Principal, id: string, expectedVersion: number, body: Rec): Promise<Rec>;
+  listAssessments(
+    p: Principal,
+    q: { system_id?: string; state?: string; overdue?: boolean },
+  ): Promise<Rec[]>;
+  createAssessment(p: Principal, body: Rec): Promise<Rec>;
+  getAssessment(p: Principal, id: string, version?: number): Promise<Rec>;
+  reviseAssessment(p: Principal, id: string, expectedVersion: number, body: Rec): Promise<Rec>;
+  submitAssessment(p: Principal, id: string, expectedVersion: number): Promise<Rec>;
+  withdrawAssessment(p: Principal, id: string, expectedVersion: number): Promise<Rec>;
+  reviewAssessment(
+    p: Principal,
+    id: string,
+    r: { expected_version: number; decision: "approve" | "reject"; comment?: string },
+  ): Promise<Rec>;
+  generateDocument(
+    p: Principal,
+    blueprint: { name: string; version: string },
+  ): Promise<{ document: Rec; created: boolean }>;
+  listDocuments(
+    p: Principal,
+    q: { blueprint_name?: string; blueprint_version?: string },
+  ): Promise<Rec[]>;
+  getDocument(p: Principal, id: string): Promise<{ document: Rec; verification: Rec }>;
+}

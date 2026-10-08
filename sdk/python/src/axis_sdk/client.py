@@ -1044,6 +1044,234 @@ class Marketplace:
         )
 
 
+class ComplianceSystems:
+    """AI system inventory (ISO/IEC 42001 asset register).
+
+    Every change is a new version; nothing is deleted."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(
+        self,
+        *,
+        risk_level: Literal["minimal", "limited", "high"] | None = None,
+        lifecycle_stage: Literal["design", "development", "deployed", "retired"] | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_compliance_systems(
+            risk_level=risk_level, lifecycle_stage=lifecycle_stage, options=options
+        )
+
+    def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.create_compliance_system(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    def get(
+        self, system_id: str, *, version: int | None = None, options: RequestOptions | None = None
+    ) -> Any:
+        """The latest version, or an earlier one with ``version``."""
+        return self._ax.api.get_compliance_system(
+            system_id=system_id, version=version, options=options
+        )
+
+    def update(
+        self,
+        system_id: str,
+        expected_version: int,
+        patch: dict[str, Any],
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """``expected_version`` is the version you read; a stale one is a 409 conflict."""
+        return self._ax.api.update_compliance_system(
+            system_id=system_id,
+            body=cast("Any", {**patch, "expected_version": expected_version}),
+            options=options,
+        )
+
+
+class ComplianceAssessments:
+    """AI impact assessments with an independent review."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(
+        self,
+        *,
+        system_id: str | None = None,
+        state: Literal["draft", "in_review", "approved", "rejected"] | None = None,
+        overdue: bool | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_compliance_impact_assessments(
+            system_id=system_id, state=state, overdue=overdue, options=options
+        )
+
+    def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.create_compliance_impact_assessment(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    def get(
+        self,
+        assessment_id: str,
+        *,
+        version: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.get_compliance_impact_assessment(
+            assessment_id=assessment_id, version=version, options=options
+        )
+
+    def revise(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        patch: dict[str, Any],
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Edit the draft in place; a reviewed latest version starts the next one."""
+        return self._ax.api.revise_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body=cast("Any", {**patch, "expected_version": expected_version}),
+            options=options,
+        )
+
+    def submit(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.submit_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body={"expected_version": expected_version},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def withdraw(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.withdraw_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body={"expected_version": expected_version},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def review(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        decision: Literal["approve", "reject"],
+        comment: str | None = None,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Approve or reject; never the author, a contributor or the submitter (403).
+
+        A rejection needs a comment."""
+        body = _drop_none(expected_version=expected_version, decision=decision, comment=comment)
+        return self._ax.api.review_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body=cast("Any", body),
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def approve(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        comment: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self.review(assessment_id, expected_version, "approve", comment, options=options)
+
+    def reject(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        comment: str,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self.review(assessment_id, expected_version, "reject", comment, options=options)
+
+
+class ComplianceDocuments:
+    """Sealed technical documentation (EU AI Act Annex IV structure).
+
+    Designed for and evidence-ready toward it; not a conformity assessment."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def generate(
+        self,
+        blueprint: BlueprintRef,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Assemble the document from the platform's records.
+
+        Missing sources are gaps in the document; ``created`` is false if nothing changed."""
+        return self._ax.api.generate_compliance_document(
+            body={"blueprint": parse_blueprint_ref(blueprint)},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def list(
+        self,
+        *,
+        blueprint_name: str | None = None,
+        blueprint_version: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_compliance_documents(
+            blueprint_name=blueprint_name, blueprint_version=blueprint_version, options=options
+        )
+
+    def get(self, document_id: str, *, options: RequestOptions | None = None) -> Any:
+        """The document and a fresh verification of its hash, Markdown and seal."""
+        return self._ax.api.get_compliance_document(document_id=document_id, options=options)
+
+
+class Compliance:
+    def __init__(self, ax: Axis) -> None:
+        self.systems = ComplianceSystems(ax)
+        self.assessments = ComplianceAssessments(ax)
+        self.documents = ComplianceDocuments(ax)
+
+
 class Axis:
     """Synchronous AXIS client."""
 
@@ -1087,6 +1315,7 @@ class Axis:
         self.usage = Usage(self)
         self.evals = Evals(self)
         self.registry = Registry(self)
+        self.compliance = Compliance(self)
         self.marketplace = Marketplace(self)
 
     @property
@@ -2060,6 +2289,238 @@ class AsyncMarketplace:
         )
 
 
+class AsyncComplianceSystems:
+    """AI system inventory (ISO/IEC 42001 asset register).
+
+    Every change is a new version; nothing is deleted."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(
+        self,
+        *,
+        risk_level: Literal["minimal", "limited", "high"] | None = None,
+        lifecycle_stage: Literal["design", "development", "deployed", "retired"] | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_compliance_systems(
+            risk_level=risk_level, lifecycle_stage=lifecycle_stage, options=options
+        )
+
+    async def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.create_compliance_system(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    async def get(
+        self, system_id: str, *, version: int | None = None, options: RequestOptions | None = None
+    ) -> Any:
+        """The latest version, or an earlier one with ``version``."""
+        return await self._ax.api.get_compliance_system(
+            system_id=system_id, version=version, options=options
+        )
+
+    async def update(
+        self,
+        system_id: str,
+        expected_version: int,
+        patch: dict[str, Any],
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """``expected_version`` is the version you read; a stale one is a 409 conflict."""
+        return await self._ax.api.update_compliance_system(
+            system_id=system_id,
+            body=cast("Any", {**patch, "expected_version": expected_version}),
+            options=options,
+        )
+
+
+class AsyncComplianceAssessments:
+    """AI impact assessments with an independent review."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(
+        self,
+        *,
+        system_id: str | None = None,
+        state: Literal["draft", "in_review", "approved", "rejected"] | None = None,
+        overdue: bool | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_compliance_impact_assessments(
+            system_id=system_id, state=state, overdue=overdue, options=options
+        )
+
+    async def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.create_compliance_impact_assessment(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    async def get(
+        self,
+        assessment_id: str,
+        *,
+        version: int | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.get_compliance_impact_assessment(
+            assessment_id=assessment_id, version=version, options=options
+        )
+
+    async def revise(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        patch: dict[str, Any],
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Edit the draft in place; a reviewed latest version starts the next one."""
+        return await self._ax.api.revise_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body=cast("Any", {**patch, "expected_version": expected_version}),
+            options=options,
+        )
+
+    async def submit(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.submit_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body={"expected_version": expected_version},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def withdraw(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.withdraw_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body={"expected_version": expected_version},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def review(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        decision: Literal["approve", "reject"],
+        comment: str | None = None,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Approve or reject; never the author, a contributor or the submitter (403).
+
+        A rejection needs a comment."""
+        body = _drop_none(expected_version=expected_version, decision=decision, comment=comment)
+        return await self._ax.api.review_compliance_impact_assessment(
+            assessment_id=assessment_id,
+            body=cast("Any", body),
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def approve(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        comment: str | None = None,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self.review(
+            assessment_id, expected_version, "approve", comment, options=options
+        )
+
+    async def reject(
+        self,
+        assessment_id: str,
+        expected_version: int,
+        comment: str,
+        *,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self.review(
+            assessment_id, expected_version, "reject", comment, options=options
+        )
+
+
+class AsyncComplianceDocuments:
+    """Sealed technical documentation (EU AI Act Annex IV structure).
+
+    Designed for and evidence-ready toward it; not a conformity assessment."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def generate(
+        self,
+        blueprint: BlueprintRef,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Assemble the document from the platform's records.
+
+        Missing sources are gaps in the document; ``created`` is false if nothing changed."""
+        return await self._ax.api.generate_compliance_document(
+            body={"blueprint": parse_blueprint_ref(blueprint)},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def list(
+        self,
+        *,
+        blueprint_name: str | None = None,
+        blueprint_version: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_compliance_documents(
+            blueprint_name=blueprint_name, blueprint_version=blueprint_version, options=options
+        )
+
+    async def get(self, document_id: str, *, options: RequestOptions | None = None) -> Any:
+        """The document and a fresh verification of its hash, Markdown and seal."""
+        return await self._ax.api.get_compliance_document(document_id=document_id, options=options)
+
+
+class AsyncCompliance:
+    def __init__(self, ax: AsyncAxis) -> None:
+        self.systems = AsyncComplianceSystems(ax)
+        self.assessments = AsyncComplianceAssessments(ax)
+        self.documents = AsyncComplianceDocuments(ax)
+
+
 class AsyncAxis:
     """Asynchronous AXIS client (same surface as :class:`Axis`, every call is awaitable)."""
 
@@ -2103,6 +2564,7 @@ class AsyncAxis:
         self.usage = AsyncUsage(self)
         self.evals = AsyncEvals(self)
         self.registry = AsyncRegistry(self)
+        self.compliance = AsyncCompliance(self)
         self.marketplace = AsyncMarketplace(self)
 
     @property

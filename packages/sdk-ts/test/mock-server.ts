@@ -48,6 +48,7 @@ const PATTERN_SAMPLES: Record<string, string> = {
   "^[a-z][a-z0-9-]{1,62}$": "sample-name",
   "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$": "sample-id",
   "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$": "sample-id",
+  "^\\d{4}-\\d{2}-\\d{2}$": "2026-12-31",
 };
 
 export function synthesize(schema: Record<string, unknown>): unknown {
@@ -207,7 +208,12 @@ export function createMockServer(opts: MockOptions = {}) {
           continue;
         }
         const t = (p.schema as { type?: string }).type;
-        const v = t === "integer" || t === "number" ? Number(raw) : raw;
+        const v =
+          t === "integer" || t === "number"
+            ? Number(raw)
+            : t === "boolean" && (raw === "true" || raw === "false")
+              ? raw === "true"
+              : raw;
         if (!ajv.validate(p.schema, v)) bad(`query ${p.name}=${raw} invalid: ${ajv.errorsText()}`);
       }
       if (p.in === "header") {

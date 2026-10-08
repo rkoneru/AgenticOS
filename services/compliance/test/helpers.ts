@@ -130,6 +130,7 @@ export const STATS: AuditStats = {
   event_count: 120,
   head_seq: 120,
   head_hash: "c".repeat(64),
+  window_from_seq: 1,
   first_ts: "2026-01-01T00:00:00.000Z",
   last_ts: "2026-01-03T00:00:00.000Z",
   by_decision: { ALLOW: 100, DENY: 15, REQUIRE_APPROVAL: 5 },
@@ -141,8 +142,8 @@ export const STATS: AuditStats = {
 export function fakeSources(over: Partial<SourcePorts> = {}, calls: string[] = []): SourcePorts {
   return {
     blueprints: {
-      get: (t, ref) => {
-        calls.push(`blueprints:${t}`);
+      get: (a, ref) => {
+        calls.push(`blueprints:${a.tenantId}`);
         return Promise.resolve(
           ref.name === "claims-triage" && ref.version === "2.3.1"
             ? sourced(snapshot())
@@ -151,14 +152,14 @@ export function fakeSources(over: Partial<SourcePorts> = {}, calls: string[] = [
       },
     },
     evals: {
-      evidence: (t) => {
-        calls.push(`evals:${t}`);
+      evidence: (a) => {
+        calls.push(`evals:${a.tenantId}`);
         return Promise.resolve(sourced(EVIDENCE));
       },
     },
     policies: {
-      activePacks: (t) => {
-        calls.push(`policies:${t}`);
+      activePacks: (a) => {
+        calls.push(`policies:${a.tenantId}`);
         return Promise.resolve(
           sourced([
             {
@@ -172,14 +173,14 @@ export function fakeSources(over: Partial<SourcePorts> = {}, calls: string[] = [
       },
     },
     audit: {
-      statistics: (t) => {
-        calls.push(`audit:${t}`);
+      statistics: (a) => {
+        calls.push(`audit:${a.tenantId}`);
         return Promise.resolve(sourced(STATS));
       },
     },
     limitations: {
-      list: (t) => {
-        calls.push(`limitations:${t}`);
+      list: (a) => {
+        calls.push(`limitations:${a.tenantId}`);
         return Promise.resolve(
           sourced([{ id: "NEEDS-1", title: "single instance", detail: null, evidence: null }]),
         );

@@ -8,6 +8,14 @@ import {
   type EvalHub,
   type HubPrincipal,
 } from "@axis/eval-hub";
+import {
+  ComplianceAudit,
+  HmacSealer,
+  MemoryDocStore as MemoryComplianceDocStore,
+  NeedsLimitations,
+  createCompliance,
+  type Compliance,
+} from "@axis/compliance";
 import { HmacSealSigner, MemoryUsageLedger } from "@axis/billing";
 import {
   FakeDomainProver,
@@ -54,6 +62,9 @@ import {
   MarketplaceAdapter,
   RegistryAdapter,
   EvalsAdapter,
+  ComplianceAdapter,
+  UnavailableCompliance,
+  gatewayComplianceSources,
   LedgerUsage,
   MemoryBlueprintStore,
   MemoryIdempotencyStore,
@@ -100,6 +111,7 @@ export interface World {
   registry: RegistryService;
   marketplace: Marketplace;
   evals: EvalHub;
+  compliance: Compliance;
   /** The key the registry trusts for eval-result attestations (the hub of this world signs nothing by itself). */
   hubKey: PublisherKeyPair;
   mpDomain: FakeDomainProver;
@@ -190,9 +202,25 @@ export async function makeWorld(
     registry: new RegistryAdapter(registry),
     marketplace: new MarketplaceAdapter(marketplace),
     evals: new EvalsAdapter(evals),
+    compliance: new UnavailableCompliance(),
     idempotency: idem,
     ...over,
   };
+  // The compliance service reads its document sources from the gateway's OWN ports (same tenant scoping, same roles).
+  const compliance = createCompliance({
+    docs: new MemoryComplianceDocStore(),
+    audit: new ComplianceAudit(audit),
+    sealer: new HmacSealer(randomBytes(32), "test-seal"),
+    sources: gatewayComplianceSources({
+      blueprints: deps.blueprints,
+      registry: deps.registry,
+      evals: deps.evals,
+      policies: deps.policies,
+      auditLog: deps.auditLog,
+      limitations: new NeedsLimitations(() => "| 1 | Single instance | in-memory | services/x |"),
+    }),
+  });
+  if (over.compliance === undefined) deps.compliance = new ComplianceAdapter(compliance);
   const gw = createGateway(deps, {
     validateResponses: true,
     allowedOrigins: ["https://console.example.test"],
@@ -212,6 +240,7 @@ export async function makeWorld(
     registry,
     marketplace,
     evals,
+    compliance,
     hubKey,
     mpDomain,
     ledger,
@@ -354,6 +383,15 @@ export interface Seed {
   approvalId: string;
   denySeq: number;
   blueprint: { name: string; version: string };
+  /** Compliance fixtures of the owner's tenant (authored by a builder, so the owner may review them). */
+  compliance: {
+    systemId: string;
+    draftId: string;
+    submitId: string;
+    withdrawId: string;
+    reviewId: string;
+    documentId: string;
+  };
   /** Eval Hub fixtures of the owner's tenant: a passed run (the baseline), a second finished run to compare, review tasks, a runner to revoke. */
   evals: {
     runId: string;
@@ -591,9 +629,11 @@ export async function seed(w: World, owner?: Cred): Promise<Seed> {
   });
   if (pol.status !== 201) throw new Error(`seed policy: ${pol.text}`);
   const evals = await seedEvals(w, o, pub.body.content_hash as string, blueprint);
+  const compliance = await seedCompliance(w, o, blueprint);
   return {
     owner: o,
     evals,
+    compliance,
     listing: { namespace: listed.namespace, name: listed.name, version: listed.version },
     install: { content_hash: preview.contentHash, consent_digest: preview.consentDigest },
     own: { namespace: ownNs, name: "own-agent", key: ownKey },
@@ -603,6 +643,50 @@ export async function seed(w: World, owner?: Cred): Promise<Seed> {
     approvalId: approval.id,
     denySeq: denied.seq,
     blueprint,
+  };
+}
+
+/** An inventoried system, assessments in every state a contract test needs, and a generated document, all authored by a builder. */
+async function seedCompliance(
+  w: World,
+  o: Cred,
+  blueprint: { name: string; version: string },
+): Promise<Seed["compliance"]> {
+  const author = await w.member(o.tenantId, "builder");
+  const a = { tenantId: o.tenantId, subject: author.memberId, role: "builder" };
+  const systemId = `sys-${rid(6)}`;
+  await w.compliance.systems.create(a, {
+    system_id: systemId,
+    name: "Seed system",
+    purpose: "Contract test system",
+    owner: "owner@example.test",
+    risk_level: "limited",
+    blueprints: [blueprint],
+  });
+  const mk = async (): Promise<string> =>
+    (
+      await w.compliance.assessments.create(a, {
+        system_id: systemId,
+        title: "Seed assessment",
+        risk_rating: "medium",
+        intended_use: "Contract test",
+        review_due: "2099-01-01",
+      })
+    ).assessment_id;
+  const draftId = await mk();
+  const submitId = await mk();
+  const withdrawId = await mk();
+  await w.compliance.assessments.submit(a, withdrawId, 1);
+  const reviewId = await mk();
+  await w.compliance.assessments.submit(a, reviewId, 1);
+  const doc = await w.compliance.documents.generate(a, blueprint);
+  return {
+    systemId,
+    draftId,
+    submitId,
+    withdrawId,
+    reviewId,
+    documentId: doc.document.meta.document_id,
   };
 }
 

@@ -31,6 +31,11 @@ export interface StandaloneConfig {
    * runner credentials (token + signed body), not with API keys.
    */
   evalRunner: { tokensFile: string; port: number } | undefined;
+  /**
+   * A NEEDS.md-style file whose numbered rows are listed as "known limitations" in generated technical documentation. Without it the
+   * documents list the limitations source as a gap. The compliance documents are sealed with a key derived from `sealKey`.
+   */
+  complianceNeedsFile: string | undefined;
 }
 
 const HEX64 = /^[0-9a-f]{64}$/i;
@@ -119,6 +124,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
           port: int("GW_EVAL_RUNNER_PORT", 0, 0, 65535),
         }
       : undefined,
+    complianceNeedsFile: env["GW_COMPLIANCE_NEEDS_FILE"] || undefined,
   };
 }
 

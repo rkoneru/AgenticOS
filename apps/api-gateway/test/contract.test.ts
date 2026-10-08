@@ -229,6 +229,67 @@ const FIXTURES: Record<string, Fx> = {
     "POST",
     (s) => `/marketplace/installs/${s.listing.namespace}/${s.listing.name}/uninstall`,
   ),
+  listComplianceSystems: ok("GET", "/compliance/systems?risk_level=limited"),
+  createComplianceSystem: ok("POST", "/compliance/systems", 201, () => ({
+    name: "Contract system",
+    purpose: "Created by the contract test",
+    owner: "owner@example.test",
+    risk_level: "minimal",
+  })),
+  getComplianceSystem: ok("GET", (s) => `/compliance/systems/${s.compliance.systemId}?version=1`),
+  updateComplianceSystem: ok(
+    "PUT",
+    (s) => `/compliance/systems/${s.compliance.systemId}`,
+    200,
+    () => ({ expected_version: 1, lifecycle_stage: "deployed" }),
+  ),
+  listComplianceImpactAssessments: ok(
+    "GET",
+    (s) => `/compliance/impact-assessments?system_id=${s.compliance.systemId}&overdue=false`,
+  ),
+  createComplianceImpactAssessment: ok("POST", "/compliance/impact-assessments", 201, (s) => ({
+    system_id: s.compliance.systemId,
+    title: "Contract assessment",
+    risk_rating: "low",
+    intended_use: "Created by the contract test",
+    review_due: "2099-06-30",
+  })),
+  getComplianceImpactAssessment: ok(
+    "GET",
+    (s) => `/compliance/impact-assessments/${s.compliance.draftId}`,
+  ),
+  reviseComplianceImpactAssessment: ok(
+    "PUT",
+    (s) => `/compliance/impact-assessments/${s.compliance.draftId}`,
+    200,
+    () => ({ expected_version: 1, title: "Retitled by the contract test" }),
+  ),
+  submitComplianceImpactAssessment: ok(
+    "POST",
+    (s) => `/compliance/impact-assessments/${s.compliance.submitId}/submit`,
+    200,
+    () => ({ expected_version: 1 }),
+  ),
+  withdrawComplianceImpactAssessment: ok(
+    "POST",
+    (s) => `/compliance/impact-assessments/${s.compliance.withdrawId}/withdraw`,
+    200,
+    () => ({ expected_version: 1 }),
+  ),
+  reviewComplianceImpactAssessment: ok(
+    "POST",
+    (s) => `/compliance/impact-assessments/${s.compliance.reviewId}/review`,
+    200,
+    () => ({ expected_version: 1, decision: "approve", comment: "reviewed" }),
+  ),
+  listComplianceDocuments: ok(
+    "GET",
+    (s) => `/compliance/documents?blueprint_name=${s.blueprint.name}`,
+  ),
+  generateComplianceDocument: ok("POST", "/compliance/documents", 201, (s) => ({
+    blueprint: s.blueprint,
+  })),
+  getComplianceDocument: ok("GET", (s) => `/compliance/documents/${s.compliance.documentId}`),
 };
 
 const check = (op: (typeof spec.operations)[number], r: Res): void => {
@@ -252,8 +313,8 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     const ids = spec.operations.map((o) => o.id).sort();
     expect(Object.keys(ROUTES).sort()).toEqual(ids);
     expect(Object.keys(FIXTURES).sort()).toEqual(ids);
-    expect(ids.length).toBe(61);
-    expect(spec.version).toBe("1.4.0");
+    expect(ids.length).toBe(75);
+    expect(spec.version).toBe("1.5.0");
   });
 
   it("every operation has a security requirement in the document (nothing is public)", () => {
