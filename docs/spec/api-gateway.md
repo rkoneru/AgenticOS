@@ -93,7 +93,7 @@ Internal errors never include exception text.
 ## 7a. Standalone process (DEV composition, ADR 0054)
 
 `node apps/api-gateway/dist/main.js`; configuration only from the environment, validated by `configFromEnv` (exit 2 with the missing/invalid name, never a secret):
-`GW_DATABASE_URL`, `GW_DB_ROLE`, `GW_REGION` (default `us-east-1`), `GW_PORT` (0), `GW_HOST` (loopback only), `GW_ALLOWED_ORIGINS`, `GW_PEPPER` / `GW_COOKIE_KEY` / `GW_SIGNING_KEY`
+`GW_DATABASE_URL`, `GW_DB_ROLE`, `GW_REGION` (default `us-east-1`), `GW_PORT` (0), `GW_HOST` (loopback only), `GW_ALLOWED_ORIGINS`, `GW_TRUSTED_PROXIES` (IP literals of reverse proxies, e.g. the console BFF, whose `X-Forwarded-For` names the client for failed-auth throttling; default none; the console relays the header only with `AXIS_TRUST_PROXY=1`), `GW_PEPPER` / `GW_COOKIE_KEY` / `GW_SIGNING_KEY`
 (64 hex each, shared with the control plane so its sessions and API keys verify), `GW_SEAL_KEY`, `GW_RUN_SERVICE_URL` + `GW_RUN_TOKENS_FILE`, `GW_KERNEL_TARGET` +
 `GW_KERNEL_TOKENS_FILE`, `GW_APPROVALS_URL` + `GW_APPROVALS_TOKENS_FILE`, `GW_BUNDLE_DIR`, `GW_RATE_BURST` / `GW_RATE_PER_SEC`. Token files are `{ "<tenant uuid>": "<token>" }`,
 re-read when they change. It refuses `NODE_ENV=production` (dev adapters: static tokens, fake provers, in-memory blueprint store, NEEDS #275) and prints

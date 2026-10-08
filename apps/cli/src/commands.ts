@@ -18,7 +18,7 @@ import { completionScript, type Shell } from "./completion.js";
 import { markdownReference, type Command, type Ctx, type FlagSpec } from "./cli.js";
 import { configPath, loadConfig, resolveCredentials, saveConfig } from "./config.js";
 import { CliError, EXIT, UsageError } from "./exit.js";
-import { keyValues, structured, table, asJson, type Column } from "./render.js";
+import { inert, keyValues, structured, table, asJson, type Column } from "./render.js";
 import { REGISTRY_COMMANDS } from "./registry.js";
 
 // ------------------------------------------------------------------------------------------- helpers
@@ -118,7 +118,9 @@ const approvalCols: Column<Approval>[] = [
 export function formatEvent(e: RunEvent): string {
   const data = e.data && Object.keys(e.data).length > 0 ? JSON.stringify(e.data) : "";
   const short = data.length > 120 ? `${data.slice(0, 117)}...` : data;
-  return `${String(e.sequence).padStart(4)}  ${e.at}  ${e.type.padEnd(16)}  ${e.pid}${short ? `  ${short}` : ""}`.trimEnd();
+  return inert(
+    `${String(e.sequence).padStart(4)}  ${e.at}  ${e.type.padEnd(16)}  ${e.pid}${short ? `  ${short}` : ""}`,
+  ).trimEnd();
 }
 
 /** One event per line: compact NDJSON for json/yaml consumers, a readable line for tables. */

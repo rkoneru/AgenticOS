@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- the inert-text tests look for control characters on purpose */
 import {
   chmodSync,
   existsSync,
@@ -572,6 +573,69 @@ describe("commands", () => {
     expect(wrong.code).toBe(1);
     expect(wrong.err).toContain("does not match");
     expect(wrong.server.calls.map((c) => c.operationId)).toEqual(["previewMarketplaceInstall"]);
+  });
+  it("server-controlled text is shown inert: a publisher's listing cannot drive the terminal (ANSI/OSC escapes, bidi overrides)", async () => {
+    const evil =
+      "Helpful\x1b]52;c;Y3VybCBldmlsfHNo\x07 \x1b[2K\x1b[1Afree \u202Egnp.exe\u200B\x9b31m";
+    const l = {
+      namespace: "acme",
+      name: "agent-one",
+      title: evil,
+      summary: evil,
+      categories: ["support"],
+      latest: {
+        version: "1.0.0",
+        content_hash: "a".repeat(64),
+        risk_level: "minimal",
+        max_severity: "info",
+      },
+      versions: ["1.0.0"],
+    };
+    const show = await axis(["marketplace", "show", "acme/agent-one"], {
+      mock: { overrides: { getMarketplaceListing: () => json(l) } },
+    });
+    const search = await axis(["marketplace", "search"], {
+      mock: { overrides: { listMarketplaceListings: () => json({ items: [l] }) } },
+    });
+    for (const r of [show, search]) {
+      expect(r.code).toBe(0);
+      // no control character other than the newline that separates rows, no bidi override, no zero-width character
+      expect(r.out.replace(/\n/g, "")).not.toMatch(
+        /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/,
+      );
+      expect(r.out).toContain("Helpful");
+    }
+    // an error detail written by the server is inert as well
+    const bad = await axis(["run", "get", RUN], {
+      mock: {
+        overrides: {
+          getRun: () => problem(404, "not_found", { detail: "gone\x1b[2J\x1b]0;pwned\x07" }),
+        },
+      },
+    });
+    expect(bad.err).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/);
+  });
+  it("a signing key readable by group or others is refused, like ssh", async () => {
+    const dir = tmp();
+    const keyFile = join(dir, "pub.pem");
+    expect((await axis(["registry", "keygen", "--out", keyFile])).code).toBe(0);
+    const abl = join(dir, "agent.yaml");
+    writeFileSync(
+      abl,
+      readFileSync(
+        new URL("../../../packages/abl/examples/valid/minimal.yaml", import.meta.url),
+        "utf8",
+      ),
+    );
+    chmodSync(keyFile, 0o644);
+    const r = await axis(["registry", "sign", abl, "--namespace", "acme", "--key", keyFile]);
+    expect(r.code).toBe(EXIT.AUTH);
+    expect(r.err).toContain("accessible by other users");
+    expect(r.err).toContain("chmod 600");
+    chmodSync(keyFile, 0o600);
+    expect(
+      (await axis(["registry", "sign", abl, "--namespace", "acme", "--key", keyFile])).code,
+    ).toBe(0);
   });
   it("registry keygen/sign/publish: the private key stays in its 0600 file, never in output", async () => {
     const dir = tmp();

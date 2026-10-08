@@ -25,7 +25,7 @@ import {
   type FlagValue,
 } from "./cli.js";
 import { CliError, EXIT, UsageError } from "./exit.js";
-import type { OutputFormat } from "./render.js";
+import { inert, type OutputFormat } from "./render.js";
 
 export const CLI_VERSION = "0.1.0";
 
@@ -137,7 +137,9 @@ function makeCtx(
 }
 
 /** Map any thrown value to a clean message and an exit code. Nothing here can print a credential. */
-export function report(e: unknown, deps: Deps, err: (line: string) => void): number {
+export function report(e: unknown, deps: Deps, rawErr: (line: string) => void): number {
+  // Messages, details and ids may come from the server: never let them carry terminal control sequences.
+  const err = (line: string): void => rawErr(inert(line));
   if (e instanceof CliError) {
     err(`axis: ${e.message}`);
     for (const h of e.hints) err(`  hint: ${h}`);

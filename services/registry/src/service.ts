@@ -200,7 +200,7 @@ export class RegistryService {
       throw invalid(
         "namespace must match [a-z][a-z0-9-]{1,62} without trailing or doubled hyphens",
       );
-    if (RESERVED_NAMESPACES.includes(namespace)) throw forbidden("namespace is reserved");
+    // (the folded comparison also covers the exact name)
     if (RESERVED_NAMESPACES.some((r) => normalizeName(r) === normalizeName(namespace)))
       throw forbidden("namespace is reserved");
     return this.mutate(
@@ -237,6 +237,31 @@ export class RegistryService {
     if (!owner) throw notFound("namespace not found");
     await this.mutate(owner, p.subject, "registry.namespace.publish", { namespace }, () =>
       this.store.setPublic(owner, namespace, p.subject, this.now()),
+    );
+  }
+
+  /**
+   * Marketplace only: one reviewed version becomes readable by every tenant (and the namespace, with its keys, so a reader can verify
+   * it). Nothing else in the namespace is released: other blueprints and later versions stay private until they are released too.
+   */
+  async setVersionPublic(
+    p: PlatformPrincipal,
+    namespace: string,
+    name: string,
+    version: string,
+  ): Promise<void> {
+    requirePlatform(p);
+    const owner = await this.store.ownerOf(namespace);
+    if (!owner) throw notFound("namespace not found");
+    if (!(await this.store.getVersion({ tenantId: owner }, namespace, name, version)))
+      throw notFound("version not found");
+    await this.setNamespacePublic(p, namespace);
+    await this.mutate(
+      owner,
+      p.subject,
+      "registry.version.publish",
+      { namespace, name, version },
+      () => this.store.setVersionPublic(owner, namespace, name, version, p.subject, this.now()),
     );
   }
 
@@ -529,8 +554,10 @@ export class RegistryService {
       throw e;
     }
     if (needPublic) {
-      const n = await this.store.getNamespace({ tenantId: null }, dep.namespace);
-      if (!n?.public) throw invalid(`dependency ${key} is not in a public namespace`);
+      // What an anonymous reader would resolve for this range must be the very version the publisher resolved (a released one).
+      const anon = await this.resolve({ tenantId: null }, dep).catch(() => undefined);
+      if (anon?.version !== res.version)
+        throw invalid(`dependency ${key} is not in a public namespace (no released version)`);
     }
     for (const r of collectReferences(res.abl))
       if (r.registry) await this.walk(viewer, parseRef(r.ref), needPublic, self, seen, depth + 1);

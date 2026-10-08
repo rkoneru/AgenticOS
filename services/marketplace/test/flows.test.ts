@@ -808,7 +808,8 @@ describe.each(envs)("installs (%s)", (_n, mk) => {
       consentDigest: p3.consentDigest,
     });
     expect(again.installCount).toBe(2);
-    expect(await env.ledger.entries(pub.tenantId)).toHaveLength(2);
+    // a re-install by the same tenant is not a second billable install (test/hardening.test.ts: the meter cannot be inflated by cycling)
+    expect(await env.ledger.entries(pub.tenantId)).toHaveLength(1);
     await expect(env.mp.installs.get(admin, pub.namespace, "ghost-agent")).rejects.toMatchObject({
       code: "not_found",
     });

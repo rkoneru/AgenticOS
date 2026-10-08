@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 import type { IdemBegin, IdempotencyStore, RateLimiter, StoredResponse } from "./ports.js";
 
 // ---- token-bucket rate limiter ----------------------------------------------------------------------------------------------
@@ -59,6 +60,40 @@ export class TokenBuckets implements RateLimiter {
   get size(): number {
     return this.buckets.size;
   }
+}
+
+// ---- client address -------------------------------------------------------------------------------------------------------------
+
+/** `::ffff:127.0.0.1` and `127.0.0.1` are one address; IPv6 is compared lower-case. */
+function normalizeAddress(a: string): string {
+  const v = a.trim().toLowerCase();
+  const m = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(v);
+  return m ? (m[1] as string) : v;
+}
+
+/**
+ * The address a failed authentication is counted against. The peer's, unless the peer is a trusted proxy, in which case the right-most
+ * `X-Forwarded-For` entry that is not itself a trusted proxy and is a literal IP (a client cannot choose it: every trusted proxy
+ * appends the address it received the request from, so entries to the left of the first untrusted one are the client's claims).
+ * Without this, one unauthenticated client behind the console's BFF exhausts the shared bucket and every user is answered 429.
+ */
+export function clientAddress(
+  peer: string | undefined,
+  forwardedFor: string | string[] | undefined,
+  trusted: ReadonlySet<string>,
+): string {
+  const p = normalizeAddress(peer ?? "unknown");
+  if (trusted.size === 0 || !trusted.has(p) || forwardedFor === undefined) return p;
+  const hops = (Array.isArray(forwardedFor) ? forwardedFor.join(",") : forwardedFor)
+    .split(",")
+    .map(normalizeAddress)
+    .filter((h) => h !== "");
+  for (let i = hops.length - 1; i >= 0; i--) {
+    const h = hops[i] as string;
+    if (trusted.has(h)) continue;
+    return isIP(h) !== 0 ? h : p; // a malformed entry is not an identity: count the proxy's own bucket
+  }
+  return p;
 }
 
 // ---- idempotency store ----------------------------------------------------------------------------------------------------------

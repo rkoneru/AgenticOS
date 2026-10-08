@@ -177,11 +177,13 @@ async def main() -> None:
     class Live(dict[str, str]):
         def __init__(self, path: Path) -> None:
             super().__init__()
-            self.path, self.m = path, -1.0
+            self.path, self.m = path, (-1, -1, -1)
 
         def _load(self) -> None:
             try:
-                m = self.path.stat().st_mtime
+                st = self.path.stat()
+                # mtime alone misses a rewrite inside one timestamp tick (coarse filesystems): inode and size count too
+                m = (st.st_ino, st.st_size, st.st_mtime_ns)
                 if m != self.m:
                     self.clear()
                     self.update(json.loads(self.path.read_text()))

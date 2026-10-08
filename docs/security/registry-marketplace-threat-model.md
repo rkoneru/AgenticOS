@@ -26,3 +26,4 @@ network or storage attacker who can read/modify stored records.
 
 Not covered: a compromised registry operator with DB owner access (can rewrite rows; verification then fails for any record whose signature they cannot
 forge, but they can delete data or alter `publishedAt`), no transparency log, publisher keys are held by publishers (no KMS), the clock is trusted.
+| S7 | Publisher IP / unreviewed content exposed by listing a namespace | a version is public only when the marketplace released it (RLS on `registry_public_versions`, migration 0012); the review-time scan reads every model-visible text (tool descriptions, notice), folds Unicode/whitespace tricks, flags IPv6 literals and credentials in URLs; an install is re-checked after the write so a racing takedown flags it; publisher metering is once per (installer, listing) | transitive agent dependencies are not part of the consent (NEEDS #290) |

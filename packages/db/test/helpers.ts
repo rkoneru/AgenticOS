@@ -183,6 +183,18 @@ export async function seedTenant(
     [`seedpub-${slug}`, t],
   );
   await q(
+    "INSERT INTO registry_names (namespace, name, tenant_id, normalized, created_at) VALUES ($1, 'released-agent', $2, 'releasedagent', now())",
+    [`seedpub-${slug}`, t],
+  );
+  await q(
+    "INSERT INTO registry_versions (namespace, name, version, tenant_id, abl, content_hash, risk_level, signature, provenance, published_at, published_by) VALUES ($1, 'released-agent', '1.0.0', $2, '{}', $3, 'minimal', '{}', '{}', now(), 'seed')",
+    [`seedpub-${slug}`, t, H("7")],
+  );
+  await q(
+    "INSERT INTO registry_public_versions (namespace, name, version, tenant_id, listed_at, listed_by) VALUES ($1, 'released-agent', '1.0.0', $2, now(), 'seed')",
+    [`seedpub-${slug}`, t],
+  );
+  await q(
     "INSERT INTO marketplace_docs (tenant_id, coll, key, rev, data) VALUES ($1, 'publishers', 'self', 1, '{\"state\": \"pending\"}')",
     [t],
   );

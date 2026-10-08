@@ -61,7 +61,32 @@ describe("configFromEnv (standalone DEV gateway)", () => {
   });
 });
 
+describe("GW_TRUSTED_PROXIES", () => {
+  it("is empty by default and only accepts IP literals", () => {
+    expect(configFromEnv(good()).trustedProxies).toEqual([]);
+    expect(
+      configFromEnv({ ...good(), GW_TRUSTED_PROXIES: "127.0.0.1, ::1" }).trustedProxies,
+    ).toEqual(["127.0.0.1", "::1"]);
+    expect(() => configFromEnv({ ...good(), GW_TRUSTED_PROXIES: "console.internal" })).toThrow(
+      /GW_TRUSTED_PROXIES/,
+    );
+  });
+});
+
 describe("TokenTable", () => {
+  it("re-reads a rewrite that kept the same mtime (size and inode are part of the cache key)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gw-tok-"));
+    const f = join(dir, "t.json");
+    const t = new TokenTable(f);
+    writeFileSync(f, JSON.stringify({ a: "tok-a" }));
+    const when = new Date(Date.now() - 60_000);
+    utimesSync(f, when, when);
+    expect(t.get("a")).toBe("tok-a");
+    expect(t.get("b")).toBeUndefined();
+    writeFileSync(f, JSON.stringify({ a: "tok-a", b: "tok-b-new-tenant" }));
+    utimesSync(f, when, when); // the tenant was added within the same timestamp tick
+    expect(t.get("b")).toBe("tok-b-new-tenant");
+  });
   it("re-reads the file when it changes and treats a missing or broken file as no credential", () => {
     const dir = mkdtempSync(join(tmpdir(), "gw-tok-"));
     const f = join(dir, "t.json");

@@ -5,7 +5,27 @@ import { checkCsrf } from "@/lib/bff";
 import { checkAbl } from "@/lib/abl-diagnostics";
 
 export const dynamic = "force-dynamic";
+const MAX_BODY_BYTES = 1024 * 1024;
 export const runtime = "nodejs";
+
+async function readCapped(req: NextRequest, max: number): Promise<string | undefined> {
+  const reader = req.body?.getReader();
+  if (!reader) return "";
+  const dec = new TextDecoder();
+  let out = "";
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => undefined);
+      return undefined;
+    }
+    out += dec.decode(value, { stream: true });
+  }
+  return out + dec.decode();
+}
 
 /** Live ABL validation with the real compiler/linter. Pure computation: no tenant data is read or written. */
 export async function POST(req: NextRequest): Promise<Response> {
@@ -25,9 +45,14 @@ export async function POST(req: NextRequest): Promise<Response> {
   });
   if (!csrf.ok)
     return NextResponse.json({ title: "CSRF check failed", status: 403 }, { status: 403 });
+  // The session cookie is only checked for presence here, so this route must not be a free CPU/memory sink: the body is read with a
+  // cap (the editor limit is 256 KiB of text), whatever the Content-Length says or omits.
+  const raw = await readCapped(req, MAX_BODY_BYTES);
+  if (raw === undefined)
+    return NextResponse.json({ title: "Body too large", status: 413 }, { status: 413 });
   let body: unknown;
   try {
-    body = await req.json();
+    body = JSON.parse(raw);
   } catch {
     return NextResponse.json({ title: "Body must be JSON", status: 400 }, { status: 400 });
   }

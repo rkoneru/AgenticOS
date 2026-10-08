@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bearerFromCookie, checkCsrf, resolveUpstream, upstreamKind } from "@/lib/bff";
+import {
+  bearerFromCookie,
+  checkCsrf,
+  forwardedForHeader,
+  resolveUpstream,
+  upstreamKind,
+} from "@/lib/bff";
 import { buildCsp, isPublicPath, newNonce, safeReturnTo, securityHeaders } from "@/lib/security";
 import { can, NAV, ROLES } from "@/lib/roles";
 import { countdown } from "@/lib/sla";
@@ -43,6 +49,18 @@ describe("resolveUpstream", () => {
     expect(resolveUpstream(["v1", "a b"], "", B)).toBeUndefined();
     expect(resolveUpstream(["v1", "a/b"], "", B)).toBeUndefined();
     expect(resolveUpstream(["v1", "."], "", B)).toBeUndefined();
+  });
+});
+
+describe("forwardedForHeader", () => {
+  it("relays the client address only behind a trusted proxy, and only IP literals", () => {
+    expect(forwardedForHeader("198.51.100.7", false)).toBeUndefined(); // default: a client could name its own address
+    expect(forwardedForHeader(null, true)).toBeUndefined();
+    expect(forwardedForHeader("198.51.100.7", true)).toBe("198.51.100.7");
+    expect(forwardedForHeader("1.1.1.1 , 2001:db8::7", true)).toBe("1.1.1.1, 2001:db8::7");
+    expect(forwardedForHeader("evil.example, 1.2.3.4, <script>", true)).toBe("1.2.3.4");
+    expect(forwardedForHeader("1.2.3.4\r\nx: y", true)).toBeUndefined();
+    expect(forwardedForHeader("not-an-ip", true)).toBeUndefined();
   });
 });
 

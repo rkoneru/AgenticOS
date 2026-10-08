@@ -12,7 +12,7 @@ import {
   type PermissionDiff,
 } from "./capabilities.js";
 import { guarded, iso, mutate, requireRole, type Ctx } from "./ctx.js";
-import { tenantScope } from "./docstore.js";
+import { tenantScope, type Doc } from "./docstore.js";
 import type { ListingService } from "./listings.js";
 import { recommendedPolicyPack } from "./policy-stub.js";
 import { scanBlueprint, type ScanFinding, type Severity } from "./scan.js";
@@ -169,13 +169,14 @@ export class InstallService {
         added: pv.diff.added.map((a) => a.key),
       },
       async () => {
-        await guarded(
+        const doc = await guarded(
           () =>
             cur
               ? this.c.docs.update(scope, p.tenantId, "installs", key, cur.rev, rec)
               : this.c.docs.insert(scope, p.tenantId, "installs", key, rec),
           "install",
         );
+        await this.stillInstallable(p.tenantId, doc, rec);
         return rec;
       },
     );
@@ -261,12 +262,43 @@ export class InstallService {
       "marketplace.install.update",
       { key, from: cur.data.version, to: pv.version, widening: pv.diff.widening },
       async () => {
-        await guarded(
+        const doc = await guarded(
           () => this.c.docs.update(scope, p.tenantId, "installs", key, cur.rev, rec),
           "install",
         );
+        await this.stillInstallable(p.tenantId, doc, rec);
         return rec;
       },
+    );
+  }
+
+  /**
+   * A takedown flags the installs it can SEE. One that ran between this request's evaluation and its write found nothing to flag, so the
+   * write would leave an active install of a taken-down version. Re-check AFTER the write (order: write, then read the listing; the
+   * takedown does: block the listing, then look for installs): whichever of the two comes second sees the other, so the install is either
+   * flagged by the takedown or refused and flagged here.
+   */
+  private async stillInstallable(
+    tenantId: string,
+    doc: Doc<InstallRecord>,
+    rec: InstallRecord,
+  ): Promise<void> {
+    try {
+      await this.listings.installable(rec.namespace, rec.name, rec.version);
+      return;
+    } catch {
+      // fall through: not installable any more (or not provably so)
+    }
+    const reason = "taken down while this install was in progress";
+    await this.c.docs
+      .update(tenantScope(tenantId), tenantId, "installs", doc.key, doc.rev, {
+        ...doc.data,
+        state: "flagged",
+        flagReason: reason,
+      })
+      .catch(() => undefined);
+    throw conflict(
+      `${rec.namespace}/${rec.name}@${rec.version} was taken down; the install was flagged`,
     );
   }
 
@@ -321,17 +353,19 @@ export class InstallService {
    */
   private async meter(installer: string, rec: InstallRecord): Promise<InstallRecord> {
     if (!this.metering) return rec;
+    const who = createHash("sha256").update(installer).digest("hex").slice(0, 16);
     try {
       await this.metering.append({
         tenantId: rec.publisherTenantId,
-        idempotencyKey: `marketplace-install:${rec.id}`,
+        // One billable install per (installing tenant, listing): install -> uninstall -> install again must not run up the publisher's meter.
+        idempotencyKey: `marketplace-install:${who}:${installKey(rec.namespace, rec.name)}`,
         meter: "marketplace_installs",
         quantity: 1n,
         eventTime: new Date(rec.consentedAt),
         dimensions: {
           listing: installKey(rec.namespace, rec.name),
           version: rec.version,
-          installer: createHash("sha256").update(installer).digest("hex").slice(0, 16),
+          installer: who,
         },
         source: "marketplace",
       });

@@ -5,7 +5,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const MIG = "../../packages/db/migrations/0020_registry.sql";
+const MIG = "../../packages/db/migrations/0010_registry.sql";
+const MIG12 = "../../packages/db/migrations/0012_registry_public_versions.sql";
 const M = [
   // --- verification: every check must matter
   ["src/verify.ts", "if (!verifyDetached(key.publicKey, msg, sig.sig)) fail(", "if (false) fail("],
@@ -39,7 +40,7 @@ const M = [
     "if (!verdict.ok) {\n      if (viewer.tenantId",
     "if (false) {\n      if (viewer.tenantId",
   ],
-  ["src/service.ts", "if (RESERVED_NAMESPACES.includes(namespace))", "if (false)"],
+  ["src/service.ts", "if (RESERVED_NAMESPACES.some(", "if (false && RESERVED_NAMESPACES.some("],
   [
     "src/service.ts",
     'if (row.status.state === "yanked") throw conflict(',
@@ -65,11 +66,6 @@ const M = [
   ],
   [
     MIG,
-    "CREATE POLICY versions_read ON registry_versions FOR SELECT USING (axis.registry_visible(namespace, tenant_id));",
-    "CREATE POLICY versions_read ON registry_versions FOR SELECT USING (true);",
-  ],
-  [
-    MIG,
     "CREATE POLICY versions_insert ON registry_versions FOR INSERT WITH CHECK (axis.registry_owns(namespace, tenant_id));",
     "CREATE POLICY versions_insert ON registry_versions FOR INSERT WITH CHECK (tenant_id = axis.current_tenant());",
   ],
@@ -83,6 +79,24 @@ const M = [
     "CREATE POLICY keys_read ON registry_keys FOR SELECT USING (axis.registry_visible(namespace, tenant_id));",
     "CREATE POLICY keys_read ON registry_keys FOR SELECT USING (true);",
   ],
+  // --- per-version release (migration 0012, ADR 0055)
+  ["src/memory-store.ts", "this.pubVersions.has(k(r.namespace, r.name, r.version))", "true"],
+  [
+    MIG12,
+    "CREATE POLICY versions_read ON registry_versions FOR SELECT USING (axis.registry_version_visible(namespace, name, version, tenant_id));",
+    "CREATE POLICY versions_read ON registry_versions FOR SELECT USING (axis.registry_visible(namespace, tenant_id));",
+  ],
+  [
+    MIG12,
+    "CREATE POLICY names_read ON registry_names FOR SELECT USING (axis.registry_name_visible(namespace, name, tenant_id));",
+    "CREATE POLICY names_read ON registry_names FOR SELECT USING (true);",
+  ],
+  [
+    MIG12,
+    "CREATE POLICY events_read ON registry_version_events FOR SELECT USING (axis.registry_version_visible(namespace, name, version, tenant_id));",
+    "CREATE POLICY events_read ON registry_version_events FOR SELECT USING (true);",
+  ],
+  ["src/service.ts", "if (anon?.version !== res.version)", "if (false)"],
   // --- audit fail-closed, rate limits, dev server tenant binding
   ["src/audit.ts", 'throw unavailable("audit log unavailable");', "return undefined as never;"],
   ["src/http-kit.ts", "if (live.length >= this.max) {", "if (false) {"],

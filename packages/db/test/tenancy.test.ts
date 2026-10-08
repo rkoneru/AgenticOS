@@ -17,7 +17,15 @@ let c: pg.Client;
 let runA: string;
 let tenantTables: string[];
 /** Readable by every tenant and by anonymous readers BY DESIGN (public registry namespaces and their rows, migration 0010; the seed's private namespace is checked by the loop through the child tables, and services/registry tests cover the namespace table's private rows). */
-const PUBLIC_BY_DESIGN = new Set(["registry_public_namespaces", "registry_namespaces"]);
+const PUBLIC_BY_DESIGN = new Set([
+  "registry_public_namespaces",
+  "registry_namespaces",
+  "registry_public_versions",
+  // a RELEASED version (and its name and events) is public by design; private rows of these tables are checked below
+  "registry_names",
+  "registry_versions",
+  "registry_version_events",
+]);
 
 beforeAll(async () => {
   c = await connect();
@@ -107,6 +115,51 @@ describe("cross-tenant isolation at the database layer", () => {
         if (!PUBLIC_BY_DESIGN.has(t)) expect(foreign, `${t} foreign`).toBe(0);
       }
     }
+  });
+
+  it("an unreleased registry blueprint is invisible to other tenants and to anonymous readers; the released one is readable", async () => {
+    for (const [t, ns] of [
+      ["registry_names", "namespace"],
+      ["registry_versions", "namespace"],
+      ["registry_version_events", "namespace"],
+    ] as const) {
+      const q = `SELECT count(*)::int AS n FROM ${t} WHERE ${ns} LIKE 'seedns-%' AND tenant_id = '${A}'`;
+      expect(await asApp(c, B, async (x) => (await x.query(q)).rows[0].n as number), t).toBe(0);
+      expect(await asAppNoTenant(c, async (x) => (await x.query(q)).rows[0].n as number), t).toBe(
+        0,
+      );
+    }
+    const rel = "SELECT count(*)::int AS n FROM registry_versions WHERE name = 'released-agent'";
+    expect(
+      await asApp(c, B, async (x) => (await x.query(rel)).rows[0].n as number),
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      await asAppNoTenant(c, async (x) => (await x.query(rel)).rows[0].n as number),
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("only the owner of a registry version can release it (a tenant cannot publish another tenant's private blueprint)", async () => {
+    const ns = (
+      await c.query(
+        "SELECT namespace FROM registry_versions WHERE tenant_id = $1 AND namespace LIKE 'seedns-%'",
+        [A],
+      )
+    ).rows[0].namespace as string;
+    for (const claimed of [A, B]) {
+      const refused = await code(
+        asApp(c, B, (x) =>
+          x.query(
+            "INSERT INTO registry_public_versions (namespace, name, version, tenant_id, listed_at, listed_by) VALUES ($1, 'seed-agent', '1.0.0', $2, now(), 'attacker')",
+            [ns, claimed],
+          ),
+        ),
+      );
+      expect(refused, `claimed owner ${claimed === A ? "A" : "B"}`).toBe("42501");
+    }
+    const n = await c.query(
+      "SELECT count(*)::int AS n FROM registry_public_versions WHERE listed_by = 'attacker'",
+    );
+    expect(n.rows[0].n).toBe(0);
   });
 
   it("no tenant set => zero rows in every table", async () => {

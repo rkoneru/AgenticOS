@@ -18,6 +18,11 @@ import {
   type TenantPrincipal,
 } from "./types.js";
 
+/** Control, line-separator, zero-width and bidi-control characters: none belongs in a title or a summary (terminals interpret them). */
+const NOT_PLAIN_TEXT =
+  // eslint-disable-next-line no-control-regex
+  /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u206f\ufeff]/;
+
 export interface CatalogEntry {
   namespace: string;
   name: string;
@@ -81,6 +86,8 @@ export class ListingService {
     ] as const)
       if (typeof v !== "string" || v.trim().length < 3 || v.length > max)
         throw invalid(`${k} must be 3-${max} characters`);
+      else if (NOT_PLAIN_TEXT.test(v))
+        throw invalid(`${k} must be plain text (no control or bidi characters)`);
     const cats = input.categories ?? [];
     if (
       !Array.isArray(cats) ||
@@ -142,8 +149,13 @@ export class ListingService {
             ),
           "listing",
         );
-        if (approved.length)
-          await this.c.registry.setNamespacePublic(MARKETPLACE_SERVICE, input.namespace);
+        for (const a of approved)
+          await this.c.registry.setVersionPublic(
+            MARKETPLACE_SERVICE,
+            input.namespace,
+            input.name,
+            a.version,
+          );
         return rec;
       },
     );

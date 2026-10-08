@@ -44,6 +44,18 @@ const HIDDEN_BEHAVIOUR = [
 const PRIVATE_HOST =
   /^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.0\.0\.0|\[?::1\]?$|.*\.internal$|.*\.local$)/i;
 
+/**
+ * What a regex must see: the text as a reader or a model would read it. Compatibility forms are folded (NFKC: full-width letters),
+ * zero-width and bidi-control characters are removed and every run of whitespace is one space, so "ignore  all\nprevious
+ * instructions" and "ig\u200bnore ..." match like the plain phrase.
+ */
+export function readable(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(/[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, "")
+    .replace(/\s+/g, " ");
+}
+
 function urlFindings(url: string, path: string, what: string): ScanFinding[] {
   let u: URL;
   try {
@@ -53,9 +65,28 @@ function urlFindings(url: string, path: string, what: string): ScanFinding[] {
     return [{ id: "SEC-NET-001", severity: "high", path, message: `${what} is not a valid URL` }];
   }
   const out: ScanFinding[] = [];
+  // A credential in the URL (userinfo or a secret-named query parameter) would be published with the blueprint.
+  if (
+    u.username ||
+    u.password ||
+    [...u.searchParams.keys()].some((k) =>
+      /^(token|access[_-]?token|api[_-]?key|key|secret|password|auth)$/i.test(k),
+    )
+  )
+    out.push({
+      id: "SEC-NET-004",
+      severity: "critical",
+      path,
+      message: `${what} embeds a credential in its URL`,
+    });
   if (u.protocol !== "https:")
     out.push({ id: "SEC-NET-002", severity: "high", path, message: `${what} does not use https` });
-  if (PRIVATE_HOST.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(u.hostname))
+  // An IPv6 literal (`[::1]`, `[fd00::1]`, `[::ffff:7f00:1]`) is a raw address like an IPv4 one; no legitimate publisher needs one.
+  if (
+    PRIVATE_HOST.test(u.hostname) ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(u.hostname) ||
+    u.hostname.startsWith("[")
+  )
     out.push({
       id: "SEC-NET-003",
       severity: "high",
@@ -155,15 +186,34 @@ export function scanBlueprint(abl: AblDocument, baseline: Baseline): ScanResult 
     f("SEC-PROC-002", "low", "/spec/process/restartPolicy", "restarts forever");
   if (!m.policy_packs.some((p) => p.startsWith("baseline-deny")))
     f("SEC-POLICY-001", "low", "/spec/policy/packs", "does not reference the baseline-deny pack");
-  const text = `${abl.spec.instructions.system}\n${abl.metadata.description ?? ""}`;
-  if (SECRET_PATTERNS.some((r) => r.test(text)))
-    f("SEC-SECRET-001", "critical", "/spec/instructions", "contains what looks like a credential");
-  if (HIDDEN_BEHAVIOUR.some((r) => r.test(text)))
+  // Every free text the model is shown (system prompt, tool descriptions) or an end user reads (transparency notice, listing metadata).
+  const rc = abl.spec.riskClassification as unknown as Record<string, unknown>;
+  const texts: { path: string; text: string }[] = [
+    { path: "/spec/instructions", text: abl.spec.instructions.system },
+    { path: "/metadata/description", text: abl.metadata.description ?? "" },
+    ...(abl.metadata.owner ? [{ path: "/metadata/owner", text: String(abl.metadata.owner) }] : []),
+    ...Object.entries(abl.metadata.labels ?? {}).map(([k, v]) => ({
+      path: `/metadata/labels/${k}`,
+      text: `${k} ${String(v)}`,
+    })),
+    ...["rationale", "intendedPurpose", "transparencyNotice"].flatMap((k) =>
+      typeof rc[k] === "string"
+        ? [{ path: `/spec/riskClassification/${k}`, text: rc[k] as string }]
+        : [],
+    ),
+    ...(abl.spec.tools ?? []).flatMap((t, i) =>
+      t.description ? [{ path: `/spec/tools/${i}/description`, text: t.description }] : [],
+    ),
+  ].map((x) => ({ ...x, text: readable(x.text) }));
+  const secret = texts.find((x) => SECRET_PATTERNS.some((r) => r.test(x.text)));
+  if (secret) f("SEC-SECRET-001", "critical", secret.path, "contains what looks like a credential");
+  const hidden = texts.find((x) => HIDDEN_BEHAVIOUR.some((r) => r.test(x.text)));
+  if (hidden)
     f(
       "SEC-PROMPT-001",
       "high",
-      "/spec/instructions",
-      "instructions contain hidden-behaviour or policy-evasion phrasing",
+      hidden.path,
+      "text the model or the user reads contains hidden-behaviour or policy-evasion phrasing",
     );
   if (/https?:\/\//i.test(abl.spec.instructions.system))
     f("SEC-PROMPT-002", "low", "/spec/instructions", "instructions embed a URL");

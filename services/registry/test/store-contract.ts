@@ -182,11 +182,33 @@ export function storeContract(name: string, env: () => Promise<ContractEnv>): vo
       expect(await store.events({ tenantId: a }, ns, "agent-one", "1.0.0")).toHaveLength(3);
       expect(await store.events({ tenantId: b }, ns, "agent-one", "1.0.0")).toEqual([]);
 
+      // listing the NAMESPACE publishes nothing but its record and keys: versions are released one at a time
       await store.setPublic(a, ns, "m", T0);
+      expect(await store.getVersion({ tenantId: b }, ns, "agent-one", "1.0.0")).toBeUndefined();
+      expect(await store.listVersions({ tenantId: null }, ns, "agent-one")).toEqual([]);
+      expect(await store.listNames({ tenantId: null }, ns)).toEqual([]);
+      expect(await store.events({ tenantId: null }, ns, "agent-one", "1.0.0")).toEqual([]);
+      await expect(
+        store.setVersionPublic(b, ns, "agent-one", "1.0.0", "m", T0),
+      ).rejects.toBeInstanceOf(StoreForbidden);
+      await expect(
+        store.setVersionPublic(a, ns, "agent-one", "9.9.9", "m", T0),
+      ).rejects.toBeInstanceOf(StoreForbidden);
+      await store.setVersionPublic(a, ns, "agent-one", "1.0.0", "m", T0);
+      await store.setVersionPublic(a, ns, "agent-one", "1.0.0", "m", T0); // idempotent
       expect(await store.getVersion({ tenantId: b }, ns, "agent-one", "1.0.0")).toBeDefined();
-      expect(await store.listVersions({ tenantId: null }, ns, "agent-one")).toHaveLength(2);
-      expect(await store.listNames({ tenantId: null }, ns)).toEqual(["agent-one", "agent-two"]);
+      // the sibling version, the sibling blueprint and their events stay private
+      expect(await store.getVersion({ tenantId: b }, ns, "agent-one", "1.1.0")).toBeUndefined();
+      expect(
+        (await store.listVersions({ tenantId: null }, ns, "agent-one")).map(
+          (r) => r.record.version,
+        ),
+      ).toEqual(["1.0.0"]);
+      expect(await store.getVersion({ tenantId: null }, ns, "agent-two", "1.0.0")).toBeUndefined();
+      expect(await store.listNames({ tenantId: null }, ns)).toEqual(["agent-one"]);
       expect(await store.events({ tenantId: null }, ns, "agent-one", "1.0.0")).toHaveLength(3);
+      // the owner still sees everything
+      expect(await store.listVersions({ tenantId: a }, ns, "agent-one")).toHaveLength(2);
       // still not writable by others
       await expect(
         store.insertVersion(verRec(ns, b, "agent-three"), "agentthree"),

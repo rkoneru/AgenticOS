@@ -10,7 +10,13 @@ import {
   type HandlerResult,
   type Route,
 } from "./context.js";
-import { CursorCodec, MemoryIdempotencyStore, TokenBuckets, fingerprint } from "./limits.js";
+import {
+  CursorCodec,
+  MemoryIdempotencyStore,
+  TokenBuckets,
+  clientAddress,
+  fingerprint,
+} from "./limits.js";
 import {
   PortConflict,
   PortForbidden,
@@ -51,6 +57,26 @@ const ALLOW_HEADERS =
   "authorization, content-type, idempotency-key, x-axis-api-key, x-request-id, last-event-id, traceparent";
 const EXPOSE_HEADERS =
   "x-request-id, retry-after, ratelimit-limit, ratelimit-remaining, idempotent-replayed, www-authenticate";
+
+/**
+ * Token cost of the operations that do real work per call (hashing up to `maxVerifyEvents` events, spawning `opa`, paging through a
+ * run's whole event log, compiling and verifying documents). Everything else costs 1. With the default bucket (burst 60) one tenant
+ * can run 3 chain verifications or 6 policy tests back to back, not 60. `options.costs` overrides per operation.
+ */
+export const DEFAULT_COSTS: Readonly<Record<string, number>> = {
+  verifyAuditChain: 20,
+  testPolicy: 10,
+  publishPolicyPack: 5,
+  explainRun: 5,
+  listAuditEvents: 3,
+  explainAuditEvent: 3,
+  getUsage: 3,
+  publishBlueprintVersion: 3,
+  publishRegistryBlueprint: 3,
+  resolveRegistryBlueprint: 2,
+  previewMarketplaceInstall: 2,
+  startRun: 2,
+};
 
 const DEFAULTS = {
   maxBodyBytes: 1 << 20,
@@ -96,6 +122,9 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
   const cursors = deps.cursors ?? new CursorCodec();
   const idem = deps.idempotency ?? new MemoryIdempotencyStore(now);
   const origins = new Set(o.allowedOrigins ?? []);
+  const trustedProxies = new Set(
+    (o.trustedProxies ?? []).map((a) => clientAddress(a, undefined, new Set())),
+  );
 
   // The route table and the spec must agree exactly: a missing or extra route fails at start-up.
   const compiled: Compiled[] = spec.operations.map((op) => {
@@ -108,6 +137,9 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       throw new Error(`route ${id} is not in the OpenAPI document`);
 
   const streams = new Map<string, number>();
+  // Denials are audited (reads too), but a denied credential cannot fill the chain: per (tenant, member, operation) a burst of 5, then
+  // one every 10 s. The fact that denials continue is itself visible as a steady trickle of rows.
+  const denialAudit = new TokenBuckets({ burst: 5, perSecond: 0.1 }, now);
 
   function baseHeaders(
     res: http.ServerResponse,
@@ -235,6 +267,34 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     return out;
   };
 
+  /** After a gateway timeout: records what the still-running handler finally did under its Idempotency-Key (same rules as the live path). */
+  async function settleLater(
+    work: Promise<HandlerResult>,
+    scope: string,
+    key: string,
+    traceId: string,
+  ): Promise<void> {
+    try {
+      const r = await work;
+      if (isStream(r) || r.status >= 500 || r.status === 429) await idem.abort(scope, key);
+      else
+        await idem.complete(scope, key, {
+          status: r.status,
+          body: r.body,
+          headers: { ...(r.headers ?? {}) },
+        });
+    } catch (e) {
+      const err = mapError(e);
+      if (err.status >= 400 && err.status < 500 && err.status !== 429 && err.status !== 408)
+        await idem.complete(scope, key, {
+          status: err.status,
+          body: toProblem(err, traceId),
+          headers: err.headers,
+        });
+      else await idem.abort(scope, key);
+    }
+  }
+
   function mapError(e: unknown): ApiError {
     if (e instanceof ApiError) return e;
     if (e instanceof PortNotFound) return notFound();
@@ -261,7 +321,11 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     baseHeaders(res, requestId, origin);
     res.setHeader("traceparent", `00-${traceId}-${randomBytes(8).toString("hex")}-01`);
     const method = (req.method ?? "GET").toUpperCase();
-    const remote = req.socket.remoteAddress ?? "unknown";
+    const remote = clientAddress(
+      req.socket.remoteAddress,
+      req.headers["x-forwarded-for"],
+      trustedProxies,
+    );
     let status = 500;
     let opId = "-";
     let tenant = "-";
@@ -328,7 +392,7 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
       const { principal, creds } = await authenticate(req, remote);
       tenant = principal.tenantId;
 
-      const cost = o.costs?.[match.op.id] ?? 1;
+      const cost = o.costs?.[match.op.id] ?? DEFAULT_COSTS[match.op.id] ?? 1;
       const rl = limiter.take(principal.tenantId, cost);
       res.setHeader("ratelimit-limit", String(rl.limit));
       res.setHeader("ratelimit-remaining", String(rl.remaining));
@@ -347,7 +411,10 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         }
       }
       if (!decision.allowed) {
-        if (match.route.mutation)
+        if (
+          denialAudit.take(`${principal.tenantId}\u0000${principal.memberId}\u0000${match.op.id}`)
+            .ok
+        )
           await deps.audit
             .record({
               tenantId: principal.tenantId,
@@ -457,6 +524,8 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         reserved = true;
       }
 
+      let timedOut = false;
+      let work: Promise<HandlerResult> | undefined;
       try {
         if (match.route.mutation) {
           try {
@@ -501,10 +570,16 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
           signal: ac.signal,
         };
         let timer: NodeJS.Timeout | undefined;
+        const running = Promise.resolve().then(() => match.route.handler(ctx));
+        running.catch(() => undefined); // its failure after a timeout is handled in settleLater, never as an unhandled rejection
+        work = running;
         const result: HandlerResult = await Promise.race([
-          match.route.handler(ctx),
+          running,
           new Promise<never>((_, rej) => {
-            timer = setTimeout(() => rej(timeout()), o.requestTimeoutMs);
+            timer = setTimeout(() => {
+              timedOut = true;
+              rej(timeout());
+            }, o.requestTimeoutMs);
           }),
         ]).finally(() => clearTimeout(timer));
 
@@ -544,7 +619,14 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
         }
         send(res, result.status, result.body, "application/json", extra);
       } catch (e) {
-        if (reserved) {
+        if (reserved && timedOut && work) {
+          // The handler is STILL RUNNING and may yet complete the operation: releasing the key now would let a retry run it a second
+          // time. The key stays reserved (a retry gets 409) until the handler settles; its outcome decides what the key replays.
+          const scope = idemScope;
+          const key = idemKey as string;
+          reserved = false;
+          void settleLater(work, scope, key, traceId).catch(() => undefined);
+        } else if (reserved) {
           const err = mapError(e);
           // Deterministic client errors are remembered (a retry gets the same answer); anything else is retryable.
           if (err.status >= 400 && err.status < 500 && err.status !== 429 && err.status !== 408)

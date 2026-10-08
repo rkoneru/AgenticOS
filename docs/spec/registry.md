@@ -42,9 +42,10 @@ provenance_builder provenance_source provenance_compiler provenance_compiler_too
 
 ## 4. Visibility and authorization
 
-Private namespace: owner only (other tenants get 404, never 403 data). Public namespace (listed by the marketplace): readable by every tenant
-and anonymously, writable only by the owner. Roles (control-plane ladder): read = viewer, publish = builder, yank/deprecate/keys/claim = admin.
-Platform-only operations (`setNamespacePublic`, `platformYank`) need the `platform/marketplace` principal.
+Private namespace: owner only (other tenants get 404, never 403 data). Public namespace (listed by the marketplace): its record and publisher keys are
+readable by every tenant and anonymously; a blueprint version is readable by non-owners ONLY after the marketplace released it
+(`setVersionPublic`, migration 0012, ADR 0055): never-submitted blueprints and versions published after the review stay private. Writable only by the owner. Roles (control-plane ladder): read = viewer, publish = builder, yank/deprecate/keys/claim = admin.
+Platform-only operations (`setNamespacePublic`, `setVersionPublic`, `platformYank`) need the `platform/marketplace` principal.
 
 ## 4a. Public API (OpenAPI 1.2.0, ADR 0053)
 
@@ -62,3 +63,5 @@ sliding-window rate limit per subject (429 + `retry-after`); body cap 4 MB; refu
 Migration `0010_registry.sql`: `registry_namespaces`, `registry_public_namespaces`, `registry_keys`, `registry_names`, `registry_versions`,
 `registry_version_events`; forced RLS; versions and events immutable; keys only NULL -> value transitions; write checks use
 `axis.registry_owns(namespace, tenant_id)`.
+Migration `0012_registry_public_versions.sql`: `registry_public_versions` (immutable release markers) and the read policies of names, versions and events
+(`axis.registry_version_visible`, `axis.registry_name_visible`).
