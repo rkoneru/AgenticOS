@@ -284,8 +284,8 @@ class JudgeGrader:
             config.rubric,
             output,
             nonce=self._nonce(),
-            input_text=input_text if config.include_input else None,
-            expected=expected if config.include_expected else None,
+            input_text=input_text,
+            expected=expected,
             max_output_chars=config.max_output_chars,
         )
         try:
