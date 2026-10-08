@@ -10,8 +10,10 @@ cases:
     input: { enforcement_point: model_call, agent: { name: stranger, version: 1.0.0 } }
     expect: { decision: DENY }
   - name: a payout needs a human
-    input: { enforcement_point: tool_call, tool: { name: file-payout, side_effects: write }, args: {} }
+    input:
+      { enforcement_point: tool_call, tool: { name: file-payout, side_effects: write }, args: {} }
     expect: { decision: REQUIRE_APPROVAL, winners: [tenant-evals/approve-payouts] }
   - name: a wire transfer is forbidden
-    input: { enforcement_point: tool_call, tool: { name: wire-funds, side_effects: write }, args: {} }
+    input:
+      { enforcement_point: tool_call, tool: { name: wire-funds, side_effects: write }, args: {} }
     expect: { decision: DENY, winners: [tenant-evals/deny-wire-funds] }

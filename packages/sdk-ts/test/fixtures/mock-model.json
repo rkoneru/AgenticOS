@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "version": "1.4.0",
-  "inputHash": "d9bd908076568934d38fc2c0ffcbd3676efb5367dd55e3b4d053b235c8677d39",
+  "inputHash": "9286f874b1e9e4d3cef6bf5594bd37dcf0c619ca79ebbb4732341a9397dfed7b",
   "security": [
     {
       "bearerAuth": []

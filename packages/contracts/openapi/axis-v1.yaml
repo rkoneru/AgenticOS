@@ -2138,7 +2138,8 @@ components:
               sig: { type: string }
     RegistryEvalAttestation:
       type: object
-      required: [run_id, suite_ref, overall, content_hash, attached_at, verified, predicate, envelope]
+      required:
+        [run_id, suite_ref, overall, content_hash, attached_at, verified, predicate, envelope]
       properties:
         run_id: { type: string }
         suite_ref: { type: string }
