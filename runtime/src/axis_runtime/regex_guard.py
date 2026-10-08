@@ -26,7 +26,7 @@ class UnsafePatternError(ValueError):
     pass
 
 
-def _check_repetition(pattern: str) -> None:
+def _check_repetition(pattern: str) -> int:
     """Reject the shapes a denylist of ``(a+)+`` misses: a quantified group (``(a|aa)+`` is
     exponential with no inner quantifier), too many repeats (``a?a?..a?aa..``) and adjacent
     unbounded repeats (``a*a*a*b``).  ``(?:...)?`` stays allowed. Classes, escapes skipped."""
@@ -78,6 +78,26 @@ def _check_repetition(pattern: str) -> None:
         if total > MAX_QUANTIFIERS or unbounded > MAX_UNBOUNDED:
             raise UnsafePatternError("too many repetitions in pattern")
         i, prev = i + step, "quant"
+    return unbounded
+
+
+#: Longest text a pattern may be run against, by the exponent of its worst case: its unbounded
+#: repeats (k), plus one for ``search``, which retries at every start position.
+#: Measured with the stdlib engine: ``\w+!`` on 100k word characters takes 16 s, ``a*a*b`` on 4k
+#: takes 10 s.
+_TEXT_LIMITS = {0: 100_000, 1: 100_000, 2: 20_000}
+_TEXT_LIMIT_CUBIC = 1_500
+
+
+def max_text_len(pattern: str, *, anchored: bool = False) -> int:
+    """The longest text ``pattern`` may be matched against without blocking the process for long.
+
+    The pattern guard above caps the SHAPE of a pattern; the cost of a legal shape still grows with
+    the text (``\w+!`` is quadratic under ``search``). Callers that match untrusted text of up to
+    100k characters (eval graders) must refuse longer text rather than truncate it: a forbidden
+    string past the cut would otherwise pass a negated check. Raises ``UnsafePatternError``."""
+    exponent = _check_repetition(pattern) + (0 if anchored else 1)
+    return _TEXT_LIMITS.get(exponent, _TEXT_LIMIT_CUBIC)
 
 
 def compile_safe(pattern: str) -> re.Pattern[str]:

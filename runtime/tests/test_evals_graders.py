@@ -129,6 +129,62 @@ def test_regex_refuses_redos_shapes(pattern: str) -> None:
     assert g.status == "error" and g.score == 0.0
 
 
+@pytest.mark.parametrize(
+    ("pattern", "mode", "limit"),
+    [
+        (r"\w+!", "search", 20_000),  # quadratic: 16 s on 100k word characters
+        (r"\w*\w*!", "search", 1_500),  # cubic: 38 s on 4k
+        (r"a*a*b", "search", 1_500),
+        (r"a*a*b", "fullmatch", 20_000),
+        (r"hello", "search", 100_000),
+    ],
+)
+def test_regex_refuses_output_longer_than_its_shape_can_bear(
+    pattern: str, mode: str, limit: int
+) -> None:
+    """Legal patterns are still polynomial in the text; a 100k-character output (the agent's, or online a
+    customer's) must not stall the runner. Refused as an error grade (0), never truncated."""
+    spec = det("g", "regex", pattern=pattern, mode=mode)
+    if limit < 100_000:  # the text itself is capped at 100k before any pattern sees it
+        over = grade_deterministic(spec, case(), trace("a" * (limit + 1)))
+        assert (over.status, over.score) == ERR, over.detail
+        assert "too long" in over.detail
+    at = grade_deterministic(spec, case(), trace("a" * limit))
+    assert at.status == "scored"
+
+
+def test_regex_cannot_stall_the_runner() -> None:
+    import time
+
+    spec = det("g", "regex", pattern=r"\w+!")
+    started = time.monotonic()
+    g = grade_deterministic(spec, case(), trace("a" * 100_000))
+    assert time.monotonic() - started < 2.0
+    assert g.status == "error"
+
+
+def test_regex_negate_never_passes_by_truncation() -> None:
+    """A forbidden string past any cut must not read as absent."""
+    spec = det("g", "regex", pattern=r"\w+!", negate=True)
+    g = grade_deterministic(spec, case(), trace("a" * 30_000 + " SECRET!"))
+    assert (g.status, g.score) == ERR
+
+
+def test_json_schema_pattern_refuses_a_string_it_cannot_match_in_time() -> None:
+    import time
+
+    schema = {"type": "string", "pattern": r"\w+!"}
+    started = time.monotonic()
+    g = grade_deterministic(
+        det("g", "json_schema", schema=schema), case(), trace(json.dumps("a" * 90_000))
+    )
+    assert time.monotonic() - started < 2.0
+    assert (g.status, g.score) == ERR
+    with pytest.raises(SchemaError):
+        validate(schema, "a" * 20_001)
+    assert validate(schema, "a" * 19_999 + "!") == []
+
+
 def test_json_schema() -> None:
     schema = {
         "type": "object",
