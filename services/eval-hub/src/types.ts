@@ -164,6 +164,8 @@ export interface EvalRunDoc {
   suite_hash: string;
   dataset_ref: string;
   dataset_hash: string;
+  /** Snapshot of the suite's pass_threshold when the run was created (the suite is immutable). */
+  pass_threshold: number;
   blueprint: BlueprintRef;
   /** Copies of `blueprint.name` and `blueprint.content_hash` (indexed). */
   blueprint_name: string;

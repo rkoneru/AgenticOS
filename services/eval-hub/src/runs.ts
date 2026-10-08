@@ -215,6 +215,7 @@ export class RunService {
       suite_hash: suite.suite_hash,
       dataset_ref: suite.dataset_ref,
       dataset_hash: suite.dataset_hash,
+      pass_threshold: suite.pass_threshold,
       blueprint: parsed.blueprint,
       blueprint_name: parsed.blueprint.name,
       content_hash: parsed.blueprint.content_hash,

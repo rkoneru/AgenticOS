@@ -183,12 +183,10 @@ describe("compareRuns", () => {
   });
 
   it("is not comparable across suite or dataset versions, or different cases", () => {
-    expect(compareRuns(mk("x", { c1: 1 }, { suite_hash: "other" }), base, o).comparable).toBe(
-      false,
-    );
-    expect(compareRuns(mk("x", { c1: 1 }, { dataset_hash: "other" }), base, o).comparable).toBe(
-      false,
-    );
+    const same = { c1: 0.9, c2: 0.9, c3: 0.9, c4: 0.9 }; // identical cases: only the hashes differ
+    expect(compareRuns(mk("x", same, { suite_hash: "other" }), base, o).comparable).toBe(false);
+    expect(compareRuns(mk("x", same, { dataset_hash: "other" }), base, o).comparable).toBe(false);
+    expect(compareRuns(mk("x", same), base, o).comparable).toBe(true);
     expect(compareRuns(mk("x", { c1: 1, c2: 1, c3: 1, c9: 1 }), base, o).comparable).toBe(false);
     expect(compareRuns(mk("x", {}), mk("y", {}), o).comparable).toBe(false);
   });

@@ -438,6 +438,25 @@ describe("regression against the baseline", () => {
     expect(codes(await ask(w, HASH_B))).toEqual(["baseline_invalid"]);
   });
 
+  it("a baseline row whose recorded hash differs from the (intact) run it points to is invalid", async () => {
+    const { w, base } = await baselined();
+    await runWithScore(w, { hash: HASH_B, score: 0.99 });
+    // an intact, sealed copy of the baseline run under another id: valid on its own, but not what the row recorded
+    const copy = await plant(w, base, () => undefined);
+    const row: BaselineDoc = {
+      blueprint_name: "support-agent",
+      suite_ref: "smoke@1.0.0",
+      seq: 2,
+      run_id: copy.id,
+      overall: copy.scores?.overall ?? 0,
+      record_hash: base.record_hash as string,
+      set_by: "evil",
+      at: w.clock.now().toISOString(),
+    };
+    await w.docs.insert(w.tenant, "baselines", "support-agent|smoke@1.0.0|00000002", row);
+    expect(codes(await ask(w, HASH_B))).toEqual(["baseline_invalid"]);
+  });
+
   it("only an admin sets a baseline, from a passed, intact run; history is append-only", async () => {
     const w = await ready();
     const bad = await runWithScore(w, { hash: HASH_B, score: 0.1 });
