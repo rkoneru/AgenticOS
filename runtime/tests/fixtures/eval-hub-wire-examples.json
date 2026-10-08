@@ -32,9 +32,7 @@
         "weight": 2,
         "config": {
           "type": "contains",
-          "values": [
-            "$5"
-          ]
+          "values": ["$5"]
         }
       },
       {
@@ -70,9 +68,7 @@
         "expected": {
           "output": "$5"
         },
-        "tags": [
-          "refund"
-        ],
+        "tags": ["refund"],
         "metadata": {}
       }
     ]
@@ -121,14 +117,7 @@
       "status",
       "trace"
     ],
-    "grade_keys": [
-      "detail",
-      "grader_id",
-      "kind",
-      "provenance",
-      "score",
-      "status"
-    ],
+    "grade_keys": ["detail", "grader_id", "kind", "provenance", "score", "status"],
     "trace_keys": [
       "cost_usd",
       "event_count",
@@ -142,13 +131,7 @@
       "tool_calls",
       "trace_id"
     ],
-    "cost_keys": [
-      "agent_usd",
-      "judge_tokens",
-      "judge_usd",
-      "tokens",
-      "total_usd"
-    ],
+    "cost_keys": ["agent_usd", "judge_tokens", "judge_usd", "tokens", "total_usd"],
     "provenance_keys": [
       "aggregation_version",
       "blueprint_content_hash",
@@ -178,17 +161,8 @@
   "review_tasks_request": {
     "method": "POST",
     "path": "/v1/evals/runs/evr_01/review-tasks",
-    "body_keys": [
-      "tasks"
-    ],
-    "task_keys": [
-      "case_id",
-      "expected",
-      "grader_id",
-      "input",
-      "output",
-      "rubric"
-    ]
+    "body_keys": ["tasks"],
+    "task_keys": ["case_id", "expected", "grader_id", "input", "output", "rubric"]
   },
   "online_configs_response": {
     "configs": [
