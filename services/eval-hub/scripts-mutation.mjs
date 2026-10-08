@@ -49,29 +49,29 @@ const M = [
     'false) bad.push("record_hash");',
     ".",
   ],
-  ["src/integrity.ts", "      bad.push(`recompute.${m}`);", "      void m;", "."],
+  [
+    "src/integrity.ts",
+    "for (const m of mismatches(run.scores, again)) bad.push(`recompute.${m}`);",
+    "for (const m of mismatches(run.scores, again)) void m;",
+    ".",
+  ],
   ["src/integrity.ts", 'if (run.suite_hash !== suite.suite_hash) bad.push("suite_hash");', "", "."],
   // --- the hub recomputes; a runner's aggregate is only a claim
   [
     "src/runs.ts",
-    "if (bad.length > 0)\n          throw integrityFailed(",
-    "if (false)\n          throw integrityFailed(",
+    "if (bad.length > 0)\n        throw integrityFailed(",
+    "if (false)\n        throw integrityFailed(",
     ".",
   ], // trust the runner's aggregate
-  ["src/runs.ts", "if (v !== undefined && v !== null)", "if (false)", "."], // a runner supplies a human score
+  ["src/runs.ts", 'if (spec.kind === "human" && gs !== "pending")', "if (false)", "."], // a runner supplies a human score
   ["src/runs.ts", "if (missing.length > 0)", "if (false)", "."], // partial datasets
   [
     "src/runs.ts",
-    'if (d.data.runner_id !== r.runnerId) throw forbidden("run belongs to another runner");\n      const { suite, dataset }',
-    "const { suite, dataset }",
+    'if (d.data.runner_id !== r.runnerId) throw forbidden("run belongs to another runner");',
+    "void 0;",
     ".",
   ], // another runner submits
-  [
-    "src/runs.ts",
-    "const passed = scores.overall >= suite.pass_threshold;",
-    "const passed = true;",
-    ".",
-  ],
+  ["src/runs.ts", "passed: agg.passed === true,", "passed: true,", "."],
   [
     "src/scoring.ts",
     "const regression = delta < -o.tolerance - 1e-9;",
@@ -97,6 +97,14 @@ const M = [
     "",
     ".",
   ],
+  // --- the signed runner wire and the dataset hash
+  [
+    "src/dev-server.ts",
+    "if (got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want)))",
+    "if (false)",
+    ".",
+  ], // skip the HMAC check
+  ["src/catalog.ts", "version_hash: datasetHash(stored),", 'version_hash: "0".repeat(64),', "."],
   // --- human review: reviewer != publisher / starter, distinct double graders, live claims
   ["src/reviews.ts", "if (t.conflicts.includes(who))", "if (false)", "."], // allow reviewer == publisher
   ["src/reviews.ts", "!x.conflicts.includes(t.subject) &&", "", "."],
