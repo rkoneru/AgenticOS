@@ -40,6 +40,9 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.registry.read",
     "api.registry.write",
     "api.marketplace.read",
+    "api.evals.read",
+    "api.evals.write",
+    "api.evals.review",
   ],
   operator: [
     "api.blueprints.read",
@@ -56,6 +59,8 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.explanations.read",
     "api.registry.read",
     "api.marketplace.read",
+    "api.evals.read",
+    "api.evals.review",
   ],
   auditor: [
     "api.blueprints.read",
@@ -70,6 +75,7 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.explanations.read",
     "api.registry.read",
     "api.marketplace.read",
+    "api.evals.read",
   ],
   billing: ["api.usage.read"],
   viewer: [
@@ -80,6 +86,7 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.explanations.read",
     "api.registry.read",
     "api.marketplace.read",
+    "api.evals.read",
   ],
 };
 
@@ -126,6 +133,38 @@ describe("api action namespace (ADR 0024)", () => {
       resource: { tenantId: "other" },
     });
     expect(d.allowed).toBe(false);
+  });
+
+  it("eval actions: reads need evals:read, everything else evals:write; a reviewer key cannot administer", async () => {
+    const a = await sharedAuthorizer();
+    expect(requiredScope("api.evals.read")).toBe("evals:read");
+    for (const v of ["run", "write", "admin", "review"])
+      expect(requiredScope(`api.evals.${v}`)).toBe("evals:write");
+    const key = (scopes: string[], role: Role) =>
+      me(role, { credential: "api_key", scopes, apiKeyId: "k" });
+    expect(
+      (await a.decide({ principal: key(["evals:read"], "owner"), action: "api.evals.admin" }))
+        .allowed,
+    ).toBe(false);
+    expect(
+      (await a.decide({ principal: key(["evals:write"], "owner"), action: "api.evals.admin" }))
+        .allowed,
+    ).toBe(true);
+    expect(
+      (await a.decide({ principal: key(["evals:write"], "operator"), action: "api.evals.admin" }))
+        .allowed,
+    ).toBe(false);
+    expect(
+      (await a.decide({ principal: key(["evals:write"], "operator"), action: "api.evals.review" }))
+        .allowed,
+    ).toBe(true);
+    expect(
+      (await a.decide({ principal: key(["evals:write"], "viewer"), action: "api.evals.review" }))
+        .allowed,
+    ).toBe(false);
+    expect((await a.decide({ principal: me("auditor"), action: "api.evals.review" })).allowed).toBe(
+      false,
+    );
   });
 
   it("scope names: api.<resource>.<verb> maps to <resource>:read|write", () => {

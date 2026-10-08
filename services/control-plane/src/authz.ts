@@ -76,6 +76,10 @@ export const API_ACTIONS = [
   "api.killswitch.write",
   "api.usage.read",
   "api.evals.run",
+  "api.evals.read",
+  "api.evals.write",
+  "api.evals.admin",
+  "api.evals.review",
   "api.explanations.read",
 ] as const;
 export type ApiAction = (typeof API_ACTIONS)[number];
