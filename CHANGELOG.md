@@ -1,5 +1,31 @@
 # Changelog
 
+## Phase 8 - exit: evals gate releases, proven end to end (`make e2e-phase8`, `make console-e2e`, `make evals`)
+
+**One additive contract change: OpenAPI 1.4.0** (ADR 0059: `listRegistryEvalAttestations`, re-verified on every read; FREEZE regenerated, SDKs and
+CLI `axis registry attestations`). No migration. Status: Prototype (scripted models; NEEDS #325-#334; ADR 0058; `docs/runbooks/evals-e2e.md`).
+
+- `e2e/test_phase8_evals.py` (22 tests) on the Phase 7 stack plus the Eval Hub and a REAL `eval_runner` process per tenant (kernel gates every model and tool
+  call, the judge included; the only fake is the scripted model): v1 (deterministic + model + human graders) runs, a reviewer grades, the hub
+  recomputes, the gate allows, the registry releases, the signed attestation is on the version; v2 regresses (passes its own bar, drops 0.35 vs the
+  baseline) and is BLOCKED (`regression`) from TS SDK, Python SDK and CLI (exit 4), registry release and marketplace submit refuse with
+  `evals_gate_failed`; fail-closed cases (no run, other content, revoked and unregistered runners, tampered score, replayed result, threshold, unknown
+  suite, newest run decides); human review (publisher/starter excluded, double grade + adjudication); online sampling of real production runs
+  (selection recomputed from run ids, PHI redacted before the judge and the hub, history only, release state untouched); judge injection (a gullible
+  scripted judge proves the defences carry the result); eval-mode safety (payout/wire/code never run, same decisions as production); cross-tenant from
+  every client; a tenant without the judge rule gets `ungraded`, not a pass. 13 wiring mutants (`e2e/mutation_phase8.py`).
+- Console: runs (live status), run detail (per-grader chart, per-case drill-down, kernel decisions, audit trace link), datasets, suites, baselines with
+  comparison charts (plain SVG, fixed 0..1 axis, table view), review queue, online history, and a release-gate panel (verdict, reasons, version history,
+  attestations) on the blueprint version and registry pages; 8 new mock flows + axe on 8 pages x 2 themes; 10 real-stack Playwright tests with a real runner.
+- Gap closures: network manifest source (hub route, runner-scoped), read-only redacted run feed + `eval_runner.py --online`, judge policy pack
+  (`policies/eval-judge`), canonical JSON parity (shared vectors), online human review tasks, registry/marketplace ask the gate whenever a hub is wired,
+  the gateway gate route always asks the stored ABL's declared suites.
+- Defects found only by this wiring and fixed: an eval payout opened a real approval request (non-UUID run id) and broke `listApprovals` (kernel `eval_mode`
+  marker); a gate call without `suites` answered ALLOWED (gateway now adds the declared ones); the staff-side registry in the harness was not wired to the hub.
+- `make evals` is real: hub suite (95% on the safety modules) + runner/grader/sampler suite (>= 95% on `axis_runtime.evals`) + judge pack golden cases. No live model.
+- Honest gaps: scripted model only (#307), a registered runner can forge consistent results (#326), release step is harness ops (#331), `main.ts` still has no
+  attestation sink (#301), console is read-mostly and polls (#330).
+
 ## Phase 8 - Eval Hub (component H, `services/eval-hub`)
 
 **One additive contract change: OpenAPI 1.3.0** (ADR 0057; FREEZE regenerated; 22 operations). Migration 0013. Status: Prototype

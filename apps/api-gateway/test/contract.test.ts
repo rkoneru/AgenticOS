@@ -193,6 +193,10 @@ const FIXTURES: Record<string, Fx> = {
     "GET",
     (s) => `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions`,
   ),
+  listRegistryEvalAttestations: ok(
+    "GET",
+    (s) => `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions/1.0.0/eval-attestations`,
+  ),
   yankRegistryVersion: ok(
     "POST",
     (s) => `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions/1.1.0/yank`,
@@ -248,8 +252,8 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     const ids = spec.operations.map((o) => o.id).sort();
     expect(Object.keys(ROUTES).sort()).toEqual(ids);
     expect(Object.keys(FIXTURES).sort()).toEqual(ids);
-    expect(ids.length).toBe(60);
-    expect(spec.version).toBe("1.3.0");
+    expect(ids.length).toBe(61);
+    expect(spec.version).toBe("1.4.0");
   });
 
   it("every operation has a security requirement in the document (nothing is public)", () => {

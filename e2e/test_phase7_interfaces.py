@@ -269,7 +269,9 @@ class Cli(Client):
             case "registryKeys":
                 return j("registry", "keys", a["namespace"])
             case "registryAddKey":
-                return j("registry", "add-key", a["namespace"], "--public-key", a["public_key"])
+                return j(
+                    "registry", "add-key", a["namespace"], f"--public-key={a['public_key']}"
+                )  # a base64url key may start with "-" (NEEDS #333)
             case "registryPublish":
                 return j(
                     "registry",

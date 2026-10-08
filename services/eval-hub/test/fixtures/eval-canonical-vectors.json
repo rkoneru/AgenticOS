@@ -1,0 +1,93 @@
+{
+  "description": "Shared by runtime/tests/test_evals_canonical.py and services/eval-hub/test/canonical.test.ts. `json` is parsed with the language's own JSON parser; the canonical form must match byte for byte (dataset hashes, signatures and result hashes depend on it).",
+  "vectors": [
+    {
+      "json": "1.0",
+      "canonical": "1"
+    },
+    {
+      "json": "1",
+      "canonical": "1"
+    },
+    {
+      "json": "-0.0",
+      "canonical": "0"
+    },
+    {
+      "json": "0.5",
+      "canonical": "0.5"
+    },
+    {
+      "json": "1e-7",
+      "canonical": "1e-7"
+    },
+    {
+      "json": "1E-7",
+      "canonical": "1e-7"
+    },
+    {
+      "json": "0.000001",
+      "canonical": "0.000001"
+    },
+    {
+      "json": "1e16",
+      "canonical": "10000000000000000"
+    },
+    {
+      "json": "1e21",
+      "canonical": "1e+21"
+    },
+    {
+      "json": "1.5e300",
+      "canonical": "1.5e+300"
+    },
+    {
+      "json": "123456789012345680000",
+      "canonical": "123456789012345680000"
+    },
+    {
+      "json": "0.1",
+      "canonical": "0.1"
+    },
+    {
+      "json": "100.0",
+      "canonical": "100"
+    },
+    {
+      "json": "2.5e-10",
+      "canonical": "2.5e-10"
+    },
+    {
+      "json": "12345.678",
+      "canonical": "12345.678"
+    },
+    {
+      "json": "-1.25",
+      "canonical": "-1.25"
+    },
+    {
+      "json": "9007199254740992",
+      "canonical": "9007199254740992"
+    },
+    {
+      "json": "{\"b\":[1.0,2.50],\"a\":null}",
+      "canonical": "{\"a\":null,\"b\":[1,2.5]}"
+    },
+    {
+      "json": "\"caf\\u00e9\\u007f\\u0001 \\\"q\\\" \\\\\"",
+      "canonical": "\"caf\\u00e9\\u007f\\u0001 \\\"q\\\" \\\\\""
+    },
+    {
+      "json": "\"\\ud83d\\ude00\"",
+      "canonical": "\"\\ud83d\\ude00\""
+    },
+    {
+      "json": "{\"\\ud83d\\ude00\":1,\"\\uffff\":2}",
+      "canonical": "{\"\\ud83d\\ude00\":1,\"\\uffff\":2}"
+    },
+    {
+      "json": "{\"score\":3.0,\"nested\":{\"z\":true,\"y\":[false,0.0]}}",
+      "canonical": "{\"nested\":{\"y\":[false,0],\"z\":true},\"score\":3}"
+    }
+  ]
+}

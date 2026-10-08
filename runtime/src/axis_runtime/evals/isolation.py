@@ -6,8 +6,10 @@ agent that production would run, but it must not have production's side effects:
 * ``EvalModeGate`` wraps the tenant's gate and can only ADD denials. It denies every action that
   could touch the outside world (MCP, code, browser, memory, outbound messages) unless the suite
   explicitly allows that action name for a sandboxed target; whatever it lets through is still
-  decided by the Risk Kernel with a request byte-identical to production's (the eval flag is NOT
-  put into the policy context: a policy must not be able to relax itself for evals).
+  decided by the Risk Kernel with the production request plus ONE marker, ``context.eval_mode``,
+  which the kernel strips before policy evaluation (a policy cannot relax or tighten itself for
+  evals) and which only has one effect: a REQUIRE_APPROVAL is still returned and audited, but no
+  approval request is opened, so a test never puts an action in front of a human approver.
 * function tools are served from the case's recorded fixtures (``metadata.tool_fixtures``) or a
   declared dry run; the real tool registry is never reachable.
 * ``lockdown_deps`` rebuilds ``RunDeps`` per case: fresh run id, trace id and event log, no
@@ -82,7 +84,8 @@ class EvalModeGate:
         reason = self._policy.check(request)
         if reason is not None:
             return deny(reason)
-        return await self._inner.evaluate(request)
+        marked = dataclasses.replace(request, context={**request.context, "eval_mode": True})
+        return await self._inner.evaluate(marked)
 
 
 # --------------------------------------------------------------------------------------

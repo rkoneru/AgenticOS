@@ -43,6 +43,7 @@ import {
   createMarketplace,
 } from "@axis/marketplace";
 import { PgRegistryStore, RegistryService, ServiceAudit } from "@axis/registry";
+import { PgDocStore as PgEvalDocStore, createEvalHub } from "@axis/eval-hub";
 
 const cfg = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const hex = (s) => Buffer.from(s, "hex");
@@ -143,9 +144,16 @@ const billingPort = await billingListen(billingServer, 0);
 
 // ---- marketplace (publisher and staff side) -------------------------------------------------------------------------
 const mpDomain = new FakeDomainProver();
+// The publisher/staff side of the registry and marketplace is wired to the SAME Eval Hub data as the gateway's hub (one Postgres): a
+// release or a submit-for-review asks the hub's gate, fail-closed. (The gateway's hub signs attestations; this one only judges.)
+const evalHub = createEvalHub({
+  docs: new PgEvalDocStore({ pool, role: cfg.role }),
+  audit: new ServiceAudit(audit, "eval-hub"),
+});
 const registry = new RegistryService({
   store: new PgRegistryStore({ pool, role: cfg.role }),
   audit: new ServiceAudit(audit, "registry"),
+  evalGate: evalHub.gatePort,
 });
 const mp = createMarketplace({
   docs: new PgDocStore({ pool, role: cfg.role }),
@@ -208,6 +216,20 @@ function flushTokenFiles() {
     byTenant((t) => t.ingestToken),
   );
 }
+
+// Eval runners (Phase 8): runner token -> {tenantId, runnerId} read by the gateway's runner-facing Eval Hub surface, and the run
+// service's READ-ONLY tokens (token -> tenant) for the completed-runs feed the online sampler reads.
+const evalRunners = new Map(); // token -> {tenantId, runnerId}
+const runReadTokens = new Map(); // token -> tenantId
+function flushEvalFiles() {
+  if (cfg.files.eval_runner)
+    writeJson(
+      cfg.files.eval_runner,
+      Object.fromEntries([...evalRunners.entries()].map(([t, v]) => [t, v])),
+    );
+  if (cfg.files.run_read) writeJson(cfg.files.run_read, Object.fromEntries(runReadTokens));
+}
+flushEvalFiles();
 
 const token = (p) => `${p}-${randomBytes(12).toString("hex")}`;
 const sessionOf = async (tenantId, memberId) => {
@@ -279,6 +301,8 @@ async function provision(b) {
     owner_member_id: t.ownerMemberId,
     owner_session: ownerToken,
     activated_pack: activated,
+    kernel_token: t.kernelToken,
+    runtime_token: t.runtimeToken,
   };
 }
 
@@ -357,6 +381,43 @@ const ops = {
       });
     return { state: rv.state, findings: rv.findings.map((f) => f.id) };
   },
+  // ---- Phase 8: eval runners and the marketplace/registry release steps -------------------------------------------------
+  "eval/runner-credentials": async (b) => {
+    const t = tenants.get(b.tenant_id);
+    if (!t) throw new Error("no such tenant");
+    const runnerToken = token("er");
+    evalRunners.set(runnerToken, { tenantId: t.id, runnerId: String(b.runner_id) });
+    let readToken = null;
+    if (b.read_token !== false) {
+      readToken = token("rr");
+      runReadTokens.set(readToken, t.id);
+    }
+    flushEvalFiles();
+    return {
+      runner_token: runnerToken,
+      read_token: readToken,
+      kernel_token: t.kernelToken,
+      runtime_token: t.runtimeToken,
+    };
+  },
+  // The step the marketplace performs when a reviewer approves a listing: the registry releases the version, and asks the eval gate first.
+  "registry/release": async (b) => {
+    await registry.setVersionPublic(
+      { kind: "platform", subject: "marketplace", service: "marketplace" },
+      b.namespace,
+      b.name,
+      b.version,
+    );
+    return { released: true };
+  },
+  "mp/submit": async (b) => {
+    const rv = await mp.reviews.submit(tenantAdmin(b.tenant_id, "builder"), {
+      namespace: b.namespace,
+      name: b.name,
+      version: b.version,
+    });
+    return { state: rv.state, findings: rv.findings.map((f) => f.id) };
+  },
   "mp/takedown": async (b) => {
     await mp.listings.takedown(
       { kind: "moderator", subject: "mod-1" },
@@ -400,7 +461,12 @@ const opsServer = http.createServer((req, res) => {
     try {
       send(200, await op(JSON.parse(Buffer.concat(chunks).toString() || "{}")));
     } catch (e) {
-      send(500, { error: String(e?.message ?? e), code: e?.code });
+      send(500, {
+        error: String(e?.message ?? e),
+        code: e?.code,
+        checks: e?.checks,
+        reasons: e?.reasons,
+      });
     }
   });
 });

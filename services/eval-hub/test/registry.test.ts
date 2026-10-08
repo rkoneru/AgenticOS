@@ -293,22 +293,34 @@ describe("registry release is gated", () => {
     );
   });
 
-  it("a blueprint that declares no suites is released without asking the gate", async () => {
+  it("a blueprint that declares no suites is still asked about (tenant-required suites); with no hub wired it is released", async () => {
     const asked: string[] = [];
     const s = await stack({
       gate: {
         check: (i) => (
           asked.push(i.blueprint.name),
-          Promise.resolve({ allowed: false, reasons: [] })
+          Promise.resolve({ allowed: true, reasons: [] })
         ),
       },
     });
     await s.publish(abl("plain-agent", "1.0.0", []));
     await s.registry.setVersionPublic(MARKET, s.ns, "plain-agent", "1.0.0");
-    expect(asked).toEqual([]);
+    expect(asked).toEqual(["plain-agent"]);
     const s2 = await stack({ gate: "none" });
     await s2.publish(abl("plain-agent", "1.0.0", []));
     await s2.registry.setVersionPublic(MARKET, s2.ns, "plain-agent", "1.0.0");
+  });
+
+  it("the real hub blocks a blueprint that declares NO suites while the tenant requires one (ADR 0058), and allows it once a run passes", async () => {
+    const s = await stack();
+    await seedSuite(s.w, { suite: { applies_to: ["plain-agent"], required_for_release: true } });
+    await s.w.hub.runs.registerRunner(s.w.admin, "runner-1");
+    const hash = await s.publish(abl("plain-agent", "1.0.0", []));
+    const e = await refusal(s.registry.setVersionPublic(MARKET, s.ns, "plain-agent", "1.0.0"));
+    expect(e?.code).toBe("evals_gate_failed");
+    expect(e?.reasons.map((r) => r.code)).toEqual(["missing_run"]);
+    await evalRun(s, hash, "plain-agent", "1.0.0", 0.95);
+    await s.registry.setVersionPublic(MARKET, s.ns, "plain-agent", "1.0.0");
   });
 
   it("the default gate refuses: a registry without a wired gate cannot release a blueprint that declares evals", async () => {

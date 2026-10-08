@@ -677,3 +677,29 @@ async def test_online_worker_builds_one_sampler_per_config_and_drops_removed_one
             raise HubError("http_500")
 
     assert await OnlineWorker(Failing(), build).poll_once() == 0
+
+
+async def test_online_worker_awaits_an_async_builder_and_survives_a_failing_one() -> None:
+    class Stub:
+        def __init__(self, config: OnlineConfig) -> None:
+            self.config = config
+
+        async def poll_once(self) -> int:
+            return 1
+
+        async def drain(self) -> None:
+            return None
+
+    async def build(cfg: OnlineConfig) -> Any:
+        if cfg.suite_ref == "bad@1.0.0":
+            raise HubError("http_404")
+        return Stub(cfg)
+
+    hub = FakeHub()
+    hub.online = [
+        OnlineConfig("claims-triage", "refunds@1.0.0", 0.5, 10),
+        OnlineConfig("claims-triage", "bad@1.0.0", 0.5, 10),
+    ]
+    ow = OnlineWorker(hub, build)
+    assert await ow.poll_once() == 1  # the good one is built and polled, the bad one is skipped
+    assert [s.config.suite_ref for s in ow.samplers()] == ["refunds@1.0.0"]  # type: ignore[attr-defined]

@@ -193,9 +193,16 @@ describe("the release gate over the API", () => {
     const ok = await ask([{ ref: s.evals.plainSuite, threshold: 0.8 }]);
     expect(ok.body).toMatchObject({ allowed: true, reasons: [] });
     expect(ok.body.runs[0]).toMatchObject({ run_id: s.evals.runId, overall: 0.95 });
+    // content that is not the stored version's content is refused, never answered
     const stale = await ask([{ ref: s.evals.plainSuite }], "c".repeat(64));
-    expect(stale.body.allowed).toBe(false);
-    expect(stale.body.reasons.map((r: { code: string }) => r.code)).toEqual([
+    expect(stale.status).toBe(422);
+    expect(stale.body.errors[0].path).toBe("/blueprint/content_hash");
+    // a version that is not stored is a hypothetical question: answered for the suites given, fail-closed
+    const hypo = await as(s.owner, "POST", "/evals/gate", {
+      blueprint: { name: s.blueprint.name, version: "8.8.8", content_hash: "c".repeat(64) },
+      suites: [{ ref: s.evals.plainSuite }],
+    });
+    expect(hypo.body.reasons.map((r: { code: string }) => r.code)).toEqual([
       "no_run_for_content_hash",
     ]);
     const regress = await as(s.owner, "POST", "/evals/gate", {
@@ -206,6 +213,33 @@ describe("the release gate over the API", () => {
     const bad = await ask([{ ref: "no-version" }]);
     expect(bad.status).toBe(422);
     expect((await ask([{ ref: s.evals.plainSuite, threshold: 2 }])).status).toBe(422);
+  });
+
+  it("always asks the suites the STORED blueprint declares, even when the caller leaves `suites` out", async () => {
+    // publish a version whose ABL declares a suite nothing has ever run
+    const abl = {
+      apiVersion: "abl.axis.dev/v1",
+      kind: "Agent",
+      metadata: { name: "declares-evals", version: "1.0.0" },
+      spec: {
+        riskClassification: {
+          level: "minimal",
+          rationale: "Answers questions; no decisions about people.",
+        },
+        model: { primary: { provider: "openai", model: "gpt-4o" } },
+        instructions: { system: "You answer." },
+        evals: { suites: [{ ref: s.evals.plainSuite, threshold: 0.8 }] },
+      },
+    };
+    const pub = await as(s.owner, "POST", "/blueprints", { abl });
+    expect(pub.status, pub.text).toBe(201);
+    const none = await as(s.owner, "POST", "/evals/gate", {
+      blueprint: { name: "declares-evals", version: "1.0.0", content_hash: pub.body.content_hash },
+    });
+    expect(none.status, none.text).toBe(200);
+    expect(none.body.allowed).toBe(false);
+    expect(none.body.reasons.map((r: { code: string }) => r.code)).toEqual(["missing_run"]);
+    expect(none.body.reasons[0].suite_ref).toBe(s.evals.plainSuite);
   });
 
   it("a viewer may ask; the gate is audited in the tenant's chain", async () => {

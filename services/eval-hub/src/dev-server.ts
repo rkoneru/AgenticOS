@@ -20,6 +20,7 @@ import type { EvalRunDoc, HubPrincipal, HubRole } from "./types.js";
  *  GET  /v1/evals/datasets[?name=]              GET /v1/evals/datasets/{name}/versions/{n|latest}
  *  POST /v1/evals/suites                        GET /v1/evals/suites[/{ref}]
  *  PUT  /v1/evals/runners/{id}   POST /v1/evals/runners/{id}/revoke   GET /v1/evals/runners
+ *  POST /v1/evals/runner/claim                      GET /v1/evals/runner/manifest?name=&version=[&namespace=]   (runner)
  *  POST /v1/evals/runs          (tenant: queue a run; runner: start a run)
  *  GET  /v1/evals/runs[?status&suite_ref&blueprint_name&content_hash&mode&limit&cursor]   GET /v1/evals/runs/{id}
  *  POST /v1/evals/runs/{id}/claim|results|fail      (runner)
@@ -35,9 +36,22 @@ export type DevAuth =
   /** A runner signs every POST body with HMAC-SHA256 under `signingKey` (default: its bearer token): `x-axis-runner-signature: v1=<hex>`. */
   | { kind: "runner"; tenantId: string; runnerId: string; signingKey?: string };
 
+/** Where a runner gets the compiled manifest of a queued blueprint version (the composition knows the registry / blueprint store). */
+export interface ManifestSource {
+  /** The compiled RuntimeManifest of this tenant's blueprint, or `undefined` when there is none (or it does not compile). */
+  manifest(
+    tenantId: string,
+    ref: { namespace: string | null; name: string; version: string },
+  ): Promise<unknown>;
+}
+
 export interface HubDevServerDeps {
   hub: EvalHub;
   tokens: Record<string, DevAuth>;
+  /** Replaces the static `tokens` lookup (tokens that appear while the server runs, e.g. a runner provisioned for a new tenant). */
+  authenticate?: (authorization: string | undefined) => DevAuth | undefined;
+  /** Enables `GET /v1/evals/runner/manifest?name=&version=[&namespace=]` for runners that hold a running run of that version. */
+  manifests?: ManifestSource;
   rateLimit?: { max: number; windowMs: number };
   now?: () => number;
 }
@@ -107,7 +121,7 @@ const q = (u: URL, k: string): string | undefined => u.searchParams.get(k) ?? un
 
 export function createHubDevServer(deps: HubDevServerDeps): http.Server {
   refuseProduction("eval-hub");
-  const auth = staticTokenAuthenticator(deps.tokens);
+  const auth = deps.authenticate ?? staticTokenAuthenticator(deps.tokens);
   const limiter = new RateLimiter(
     deps.rateLimit?.max ?? 600,
     deps.rateLimit?.windowMs ?? 60_000,
@@ -175,6 +189,22 @@ export function createHubDevServer(deps: HubDevServerDeps): http.Server {
             throw new HubError("forbidden", "runner_id does not match the credential");
           const run = await h.runs.claimNext(p);
           return run ? [200, { run: queuedRunWire(run, p.tenantId) }] : [200, { run: null }];
+        }
+        if (r.length === 2 && r[1] === "manifest" && m === "GET") {
+          const name = q(url, "name");
+          const version = q(url, "version");
+          const namespace = q(url, "namespace") ?? null;
+          if (p.kind !== "runner") throw new HubError("forbidden", "runners only");
+          if (!deps.manifests || !name || !version) throw new HubError("not_found", "no manifest");
+          // fail closed: only the manifest of a version the runner is executing right now, for its own tenant
+          if (!(await h.runs.runnerHoldsBlueprint(p, { name, version })))
+            throw new HubError(
+              "forbidden",
+              "no running run of that blueprint is held by this runner",
+            );
+          const manifest = await deps.manifests.manifest(p.tenantId, { namespace, name, version });
+          if (manifest === undefined) throw new HubError("not_found", "manifest not found");
+          return [200, { manifest }];
         }
         break;
       }

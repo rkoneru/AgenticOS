@@ -16,7 +16,9 @@ export type Capability =
   | "admin.budgets"
   | "admin.sso"
   | "marketplace.install"
-  | "killswitch.set";
+  | "killswitch.set"
+  | "evals.write"
+  | "evals.review";
 
 const RANK: Record<Role, number> = {
   owner: 100,
@@ -44,6 +46,8 @@ const RULES: Record<Capability, (r: Role) => boolean> = {
   "admin.sso": (r) => r === "owner",
   "marketplace.install": (r) => RANK[r] >= 80,
   "killswitch.set": (r) => RANK[r] >= 80,
+  "evals.write": (r) => RANK[r] >= 50 && r !== "operator",
+  "evals.review": (r) => RANK[r] >= 50,
 };
 
 export const can = (role: Role | undefined, cap: Capability): boolean =>

@@ -474,6 +474,7 @@ def test_the_online_sampler_imports_nothing_from_the_decision_path() -> None:
         "redact",
         "trace",
         "hubclient",
+        "sources_http",
     ],
 )
 def test_pure_eval_modules_stay_off_the_decision_path(module: str) -> None:

@@ -100,6 +100,8 @@ export interface World {
   registry: RegistryService;
   marketplace: Marketplace;
   evals: EvalHub;
+  /** The key the registry trusts for eval-result attestations (the hub of this world signs nothing by itself). */
+  hubKey: PublisherKeyPair;
   mpDomain: FakeDomainProver;
   ledger: MemoryUsageLedger;
   idem: MemoryIdempotencyStore;
@@ -149,10 +151,12 @@ export async function makeWorld(
     docs: new MemoryEvalDocStore(),
     audit: new ServiceAudit(audit, "eval-hub"),
   });
+  const hubKey = generatePublisherKey();
   const registry = new RegistryService({
     store: new MemoryRegistryStore(),
     audit: new ServiceAudit(audit, "registry"),
     evalGate: evals.gatePort,
+    evalHubKeys: [{ keyId: hubKey.keyId, publicKey: hubKey.publicKey }],
   });
   const mpDomain = new FakeDomainProver();
   const marketplace = createMarketplace({
@@ -208,6 +212,7 @@ export async function makeWorld(
     registry,
     marketplace,
     evals,
+    hubKey,
     mpDomain,
     ledger,
     idem,

@@ -51,7 +51,7 @@ const fail = async (p: Promise<unknown>): Promise<RegistryError> => {
 };
 
 describe("the eval gate port", () => {
-  it("is asked with the suites of the STORED blueprint, only when it declares some", async () => {
+  it("is asked with the suites of the STORED blueprint; with a hub wired it is asked even when none are declared (tenant-required suites)", async () => {
     const seen: EvalGateInput[] = [];
     const gate: EvalGatePort = {
       check: (i) => (seen.push(i), Promise.resolve({ allowed: true, reasons: [] })),
@@ -60,7 +60,9 @@ describe("the eval gate port", () => {
     await pub.publish(withSuites("agent-one", "1.0.0", [{ ref: "smoke@1.0.0", threshold: 0.8 }]));
     await pub.publish(withSuites("agent-two", "1.0.0", []));
     await svc.setVersionPublic(MARKET, pub.namespace, "agent-two", "1.0.0");
-    expect(seen).toEqual([]);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ suites: [], blueprint: { name: "agent-two" } });
+    seen.length = 0;
     await svc.setVersionPublic(MARKET, pub.namespace, "agent-one", "1.0.0");
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
@@ -74,6 +76,26 @@ describe("the eval gate port", () => {
       name: "agent-one",
       version: "1.0.0",
     });
+  });
+
+  it("a wired hub that refuses blocks a blueprint that declares no suites (a tenant-required suite is missing a run)", async () => {
+    const { svc, pub } = await setup({
+      check: () =>
+        Promise.resolve({
+          allowed: false,
+          reasons: [{ code: "missing_run", suite_ref: "house@1.0.0", message: "no run" }],
+        }),
+    });
+    await pub.publish(withSuites("agent-two", "1.0.0", []));
+    const e = await fail(svc.setVersionPublic(MARKET, pub.namespace, "agent-two", "1.0.0"));
+    expect(e).toMatchObject({ code: "evals_gate_failed", checks: ["missing_run"] });
+  });
+
+  it("without a wired hub a blueprint that declares no suites is released (nothing could know of a requirement)", async () => {
+    const { svc, pub } = await setup();
+    await pub.publish(withSuites("agent-two", "1.0.0", []));
+    await svc.setVersionPublic(MARKET, pub.namespace, "agent-two", "1.0.0");
+    expect((await svc.listVersions({ tenantId: null }, pub.namespace, "agent-two")).length).toBe(1);
   });
 
   it("refuses with evals_gate_failed (409) and the reasons; the version stays private; the refusal is audited", async () => {
@@ -200,6 +222,37 @@ describe("eval attestations", () => {
     expect(
       await svc.evalAttestations({ tenantId: null }, pub.namespace, "agent-one", "1.0.0"),
     ).toEqual([]);
+    // as a reader sees it: re-verified on every read, with the decoded summary only when it verifies
+    const seen = await svc.evalAttestationSummaries(
+      { tenantId: pub.p.tenantId },
+      pub.namespace,
+      "agent-one",
+      "1.0.0",
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      verified: true,
+      predicate: { run_id: "run-1", overall: 0.9, status: "passed", suite_ref: "smoke@1.0.0" },
+    });
+    expect(
+      await svc.evalAttestationSummaries({ tenantId: null }, pub.namespace, "agent-one", "1.0.0"),
+    ).toEqual([]);
+    // the same stored envelope read by a registry that does not trust the hub key (or after it was altered) is NOT verified
+    const untrusting = new RegistryService({
+      store: (
+        svc as unknown as { store: ConstructorParameters<typeof RegistryService>[0]["store"] }
+      ).store,
+      audit: new ServiceAudit(new MemoryAuditLog(), "registry"),
+      evalHubKeys: [{ keyId: "other", publicKey: generatePublisherKey().publicKey }],
+    });
+    const distrust = await untrusting.evalAttestationSummaries(
+      { tenantId: pub.p.tenantId },
+      pub.namespace,
+      "agent-one",
+      "1.0.0",
+    );
+    expect(distrust).toHaveLength(1);
+    expect(distrust[0]).toMatchObject({ verified: false, predicate: null });
     // wrong key, wrong hash, wrong name, wrong caller
     const other = generatePublisherKey();
     expect(

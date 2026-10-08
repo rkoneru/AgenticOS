@@ -123,6 +123,12 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "back into any decision; a failure leaves the run unreported, which the release gate "
         "treats as a block.",
     },
+    "evals/sources_http.py": {
+        "httpx": "HttpManifestSource / HttpRunLogReader: the eval runner's two read-only inputs "
+        "(compiled manifest of the blueprint version it is executing, from the Eval Hub; the "
+        "REDACTED feed of finished runs, from the run service, with a read-only credential). Not an "
+        "agent action and unreachable from one; neither can start, signal or change a run.",
+    },
     "channels.py": {
         "httpx": "HttpChannelSender: client of the channels service (loopback dev surface, NEEDS). "
         "Reachable only through MessageSend performed by ActionExecutor: a DENY never sends; the "

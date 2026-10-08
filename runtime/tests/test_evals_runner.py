@@ -4,6 +4,7 @@ for infrastructure, determinism, bounded concurrency, tenant isolation."""
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import pytest
@@ -313,6 +314,22 @@ async def test_eval_mode_denies_side_effect_actions_before_the_kernel(
     assert len(inner.requests) == (1 if allowed else 0)
     if not allowed:
         assert d.reason.startswith("eval_mode_side_effect_denied")
+
+
+async def test_requests_that_reach_the_kernel_carry_the_eval_marker_and_nothing_else_changes() -> (
+    None
+):
+    inner = ScriptedGate(allow())
+    gate = EvalModeGate(inner, EvalModePolicy())
+    original = request(EnforcementPoint.TOOL_CALL, "lookup", "function")
+    await gate.evaluate(original)
+    await gate.evaluate(request(EnforcementPoint.MODEL_CALL, "gpt-4o", "function"))
+    sent = inner.requests[0]
+    assert sent.context["eval_mode"] is True
+    assert {k: v for k, v in sent.context.items() if k != "eval_mode"} == dict(original.context)
+    assert dataclasses.replace(sent, context=original.context) == original
+    assert "eval_mode" not in original.context  # the caller's request is not mutated
+    assert inner.requests[1].context["eval_mode"] is True
 
 
 async def test_a_suite_can_allow_a_named_sandboxed_target_but_the_kernel_still_decides() -> None:

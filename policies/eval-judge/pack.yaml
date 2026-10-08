@@ -1,0 +1,16 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: eval-judge
+  version: 1.0.0
+  description: "Lets the model-graded eval judge (blueprint eval-judge, a tool-less agent) make its one gated model call. Merge this rule into the tenant's active pack: without an explicit rule a deny-by-default tenant makes every model-graded case ungraded (score 0, fail closed). Model egress for PHI tenants is a separate decision (docs/NEEDS.md #309)."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+  rules:
+    - id: allow-eval-judge-model-calls
+      enforcementPoints: [model_call]
+      when: { field: agent.name, op: eq, value: eval-judge }
+      gates: [tenant-kill]
+      decision: ALLOW

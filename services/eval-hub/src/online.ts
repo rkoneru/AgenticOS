@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
+import { redactPatterns } from "@axis/channels";
 import { requireReader, requireRunner, requireTenant } from "./authz.js";
 import { denyAudit, guarded, iso, mutate, type Ctx } from "./context.js";
 import type { Doc } from "./docstore.js";
 import { HubError, integrityFailed, invalid, notFound } from "./errors.js";
+import { DocConflict } from "./docstore.js";
 import type { RunService } from "./runs.js";
 import {
   AggregationError,
@@ -17,6 +20,7 @@ import {
   SUITE_REF_RE,
   type HubPrincipal,
   type OnlineResult,
+  type ReviewTaskDoc,
   type SamplingConfig,
   type Suite,
 } from "./types.js";
@@ -170,6 +174,10 @@ export class OnlineService {
    * A registered runner posts one sampled production run (docs/spec/evals-runner.md section 9): grades per grader, status and score. The
    * hub recomputes the score from the grades and rejects a mismatch. Only scores and ids are stored: the sampled output, trace and
    * review tasks are NOT kept (nothing of a production conversation is persisted by this path).
+   *
+   * EXCEPTION, by design: a result still waiting for a human grade carries `review_tasks` (the runner's already-redacted case input
+   * and output). The hub redacts them AGAIN and keeps them only as review tasks (the reviewer has to read something); the online
+   * record itself still holds scores and ids only. When every task resolves the hub appends a completed record.
    */
   async ingest(p: HubPrincipal, input: Record<string, unknown>): Promise<OnlineResult> {
     const r = requireRunner(p);
@@ -289,10 +297,136 @@ export class OnlineService {
           () => this.c.docs.insert(p.tenantId, "online", `${rec.at}|${rec.id}`, rec),
           "online result",
         );
+        if (agg.status === "pending_human")
+          await this.queueTasks(p.tenantId, rec, suite, input["review_tasks"], cfg.redaction);
         await this.maybeAlert(p.tenantId, cfg, now);
         return rec;
       },
     );
+  }
+
+  /** One review task per pending human cell of a sampled result. Idempotent; a task that does not match a human grader is refused. */
+  private async queueTasks(
+    tenantId: string,
+    rec: OnlineResult,
+    suite: Suite,
+    raw: unknown,
+    redaction: "phi" | "always",
+  ): Promise<void> {
+    if (raw === undefined || raw === null || (Array.isArray(raw) && raw.length === 0)) return; // stays pending; nothing to review
+    if (!Array.isArray(raw) || raw.length > 50)
+      throw invalid("review_tasks must be an array of at most 50", ["review_tasks"]);
+    let publisher: string | null = null;
+    try {
+      publisher = (await this.c.publishers?.publisherOf(tenantId, rec.blueprint)) ?? null;
+    } catch {
+      throw new HubError("unavailable", "the blueprint's publisher could not be determined");
+    }
+    const created = this.c.now();
+    const scrub = (v: unknown): unknown =>
+      typeof v === "string"
+        ? redactPatterns(v)
+        : Array.isArray(v)
+          ? v.map(scrub)
+          : isObj(v)
+            ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, scrub(x)]))
+            : v;
+    void redaction; // the runner redacts per its configuration; the hub's own pass is unconditional
+    for (const [i, t] of raw.entries()) {
+      const path = `review_tasks[${i}]`;
+      const spec = isObj(t) ? suite.graders.find((g) => g.id === t["grader_id"]) : undefined;
+      if (!isObj(t) || !spec || spec.kind !== "human")
+        throw invalid("task must name a human grader of the suite", [path]);
+      const output = t["output"] === undefined || t["output"] === null ? null : t["output"];
+      if (output !== null && (typeof output !== "string" || output.length > 20_000))
+        throw invalid("output must be a string of at most 20000 characters", [`${path}.output`]);
+      if (
+        JSON.stringify(t["input"] ?? null).length > 64_000 ||
+        JSON.stringify(t["expected"] ?? null).length > 64_000
+      )
+        throw invalid("input/expected are too large", [path]);
+      const rubric = t["rubric"] === undefined ? String(spec.config["rubric"]) : t["rubric"];
+      if (typeof rubric !== "string" || rubric === "" || rubric.length > 4000)
+        throw invalid("rubric must be a string of 1-4000 characters", [`${path}.rubric`]);
+      const id = `ot-${createHash("sha256").update(`${rec.id}|${spec.id}`).digest("hex").slice(0, 32)}`;
+      const task: ReviewTaskDoc = {
+        id,
+        run_id: `online:${rec.id}`,
+        suite_ref: rec.suite_ref,
+        case_id: (rec.source_run_id ?? rec.id).slice(0, 128),
+        grader_id: spec.id,
+        rubric,
+        blueprint: rec.blueprint,
+        case_input: scrub(t["input"] ?? null),
+        case_output: output === null ? null : redactPatterns(output as string),
+        case_expected: scrub(t["expected"] ?? null),
+        state: "open",
+        created_at: iso(created),
+        sla_deadline: iso(
+          new Date(created.getTime() + (spec.config["sla_hours"] as number) * 3_600_000),
+        ),
+        double_grade: spec.config["double_grade"] === true,
+        agreement_tolerance: spec.config["agreement_tolerance"] as number,
+        conflicts: publisher === null ? [] : [publisher],
+        claimed_by: null,
+        claim_expires_at: null,
+        skipped_by: [],
+        grades: [],
+        resolution: null,
+        resolved_at: null,
+        sla_breached_at: null,
+      };
+      try {
+        await this.c.docs.insert(tenantId, "tasks", id, task);
+      } catch (e) {
+        if (!(e instanceof DocConflict)) throw e;
+      }
+    }
+  }
+
+  /**
+   * Called when a review task of a sampled result resolves. When no task of the result is left open, appends the COMPLETED record
+   * (score recomputed from the scored cells and the human scores, exactly as for a run). Online data stays out of every gate.
+   */
+  async humanResolved(tenantId: string, resultId: string): Promise<void> {
+    const pending = (
+      await this.c.docs.find<OnlineResult>(tenantId, "online", { id: resultId })
+    ).find((d) => d.data.status === "pending_human")?.data;
+    if (!pending) return;
+    const tasks = (
+      await this.c.docs.find<ReviewTaskDoc>(tenantId, "tasks", { run_id: `online:${resultId}` })
+    ).map((d) => d.data);
+    if (tasks.length === 0 || tasks.some((t) => t.resolution === null)) return;
+    const suiteDoc = await this.c.docs.get<Suite>(tenantId, "suites", pending.suite_ref);
+    if (!suiteDoc) return;
+    const scores: Record<string, number> = { ...pending.scores };
+    for (const g of suiteDoc.data.graders) {
+      const t = tasks.find((x) => x.grader_id === g.id);
+      if (t?.resolution) scores[g.id] = t.resolution.score;
+    }
+    const grid: Record<string, GradeCell> = {};
+    for (const g of suiteDoc.data.graders) {
+      const v = scores[g.id];
+      grid[g.id] =
+        v === undefined ? { status: "ungraded", score: 0 } : { status: "scored", score: v };
+    }
+    const agg = aggregateGrid(suiteDoc.data.graders, { sample: grid }, { pass_threshold: 0 });
+    if (agg.status !== "complete") return;
+    const at = iso(this.c.now());
+    const done: OnlineResult = {
+      ...pending,
+      id: this.c.newId(),
+      scores,
+      score: agg.per_case["sample"] as number,
+      status: "complete",
+      at,
+      resolves: pending.id,
+    };
+    try {
+      await this.c.docs.insert(tenantId, "online", `resolved|${pending.id}`, done);
+    } catch (e) {
+      if (!(e instanceof DocConflict)) throw e; // already completed
+    }
   }
 
   /** Sampled results that carry a score (a result still waiting for a human grade has none). */

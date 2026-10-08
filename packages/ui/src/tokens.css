@@ -80,12 +80,15 @@
 /* Data-viz series slot 1 (validated reference palette, light/dark steps). */
 :root {
   --axis-viz-1: #2a78d6;
+  --axis-viz-2: #eb6834;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --axis-viz-1: #3987e5;
+    --axis-viz-2: #d95926;
   }
 }
 :root[data-theme="dark"] {
   --axis-viz-1: #3987e5;
+  --axis-viz-2: #d95926;
 }

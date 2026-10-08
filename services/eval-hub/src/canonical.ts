@@ -4,8 +4,8 @@ import type { EvalCase } from "./types.js";
 /**
  * Canonical JSON exactly as the runner writes it (`json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)`): sorted keys,
  * no whitespace, every character outside space..~ escaped as \uXXXX (lower-case hex, UTF-16 units). Numbers use JavaScript's shortest
- * form, which equals Python's for integers and for floats that are not integral (a float with an integral value, `1.0`, is `1` here:
- * docs/NEEDS.md).
+ * form; the runner's `canonical` prints numbers the same way (an integral float, `1.0`, is `1` on both sides; shared vectors in
+ * test/fixtures/eval-canonical-vectors.json).
  */
 export function canonicalAscii(value: unknown): string {
   if (value === null) return "null";

@@ -442,9 +442,46 @@ async function getEvalRunComparison(c: Ctx): Promise<HandlerResult> {
   return ok(cmp === undefined ? {} : { comparison: cmp });
 }
 
+type DeclaredSuites = { spec?: { evals?: { suites?: { ref: string; threshold: number }[] } } };
+
+/**
+ * The gate answers for a STORED version: the suites its ABL declares are always asked (a caller that leaves `suites` out cannot get a
+ * green light by forgetting them), the tenant-required ones are added by the hub, and the caller may add more or raise a threshold.
+ * A content hash that is not the stored version's is a 422: the answer would be about content that was never stored.
+ * A version that is not stored (a hypothetical question) is answered for the suites given alone.
+ */
 async function gateEvalRelease(c: Ctx): Promise<HandlerResult> {
+  const body = c.body as {
+    blueprint: { namespace?: string; name: string; version: string; content_hash: string };
+    suites?: { ref: string; threshold?: number }[];
+  };
+  const b = body.blueprint;
+  let stored: { content_hash: string; abl: unknown } | undefined;
+  try {
+    stored =
+      b.namespace !== undefined
+        ? await c.deps.registry.resolve(c.principal, `${b.namespace}/${b.name}@${b.version}`)
+        : await c.deps.blueprints.get(c.tenantId, b.name, b.version);
+  } catch (e) {
+    if (!(e instanceof PortNotFound)) throw e;
+  }
+  let suites = body.suites;
+  if (stored !== undefined) {
+    if (stored.content_hash !== b.content_hash)
+      throw validation("blueprint.content_hash is not the content hash of the stored version", [
+        { path: "/blueprint/content_hash", message: "does not match the stored version" },
+      ]);
+    const declared = (stored.abl as DeclaredSuites).spec?.evals?.suites ?? [];
+    suites = [
+      ...declared.map((d) => ({ ref: d.ref, threshold: d.threshold })),
+      ...(body.suites ?? []),
+    ];
+  }
   return ok(
-    await c.deps.evals.gate(c.principal, c.body as { blueprint: unknown; suites?: unknown }),
+    await c.deps.evals.gate(c.principal, {
+      blueprint: body.blueprint,
+      ...(suites !== undefined ? { suites } : {}),
+    }),
   );
 }
 
@@ -593,6 +630,18 @@ async function yankRegistryVersion(c: Ctx): Promise<HandlerResult> {
   );
   return ok({ ok: true });
 }
+async function listRegistryEvalAttestations(c: Ctx): Promise<HandlerResult> {
+  const version = str(c.params["version"]);
+  if (!SEMVER.test(version)) throw notFound("not found");
+  return ok({
+    items: await c.deps.registry.evalAttestations(
+      c.principal,
+      str(c.params["namespace"]),
+      regName(c),
+      version,
+    ),
+  });
+}
 async function resolveRegistryBlueprint(c: Ctx): Promise<HandlerResult> {
   return ok(await c.deps.registry.resolve(c.principal, str(c.query["ref"])));
 }
@@ -740,6 +789,11 @@ export const ROUTES: Record<string, Route> = {
   listRegistryVersions: {
     action: "api.registry.read",
     handler: listRegistryVersions,
+    mutation: false,
+  },
+  listRegistryEvalAttestations: {
+    action: "api.registry.read",
+    handler: listRegistryEvalAttestations,
     mutation: false,
   },
   yankRegistryVersion: {

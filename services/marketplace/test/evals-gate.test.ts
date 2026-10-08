@@ -92,21 +92,44 @@ describe("marketplace submit-for-review is gated by the Eval Hub", () => {
     ]);
   });
 
-  it("a blueprint without declared suites is never gated; a marketplace with no gate wired refuses one that declares evals", async () => {
+  it("a blueprint without declared suites is asked about too when a gate is wired (tenant-required suites); with no gate wired it passes, and one that declares evals is refused", async () => {
     const g = gate(() => blocked);
     const env = makeEnv({ evalGate: g });
     const pub = await Pub.create(env);
     await pub.publish(ablDoc("plain-agent", "1.0.0"));
+    await expect(
+      env.mp.reviews.submit(pub.b, {
+        namespace: pub.namespace,
+        name: "plain-agent",
+        version: "1.0.0",
+      }),
+    ).rejects.toMatchObject({ code: "evals_gate_failed" });
+    expect(g.calls).toHaveLength(1);
+    expect(g.calls[0]?.suites).toEqual([]);
+    const open = makeEnv({ evalGate: gate(() => ({ allowed: true, reasons: [] })) });
+    const pubOpen = await Pub.create(open);
+    await pubOpen.publish(ablDoc("plain-agent", "1.0.0"));
     expect(
       (
-        await env.mp.reviews.submit(pub.b, {
-          namespace: pub.namespace,
+        await open.mp.reviews.submit(pubOpen.b, {
+          namespace: pubOpen.namespace,
           name: "plain-agent",
           version: "1.0.0",
         })
       ).state,
     ).toBe("in_review");
-    expect(g.calls).toEqual([]);
+    const none = makeEnv({}); // no gate wired at all
+    const pubNone = await Pub.create(none);
+    await pubNone.publish(ablDoc("plain-agent", "1.0.0"));
+    expect(
+      (
+        await none.mp.reviews.submit(pubNone.b, {
+          namespace: pubNone.namespace,
+          name: "plain-agent",
+          version: "1.0.0",
+        })
+      ).state,
+    ).toBe("in_review");
 
     const env2 = makeEnv(); // default: the registry's deny-all gate
     const pub2 = await Pub.create(env2);

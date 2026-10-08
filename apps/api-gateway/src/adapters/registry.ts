@@ -6,6 +6,7 @@ import {
   PortNotFound,
   PortUnavailable,
   type Principal,
+  type RegistryEvalAttestationDto,
   type RegistryKeyDto,
   type RegistryNamespaceDto,
   type RegistryPort,
@@ -157,6 +158,35 @@ export class RegistryAdapter implements RegistryPort {
   ): Promise<void> {
     try {
       await this.reg.yank(registryPrincipal(p), namespace, name, version, reason);
+    } catch (e) {
+      return fromRegistryError(e);
+    }
+  }
+
+  async evalAttestations(
+    p: Principal,
+    namespace: string,
+    name: string,
+    version: string,
+  ): Promise<RegistryEvalAttestationDto[]> {
+    try {
+      const viewer = { tenantId: p.tenantId };
+      // The version must be visible to the caller (a private version of another tenant is a 404, not an empty list).
+      const rows = await this.reg.listVersions(viewer, namespace, name);
+      if (!rows.some((r) => r.record.version === version))
+        throw new PortNotFound("version not found");
+      return (await this.reg.evalAttestationSummaries(viewer, namespace, name, version)).map(
+        (a) => ({
+          run_id: a.record.runId,
+          suite_ref: a.record.suiteRef,
+          overall: a.record.overall,
+          content_hash: a.record.contentHash,
+          attached_at: a.record.attachedAt.toISOString(),
+          verified: a.verified,
+          predicate: a.predicate === null ? null : { ...a.predicate },
+          envelope: a.record.envelope,
+        }),
+      );
     } catch (e) {
       return fromRegistryError(e);
     }

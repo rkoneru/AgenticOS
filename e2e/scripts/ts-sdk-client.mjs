@@ -70,10 +70,38 @@ const ops = {
   usage: () => ax.usage.get({ from: a.from, to: a.to, groupBy: a.group_by }),
   killSwitch: () => ax.killSwitches.set({ scope: "tenant", engaged: a.engaged, reason: a.reason }),
   killSwitchList: () => ax.killSwitches.list(),
+  // ---- Phase 8: the Eval Hub ----
+  evalsDatasetCreate: () => ax.evals.datasets.create(a.body),
+  evalsDatasetGet: () => ax.evals.datasets.get(a.name, a.version ?? "latest"),
+  evalsDatasetList: () => ax.evals.datasets.list(a.name ? { name: a.name } : {}),
+  evalsSuiteCreate: () => ax.evals.suites.create(a.body),
+  evalsSuiteGet: () => ax.evals.suites.get(a.ref),
+  evalsSuiteList: () => ax.evals.suites.list(),
+  evalsRunStart: () =>
+    ax.evals.start({ suite: a.suite, blueprint: a.blueprint, ...(a.mode ? { mode: a.mode } : {}) }),
+  evalsRunGet: () => ax.evals.get(a.id),
+  evalsRunWait: () =>
+    ax.evals.wait(a.id, { timeoutMs: a.timeout_ms ?? 180000, pollIntervalMs: 300 }),
+  evalsRunList: () => ax.evals.list(a.params ?? {}),
+  evalsCompare: () => ax.evals.comparison(a.id),
+  evalsGate: () => ax.evals.gate({ blueprint: a.blueprint, suites: a.suites }),
+  evalsBaselineList: () => ax.evals.baselines.list(a.blueprint, a.suite),
+  evalsBaselineSet: () => ax.evals.baselines.set(a.run_id),
+  evalsReviewTasks: () => ax.evals.review.tasks(a.params ?? {}),
+  evalsReviewClaim: () => ax.evals.review.claim(a.id),
+  evalsReviewGrade: () => ax.evals.review.grade(a.id, { score: a.score, comment: a.comment }),
+  evalsReviewSkip: () => ax.evals.review.skip(a.id, a.reason),
+  evalsSamplingPut: () => ax.evals.sampling.put(a.id, a.body),
+  evalsSamplingList: () => ax.evals.sampling.list(),
+  evalsSamplingSummary: () => ax.evals.sampling.summary(a.params ?? {}),
+  evalsRunnersList: () => ax.evals.runners.list(),
+  evalsRunnersRegister: () => ax.evals.runners.register(a.id, a.description),
+  evalsRunnersRevoke: () => ax.evals.runners.revoke(a.id),
+  registryAttestations: () => ax.registry.evalAttestations(a.namespace, a.name, a.version),
 };
 
 try {
-  console.log(JSON.stringify(await ops[op]()));
+  console.log(JSON.stringify((await ops[op]()) ?? null));
 } catch (e) {
   const status = e instanceof AxisApiError ? e.status : undefined;
   console.log(

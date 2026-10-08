@@ -34,6 +34,9 @@ export function createEvalHub(o: HubOptions): EvalHub {
   });
   const baselines = new BaselineService(ctx);
   const gate = new GateService(ctx, runs, baselines);
+  const reviews = new ReviewService(ctx, runs);
+  const online = new OnlineService(ctx, runs);
+  reviews.attachOnline(online);
   return {
     datasets: new DatasetService(ctx),
     suites: new SuiteService(ctx),
@@ -41,7 +44,7 @@ export function createEvalHub(o: HubOptions): EvalHub {
     baselines,
     gate,
     gatePort: new HubGatePort(gate, baselines),
-    reviews: new ReviewService(ctx, runs),
-    online: new OnlineService(ctx, runs),
+    reviews,
+    online,
   };
 }

@@ -77,6 +77,38 @@ describe("approval request (REQUIRE_APPROVAL)", () => {
     expect(row?.reason).toContain("request=ap-1");
   });
 
+  it("eval mode: the same REQUIRE_APPROVAL decision, but NO request is opened and the marker never reaches the policy", async () => {
+    const requester = new FakeRequester();
+    const seen: Record<string, unknown>[] = [];
+    const spy: PolicyEngine = {
+      evaluate: async (input) => {
+        seen.push(input);
+        return (await defaultEngine()).evaluate(input);
+      },
+    };
+    const h = await harness({ approvalRequester: requester }, spy);
+    const live = await h.kernel.evaluate(payments());
+    const r0 = payments();
+    const test = await h.kernel.evaluate({ ...r0, context: { ...r0.context, eval_mode: true } });
+    expect(test.decision).toBe(live.decision);
+    expect(test.matched_rule_ids).toEqual(live.matched_rule_ids);
+    expect(test.policy_version).toBe(live.policy_version);
+    expect(test).toMatchObject({ decision: "REQUIRE_APPROVAL", approval_id: "eval-dry-run" });
+    expect(test.reason).toContain("eval mode: no approval request opened");
+    expect(requester.inputs).toHaveLength(1); // only the live request opened one
+    expect(seen).toHaveLength(2);
+    expect("eval_mode" in (seen[1] as object)).toBe(false);
+    expect(seen[1]).toEqual(seen[0]); // byte-identical policy input: the eval was judged by the very same policy
+    // the denial paths are not softened by it: a failing gate still denies
+    const r1 = payments({ args: { amount: 20000 } });
+    const capped = await h.kernel.evaluate({ ...r1, context: { ...r1.context, eval_mode: true } });
+    expect(capped.decision).toBe("DENY");
+    // and only a literal true counts
+    const r2 = payments();
+    await h.kernel.evaluate({ ...r2, context: { ...r2.context, eval_mode: "yes" } });
+    expect(requester.inputs).toHaveLength(2);
+  });
+
   it("without a requester the outcome is unchanged: REQUIRE_APPROVAL with an empty id (clients deny)", async () => {
     const h = await harness();
     const r = await h.kernel.evaluate(payments());

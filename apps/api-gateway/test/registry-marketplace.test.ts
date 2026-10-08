@@ -1,3 +1,4 @@
+import { signEvalStatement } from "@axis/registry";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LISTED_ABL, call, makeWorld, seed, signedBundle, type Seed, type World } from "./world.js";
 
@@ -225,5 +226,74 @@ describe("approvals by id and policy activation", () => {
       list.body.items.find((p: { version_id: string }) => p.version_id === s.policyVersionId)
         .active,
     ).toBe(true);
+  });
+});
+
+describe("eval attestations of a version (OpenAPI 1.4.0)", () => {
+  const platform = { kind: "platform", subject: "eval-hub", service: "eval-hub" } as const;
+  const stmt = (ns: string, name: string, hash: string, runId: string) => ({
+    _type: "https://in-toto.io/Statement/v1",
+    subject: [{ name: `${ns}/${name}@1.0.0`, digest: { sha256: hash } }],
+    predicateType: "https://axis.dev/eval-result/v1",
+    predicate: {
+      run_id: runId,
+      suite_ref: "smoke@1.0.0",
+      suite_hash: "s".repeat(64),
+      dataset_hash: "d".repeat(64),
+      mode: "ci",
+      status: "passed" as const,
+      overall: 0.9,
+      per_grader: { exact: 0.9 },
+      pass_threshold: 0.8,
+      sample_size: 4,
+      runner_id: "r",
+      finished_at: "2026-10-08T12:00:00.000Z",
+      record_hash: "h".repeat(64),
+    },
+  });
+
+  it("lists the attested runs of a version, re-verified on the read; another tenant gets a 404, never an empty list", async () => {
+    const path = `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions/1.0.0/eval-attestations`;
+    const versions = await call(
+      w,
+      "GET",
+      `/registry/blueprints/${s.own.namespace}/${s.own.name}/versions`,
+      {
+        token: s.owner.token,
+      },
+    );
+    const hash = versions.body.items.find(
+      (v: { version: string }) => v.version === "1.0.0",
+    ).content_hash;
+    expect((await call(w, "GET", path, { token: s.owner.token })).body.items).toEqual([]);
+    const env = signEvalStatement(stmt(s.own.namespace, s.own.name, hash, "run-att-1"), w.hubKey);
+    await w.registry.attachEvalAttestation(
+      platform,
+      { namespace: s.own.namespace, name: s.own.name, version: "1.0.0" },
+      env,
+    );
+    const r = await call(w, "GET", path, { token: s.owner.token });
+    expect(r.status, r.text).toBe(200);
+    expect(r.body.items).toHaveLength(1);
+    expect(r.body.items[0]).toMatchObject({
+      run_id: "run-att-1",
+      suite_ref: "smoke@1.0.0",
+      overall: 0.9,
+      content_hash: hash,
+      verified: true,
+      predicate: { status: "passed", overall: 0.9, runner_id: "r" },
+    });
+    expect(r.body.items[0].envelope.signatures[0].keyid).toBe(w.hubKey.keyId);
+    // an API key sees it with the registry read scope
+    const key = await w.apiKey(s.owner, ["registry:read"]);
+    expect((await call(w, "GET", path, { key })).status).toBe(200);
+    // another tenant: the version is private to the owner, so there is nothing to attest and no hint that it exists
+    expect((await call(w, "GET", path, { token: other.token })).status).toBe(404);
+    expect(
+      (await call(w, "GET", path.replace("/1.0.0/", "/9.9.9/"), { token: s.owner.token })).status,
+    ).toBe(404);
+    expect(
+      (await call(w, "GET", path.replace("/1.0.0/", "/latest/"), { token: s.owner.token })).status,
+    ).toBe(404);
   });
 });

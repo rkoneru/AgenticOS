@@ -1,0 +1,27 @@
+apiVersion: abl.axis.dev/v1
+kind: Agent
+metadata:
+  name: answer-agent
+  version: 1.0.0
+  description: "Phase 8 e2e. Answers customer questions about claims; releases are gated by the answers@1.0.0 eval suite."
+spec:
+  riskClassification:
+    level: limited
+    rationale: Answers questions about claim status; no decisions about people.
+    transparencyNotice: You are interacting with an AI system.
+  model:
+    primary: { provider: openai, model: gpt-4o, params: { maxOutputTokens: 128 } }
+  instructions:
+    system: "You answer customer questions about the status of their insurance claims. Persona: careful. Always say what happens next and thank the customer."
+  routing:
+    stages: [llm]
+  tools:
+    - { name: lookup-claim, kind: function, sideEffects: read }
+  budgets:
+    tokens: { soft: 40000, hard: 60000 }
+    toolCalls: { hard: 10 }
+  policy:
+    packs: ["tenant-evals@^1.0.0"]
+  evals:
+    suites:
+      - { ref: "answers@1.0.0", threshold: 0.6 }

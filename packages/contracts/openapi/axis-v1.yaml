@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AXIS Control Plane API
-  version: 1.3.0
+  version: 1.4.0
   summary: Governed agent runtime — REST API v1
   description: |
     Source of truth for the public `/v1` API. SDKs and server route schemas are generated from this file.
@@ -1185,6 +1185,33 @@ paths:
                   items: { type: array, items: { $ref: "#/components/schemas/RegistryVersion" } }
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
+  /registry/blueprints/{namespace}/{name}/versions/{version}/eval-attestations:
+    get:
+      tags: [Registry]
+      operationId: listRegistryEvalAttestations
+      summary: Signed eval-result attestations attached to a version (its eval history, as the Eval Hub vouches for it)
+      description: |
+        Every finished eval run of this exact content is attested by the Eval Hub and attached append-only. Each envelope is
+        re-verified against the trusted hub keys on every read (`verified`); a summary (`predicate`) is shown only when it verifies.
+        Same visibility as the version itself (the owner, or everyone once the version is released).
+      parameters:
+        - { $ref: "#/components/parameters/Namespace" }
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Attestations, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/RegistryEvalAttestation" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
   /registry/blueprints/{namespace}/{name}/versions/{version}/yank:
     post:
       tags: [Registry]
@@ -2109,6 +2136,24 @@ components:
             properties:
               keyid: { type: string }
               sig: { type: string }
+    RegistryEvalAttestation:
+      type: object
+      required:
+        [run_id, suite_ref, overall, content_hash, attached_at, verified, predicate, envelope]
+      properties:
+        run_id: { type: string }
+        suite_ref: { type: string }
+        overall: { type: number, minimum: 0, maximum: 1 }
+        content_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        attached_at: { type: string, format: date-time }
+        verified:
+          type: boolean
+          description: The envelope verified against the trusted eval hub keys, and is about this version's name and content hash
+        predicate:
+          description: The decoded eval-result summary of the statement; null unless `verified`
+          type: [object, "null"]
+          additionalProperties: true
+        envelope: { $ref: "#/components/schemas/DsseEnvelope" }
     RegistryVersion:
       type: object
       required: [namespace, name, version, content_hash, risk_level, signature, published_at]

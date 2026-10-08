@@ -8,8 +8,9 @@ treats a failed run like a missing one (blocked), so a refusal can never read as
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -136,7 +137,7 @@ class OnlineWorker:
     def __init__(
         self,
         hub: EvalHubClient,
-        build_sampler: Callable[[OnlineConfig], OnlineSampler],
+        build_sampler: Callable[[OnlineConfig], OnlineSampler | Awaitable[OnlineSampler]],
         *,
         poll_interval: float = 30.0,
     ) -> None:
@@ -157,7 +158,17 @@ class OnlineWorker:
         for key, cfg in live.items():
             current = self._samplers.get(key)
             if current is None or current.config != cfg:
-                self._samplers[key] = self._build(cfg)
+                try:
+                    built = self._build(cfg)
+                    self._samplers[key] = await built if inspect.isawaitable(built) else built
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 - one bad configuration must not stop the others
+                    kind = exc.kind if isinstance(exc, HubError) else type(exc).__name__
+                    log.warning("online sampler for %s not built: %s", key, kind)
+
+    def samplers(self) -> list[OnlineSampler]:
+        return list(self._samplers.values())
 
     async def poll_once(self) -> int:
         await self.refresh()

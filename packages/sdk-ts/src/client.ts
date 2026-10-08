@@ -770,6 +770,10 @@ export class Registry {
   versions(namespace: string, name: string, options?: Opts) {
     return this.ax.api.listRegistryVersions({ namespace, name }, options);
   }
+  /** The eval history of one version as the Eval Hub vouches for it: signed attestations, each re-verified by the server on this read. */
+  evalAttestations(namespace: string, name: string, version: string, options?: Opts) {
+    return this.ax.api.listRegistryEvalAttestations({ namespace, name, version }, options);
+  }
   yank(namespace: string, name: string, version: string, reason: string, options?: Opts) {
     return this.ax.api.yankRegistryVersion({ namespace, name, version, body: { reason } }, options);
   }

@@ -58,6 +58,8 @@ const safeHash = (v: unknown): string => {
   }
 };
 
+/** The approval id of an eval-mode REQUIRE_APPROVAL: names no record, so nothing can ever approve it. */
+export const EVAL_DRY_RUN_APPROVAL_ID = "eval-dry-run";
 const SCOPES: KillScope[] = ["global", "tenant", "agent", "tool"];
 const MAX_REASON = 1000;
 
@@ -273,6 +275,16 @@ export class RiskKernel {
       approval_id: "",
     };
     if (requester === undefined) return pending;
+    // Eval mode (docs/spec/evals-runner.md): the decision is the one production would get, but no approval request is opened, so a
+    // test case never puts an action in front of a human approver. The id is a constant that names no record: it can neither be
+    // approved nor verified, so the marker can only REMOVE a side effect (the action stays parked or is denied), never add an allowance.
+    // It is not policy input.
+    if (req.context["eval_mode"] === true)
+      return {
+        ...pending,
+        reason: `${policy.reason}; eval mode: no approval request opened`.slice(0, MAX_REASON),
+        approval_id: EVAL_DRY_RUN_APPROVAL_ID,
+      };
     try {
       const runId = (req.context["run"] as { id?: unknown } | undefined)?.id;
       if (typeof runId !== "string" || runId === "") return deny("approval needs context.run.id");
@@ -302,9 +314,11 @@ export class RiskKernel {
   }
 
   private async policy(req: GateRequest): Promise<PolicyResult> {
-    // A presented approval record is evidence for the kernel's own check, never policy input.
+    // A presented approval record is evidence for the kernel's own check, never policy input. So is the eval-mode marker: a policy
+    // must not be able to relax (or tighten) itself for evals; it only changes whether an approval REQUEST is opened (below).
     const context = { ...req.context };
     delete context["approval"];
+    delete context["eval_mode"];
     const input: Record<string, unknown> = {
       ...context,
       enforcement_point: req.enforcement_point,

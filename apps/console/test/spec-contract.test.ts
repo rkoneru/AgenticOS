@@ -49,6 +49,22 @@ describe("console data layer vs OpenAPI v1", () => {
       api.setKillSwitch({ scope: "tenant", engaged: true }),
       api.getUsage({ from: "a", to: "b" }),
       api.startEvalRun("s", { name: "a", version: "1" }),
+      api.listEvalRuns(),
+      api.getEvalRun(id),
+      api.getEvalComparison(id),
+      api.gateEval({ name: "a", version: "1", content_hash: "a".repeat(64) }),
+      api.listEvalDatasets(),
+      api.getEvalDataset("d", 1),
+      api.listEvalSuites(),
+      api.getEvalSuite("s@1.0.0"),
+      api.listEvalBaselines("a", "s@1.0.0"),
+      api.listEvalReviewTasks(),
+      api.claimEvalReviewTask("rt-1"),
+      api.gradeEvalReviewTask("rt-1", 1, "ok"),
+      api.skipEvalReviewTask("rt-1", "no"),
+      api.listEvalSampling(),
+      api.getEvalOnlineSummary(),
+      api.listEvalAttestations("ns", "a", "1.0.0"),
     ]);
     for (const c of calls) {
       const [method, path] = c.split(" ") as [string, string];
@@ -60,7 +76,7 @@ describe("console data layer vs OpenAPI v1", () => {
       expect(match, `${c} must exist in axis-v1.yaml`).toBeDefined();
       expect(spec.paths[match!]![method.toLowerCase()], `${c} method`).toBeDefined();
     }
-    expect(calls).toHaveLength(19);
+    expect(calls).toHaveLength(35);
     // sanity: the additive allow-list really is only used for non-spec paths
     expect(ADDITIVE.length).toBeGreaterThan(0);
   });

@@ -319,6 +319,24 @@ export class RunService {
     return null;
   }
 
+  /**
+   * May this runner read the compiled manifest of `name@version`? Only while it holds a RUNNING run of exactly that blueprint version
+   * (claimed by it, not yet submitted): a runner is not a general reader of the tenant's blueprints.
+   */
+  async runnerHoldsBlueprint(
+    p: HubPrincipal,
+    b: { name: string; version: string },
+  ): Promise<boolean> {
+    const r = requireRunner(p);
+    await this.requireActiveRunner(r);
+    return (await this.c.docs.find<EvalRunDoc>(p.tenantId, "runs", { status: "running" })).some(
+      (d) =>
+        d.data.runner_id === r.runnerId &&
+        d.data.blueprint.name === b.name &&
+        d.data.blueprint.version === b.version,
+    );
+  }
+
   // ---------------------------------------------------------------- results
   private async load(
     tenantId: string,

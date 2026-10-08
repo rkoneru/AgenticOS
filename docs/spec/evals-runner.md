@@ -1,7 +1,6 @@
 # Eval runner, graders and online sampler
 
-Status: **Prototype** (built and tested against a scripted model, a scripted gate and an in-memory hub; no live provider, no running
-Eval Hub yet) · Code: `runtime/src/axis_runtime/evals/`, launcher `runtime/scripts/eval_runner.py` · Tests: `runtime/tests/test_evals_*.py`,
+Status: **Prototype** (tested against a scripted model, a scripted gate and an in-memory hub, and end to end with the real hub and kernel in `make e2e-phase8`; no live provider) · Code: `runtime/src/axis_runtime/evals/`, launcher `runtime/scripts/eval_runner.py` · Tests: `runtime/tests/test_evals_*.py`,
 mutation check `runtime/tests/mutation_evals.py` (52 mutants) · Shared vectors: `runtime/tests/fixtures/eval-aggregation-vectors.json` ·
 Wire examples: `runtime/tests/fixtures/eval-hub-wire-examples.json` · Plan: `docs/plans/phase-8.md` (component B) · Gaps: `docs/NEEDS.md` #306-#324.
 
@@ -59,9 +58,13 @@ errors surface as `HubError(kind)` with a stable, secret-free kind (`transport:<
 `CaseRunner.run_case` per dataset case:
 
 1. **Real run path.** `start_agent(manifest, case.input_text, deps)` with the tenant's gate (`GrpcGateClient` in production). The
-   Risk Kernel decides every model call and tool call with a request **byte-identical to production's**: the eval flag is _not_ put
-   into the policy context, so a policy cannot relax itself for evals and an eval measures what production would do. A tenant DENY
-   is a result (`policy_decision` graders can assert it), never retried.
+   Risk Kernel decides every model call and tool call with the production request plus one marker, `context.eval_mode: true`
+   (added by `EvalModeGate`). The kernel strips the marker **before** policy evaluation, so a policy cannot relax or tighten itself for
+   evals and the eval measures what production would do (same rules, same policy version, same gates). The marker has one effect: a
+   `REQUIRE_APPROVAL` is returned and audited as always, but **no approval request is opened**, so a test never reaches a human
+   approver (found by the Phase 8 e2e: before the marker an eval payout opened a real approval request with a non-UUID run id, and the
+   tenant's `listApprovals` answered 500 until it expired). The marker can only remove a side effect, never add an allowance. A tenant
+   DENY is a result (`policy_decision` graders can assert it), never retried.
 2. **Eval mode lockdown (`isolation.py`).** The gate is wrapped by `EvalModeGate`, which can only add denials. Allowed to proceed to
    the kernel: `model_call`, and `tool_call` of kind `function` or `agent`. Everything else (`mcp_call`, `code_exec`,
    `browser_exec`, `memory_*`, `message_send`, tool kinds `mcp`/`code`/`browser`/`channel`) is denied with
@@ -221,7 +224,7 @@ review_tasks, provenance.sampling}`);
 outside the scanned package because it constructs the `ModelGateway`, the gRPC gate client and reads files and the environment; a
 `python -m axis_runtime.evals` module would have to do the same inside `src/axis_runtime`, which the bypass scanner forbids. The only
 scanner grant is `httpx` in `evals/hubclient.py` (documented in `tests/bypass_scan.py`). It polls for queued runs of one tenant;
-there is no online-mode entry point yet because no production run-log reader exists (NEEDS #318).
+`--online` (or `"mode": "online"`) runs the sampler over the run service's read-only feed `GET /v1/completed-runs` (`run_service_url`, `run_read_token`); without `manifest_dir` the manifest comes from the hub (`HttpManifestSource`).
 
 ## 11. Verification
 

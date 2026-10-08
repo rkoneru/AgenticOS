@@ -7,6 +7,7 @@ import {
   verifyEvalAttestation,
   type EvalGatePort,
   type EvalGateReason,
+  type EvalStatement,
   type TrustedHubKey,
 } from "./eval-gate.js";
 import { isEnvelope } from "./provenance.js";
@@ -127,9 +128,12 @@ export class RegistryService {
   private readonly now: () => Date;
   private readonly verifyOpts: VerifyOptions;
   private readonly evalGate: EvalGatePort;
+  /** True when the composition wired a hub. Only then is a blueprint that declares NO suites still asked about (tenant-required suites). */
+  private readonly evalGateWired: boolean;
   private readonly hubKeys: TrustedHubKey[];
   constructor(d: RegistryDeps) {
     this.evalGate = d.evalGate ?? DENY_ALL_EVAL_GATE;
+    this.evalGateWired = d.evalGate !== undefined;
     this.hubKeys = d.evalHubKeys ?? [];
     this.store = d.store;
     this.audit = d.audit;
@@ -271,7 +275,7 @@ export class RegistryService {
     if (!owner) throw notFound("namespace not found");
     if (!(await this.store.getVersion({ tenantId: owner }, namespace, name, version)))
       throw notFound("version not found");
-    // The eval gate runs BEFORE anything becomes public. A blueprint that declares no suites is not gated.
+    // The eval gate runs BEFORE anything becomes public. With a hub wired it is asked even when the blueprint declares no suites.
     await this.requireEvalGate({
       tenantId: owner,
       namespace,
@@ -322,7 +326,10 @@ export class RegistryService {
     } catch {
       throw invalid("stored blueprint is not readable"); // fail closed: an unreadable ABL cannot be shown to declare no suites
     }
-    if (suites.length === 0) return undefined;
+    // The rule (ADR 0058): with a hub wired the gate is ALWAYS asked, because the tenant may require suites the blueprint did not
+    // declare (`required_for_release`); the hub adds them and allows when nothing is required. Without a wired hub there is nothing
+    // that could know of a requirement, so a blueprint that declares no suites is not gated (as before).
+    if (suites.length === 0 && !this.evalGateWired) return undefined;
     return {
       tenantId: g.tenantId,
       blueprint: {
@@ -338,8 +345,8 @@ export class RegistryService {
   }
 
   /**
-   * Refuses (`evals_gate_failed`, 409, with the gate's reasons) unless the Eval Hub allows this version. The suites come from the
-   * STORED blueprint. No declared suites: allowed without asking the gate. A gate that errors, times out or is absent refuses.
+   * Refuses (`evals_gate_failed`, 409, with the gate's reasons) unless the Eval Hub allows this version. The declared suites come from
+   * the STORED blueprint; the hub adds the tenant's required ones. No declared suites and no wired hub: allowed without asking. A gate that errors, times out or is absent refuses.
    */
   async requireEvalGate(g: {
     tenantId: string;
@@ -446,6 +453,37 @@ export class RegistryService {
         return rec;
       },
     );
+  }
+
+  /**
+   * Attestations of one version as a reader sees them: every envelope is RE-VERIFIED against the trusted hub keys on every read
+   * (`verified`), and only a verified one exposes its decoded summary (`predicate`). A row changed behind the registry's back reads as
+   * `verified: false` with no summary, never as a pass.
+   */
+  async evalAttestationSummaries(
+    viewer: Viewer,
+    ns: string,
+    name: string,
+    version: string,
+  ): Promise<
+    {
+      record: EvalAttestationRecord;
+      verified: boolean;
+      predicate: EvalStatement["predicate"] | null;
+    }[]
+  > {
+    return (await this.evalAttestations(viewer, ns, name, version)).map((record) => {
+      const v = verifyEvalAttestation(record.envelope, this.hubKeys);
+      const aboutThis =
+        v.ok &&
+        v.statement.subject[0]?.name === `${ns}/${name}@${version}` &&
+        v.statement.subject[0].digest.sha256 === record.contentHash;
+      return {
+        record,
+        verified: aboutThis,
+        predicate: aboutThis && v.ok ? v.statement.predicate : null,
+      };
+    });
   }
 
   /** Attestations of one version (same visibility as the version). */

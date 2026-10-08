@@ -1,0 +1,19 @@
+packs: [pack.yaml]
+cases:
+  - name: the judge's model call is allowed
+    input: { enforcement_point: model_call, agent: { name: eval-judge, version: judge-v1 } }
+    expect: { decision: ALLOW, winners: [eval-judge/allow-eval-judge-model-calls] }
+  - name: another agent's model call is not covered by this pack
+    input: { enforcement_point: model_call, agent: { name: some-agent, version: 1.0.0 } }
+    expect: { decision: DENY, winners: [] }
+  - name: the judge gets no tools through this pack
+    input:
+      {
+        enforcement_point: tool_call,
+        agent: { name: eval-judge, version: judge-v1 },
+        tool: { name: lookup, side_effects: read },
+      }
+    expect: { decision: DENY, winners: [] }
+  - name: no agent field at all fails closed
+    input: { enforcement_point: model_call }
+    expect: { decision: DENY }

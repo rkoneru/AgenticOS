@@ -7,6 +7,7 @@ import { useResource } from "@/lib/hooks";
 import { formatTime } from "@/lib/format";
 import { PageHeader, ResourceView } from "@/components/common";
 import { BlueprintEditor } from "@/components/blueprint-editor";
+import { ReleaseGatePanel } from "@/components/evals";
 
 export default function BlueprintVersionPage({
   params,
@@ -38,6 +39,9 @@ export default function BlueprintVersionPage({
               <span>Published {formatTime(b.created_at)}</span>
               {b.content_hash ? <code>{b.content_hash}</code> : null}
             </div>
+            {b.content_hash ? (
+              <ReleaseGatePanel name={n} version={v} contentHash={b.content_hash} />
+            ) : null}
             <BlueprintEditor initial={stringify(b.abl)} />
           </div>
         )}
