@@ -155,7 +155,7 @@ export class GateService {
       reason: result.allowed
         ? `blueprint=${bp.name}@${bp.version} suites=${runs.length}`
         : `blueprint=${bp.name}@${bp.version} blocked=${[...new Set(reasons.map((r) => r.code))].join(",")}`.slice(0, 900),
-      inputs: { blueprint: bp, suites: [...suites.entries()] },
+      inputs: { blueprint: bp, suites: [...suites.entries()].map(([ref, t]) => [ref, t ?? null]) },
       outputs: { allowed: result.allowed, runs: runs.map((r) => r.run_id) },
     });
     return result;

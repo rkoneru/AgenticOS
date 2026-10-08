@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hashJson } from "@axis/contracts";
 import { HubError, parseGraders, redactJson } from "../src/index.js";
-import { CASES, DET, HUMAN, seedSuite, user, world } from "./helpers.js";
+import { CASES, events, DET, HUMAN, seedSuite, user, world } from "./helpers.js";
 
 const code = async (p: Promise<unknown>): Promise<string> => {
   try {
@@ -100,9 +100,10 @@ describe("datasets", () => {
     expect(await code(w.hub.datasets.get(w.admin, "ghost@latest"))).toBe("not_found:");
     expect(await code(w.hub.datasets.get(w.admin, "ghost@3"))).toBe("not_found:");
     expect((await w.hub.datasets.list(other)).length).toBe(0);
-    // refused writes are audited as DENY
-    const denies = w.audit.all?.() ?? [];
-    void denies;
+    // refused writes are audited as DENY, accepted ones as ALLOW + done
+    const ev = await events(w, "evals.dataset.create", "evals.dataset.create.done");
+    expect(ev.filter((e) => e.decision === "DENY")).toHaveLength(3);
+    expect(ev.filter((e) => e.action.endsWith(".done"))).toHaveLength(1);
   });
 });
 

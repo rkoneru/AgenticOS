@@ -195,3 +195,9 @@ export async function runWithScore(
 }
 
 export { generatePublisherKey, PgDocStore };
+
+/** The tenant's audit events (optionally only these actions). */
+export async function events(w: World, ...actions: string[]) {
+  const all = await w.audit.read(w.tenant);
+  return actions.length === 0 ? all : all.filter((e) => actions.includes(e.action));
+}
