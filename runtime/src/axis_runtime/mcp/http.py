@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
 from axis_runtime.mcp import protocol
 from axis_runtime.mcp.config import McpLimits, ServerConfig
 from axis_runtime.mcp.errors import (
@@ -54,7 +55,9 @@ class StreamableHttpTransport:
         self._allow_http = allow_http
         self._extra_ports = extra_ports
         self._client = client or httpx.AsyncClient(
-            timeout=limits.call_timeout_seconds, follow_redirects=False
+            timeout=limits.call_timeout_seconds,
+            follow_redirects=False,
+            verify=shared_ssl_context(),
         )
         self._owns_client = client is None
         self._session_id: str | None = None

@@ -20,6 +20,8 @@ from typing import Any, Protocol
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
+
 
 class ApprovalUnavailable(RuntimeError):  # noqa: N818 - a condition, not a failure class hierarchy
     """The approval could not be resolved. Callers MUST treat this as DENY."""
@@ -50,7 +52,9 @@ class HttpApprovalResolver:
         self._headers = {"authorization": f"Bearer {token}"}
         self._poll = poll_seconds
         self._max = max_wait_seconds
-        self._client = client or httpx.AsyncClient(timeout=poll_seconds + 10.0)
+        self._client = client or httpx.AsyncClient(
+            timeout=poll_seconds + 10.0, verify=shared_ssl_context()
+        )
 
     async def resolve(self, tenant_id: str, approval_id: str) -> Mapping[str, Any]:
         deadline = time.monotonic() + self._max

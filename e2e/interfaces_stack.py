@@ -59,7 +59,13 @@ def psql(url: str, sql: str) -> str:
 
 
 def _spawn(
-    args: list[str], env: dict[str, str], err: Path, ready: str, cwd: Path = ROOT
+    args: list[str],
+    env: dict[str, str],
+    err: Path,
+    ready: str,
+    cwd: Path = ROOT,
+    *,
+    append: bool = False,
 ) -> tuple[subprocess.Popen[str], dict[str, Any]]:
     """Start a process and wait for its one JSON readiness line (an object with a key in ``ready``)."""
     proc = subprocess.Popen(
@@ -67,7 +73,7 @@ def _spawn(
         cwd=cwd,
         env={**os.environ, **env},
         stdout=subprocess.PIPE,
-        stderr=err.open("w"),
+        stderr=err.open("a" if append else "w"),
         text=True,
         start_new_session=True,
     )
@@ -106,6 +112,29 @@ class Stack:
     eval_hub: str = ""
     control_plane_url: str = ""
     procs: list[subprocess.Popen[str]] = field(default_factory=list)
+    #: how each long-lived process was started (name -> args, env, stderr file, ready key, cwd), so chaos tests can kill and restart it
+    #: on the SAME port (the kernel, the run service and the gateway have fixed ports for exactly that reason)
+    specs: dict[str, tuple[list[str], dict[str, str], Path, str, Path]] = field(
+        default_factory=dict
+    )
+    named: dict[str, subprocess.Popen[str]] = field(default_factory=dict)
+
+    def kill(self, name: str, sig: int = signal.SIGKILL) -> None:
+        """Signal a named process group (``kernel``, ``run``, ``gateway``, ``stack``) and wait for it to exit."""
+        p = self.named[name]
+        try:
+            os.killpg(p.pid, sig)
+        except ProcessLookupError:
+            return
+        p.wait(30)
+
+    def restart(self, name: str) -> dict[str, Any]:
+        """Start a previously killed process again with its original arguments and environment (stderr is appended)."""
+        args, env, err, ready, cwd = self.specs[name]
+        proc, info = _spawn(args, env, err, ready, cwd, append=True)
+        self.named[name] = proc
+        self.procs.append(proc)
+        return info
 
     def ops(self, op: str, /, **body: Any) -> dict[str, Any]:
         r = httpx.post(
@@ -289,7 +318,11 @@ def _free_port() -> int:
 
 @contextmanager
 def boot(
-    work: Path, admin_url: str, *, console_origin: str = "http://localhost:3100"
+    work: Path,
+    admin_url: str,
+    *,
+    console_origin: str = "http://localhost:3100",
+    gateway_env: dict[str, str] | None = None,
 ) -> Iterator[Stack]:
     suffix = secrets.token_hex(4)
     db = f"axis_e2e7_{suffix}"
@@ -311,9 +344,25 @@ def boot(
         bundle_dir.mkdir()
         hmac_key = secrets.token_hex(32)
         approvals_port = _free_port()
-        kernel, kinfo = _spawn(
+        kernel_port, run_port, gw_port = _free_port(), _free_port(), _free_port()
+        specs: dict[str, tuple[list[str], dict[str, str], Path, str, Path]] = {}
+        named: dict[str, subprocess.Popen[str]] = {}
+
+        def launch(
+            name: str, args: list[str], env: dict[str, str], ready: str, cwd: Path = ROOT
+        ) -> dict[str, Any]:
+            err = work / f"{name}.err"
+            proc, info = _spawn(args, env, err, ready, cwd)
+            specs[name] = (args, env, err, ready, cwd)
+            named[name] = proc
+            procs.append(proc)
+            return info
+
+        kinfo = launch(
+            "kernel",
             ["node", "--import", "tsx", "services/risk-kernel/src/main.ts"],
             {
+                "AXIS_RK_PORT": str(kernel_port),
                 "AXIS_POLICY_BUNDLE_DIR": str(bundle_dir),
                 "AXIS_RK_TOKENS": str(files["kernel_principals"]),
                 "AXIS_AUDIT_PG_URL": db_url,
@@ -322,10 +371,8 @@ def boot(
                 "AXIS_APPROVALS_DEV_BRIDGE": "1",
                 "AXIS_APPROVALS_PORT": str(approvals_port),
             },
-            work / "kernel.err",
             "port",
         )
-        procs.append(kernel)
         kernel_target = f"127.0.0.1:{kinfo['port']}"
         secrets_cfg = {k: secrets.token_hex(32) for k in ("pepper", "cookie_key", "signing_key")}
         ops_token = "e2e-ops-" + secrets.token_hex(8)
@@ -349,21 +396,16 @@ def boot(
                 }
             )  # fmt: skip
         )
-        stack_proc, sinfo = _spawn(
-            ["node", "scripts/interfaces-stack.mjs", str(cfg)],
-            {},
-            work / "stack.err",
-            "cp",
-            cwd=ROOT / "e2e",
+        sinfo = launch(
+            "stack", ["node", "scripts/interfaces-stack.mjs", str(cfg)], {}, "cp", ROOT / "e2e"
         )
-        procs.append(stack_proc)
         cp = f"http://127.0.0.1:{sinfo['cp']}"
         billing = f"http://127.0.0.1:{sinfo['billing']}"
         run_cfg = work / "runserver.json"
         run_cfg.write_text(
             json.dumps(
                 {
-                    "port": 0,
+                    "port": run_port,
                     "tokens": {},
                     "kernel_target": kernel_target,
                     "kernel_tokens": {},
@@ -384,18 +426,18 @@ def boot(
                 }
             )  # fmt: skip
         )
-        run, rinfo = _spawn(
+        rinfo = launch(
+            "run",
             ["uv", "run", "python", "e2e/scripts/interfaces_run_server.py"],
             {"RUNSERVER_CONFIG": str(run_cfg)},
-            work / "runserver.err",
             "port",
         )
-        procs.append(run)
         run_service = f"http://127.0.0.1:{rinfo['port']}"
-        gw, ginfo = _spawn(
+        ginfo = launch(
+            "gateway",
             ["node", "apps/api-gateway/dist/main.js"],
             {
-                "GW_DATABASE_URL": db_url, "GW_DB_ROLE": "axis_app", "GW_PORT": "0",
+                "GW_DATABASE_URL": db_url, "GW_DB_ROLE": "axis_app", "GW_PORT": str(gw_port),
                 "GW_ALLOWED_ORIGINS": console_origin, "GW_PEPPER": secrets_cfg["pepper"],
                 "GW_COOKIE_KEY": secrets_cfg["cookie_key"], "GW_SIGNING_KEY": secrets_cfg["signing_key"],
                 "GW_SEAL_KEY": seal_key, "GW_RUN_SERVICE_URL": run_service,
@@ -405,18 +447,17 @@ def boot(
                 "GW_APPROVALS_TOKENS_FILE": str(files["gw_kernel"]), "GW_BUNDLE_DIR": str(bundle_dir),
                 "GW_RATE_BURST": "2000", "GW_RATE_PER_SEC": "1000",
                 "GW_EVAL_RUNNER_TOKENS_FILE": str(files["eval_runner"]), "GW_EVAL_RUNNER_PORT": "0",
+                **(gateway_env or {}),
             },
-            work / "gateway.err",
             "port",
         )  # fmt: skip
-        procs.append(gw)
         yield Stack(
             admin_url=admin_url, db_url=db_url, work=work,
             gateway=f"http://127.0.0.1:{ginfo['port']}/v1", gateway_origin=f"http://127.0.0.1:{ginfo['port']}",
             cp=cp, billing=billing, ops_url=f"http://127.0.0.1:{sinfo['ops']}", idp=f"http://localhost:{sinfo['idp']}",
             run_service=run_service, kernel_target=kernel_target,
             approvals_bridge=f"http://127.0.0.1:{approvals_port}", console_origin=console_origin,
-            ops_token=ops_token, platform_token=platform_token, procs=procs,
+            ops_token=ops_token, platform_token=platform_token, procs=procs, specs=specs, named=named,
             eval_hub=f"http://127.0.0.1:{ginfo['eval_runner_port']}", control_plane_url=cp,
         )  # fmt: skip
     finally:
@@ -437,6 +478,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="where to write the stack description (JSON)")
     ap.add_argument("--console-origin", default="http://localhost:3100")
+    ap.add_argument(
+        "--gateway-env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="extra environment for the gateway process (e.g. GW_RATE_BURST=100000 for a load test)",
+    )
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     a = ap.parse_args()
     cmd = a.cmd[1:] if a.cmd and a.cmd[0] == "--" else a.cmd
@@ -447,7 +495,12 @@ def main() -> int:
 
     with (
         tempfile.TemporaryDirectory(prefix="axis-e2e7-") as d,
-        boot(Path(d), admin, console_origin=a.console_origin) as st,
+        boot(
+            Path(d),
+            admin,
+            console_origin=a.console_origin,
+            gateway_env=dict(kv.split("=", 1) for kv in a.gateway_env),
+        ) as st,
     ):
         Path(a.out).write_text(json.dumps(st.info()))
         return subprocess.run(cmd, env={**os.environ, "STACK_JSON": a.out}, check=False).returncode

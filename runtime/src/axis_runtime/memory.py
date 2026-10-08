@@ -22,6 +22,7 @@ from typing import Any
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
 from axis_runtime.nexus.types import Passage
 
 #: ABL/runtime scope names -> service scopes.
@@ -56,7 +57,7 @@ class _Client:
         self._base = base_url.rstrip("/") + "/v1/memory/"
         self._headers = {"authorization": f"Bearer {token}"}
         self.tenant_id = tenant_id
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=shared_ssl_context())
 
     async def post(self, route: str, body: Mapping[str, Any]) -> dict[str, Any]:
         payload = {"tenant_id": self.tenant_id, **body}

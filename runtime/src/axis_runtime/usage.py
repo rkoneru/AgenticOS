@@ -21,6 +21,7 @@ from typing import Any, Protocol
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
 from axis_runtime.events import RunEvent, RunEventLog
 
 #: event type -> the data keys that leave the runtime. Everything else is dropped.
@@ -80,7 +81,7 @@ class HttpUsageEmitter:
     ) -> None:
         self._url = base_url.rstrip("/") + "/v1/usage/run-events"
         self._headers = {"authorization": f"Bearer {token}"}
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=shared_ssl_context())
 
     async def emit_events(self, run_id: str, events: Sequence[RunEvent]) -> dict[str, Any]:
         """Send the billing projection of ``events`` (one run, in order). Returns the service's

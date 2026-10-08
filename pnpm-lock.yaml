@@ -365,6 +365,9 @@ importers:
       '@axis/contracts':
         specifier: workspace:*
         version: link:../packages/contracts
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../packages/db
       '@grpc/grpc-js':
         specifier: ^1.14.5
         version: 1.14.5

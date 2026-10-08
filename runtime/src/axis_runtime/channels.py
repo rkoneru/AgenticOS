@@ -25,6 +25,8 @@ from urllib.parse import quote
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
+
 CHANNELS = frozenset({"web", "slack", "teams", "email", "sms", "whatsapp"})
 
 #: Error codes the service may return; anything else is reported as ``error``.
@@ -78,7 +80,7 @@ class HttpChannelSender:
         self.tenant_id = tenant_id
         self._run_id = run_id
         self._trace_id = trace_id
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=shared_ssl_context())
 
     async def send(self, channel: str, args: Mapping[str, Any]) -> Any:
         if channel not in CHANNELS:
@@ -149,7 +151,7 @@ class ChannelServiceClient:
             raise ValueError("token required")
         self._base = base_url.rstrip("/")
         self._headers = {"authorization": f"Bearer {token}"}
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=shared_ssl_context())
 
     async def _call(
         self, method: str, path: str, body: Mapping[str, Any] | None = None

@@ -90,6 +90,11 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "httpx": "HttpMcpClient: MCP-over-HTTP backend; reachable only through McpCall performed "
         "by ActionExecutor.",
     },
+    "_tls.py": {
+        "httpx": "shared_ssl_context: ``httpx.create_ssl_context()`` built once so every allow-listed "
+        "HTTP client above shares one CA bundle in memory (Phase 9 perf fix). Opens no connection.",
+        "ssl": "type of that context only (``ssl.SSLContext``); no socket is wrapped here.",
+    },
     "gate.py": {
         "grpc": "GrpcGateClient: the gate's own transport to the Risk Kernel (not an action).",
     },
