@@ -297,6 +297,16 @@ export class ReviewService {
             throw new RegistryError("conflict", "blueprint changed since it was scanned", [
               "content_hash_changed",
             ]);
+          // Required evals are re-checked at the moment of release: a run that went stale, or a regression found since the submission,
+          // keeps the review open (evals_gate_failed) instead of leaving an approved review whose release was refused.
+          await this.registry().requireEvalGate({
+            tenantId,
+            namespace: cur.data.namespace,
+            name: cur.data.name,
+            version: cur.data.version,
+            purpose: "release",
+            actor: r.subject,
+          });
           patch = { ...patch, approvedHash: bp.contentHash };
         }
         const next = await this.move(tenantId, cur, to, r.subject, patch);
