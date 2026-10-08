@@ -203,6 +203,10 @@ export async function seedTenant(
     [t],
   );
   await q(
+    "INSERT INTO compliance_docs (tenant_id, coll, key, rev, data) VALUES ($1, 'systems', 'seed-system', 1, '{\"name\": \"seed\"}')",
+    [t],
+  );
+  await q(
     "INSERT INTO registry_eval_attestations (tenant_id, namespace, name, version, run_id, suite_ref, content_hash, overall, envelope, attached_at, attached_by) VALUES ($2, $1, 'seed-agent', '1.0.0', 'seed-run', 'smoke@1', $3, 0.9, '{}', now(), 'seed')",
     [`seedns-${slug}`, t, H("6")],
   );

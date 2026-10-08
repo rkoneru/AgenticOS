@@ -29,6 +29,7 @@ describe("migration runner", () => {
       "0011_marketplace",
       "0012_registry_public_versions",
       "0013_eval_hub",
+      "0016_compliance",
     ]);
     for (const x of m) expect(x.checksum).toMatch(/^[0-9a-f]{64}$/);
   });
