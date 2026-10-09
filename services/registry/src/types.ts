@@ -24,7 +24,15 @@ export interface TenantPrincipal {
   kind: "tenant";
   tenantId: string;
   subject: string;
-  role: "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer";
+  role:
+    | "owner"
+    | "admin"
+    | "builder"
+    | "operator"
+    | "auditor"
+    | "billing"
+    | "viewer"
+    | "privacy_officer";
 }
 
 /** The marketplace service (public namespaces, takedowns) or the Eval Hub (attestations) acting for the platform. Never producible from an HTTP credential. */
