@@ -47,7 +47,7 @@ activated policy bundle from its own store, so it keeps enforcing the LAST activ
 | tenant policy bundles        | recovered (files)                                                                                                         |
 | kill-switches                | recovered when `AXIS_RK_KILL_STATE_FILE` is set (the e2e/chaos stack sets it); a corrupt file REFUSES to start the kernel |
 | pending approvals            | LOST (in-memory approvals service): the waiting action is denied, never executed                                          |
-| rate-limit / budget counters | LOST (in-memory): windows restart (NEEDS 386)                                                                            |
+| rate-limit / budget counters | LOST (in-memory): windows restart (NEEDS 386)                                                                             |
 | audit chain                  | durable in Postgres                                                                                                       |
 
 ## Flake handling (honest)

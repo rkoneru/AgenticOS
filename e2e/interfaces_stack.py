@@ -198,6 +198,8 @@ class Stack:
         judge_log: Path | None = None,
         creds: dict[str, Any] | None = None,
         poll: float = 0.4,
+        script: str = "e2e/scripts/eval_runner_e2e.py",
+        extra_env: dict[str, str] | None = None,
     ) -> EvalRunner:
         """Start the REAL eval runner for ``tenant`` (scripted models; the kernel gates every call). It is not registered with the hub:
         registering is the tenant admin's act (``axis evals runners register``)."""
@@ -224,7 +226,7 @@ class Stack:
             )
         )
         err = self.work / f"runner-{tag}.err"
-        env = {"EVAL_RUNNER_CONFIG": str(cfg)}
+        env = {"EVAL_RUNNER_CONFIG": str(cfg), **(extra_env or {})}
         if judge_log is not None:
             env["JUDGE_LOG"] = str(judge_log)
         proc = subprocess.Popen(
@@ -232,7 +234,7 @@ class Stack:
                 "uv",
                 "run",
                 "python",
-                "e2e/scripts/eval_runner_e2e.py",
+                script,
                 *(["--online"] if online else []),
             ],
             cwd=ROOT,

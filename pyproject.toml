@@ -34,6 +34,9 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 # chaos and DR drills are harnesses of the same kind.
 "chaos/**" = ["S101", "S106", "S603", "S607", "S608", "E501", "ASYNC110"]
 "infra/dr/**" = ["S101", "S106", "S603", "S607", "S608", "E501"]
+# evals/redteam: the red-team corpus generator, oracle and gullible scripted model (seeded RNG, long attack strings on purpose).
+"scripts/**" = ["E501"]
+"evals/**" = ["S101", "S311", "E501", "S324", "S108", "B007"]
 
 [tool.mypy]
 strict = true

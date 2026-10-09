@@ -25,6 +25,43 @@ if TYPE_CHECKING:
 ToolHandler = Callable[[Mapping[str, Any]], Any]
 
 
+_TYPES: dict[str, tuple[type, ...]] = {
+    "string": (str,),
+    "number": (int, float),
+    "integer": (int,),
+    "boolean": (bool,),
+    "object": (dict,),
+    "array": (list,),
+    "null": (type(None),),
+}
+
+
+def validate_arguments(schema: Mapping[str, Any], args: Mapping[str, Any]) -> str | None:
+    """A reason (never a value) when ``args`` does not fit the declared ``schema``, else ``None``.
+
+    Checks what a smuggled call breaks: ``required``, ``additionalProperties: false`` and the
+    primitive ``type`` of each declared top-level property. No ``properties``: anything goes."""
+    props = schema.get("properties")
+    if not isinstance(props, Mapping):
+        return None
+    missing = [k for k in schema.get("required", []) if k not in args]
+    if missing:
+        return "missing_required"
+    if schema.get("additionalProperties") is False and any(k not in props for k in args):
+        return "unexpected_property"
+    for key, value in args.items():
+        spec = props.get(key)
+        kind = spec.get("type") if isinstance(spec, Mapping) else None
+        allowed = _TYPES.get(kind) if isinstance(kind, str) else None
+        if allowed is None:
+            continue
+        if isinstance(value, bool) and kind in ("number", "integer"):
+            return "wrong_type"
+        if not isinstance(value, allowed):
+            return "wrong_type"
+    return None
+
+
 class ToolNotFoundError(KeyError):
     pass
 

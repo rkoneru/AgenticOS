@@ -71,6 +71,19 @@ describe("compilePolicySet: structure and determinism", () => {
     expect(opaBuildWasm(rego).length).toBeGreaterThan(1000);
   });
 
+  it("every operator, `exists` included, compiles to Rego that passes opa check --strict (red-team finding)", () => {
+    const cond = {
+      any: [
+        { field: "args.tenant_id", op: "exists", value: true },
+        { field: "args.x", op: "exists", value: false },
+        { field: "args.y", op: "exists" },
+      ],
+    };
+    const { rego } = ok(compilePolicySet([pack({}, [rule(cond, "DENY")])]));
+    expect(() => opaCheck(rego)).not.toThrow();
+    expect(opaBuildWasm(rego).length).toBeGreaterThan(1000);
+  });
+
   it("rejects an empty set and schema-invalid documents with positions", () => {
     expect(codes(compilePolicySet([]))).toEqual(["POLICY_EMPTY_SET"]);
     const r = compilePolicySet([{ apiVersion: "policy.axis.dev/v1" }]);

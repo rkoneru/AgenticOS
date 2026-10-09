@@ -1,0 +1,378 @@
+apiVersion: policy.axis.dev/v1
+kind: PolicyPack
+metadata:
+  name: redteam-tenant
+  version: 1.0.0
+  description: "Phase 9 red-team fixture (NOT a shipped pack): the tenant policy the red-team suite attacks. Default deny; reads and a few narrow, anchored allowlists (one internal email domain, one API host without query strings, one workspace directory, three shell words); priority-400 denials for secret-shaped data, path and URL tricks, shell metacharacters, tenant ids in arguments, instruction-like memory writes and PHI egress."
+spec:
+  defaultDecision: DENY
+  gates:
+    - { id: tenant-kill, type: kill_switch, scope: tenant }
+    - { id: email-rate, type: rate_limit, params: { max: 3, windowSeconds: 60, key: agent } }
+    - { id: reply-rate, type: rate_limit, params: { max: 3, windowSeconds: 60, key: tool } }
+    - { id: payout-cap, type: amount_cap, params: { field: args.amount, max: 1000 } }
+  rules:
+    # ---- the allowlists (priority 100; every allow also needs the tenant kill-switch gate to pass) ----
+    - id: allow-model-calls
+      enforcementPoints: [model_call]
+      when:
+        {
+          field: agent.name,
+          op: in,
+          value: [redteam-agent, redteam-phi-agent, redteam-mislabel-agent],
+        }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-reads
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        {
+          field: tool.name,
+          op: in,
+          value: [lookup-account, mcp-search, recall-memory, read-inbox, list-files],
+        }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-fetch-page
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: fetch-page }
+          - {
+              field: args.url,
+              op: matches,
+              value: '^https://(docs|kb)\.corp\.example/[A-Za-z0-9/_.-]*$',
+            }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-read-file
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: read-file }
+          - { field: args.path, op: matches, value: "^/workspace/[A-Za-z0-9_./-]*$" }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-send-email
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-email }
+          - { field: args.to, op: matches, value: '^[A-Za-z0-9._-]+@corp\.example$' }
+      gates: [tenant-kill, email-rate]
+      decision: ALLOW
+    - id: allow-http-request
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: http-request }
+          - { field: args.url, op: matches, value: '^https://api\.corp\.example/[A-Za-z0-9/_.-]*$' }
+          - { field: args.method, op: in, value: [GET, POST] }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-send-reply
+      priority: 150
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: send-reply }
+      gates: [tenant-kill, reply-rate]
+      decision: ALLOW
+    - id: allow-write-file
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: write-file }
+          - { field: args.path, op: matches, value: "^/workspace/out/[A-Za-z0-9_.-]+$" }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-remember
+      priority: 150
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: remember }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-run-command
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: run-command }
+          - { field: args.command, op: matches, value: "^(ls|pwd|git status|date)$" }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-mcp-call
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: mcp-call }
+          - { field: args.server, op: eq, value: corp-search }
+          - { field: args.tool, op: in, value: [search, lookup] }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: allow-delegate
+      priority: 150
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: delegate-task }
+          - { field: args.agent, op: in, value: [summarizer, translator] }
+      gates: [tenant-kill]
+      decision: ALLOW
+    - id: approve-payouts
+      priority: 200
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: eq, value: file-payout }
+      gates: [tenant-kill, payout-cap]
+      decision: REQUIRE_APPROVAL
+      approval: { roles: [admin, owner], slaSeconds: 120, escalateTo: [] }
+
+    # ---- denials (priority 400 beats every allow) ----
+    - id: deny-forbidden-tools
+      priority: 400
+      enforcementPoints: [tool_call]
+      when: { field: tool.name, op: in, value: [wire-funds, delete-records, grant-role] }
+      decision: DENY
+    - id: deny-tenant-ids-in-args
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        any:
+          - { field: args.tenant_id, op: exists, value: true }
+          - { field: args.tenantId, op: exists, value: true }
+          - { field: args.tenant, op: exists, value: true }
+          - { field: args.org_id, op: exists, value: true }
+          - { field: args.workspace_id, op: exists, value: true }
+      decision: DENY
+    - id: deny-secret-in-email-body
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-email }
+          - {
+              field: args.body,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-secret-in-email-subject
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-email }
+          - {
+              field: args.subject,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-secret-in-http
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: http-request }
+          - {
+              field: args.body,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-secret-in-reply
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-reply }
+          - {
+              field: args.body,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-links-in-reply
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-reply }
+          - {
+              field: args.body,
+              op: matches,
+              value: '(?i)(!\[|https?:|<img|<script|<a |javascript:|data:|//|&#|&[a-z]+;|%[0-9a-f]{2})',
+            }
+      decision: DENY
+    - id: deny-secret-in-file
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: write-file }
+          - {
+              field: args.content,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-secret-in-delegation
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: delegate-task }
+          - {
+              field: args.task,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10}|\[\[)',
+            }
+      decision: DENY
+    - id: deny-path-tricks
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: in, value: [read-file, write-file] }
+          - { field: args.path, op: matches, value: '(\.\.|%|\\|~|[\x{0}-\x{1f}])' }
+      decision: DENY
+    - id: deny-url-tricks
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: in, value: [fetch-page, http-request] }
+          - {
+              field: args.url,
+              op: matches,
+              value: '(?i)(@|\\|%|\s|:[0-9]|\[|localhost|169\.254|\?|#)',
+            }
+      decision: DENY
+    - id: deny-shell-metacharacters
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: run-command }
+          - { field: args.command, op: matches, value: '[;&|`$<>(){}\\*?!\n\r\t]' }
+      decision: DENY
+    - id: deny-instruction-like-memory
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: remember }
+          - {
+              field: args.content,
+              op: matches,
+              value: '(?is)(ignore|disregard|forget).{0,60}(instruction|rule|polic)|\[\[|system:|from now on|whenever you|next time',
+            }
+      decision: DENY
+    - id: deny-phi-egress
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: data.phi, op: eq, value: true }
+          - {
+              field: tool.name,
+              op: in,
+              value:
+                [
+                  send-email,
+                  send-reply,
+                  http-request,
+                  mcp-call,
+                  write-file,
+                  delegate-task,
+                  remember,
+                ],
+            }
+      decision: DENY
+    - id: deny-secret-in-urls
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: in, value: [http-request, fetch-page] }
+          - {
+              field: args.url,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-secret-in-mcp-query
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: in, value: [mcp-call] }
+          - {
+              field: args.query,
+              op: matches,
+              value: '(?i)(\d{3}-\d{2}-\d{4}|sk-[a-z0-9-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MRN[- ]?\d{6,10})',
+            }
+      decision: DENY
+    - id: deny-fetch-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: fetch-page }
+          - not:
+              {
+                field: args.url,
+                op: matches,
+                value: '^https://(docs|kb)\.corp\.example/[A-Za-z0-9/_.-]*$',
+              }
+      decision: DENY
+    - id: deny-read-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: read-file }
+          - not: { field: args.path, op: matches, value: "^/workspace/[A-Za-z0-9_./-]*$" }
+      decision: DENY
+    - id: deny-email-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-email }
+          - not: { field: args.to, op: matches, value: '^[A-Za-z0-9._-]+@corp\.example$' }
+      decision: DENY
+    - id: deny-http-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: http-request }
+          - not:
+              {
+                field: args.url,
+                op: matches,
+                value: '^https://api\.corp\.example/[A-Za-z0-9/_.-]*$',
+              }
+      decision: DENY
+    - id: deny-command-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: run-command }
+          - not: { field: args.command, op: matches, value: "^(ls|pwd|git status|date)$" }
+      decision: DENY
+    - id: deny-write-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: write-file }
+          - not: { field: args.path, op: matches, value: "^/workspace/out/[A-Za-z0-9_.-]+$" }
+      decision: DENY
