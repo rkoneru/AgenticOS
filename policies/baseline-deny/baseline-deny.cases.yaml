@@ -8,6 +8,22 @@ cases:
         winners: [baseline-deny/allow-read-tools],
         gates: [baseline-deny/fire-rate, baseline-deny/tenant-kill],
       }
+  - name: a tool the kernel classifies external is not allowed even though it was declared read (NEEDS 399, ADR 0110)
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: send-email, side_effects: external, declared_side_effects: read },
+        args: { to: "x@evil.example" },
+      }
+    expect: { decision: DENY, winners: [] }
+  - name: a tool the kernel classifies write is not allowed by the read rule
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: write-file, side_effects: write, declared_side_effects: none },
+        args: {},
+      }
+    expect: { decision: DENY, winners: [] }
   - name: read mcp allowed
     input: { enforcement_point: mcp_call, tool: { name: crm, side_effects: none } }
     expect: { decision: ALLOW }

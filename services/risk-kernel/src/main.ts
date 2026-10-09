@@ -25,6 +25,7 @@ import { ReloadingTokenTable, TenantBundleEngine } from "./tenant-engine.js";
 import { RiskKernel } from "./kernel.js";
 import { MemoryAuditSink } from "./memory-sink.js";
 import { FileKillSwitchStore } from "./file-kill-switch.js";
+import { FileToolCatalog } from "./capability.js";
 import { MemoryCounterStore, MemoryKillSwitchStore } from "./stores.js";
 
 // AXIS_POLICY_BUNDLE (one wasm bundle for every tenant) XOR AXIS_POLICY_BUNDLE_DIR (DEV, Phase 6: `<tenant uuid>.tar.gz` per tenant,
@@ -93,8 +94,15 @@ const approvals = hmacKey
       return { service, ports: kernelApprovalPorts(service, signer) };
     })()
   : undefined;
+// AXIS_RK_TOOL_CATALOG_FILE: JSON {"<tenant uuid>": {"<tool name>": "none|read|write|external"}}, the tenants' pre-registered tool
+// side-effects (authoritative over a blueprint's label, ADR 0110). Without it the kernel classifies from name, kind and argument keys.
+const catalogFile = process.env["AXIS_RK_TOOL_CATALOG_FILE"];
+const toolCatalog = catalogFile
+  ? new FileToolCatalog(catalogFile) // re-read when the file changes; a bad file denies tool calls (fail closed)
+  : undefined;
 const kernel = new RiskKernel({
   engine,
+  ...(toolCatalog ? { toolCatalog } : {}),
   audit,
   killSwitches,
   counters,
