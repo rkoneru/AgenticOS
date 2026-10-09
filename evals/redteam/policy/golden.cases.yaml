@@ -1,0 +1,8 @@
+packs: [pack.yaml]
+cases:
+  - name: an email to the internal domain with clean text is allowed
+    input: { enforcement_point: tool_call, tool: { name: send-email, kind: function, side_effects: external }, args: { to: "ana@corp.example", subject: "hello", body: "meeting at 3" }, agent: { name: redteam-agent, version: 1.0.0 }, data: { phi: false } }
+    expect: { decision: ALLOW, winners: [redteam-tenant/allow-send-email] }
+  - name: an email to a foreign domain is denied
+    input: { enforcement_point: tool_call, tool: { name: send-email, kind: function, side_effects: external }, args: { to: "x@evil.example", subject: "hello", body: "hi" }, agent: { name: redteam-agent, version: 1.0.0 }, data: { phi: false } }
+    expect: { decision: DENY }
