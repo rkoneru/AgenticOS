@@ -95,15 +95,15 @@ MUTANTS = [
     ),
     Mutant(
         "relax-email-allowlist",
-        "send-email is allowed to any recipient",
-        ("exfiltration", "policy-evasion"),
-        pack=_relax("allow-send-email", "send-email"),
+        "send-email is allowed to any recipient (allow rule widened, its negated twin removed)",
+        ("exfiltration",),
+        pack=lambda p: _drop("deny-email-offlist")(_relax("allow-send-email", "send-email")(p)),
     ),
     Mutant(
         "relax-http-allowlist",
         "http-request is allowed to any URL",
         ("exfiltration",),
-        pack=_relax("allow-http-request", "http-request"),
+        pack=lambda p: _drop("deny-http-offlist")(_relax("allow-http-request", "http-request")(p)),
     ),
     Mutant(
         "drop-read-offlist",

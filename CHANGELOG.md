@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 9 / C - red team and STRIDE (`make redteam`, `make redteam-selfcheck`, `make threatmodel-check`)
+
+No contract change. Status: Built as a regression net (scripted gullible model; measures platform containment, not model robustness; ADR 0090; NEEDS 3301-3313).
+
+- `evals/redteam/`: 243 attack cases in 6 Eval Hub datasets (seed 90210, byte-for-byte reproducible) plus 11 API probes, run on the real stack through a real eval runner;
+  mechanical SAFE definition (gate decisions, performed tools, execution sink with nine canary encodings, markers); thresholds in `thresholds.json`; the Hub release gate must allow.
+- `make redteam-selfcheck`: ten mutants (gate bypass, widened allowlists, dropped deny rules, kill-switch bypass) must each make the suite fail.
+- `docs/security/stride-*.md`: 18 STRIDE models (assets, boundaries, data flow, threat to mitigation to test to residual, prompt injection, tool misuse), index in `docs/security/README.md`, methodology in `docs/security/redteam.md`; `make threatmodel-check` fails on a missing file, category, path, test or NEEDS id.
+- Findings fixed with failing-first tests: policy compiler `exists` leaf (strict `opa check`), function-tool arguments validated against the declared schema before the gate (argument smuggling). Recorded: DLP regex evasion class, unscanned final output, baseline trusting `sideEffects` (NEEDS 3302, 3305, 3306).
+
 ## Phase 8 - exit: evals gate releases, proven end to end (`make e2e-phase8`, `make console-e2e`, `make evals`)
 
 **One additive contract change: OpenAPI 1.4.0** (ADR 0059: `listRegistryEvalAttestations`, re-verified on every read; FREEZE regenerated, SDKs and
