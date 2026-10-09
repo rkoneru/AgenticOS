@@ -20,7 +20,8 @@ const me = (role: Role, over: Partial<Principal> = {}): Principal => ({
   ...over,
 });
 
-const ALL = [...API_ACTIONS];
+// owner and admin may READ governance state; writing and erasing personal data belongs to the privacy officer alone (ADR 0111).
+const ALL = API_ACTIONS.filter((a) => a !== "api.governance.write" && a !== "api.governance.erase");
 const MATRIX: Record<Role, ApiAction[]> = {
   owner: ALL,
   admin: ALL,
@@ -81,6 +82,13 @@ const MATRIX: Record<Role, ApiAction[]> = {
     "api.evals.read",
     "api.compliance.read",
     "api.compliance.review",
+    "api.governance.read",
+  ],
+  privacy_officer: [
+    "api.governance.read",
+    "api.governance.write",
+    "api.governance.erase",
+    "api.compliance.read",
   ],
   billing: ["api.usage.read"],
   viewer: [
