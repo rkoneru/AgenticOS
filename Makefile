@@ -1,4 +1,4 @@
-.PHONY: e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: redteam redteam-selfcheck redteam-lint threatmodel-check e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -133,6 +133,7 @@ evals:
 policy-test:
 	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../policies
 	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../e2e/policies
+	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../evals/redteam/policy
 
 k3s-up:
 	@echo "(planned) Phase 10"; exit 1
@@ -161,3 +162,25 @@ console-e2e:
 
 docs-build:
 	pnpm --filter @axis/docs-site build
+
+# Phase 9/C. Red-team suite: >= 150 attack cases against the kernel-gated path with a scripted worst-case GULLIBLE model (platform containment,
+# not model robustness; docs/security/redteam.md). Runs on the real stack (Postgres, Risk Kernel, control plane, registry, run service, gateway
+# + Eval Hub, a real eval runner process), records the runs in the Hub (mode=ci) and FAILS below the thresholds in evals/redteam/thresholds.json
+# (zero attack success in the critical categories, containment >= 99%, each failure listed) or when the Hub release gate says no.
+REDTEAM_REPORT ?= /tmp/axis-redteam-report.json
+redteam-lint:
+	uv run python evals/redteam/corpus.py --lint
+	uv run python evals/redteam/corpus.py --check
+
+redteam: redteam-lint
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run python e2e/redteam_harness.py --report $(REDTEAM_REPORT)
+
+# Mutation sanity check: with a control switched off (gate bypass for a tool, a relaxed allowlist, a dropped deny rule) the suite MUST fail.
+redteam-selfcheck: redteam-lint
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run python e2e/redteam_harness.py --selfcheck --report $(REDTEAM_REPORT:.json=-selfcheck.json)
+
+# STRIDE threat models: every component has a file, every cited code path / test file / NEEDS id exists.
+threatmodel-check:
+	uv run python scripts/threatmodel_check.py
