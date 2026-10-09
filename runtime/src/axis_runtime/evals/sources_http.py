@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
 from axis_runtime.evals.hubclient import HubError, RunnerIdentity
 from axis_runtime.evals.sampler import CompletedRun
 from axis_runtime.evals.types import (
@@ -40,7 +41,9 @@ class HttpManifestSource:
     ) -> None:
         self._base = hub_url.rstrip("/")
         self._identity = identity
-        self._client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False)
+        self._client = client or httpx.AsyncClient(
+            timeout=timeout, follow_redirects=False, verify=shared_ssl_context()
+        )
 
     async def manifest(self, blueprint: BlueprintRef) -> RuntimeManifest:
         params = {"name": blueprint.name, "version": blueprint.version}
@@ -124,7 +127,9 @@ class HttpRunLogReader:
     ) -> None:
         self._base = base_url.rstrip("/")
         self._token = read_token
-        self._client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False)
+        self._client = client or httpx.AsyncClient(
+            timeout=timeout, follow_redirects=False, verify=shared_ssl_context()
+        )
 
     async def completed_runs(
         self, *, tenant_id: str, blueprint: str, since: str, limit: int

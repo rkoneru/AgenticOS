@@ -430,6 +430,24 @@ const ops = {
     );
     return { ok: true };
   },
+  // Phase 9 DR drill: close + seal a period, and verify a stored seal (HMAC with the seal key, which must be restored separately).
+  "billing/seal-past-period": async (b) => {
+    // usage of an ENDED month (a period can only be sealed once it has ended), then close + seal it
+    const [y, m] = b.period.split("-").map(Number);
+    for (let i = 0; i < 5; i++)
+      await ledger.append({
+        tenantId: b.tenant_id,
+        idempotencyKey: `dr-${b.tenant_id}-${b.period}-${i}`,
+        meter: "tokens_in",
+        quantity: BigInt(100 * (i + 1)),
+        eventTime: new Date(Date.UTC(y, m - 1, 3 + i, 12)),
+        dimensions: { model_class: "small" },
+        source: "dr-drill",
+      });
+    const seal = await ledger.closePeriod(b.tenant_id, b.period);
+    return { seal_hash: seal.sealHash, event_count: seal.eventCount, seq: seal.seq };
+  },
+  "billing/verify-seal": async (b) => ({ verdict: await ledger.verifySeal(b.tenant_id, b.period) }),
   "billing/totals": async (b) => ({
     totals: (await ledger.totals(b.tenant_id, b.period)).map((t) => ({ ...t })),
   }),

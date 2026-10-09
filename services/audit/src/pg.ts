@@ -123,21 +123,21 @@ export class PgAuditLog implements AuditStore {
   }
 
   /**
-   * Validates, then appends in one transaction and resolves only after COMMIT. The first attempt is optimistic; if
-   * the database chain guard rejects it because a concurrent append won the race (check_violation 23514), the
-   * head is re-read and the retry takes the same per-tenant advisory lock the guard uses, so it cannot lose again.
+   * Validates, then appends in one transaction and resolves only after COMMIT. The transaction takes the per-tenant advisory lock the
+   * database chain guard uses before reading the head, so concurrent appends to one chain are serialised without losing a race. The retry
+   * loop remains as a backstop for the guard's check_violation / unique_violation (e.g. a writer that does not take the lock).
    */
   async append(input: AuditInput): Promise<AuditEvent> {
     const { event, tsSupplied } = prepare(input, this.now);
     for (let attempt = 1; ; attempt++) {
       try {
         return await inTenant(this.opts, event.tenant_id, async (c) => {
-          if (attempt > 1) {
-            // same key as axis.audit_chain_guard (migration 0004): class 727275 + hashtext(tenant)
-            await c.query("SELECT pg_advisory_xact_lock(727275, hashtext($1::text))", [
-              event.tenant_id,
-            ]);
-          }
+          // Taken on EVERY attempt, up front (Phase 9 perf fix): concurrent appends to one tenant queue on this lock in the database instead of
+          // racing optimistically, failing the chain guard and retrying (which made a hot chain slower the more callers it had).
+          // Same key as axis.audit_chain_guard (migration 0004): class 727275 + hashtext(tenant).
+          await c.query("SELECT pg_advisory_xact_lock(727275, hashtext($1::text))", [
+            event.tenant_id,
+          ]);
           const dup = await c.query<Row>(
             `SELECT ${COLS} FROM audit_events WHERE tenant_id = $1 AND id = $2::uuid`,
             [event.tenant_id, event.id],

@@ -18,6 +18,15 @@ if (!url || !tokens) {
 }
 const role = process.env["AXIS_MEMORY_ROLE"]; // e.g. axis_app when connecting as a superuser in dev
 const pool = new pg.Pool({ connectionString: url });
+pool.on("error", (e) =>
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "idle postgres client error (connection lost; the pool reconnects on next use)",
+      error: e.message,
+    }),
+  ),
+);
 const service = new PgMemoryService({
   pool,
   embedder: new HashEmbedder(),

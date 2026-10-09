@@ -20,6 +20,7 @@ from urllib.parse import quote
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
 from axis_runtime.evals.types import (
     RUNNER_VERSION,
     Dataset,
@@ -85,7 +86,9 @@ class HttpEvalHubClient:
     ) -> None:
         self._base = base_url.rstrip("/")
         self._identity = identity
-        self._client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False)
+        self._client = client or httpx.AsyncClient(
+            timeout=timeout, follow_redirects=False, verify=shared_ssl_context()
+        )
 
     async def _request(
         self, method: str, path: str, body: Mapping[str, Any] | None = None

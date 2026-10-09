@@ -1,0 +1,19 @@
+{
+  "name": "@axis/chaos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fault-injection toolkit (in-repo TCP proxy with toxics) for the chaos suite (Phase 9 D). Run with `make chaos`.",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@axis/approvals": "workspace:*",
+    "@axis/billing": "workspace:*",
+    "@axis/contracts": "workspace:*"
+  }
+}

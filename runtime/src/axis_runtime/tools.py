@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
+
 if TYPE_CHECKING:
     from axis_runtime.manifest import RuntimeManifest
     from axis_runtime.models.types import ToolDefinition
@@ -138,7 +140,7 @@ class HttpMcpClient:
         timeout: float = 30.0,
     ) -> None:
         self._servers = dict(servers)
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=shared_ssl_context())
         self._ids = itertools.count(1)
 
     async def call_tool(self, server: str, name: str, args: Mapping[str, Any]) -> Any:

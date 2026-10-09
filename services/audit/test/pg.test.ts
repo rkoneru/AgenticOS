@@ -14,7 +14,6 @@ import {
 import {
   adminClient,
   countingPool,
-  interleavePool,
   ev,
   newPool,
   newTenant,
@@ -53,8 +52,24 @@ describe("PgAuditLog concurrency", () => {
     const stored = await log.read(t, {});
     expect(seqs(stored)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
     expect(await log.verify(t)).toEqual({ ok: true, length: 30 });
-    expect(counted.count()).toBeGreaterThan(0); // the DB guard did reject racers and they retried
+    expect(counted.count()).toBeGreaterThan(0);
   });
+
+  it("with NO retries allowed, 60 parallel appends to one tenant still all succeed: racers queue on the lock instead of losing an optimistic attempt (perf regression: the retry storm cut a hot chain from ~270 to ~170 appends/s)", async () => {
+    const t = await newTenant(admin);
+    const once = new PgAuditLog({ pool, role: ROLE, maxAttempts: 1 });
+    const out = await Promise.allSettled(Array.from({ length: 60 }, () => once.append(ev(t))));
+    expect(out.filter((o) => o.status === "rejected")).toHaveLength(0);
+    expect(await log.verify(t)).toEqual({ ok: true, length: 60 });
+  });
+
+  it("200 parallel appends to one tenant ALL succeed (perf regression: a hot chain must not exhaust the retries and DENY the callers)", async () => {
+    const t = await newTenant(admin);
+    const out = await Promise.allSettled(Array.from({ length: 200 }, () => log.append(ev(t))));
+    const failed = out.filter((o) => o.status === "rejected");
+    expect(failed.map((f) => String((f as PromiseRejectedResult).reason))).toEqual([]);
+    expect(await log.verify(t)).toEqual({ ok: true, length: 200 });
+  }, 60_000);
 
   it("two tenants interleaved under load stay independent", async () => {
     const [t1, t2] = [await newTenant(admin), await newTenant(admin)];
@@ -72,21 +87,9 @@ describe("PgAuditLog concurrency", () => {
     expect((await log.read(t, {})).length).toBe(1);
   });
 
-  it("an identical append that slips in between the duplicate check and the head read resolves idempotently", async () => {
-    const t = await newTenant(admin);
-    const input = ev(t, { id: randomUUID(), ts: "2026-01-02T03:04:05.678Z" });
-    // Deterministic interleaving: after our duplicate check finds nothing, the same event is committed by someone else.
-    // Our head read then sees it, we seal seq 2 and hit unique(tenant_id, id); the retry must return the stored event.
-    const slow = new PgAuditLog({
-      pool: interleavePool(pool, /WHERE tenant_id = \$1 AND id = \$2::uuid/, async () => {
-        await log.append({ ...input });
-      }),
-      role: ROLE,
-    });
-    const r = await slow.append({ ...input });
-    expect(r.seq).toBe(1);
-    expect((await log.read(t, {})).length).toBe(1);
-  });
+  // (Removed in Phase 9: "an identical append slips in between the duplicate check and the head read". Every append now holds the
+  // per-tenant lock from its first statement, so that interleaving cannot happen between two PgAuditLog writers; the duplicate-id
+  // idempotency it protected is still covered by "concurrent appends of the same client id produce exactly one event" above.)
 
   it("gives up after the bounded number of attempts and acknowledges nothing", async () => {
     const t = await newTenant(admin);
@@ -102,7 +105,7 @@ describe("PgAuditLog concurrency", () => {
       const counted = countingPool(pool, /pg_advisory_xact_lock/);
       const l = new PgAuditLog({ pool: counted, role: ROLE, maxAttempts: 3 });
       await expect(l.append(ev(t))).rejects.toBeInstanceOf(AuditAppendError);
-      expect(counted.count()).toBe(2); // attempts 2 and 3 took the lock
+      expect(counted.count()).toBe(3); // every attempt takes the lock
       expect(await log.head(t)).toBeUndefined();
     } finally {
       await admin.query("DROP TRIGGER a_force_fail ON audit_events");

@@ -1,0 +1,1716 @@
+{
+  "started": "2026-10-09T23:06:36.034911+00:00",
+  "steps": {
+    "logical_backup_seconds": 0.11,
+    "physical_backup_seconds": 0.47,
+    "logical_dump_bytes": 299358,
+    "basebackup_bytes": 51330202,
+    "seconds_between_last_committed_audit_row_and_crash": 0.65,
+    "disaster": "postmaster killed with SIGKILL and the data directory deleted",
+    "restore_logical": {
+      "rto_seconds": 1.27,
+      "checks": [
+        {
+          "name": "audit chain verifies (06ef3eff)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"length\":28}"
+        },
+        {
+          "name": "chain head == pre-backup head (06ef3eff)",
+          "ok": true,
+          "detail": "got seq 28, want 28"
+        },
+        {
+          "name": "signed checkpoint (held outside the DB) matches (06ef3eff)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"checkpointSeq\":28,\"headSeq\":28}"
+        },
+        {
+          "name": "audit chain verifies (6629e7e6)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"length\":19}"
+        },
+        {
+          "name": "chain head == pre-backup head (6629e7e6)",
+          "ok": true,
+          "detail": "got seq 19, want 19"
+        },
+        {
+          "name": "signed checkpoint (held outside the DB) matches (6629e7e6)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":19}"
+        },
+        {
+          "name": "audit chain verifies (f239303d)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"length\":19}"
+        },
+        {
+          "name": "chain head == pre-backup head (f239303d)",
+          "ok": true,
+          "detail": "got seq 19, want 19"
+        },
+        {
+          "name": "signed checkpoint (held outside the DB) matches (f239303d)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":19}"
+        },
+        {
+          "name": "RLS: tenant 06ef3eff sees 0 rows of 6629e7e6",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: tenant 6629e7e6 sees 0 rows of f239303d",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: tenant f239303d sees 0 rows of 06ef3eff",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: the application role with NO tenant set sees 0 audit rows",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "rows api_keys (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/3ede8c97, want 1/3ede8c97"
+        },
+        {
+          "name": "rows approvals (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows audit_checkpoints (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/fea6e2f6, want 1/fea6e2f6"
+        },
+        {
+          "name": "rows audit_events (06ef3eff): 28",
+          "ok": true,
+          "detail": "got 28/d387c3aa, want 28/d387c3aa"
+        },
+        {
+          "name": "rows billing_period_seals (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/5237df0d, want 1/5237df0d"
+        },
+        {
+          "name": "rows blueprint_versions (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows blueprints (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows budgets (06ef3eff): 4",
+          "ok": true,
+          "detail": "got 4/7cf02115, want 4/7cf02115"
+        },
+        {
+          "name": "rows channel_identities (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversation_messages (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversation_threads (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversations (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows directories (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows directory_role_mappings (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows end_users (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows eval_hub_docs (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/2289bc35, want 1/2289bc35"
+        },
+        {
+          "name": "rows identity_connections (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/a2184242, want 1/a2184242"
+        },
+        {
+          "name": "rows invoice_provider_links (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows invoices (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows kill_switches (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows knowledge_bases (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows link_challenges (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows marketplace_docs (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows members (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/2ac2d2a3, want 1/2ac2d2a3"
+        },
+        {
+          "name": "rows memory_chunks (06ef3eff): 3",
+          "ok": true,
+          "detail": "got 3/3702a5c9, want 3/3702a5c9"
+        },
+        {
+          "name": "rows memory_documents (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows model_credentials (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/fac1da1b, want 1/fac1da1b"
+        },
+        {
+          "name": "rows policy_assignments (06ef3eff): 2",
+          "ok": true,
+          "detail": "got 2/da7401c9, want 2/da7401c9"
+        },
+        {
+          "name": "rows policy_pack_versions (06ef3eff): 2",
+          "ok": true,
+          "detail": "got 2/30bb0329, want 2/30bb0329"
+        },
+        {
+          "name": "rows policy_packs (06ef3eff): 2",
+          "ok": true,
+          "detail": "got 2/394d67c2, want 2/394d67c2"
+        },
+        {
+          "name": "rows processes (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_eval_attestations (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_keys (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/89d222c1, want 1/89d222c1"
+        },
+        {
+          "name": "rows registry_names (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/ec0069e1, want 1/ec0069e1"
+        },
+        {
+          "name": "rows registry_namespaces (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/db0c6079, want 1/db0c6079"
+        },
+        {
+          "name": "rows registry_public_namespaces (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_public_versions (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_version_events (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_versions (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/a3bca816, want 1/a3bca816"
+        },
+        {
+          "name": "rows run_events (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows runs (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows scim_group_members (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows scim_groups (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows sessions (06ef3eff): 2",
+          "ok": true,
+          "detail": "got 2/ee0f2958, want 2/ee0f2958"
+        },
+        {
+          "name": "rows tenant_keys (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/141be750, want 1/141be750"
+        },
+        {
+          "name": "rows tenant_placements (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/eef17c20, want 1/eef17c20"
+        },
+        {
+          "name": "rows tenant_settings (06ef3eff): 1",
+          "ok": true,
+          "detail": "got 1/97e73e1e, want 1/97e73e1e"
+        },
+        {
+          "name": "rows usage_conflicts (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows usage_events (06ef3eff): 17",
+          "ok": true,
+          "detail": "got 17/c3d15bc3, want 17/c3d15bc3"
+        },
+        {
+          "name": "rows verified_domains (06ef3eff): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows api_keys (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/0ab054d2, want 1/0ab054d2"
+        },
+        {
+          "name": "rows approvals (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows audit_checkpoints (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/5a9c2427, want 1/5a9c2427"
+        },
+        {
+          "name": "rows audit_events (6629e7e6): 19",
+          "ok": true,
+          "detail": "got 19/1bf33a76, want 19/1bf33a76"
+        },
+        {
+          "name": "rows billing_period_seals (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/429c49c5, want 1/429c49c5"
+        },
+        {
+          "name": "rows blueprint_versions (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows blueprints (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows budgets (6629e7e6): 4",
+          "ok": true,
+          "detail": "got 4/bd661fa8, want 4/bd661fa8"
+        },
+        {
+          "name": "rows channel_identities (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversation_messages (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversation_threads (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversations (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows directories (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows directory_role_mappings (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows end_users (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows eval_hub_docs (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/31137895, want 1/31137895"
+        },
+        {
+          "name": "rows identity_connections (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/fdc52fff, want 1/fdc52fff"
+        },
+        {
+          "name": "rows invoice_provider_links (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows invoices (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows kill_switches (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows knowledge_bases (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows link_challenges (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows marketplace_docs (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows members (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/61e08887, want 1/61e08887"
+        },
+        {
+          "name": "rows memory_chunks (6629e7e6): 3",
+          "ok": true,
+          "detail": "got 3/24dae608, want 3/24dae608"
+        },
+        {
+          "name": "rows memory_documents (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows model_credentials (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/a0f845db, want 1/a0f845db"
+        },
+        {
+          "name": "rows policy_assignments (6629e7e6): 2",
+          "ok": true,
+          "detail": "got 2/d4a1c5b8, want 2/d4a1c5b8"
+        },
+        {
+          "name": "rows policy_pack_versions (6629e7e6): 2",
+          "ok": true,
+          "detail": "got 2/5c7a3c97, want 2/5c7a3c97"
+        },
+        {
+          "name": "rows policy_packs (6629e7e6): 2",
+          "ok": true,
+          "detail": "got 2/f23096ac, want 2/f23096ac"
+        },
+        {
+          "name": "rows processes (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_eval_attestations (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_keys (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_names (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_namespaces (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_public_namespaces (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_public_versions (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_version_events (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_versions (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows run_events (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows runs (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows scim_group_members (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows scim_groups (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows sessions (6629e7e6): 2",
+          "ok": true,
+          "detail": "got 2/993decc1, want 2/993decc1"
+        },
+        {
+          "name": "rows tenant_keys (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/3586ed34, want 1/3586ed34"
+        },
+        {
+          "name": "rows tenant_placements (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/3fe57c4e, want 1/3fe57c4e"
+        },
+        {
+          "name": "rows tenant_settings (6629e7e6): 1",
+          "ok": true,
+          "detail": "got 1/90d1bef9, want 1/90d1bef9"
+        },
+        {
+          "name": "rows usage_conflicts (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows usage_events (6629e7e6): 16",
+          "ok": true,
+          "detail": "got 16/072a567d, want 16/072a567d"
+        },
+        {
+          "name": "rows verified_domains (6629e7e6): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows api_keys (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/b6a71a0a, want 1/b6a71a0a"
+        },
+        {
+          "name": "rows approvals (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows audit_checkpoints (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/ce3a44ef, want 1/ce3a44ef"
+        },
+        {
+          "name": "rows audit_events (f239303d): 19",
+          "ok": true,
+          "detail": "got 19/86ab258d, want 19/86ab258d"
+        },
+        {
+          "name": "rows billing_period_seals (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/075c4f76, want 1/075c4f76"
+        },
+        {
+          "name": "rows blueprint_versions (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows blueprints (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows budgets (f239303d): 4",
+          "ok": true,
+          "detail": "got 4/0136a57d, want 4/0136a57d"
+        },
+        {
+          "name": "rows channel_identities (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversation_messages (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversation_threads (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows conversations (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows directories (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows directory_role_mappings (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows end_users (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows eval_hub_docs (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/a31fbd3c, want 1/a31fbd3c"
+        },
+        {
+          "name": "rows identity_connections (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/b66f3c58, want 1/b66f3c58"
+        },
+        {
+          "name": "rows invoice_provider_links (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows invoices (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows kill_switches (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows knowledge_bases (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows link_challenges (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows marketplace_docs (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows members (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/077ade89, want 1/077ade89"
+        },
+        {
+          "name": "rows memory_chunks (f239303d): 3",
+          "ok": true,
+          "detail": "got 3/dda0f19b, want 3/dda0f19b"
+        },
+        {
+          "name": "rows memory_documents (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows model_credentials (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/ccff2a20, want 1/ccff2a20"
+        },
+        {
+          "name": "rows policy_assignments (f239303d): 2",
+          "ok": true,
+          "detail": "got 2/a903f8e1, want 2/a903f8e1"
+        },
+        {
+          "name": "rows policy_pack_versions (f239303d): 2",
+          "ok": true,
+          "detail": "got 2/9175f230, want 2/9175f230"
+        },
+        {
+          "name": "rows policy_packs (f239303d): 2",
+          "ok": true,
+          "detail": "got 2/bf6a51bd, want 2/bf6a51bd"
+        },
+        {
+          "name": "rows processes (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_eval_attestations (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_keys (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_names (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_namespaces (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_public_namespaces (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_public_versions (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_version_events (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows registry_versions (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows run_events (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows runs (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows scim_group_members (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows scim_groups (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows sessions (f239303d): 2",
+          "ok": true,
+          "detail": "got 2/44a18ad3, want 2/44a18ad3"
+        },
+        {
+          "name": "rows tenant_keys (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/b01a21c0, want 1/b01a21c0"
+        },
+        {
+          "name": "rows tenant_placements (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/359cda27, want 1/359cda27"
+        },
+        {
+          "name": "rows tenant_settings (f239303d): 1",
+          "ok": true,
+          "detail": "got 1/b7deed35, want 1/b7deed35"
+        },
+        {
+          "name": "rows usage_conflicts (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "rows usage_events (f239303d): 18",
+          "ok": true,
+          "detail": "got 18/94887628, want 18/94887628"
+        },
+        {
+          "name": "rows verified_domains (f239303d): 0",
+          "ok": true,
+          "detail": "got 0/, want 0/"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (06ef3eff)",
+          "ok": true,
+          "detail": "{\"ok\":true}"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (6629e7e6)",
+          "ok": true,
+          "detail": "{\"ok\":true}"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (f239303d)",
+          "ok": true,
+          "detail": "{\"ok\":true}"
+        },
+        {
+          "name": "registry resolve verifies hash+signature+provenance (dr-c3f8a6/helper-agent@^1)",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "ok": true
+    },
+    "restore_physical": {
+      "rto_seconds": 1.52,
+      "checks": [
+        {
+          "name": "audit chain verifies (06ef3eff)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"length\":36}"
+        },
+        {
+          "name": "pre-backup head is inside the restored chain (06ef3eff)",
+          "ok": true,
+          "detail": "restored head seq 36, backup head seq 28"
+        },
+        {
+          "name": "signed checkpoint (held outside the DB) matches (06ef3eff)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"checkpointSeq\":28,\"headSeq\":36}"
+        },
+        {
+          "name": "audit chain verifies (6629e7e6)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"length\":27}"
+        },
+        {
+          "name": "pre-backup head is inside the restored chain (6629e7e6)",
+          "ok": true,
+          "detail": "restored head seq 27, backup head seq 19"
+        },
+        {
+          "name": "signed checkpoint (held outside the DB) matches (6629e7e6)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":27}"
+        },
+        {
+          "name": "audit chain verifies (f239303d)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"length\":27}"
+        },
+        {
+          "name": "pre-backup head is inside the restored chain (f239303d)",
+          "ok": true,
+          "detail": "restored head seq 27, backup head seq 19"
+        },
+        {
+          "name": "signed checkpoint (held outside the DB) matches (f239303d)",
+          "ok": true,
+          "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":27}"
+        },
+        {
+          "name": "RLS: tenant 06ef3eff sees 0 rows of 6629e7e6",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: tenant 6629e7e6 sees 0 rows of f239303d",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: tenant f239303d sees 0 rows of 06ef3eff",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: the application role with NO tenant set sees 0 audit rows",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "rows api_keys (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows approvals (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows audit_checkpoints (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows billing_period_seals (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows blueprint_versions (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows blueprints (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows budgets (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 4, backup 4"
+        },
+        {
+          "name": "rows channel_identities (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_messages (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_threads (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversations (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directories (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directory_role_mappings (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows end_users (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows eval_hub_docs (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows identity_connections (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows invoice_provider_links (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows invoices (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows kill_switches (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows knowledge_bases (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows link_challenges (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows marketplace_docs (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows members (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows memory_chunks (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 3, backup 3"
+        },
+        {
+          "name": "rows memory_documents (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows model_credentials (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows policy_assignments (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_pack_versions (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_packs (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows processes (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_eval_attestations (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_keys (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows registry_names (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows registry_namespaces (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows registry_public_namespaces (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_versions (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_version_events (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_versions (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows run_events (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows runs (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_group_members (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_groups (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows sessions (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows tenant_keys (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_placements (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_settings (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows usage_conflicts (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows usage_events (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 27, backup 17"
+        },
+        {
+          "name": "rows verified_domains (06ef3eff) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows api_keys (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows approvals (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows audit_checkpoints (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows billing_period_seals (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows blueprint_versions (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows blueprints (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows budgets (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 4, backup 4"
+        },
+        {
+          "name": "rows channel_identities (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_messages (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_threads (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversations (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directories (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directory_role_mappings (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows end_users (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows eval_hub_docs (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows identity_connections (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows invoice_provider_links (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows invoices (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows kill_switches (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows knowledge_bases (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows link_challenges (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows marketplace_docs (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows members (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows memory_chunks (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 3, backup 3"
+        },
+        {
+          "name": "rows memory_documents (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows model_credentials (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows policy_assignments (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_pack_versions (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_packs (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows processes (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_eval_attestations (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_keys (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_names (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_namespaces (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_namespaces (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_versions (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_version_events (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_versions (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows run_events (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows runs (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_group_members (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_groups (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows sessions (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows tenant_keys (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_placements (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_settings (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows usage_conflicts (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows usage_events (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 26, backup 16"
+        },
+        {
+          "name": "rows verified_domains (6629e7e6) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows api_keys (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows approvals (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows audit_checkpoints (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows billing_period_seals (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows blueprint_versions (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows blueprints (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows budgets (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 4, backup 4"
+        },
+        {
+          "name": "rows channel_identities (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_messages (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_threads (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversations (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directories (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directory_role_mappings (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows end_users (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows eval_hub_docs (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows identity_connections (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows invoice_provider_links (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows invoices (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows kill_switches (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows knowledge_bases (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows link_challenges (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows marketplace_docs (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows members (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows memory_chunks (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 3, backup 3"
+        },
+        {
+          "name": "rows memory_documents (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows model_credentials (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows policy_assignments (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_pack_versions (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_packs (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows processes (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_eval_attestations (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_keys (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_names (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_namespaces (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_namespaces (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_versions (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_version_events (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_versions (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows run_events (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows runs (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_group_members (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_groups (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows sessions (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows tenant_keys (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_placements (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_settings (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows usage_conflicts (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows usage_events (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 27, backup 18"
+        },
+        {
+          "name": "rows verified_domains (f239303d) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (06ef3eff)",
+          "ok": true,
+          "detail": "{\"ok\":true}"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (6629e7e6)",
+          "ok": true,
+          "detail": "{\"ok\":true}"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (f239303d)",
+          "ok": true,
+          "detail": "{\"ok\":true}"
+        },
+        {
+          "name": "registry resolve verifies hash+signature+provenance (dr-c3f8a6/helper-agent@^1)",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "ok": true,
+      "audit_events_lost_per_tenant": {
+        "06ef3eff-b5c4-4d6e-a5e9-1b9270abd8bb": 0,
+        "6629e7e6-78a9-4935-91b7-e9e66090f34a": 0,
+        "f239303d-b5ce-405e-ac95-82cb17d8936d": 0
+      },
+      "last_restored_audit_ts": "2026-10-09 23:06:52.469+00",
+      "last_committed_audit_ts_before_crash": "2026-10-09 23:06:52.469+00"
+    },
+    "measured_rpo": {
+      "lost_audit_events": 0,
+      "window_seconds": 0.0
+    },
+    "negatives": [
+      {
+        "tamper": "flipped decision",
+        "detected": true,
+        "failed_checks": [
+          "audit chain verifies (06ef3eff)",
+          "signed checkpoint (held outside the DB) matches (06ef3eff)",
+          "rows audit_events (06ef3eff): 28"
+        ]
+      },
+      {
+        "tamper": "truncated tail",
+        "detected": true,
+        "failed_checks": [
+          "chain head == pre-backup head (6629e7e6)",
+          "signed checkpoint (held outside the DB) matches (6629e7e6)",
+          "rows audit_events (6629e7e6): 19"
+        ]
+      }
+    ]
+  },
+  "machine": "x86_64",
+  "measured": {
+    "rpo_window_seconds": 0.0,
+    "rto_logical_seconds": 1.27,
+    "rto_physical_seconds": 1.52
+  },
+  "failures": []
+}

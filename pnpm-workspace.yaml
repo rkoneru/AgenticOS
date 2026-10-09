@@ -3,3 +3,5 @@ packages:
   - "services/*"
   - "packages/*"
   - "e2e"
+  - "perf"
+  - "chaos"

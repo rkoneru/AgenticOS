@@ -15,6 +15,7 @@ from typing import Any, ClassVar, Protocol
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
 from axis_runtime.models.endpoints import Resolver
 from axis_runtime.models.secrets import Secret, scrub
 from axis_runtime.models.types import (
@@ -77,7 +78,7 @@ def _map_transport_error(exc: httpx.HTTPError, provider: str) -> ModelError:
 
 class HttpxTransport:
     def __init__(self, client: httpx.AsyncClient | None = None, *, provider_hint: str = "") -> None:
-        self._client = client or httpx.AsyncClient()
+        self._client = client or httpx.AsyncClient(verify=shared_ssl_context())
         self._hint = provider_hint
 
     async def send(self, call: HttpCall) -> HttpResponse:

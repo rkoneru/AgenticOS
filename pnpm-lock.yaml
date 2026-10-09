@@ -212,6 +212,18 @@ importers:
         specifier: ^2.5.0
         version: 2.9.1
 
+  chaos:
+    dependencies:
+      '@axis/approvals':
+        specifier: workspace:*
+        version: link:../services/approvals
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../services/billing
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
+
   e2e:
     dependencies:
       '@axis/abl':
@@ -235,12 +247,18 @@ importers:
       '@axis/control-plane':
         specifier: workspace:*
         version: link:../services/control-plane
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../packages/db
       '@axis/eval-hub':
         specifier: workspace:*
         version: link:../services/eval-hub
       '@axis/marketplace':
         specifier: workspace:*
         version: link:../services/marketplace
+      '@axis/memory':
+        specifier: workspace:*
+        version: link:../services/memory
       '@axis/registry':
         specifier: workspace:*
         version: link:../services/registry
@@ -359,6 +377,34 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
+
+  perf:
+    dependencies:
+      '@axis/audit':
+        specifier: workspace:*
+        version: link:../services/audit
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
+      '@axis/db':
+        specifier: workspace:*
+        version: link:../packages/db
+      '@grpc/grpc-js':
+        specifier: ^1.14.5
+        version: 1.14.5
+      '@grpc/proto-loader':
+        specifier: ^0.8.1
+        version: 0.8.1
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
 
   services/agil:
     dependencies:

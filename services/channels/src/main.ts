@@ -46,6 +46,15 @@ if (!tokens || !routesJson) {
 const url = process.env["AXIS_CHANNELS_DATABASE_URL"];
 const role = process.env["AXIS_CHANNELS_ROLE"];
 const pool = url ? new pg.Pool({ connectionString: url }) : undefined;
+pool?.on("error", (e) =>
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "idle postgres client error (connection lost; the pool reconnects on next use)",
+      error: e.message,
+    }),
+  ),
+);
 const store = pool
   ? new PgConversationStore({ pool, ...(role ? { role } : {}) })
   : new MemoryConversationStore();

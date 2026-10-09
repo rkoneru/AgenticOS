@@ -1,4 +1,4 @@
-.PHONY: compliance-check e2e-compliance e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt
+.PHONY: compliance-check e2e-compliance e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt loadtest chaos dr-drill
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -175,3 +175,25 @@ compliance-check:
 e2e-compliance:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_compliance.py -p no:cacheprovider --no-cov
+
+# Phase 9 D: load test of the REAL stack (docs/runbooks/loadtest.md). Open-model Node harness (executed) + the committed k6 scripts (run when
+# perf/install-k6.sh has installed k6). ~2-3 minutes. Writes perf/results/loadtest-short.{json,md}. Same prerequisites as e2e-core.
+loadtest:
+	pnpm build
+	bash perf/install-k6.sh || true
+	bash infra/scripts/with-pg.sh uv run python e2e/interfaces_stack.py --out /tmp/axis-loadtest-stack.json --gateway-env GW_RATE_BURST=1000000 --gateway-env GW_RATE_PER_SEC=1000000 --gateway-env GW_MAX_SSE_STREAMS=2000 -- pnpm --filter @axis/perf exec tsx src/cli.ts --stack /tmp/axis-loadtest-stack.json --out $(CURDIR)/perf/results --profile short --k6
+
+# Phase 9 D: chaos suite on the real stack (docs/runbooks/chaos.md): kernel/DB/control-plane/run-service faults, slow and silent gates,
+# payload and connection floods; asserts FAIL-CLOSED behaviour and recovery. Same prerequisites as e2e-core.
+chaos:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest chaos -p no:cacheprovider --no-cov -q
+	pnpm --filter @axis/chaos test
+
+# Phase 9 D: DR drill (docs/runbooks/dr.md): populate a multi-tenant real stack on a WAL-archiving Postgres, take a logical and a physical
+# backup, kill -9 and delete the database, restore into FRESH clusters, verify (audit chains per tenant, heads vs the pre-backup heads, signed
+# checkpoints held outside the DB, RLS, row hashes, sealed billing periods, registry signatures), measure RPO/RTO, and prove that tampered
+# backups are detected. Needs PostgreSQL 16 binaries (initdb, pg_basebackup, pg_dump) and root or the postgres user.
+dr-drill:
+	pnpm build
+	uv run python infra/dr/dr_drill.py

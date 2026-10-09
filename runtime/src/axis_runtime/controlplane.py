@@ -23,6 +23,8 @@ from typing import Any
 
 import httpx
 
+from axis_runtime._tls import shared_ssl_context
+
 
 class ControlPlaneUnavailable(RuntimeError):  # noqa: N818 - a condition, not a hierarchy
     """The control plane could not answer. ``kind`` is a stable, secret-free reason."""
@@ -49,7 +51,7 @@ class ControlPlaneBridge:
         self._base = base_url.rstrip("/")
         self.tenant_id = tenant_id
         self._headers = {"authorization": f"Bearer {token}"}
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=shared_ssl_context())
 
     async def _call(
         self, method: str, path: str, body: dict[str, Any] | None = None

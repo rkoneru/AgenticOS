@@ -20,6 +20,14 @@ DSAR engine (30-day SLA, verification hook, signed export bundle, idempotent res
 `ResidencyPolicy` wired into memory/channels/eval-hub/billing/registry write paths and the runtime `ModelGateway`, PHI canary harness (two real leaks fixed: channels Unicode
 redaction, eval dataset description). Status: Prototype (NEEDS 362-379; no public API/SDK/CLI/console surface yet). Mutation check: 14/14 killed.
 
+## Phase 9 D - load, chaos, DR (`make loadtest`, `make chaos`, `make dr-drill`; docs/nfr.md, ADR 0100-0103)
+
+NFR targets with measured verdicts (`docs/nfr.md`), an open-model/coordinated-omission-aware Node load harness plus k6 scripts (pinned installer), an in-repo
+TCP fault proxy and an 18-test chaos suite on the real stack, and a DR drill (kill -9 + delete, logical and PITR restores into fresh clusters, tampered
+backups detected). Defects found and fixed: run service kept ~5 MB per run (shared SSL context), audit append retry storm (lock first: 170 -> 264 appends/s at 8
+callers), gateway crash on dropped idle Postgres connections (every service main), kill-switches released by a kernel restart (`FileKillSwitchStore`), SSE cap
+configurable (`GW_MAX_SSE_STREAMS`). Status: tested locally on one small machine; NEEDS 380-393.
+
 ## Phase 8 - exit: evals gate releases, proven end to end (`make e2e-phase8`, `make console-e2e`, `make evals`)
 
 **One additive contract change: OpenAPI 1.4.0** (ADR 0059: `listRegistryEvalAttestations`, re-verified on every read; FREEZE regenerated, SDKs and
