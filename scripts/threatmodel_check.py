@@ -52,7 +52,9 @@ CATEGORIES = [
     "Denial of service",
     "Elevation of privilege",
 ]
-PATH_RE = re.compile(r"`([A-Za-z0-9_.@*/-]+/[A-Za-z0-9_.@*/-]+|[A-Za-z0-9_.-]+\.(?:py|ts|tsx|mjs|md|json|yaml|yml|sh|sql|proto))(?::[A-Za-z0-9_.:-]+)?`")
+PATH_RE = re.compile(
+    r"`([A-Za-z0-9_.@*/-]+/[A-Za-z0-9_.@*/-]+|[A-Za-z0-9_.-]+\.(?:py|ts|tsx|mjs|md|json|yaml|yml|sh|sql|proto))(?::[A-Za-z0-9_.:-]+)?`"
+)
 NEEDS_RE = re.compile(r"NEEDS\s+#(\d+)((?:\s*,\s*#?\d+)*)")
 
 
@@ -95,7 +97,9 @@ def check_file(path: Path, ids: set[int], root: Path = ROOT) -> list[str]:
             errs.append(f"{name}: STRIDE table has no {cat} row")
     for r in rows:
         if len(r) != 5:
-            errs.append(f"{name}: STRIDE row needs 5 cells (category | threat | mitigation | test | residual): {r[:2]}")
+            errs.append(
+                f"{name}: STRIDE row needs 5 cells (category | threat | mitigation | test | residual): {r[:2]}"
+            )
             continue
         _, threat, mitigation, test, residual = r
         if not PATH_RE.search(mitigation):

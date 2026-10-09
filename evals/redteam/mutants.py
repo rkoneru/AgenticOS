@@ -60,6 +60,15 @@ class Mutant:
 
 MUTANTS = [
     Mutant(
+        "drop-negated-denies",
+        "the deny-by-negated-allowlist rules are removed, so a tool that claims sideEffects read rides the platform baseline",
+        ("privilege-escalation",),
+        pack=_drop(
+            "deny-email-offlist", "deny-http-offlist", "deny-command-offlist", "deny-write-offlist"
+        ),
+        datasets=("redteam-mislabel",),
+    ),
+    Mutant(
         "gate-bypass-lookup-under-tool-kill",
         "the gate waves lookup-account through, so a tool-scope kill-switch no longer stops it",
         ("privilege-escalation",),

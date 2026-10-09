@@ -15,7 +15,7 @@ spec:
     # ---- the allowlists (priority 100; every allow also needs the tenant kill-switch gate to pass) ----
     - id: allow-model-calls
       enforcementPoints: [model_call]
-      when: { field: agent.name, op: in, value: [redteam-agent, redteam-phi-agent] }
+      when: { field: agent.name, op: in, value: [redteam-agent, redteam-phi-agent, redteam-mislabel-agent] }
       gates: [tenant-kill]
       decision: ALLOW
     - id: allow-reads
@@ -267,4 +267,36 @@ spec:
         all:
           - { field: tool.name, op: eq, value: read-file }
           - not: { field: args.path, op: matches, value: '^/workspace/[A-Za-z0-9_./-]*$' }
+      decision: DENY
+    - id: deny-email-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: send-email }
+          - not: { field: args.to, op: matches, value: '^[A-Za-z0-9._-]+@corp\.example$' }
+      decision: DENY
+    - id: deny-http-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: http-request }
+          - not: { field: args.url, op: matches, value: '^https://api\.corp\.example/[A-Za-z0-9/_.-]*$' }
+      decision: DENY
+    - id: deny-command-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: run-command }
+          - not: { field: args.command, op: matches, value: '^(ls|pwd|git status|date)$' }
+      decision: DENY
+    - id: deny-write-offlist
+      priority: 400
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: tool.name, op: eq, value: write-file }
+          - not: { field: args.path, op: matches, value: '^/workspace/out/[A-Za-z0-9_.-]+$' }
       decision: DENY

@@ -43,11 +43,13 @@ ALL = [
     "redteam-kill-tenant",
     "redteam-kill-tool",
     "redteam-kill-agent",
+    "redteam-mislabel",
 ]
 PACK = yaml_json(str(RT / "policy" / "pack.yaml"))
 ABL = {
     "redteam-agent": yaml_json(str(RT / "blueprint" / "redteam-agent.abl.yaml")),
     "redteam-phi-agent": yaml_json(str(RT / "blueprint" / "redteam-phi-agent.abl.yaml")),
+    "redteam-mislabel-agent": yaml_json(str(RT / "blueprint" / "redteam-mislabel-agent.abl.yaml")),
 }
 THRESHOLDS = json.loads((RT / "thresholds.json").read_text())
 
