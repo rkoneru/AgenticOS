@@ -16,3 +16,5 @@ docs/spec/cli.md
 test-results
 playwright-report
 .next
+perf/results/
+infra/dr/results/
