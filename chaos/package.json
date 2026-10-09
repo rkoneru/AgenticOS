@@ -10,5 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@axis/approvals": "workspace:*",
+    "@axis/billing": "workspace:*",
+    "@axis/contracts": "workspace:*"
   }
 }

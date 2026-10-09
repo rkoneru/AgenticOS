@@ -209,7 +209,17 @@ importers:
         specifier: ^2.5.0
         version: 2.9.1
 
-  chaos: {}
+  chaos:
+    dependencies:
+      '@axis/approvals':
+        specifier: workspace:*
+        version: link:../services/approvals
+      '@axis/billing':
+        specifier: workspace:*
+        version: link:../services/billing
+      '@axis/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
 
   e2e:
     dependencies:
