@@ -23,6 +23,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 ROOT = Path(__file__).resolve().parent.parent
 RT = ROOT / "evals" / "redteam"
 sys.path.insert(0, str(Path(__file__).parent))
@@ -31,9 +33,17 @@ sys.path.insert(0, str(RT))
 import interfaces_stack as istack  # noqa: E402
 import mutants as mutants_mod  # noqa: E402
 import oracle  # noqa: E402
+import redteam_probes  # noqa: E402
 from evals_clients import PySdk  # noqa: E402
 from evals_world import bp_dict, publish_version, ref_of, setup_publisher, yaml_json  # noqa: E402
 
+ALL = [
+    "redteam-core",
+    "redteam-phi",
+    "redteam-kill-tenant",
+    "redteam-kill-tool",
+    "redteam-kill-agent",
+]
 PACK = yaml_json(str(RT / "policy" / "pack.yaml"))
 ABL = {
     "redteam-agent": yaml_json(str(RT / "blueprint" / "redteam-agent.abl.yaml")),
@@ -49,6 +59,17 @@ class _W:
         self.stack, self.ns, self.state = stack, ns, {}
 
 
+def switch(stack: istack.Stack, key: str, ks: dict[str, Any], engaged: bool) -> None:
+    body: dict[str, Any] = {"scope": ks["scope"], "engaged": engaged, "reason": "red-team drill"}
+    if ks.get("target"):
+        body["target"] = ks["target"]
+    r = httpx.put(
+        f"{stack.gateway}/kill-switches", headers={"x-axis-api-key": key}, json=body, timeout=60
+    )
+    assert r.status_code == 200, (r.status_code, r.text)
+    time.sleep(1.2)  # "effective < 1 s"
+
+
 def campaign(
     stack: istack.Stack,
     *,
@@ -57,6 +78,7 @@ def campaign(
     gate_bypass: tuple[str, ...] = (),
     label: str = "control",
     timeout_s: int = 900,
+    probes: bool = False,
 ) -> dict[str, Any]:
     slug = "rt" + secrets.token_hex(3)
     tenant = stack.provision(slug, pack=pack)
@@ -95,8 +117,15 @@ def campaign(
             assert created["ref"] == suite["dataset_ref"], created["ref"]
             sdk.call("evalsSuiteCreate", body=suite)
             v = published[ds["blueprint"]]
-            run = sdk.call("evalsRunStart", suite=suite["ref"], blueprint=ref_of(w, v))  # type: ignore[arg-type]
-            fin = sdk.call("evalsRunWait", id=run["id"], timeout_ms=timeout_s * 1000)
+            ks = ds.get("kill_switch")
+            if ks:
+                switch(stack, key, ks, True)
+            try:
+                run = sdk.call("evalsRunStart", suite=suite["ref"], blueprint=ref_of(w, v))  # type: ignore[arg-type]
+                fin = sdk.call("evalsRunWait", id=run["id"], timeout_ms=timeout_s * 1000)
+            finally:
+                if ks:
+                    switch(stack, key, ks, False)
             runs[d] = {k: fin.get(k) for k in ("id", "status", "score", "mode", "scores")}
             by_case = {c["case_id"]: c for c in fin.get("case_results", [])}
             entries: dict[str, list[dict[str, Any]]] = {}
@@ -115,6 +144,25 @@ def campaign(
     finally:
         err = runner.stderr()
         runner.stop()
+    if probes:
+        other = stack.provision("rt" + secrets.token_hex(3), pack=pack)
+        key_b = stack.api_key(other["tenant_id"], other["owner_member_id"])
+        narrow = stack.api_key(tenant["tenant_id"], tenant["owner_member_id"], scopes=["runs:read"])
+        first = datasets[0]
+        ds0 = json.loads((RT / "datasets" / f"{first}.json").read_text())
+        verdicts.extend(
+            redteam_probes.run_probes(
+                stack.gateway,
+                key_a=key,
+                key_b=key_b,
+                narrow_a=narrow,
+                tenant_a=tenant["tenant_id"],
+                tenant_b=other["tenant_id"],
+                run_id_a=runs[first]["id"],
+                suite_ref=ds0["suite"],
+                dataset=(ds0["name"], 1),
+            )
+        )
     summary = oracle.summarise(verdicts, THRESHOLDS)
     return {
         "label": label,
@@ -142,7 +190,7 @@ def main() -> int:
     code = 0
     with istack.boot(work, admin) as stack:
         if not args.selfcheck:
-            rep = campaign(stack, pack=PACK, datasets=["redteam-core", "redteam-phi"])
+            rep = campaign(stack, pack=PACK, datasets=ALL, probes=True)
             out = rep
             s = rep["summary"]
             print(
@@ -176,7 +224,7 @@ def main() -> int:
                 rep = campaign(
                     stack,
                     pack=pack,
-                    datasets=["redteam-core"],
+                    datasets=list(m.datasets),
                     gate_bypass=m.gate_bypass,
                     label=m.name,
                 )
