@@ -175,3 +175,11 @@ chaos:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest chaos -p no:cacheprovider --no-cov -q
 	pnpm --filter @axis/chaos test
+
+# Phase 9 D: DR drill (docs/runbooks/dr.md): populate a multi-tenant real stack on a WAL-archiving Postgres, take a logical and a physical
+# backup, kill -9 and delete the database, restore into FRESH clusters, verify (audit chains per tenant, heads vs the pre-backup heads, signed
+# checkpoints held outside the DB, RLS, row hashes, sealed billing periods, registry signatures), measure RPO/RTO, and prove that tampered
+# backups are detected. Needs PostgreSQL 16 binaries (initdb, pg_basebackup, pg_dump) and root or the postgres user.
+dr-drill:
+	pnpm build
+	uv run python infra/dr/dr_drill.py

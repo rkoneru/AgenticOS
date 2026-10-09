@@ -111,6 +111,8 @@ class Stack:
     #: the Eval Hub's runner-facing surface (served by the gateway process)
     eval_hub: str = ""
     control_plane_url: str = ""
+    #: the billing seal HMAC key (a secret that a restore needs: it lives in the KMS/secret store, never in the database)
+    seal_key: str = ""
     procs: list[subprocess.Popen[str]] = field(default_factory=list)
     #: how each long-lived process was started (name -> args, env, stderr file, ready key, cwd), so chaos tests can kill and restart it
     #: on the SAME port (the kernel, the run service and the gateway have fixed ports for exactly that reason)
@@ -469,7 +471,7 @@ def boot(
             run_service=run_service, kernel_target=kernel_target,
             approvals_bridge=f"http://127.0.0.1:{approvals_port}", console_origin=console_origin,
             ops_token=ops_token, platform_token=platform_token, procs=procs, specs=specs, named=named,
-            eval_hub=f"http://127.0.0.1:{ginfo['eval_runner_port']}", control_plane_url=cp,
+            eval_hub=f"http://127.0.0.1:{ginfo['eval_runner_port']}", control_plane_url=cp, seal_key=seal_key,
         )  # fmt: skip
     finally:
         for p in reversed(procs):
