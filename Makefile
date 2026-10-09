@@ -168,3 +168,10 @@ loadtest:
 	pnpm build
 	bash perf/install-k6.sh || true
 	bash infra/scripts/with-pg.sh uv run python e2e/interfaces_stack.py --out /tmp/axis-loadtest-stack.json --gateway-env GW_RATE_BURST=1000000 --gateway-env GW_RATE_PER_SEC=1000000 -- pnpm --filter @axis/perf exec tsx src/cli.ts --stack /tmp/axis-loadtest-stack.json --out $(CURDIR)/perf/results --profile short --k6
+
+# Phase 9 D: chaos suite on the real stack (docs/runbooks/chaos.md): kernel/DB/control-plane/run-service faults, slow and silent gates,
+# payload and connection floods; asserts FAIL-CLOSED behaviour and recovery. Same prerequisites as e2e-core.
+chaos:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest chaos -p no:cacheprovider --no-cov -q
+	pnpm --filter @axis/chaos test

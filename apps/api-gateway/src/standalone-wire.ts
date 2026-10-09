@@ -45,6 +45,15 @@ export async function startStandalone(
   options: GatewayOptions = {},
 ): Promise<RunningGateway> {
   const pool = new pg.Pool({ connectionString: c.databaseUrl, max: 10 });
+  pool.on("error", (e) =>
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "idle postgres client error (connection lost; the pool reconnects on next use)",
+        error: e.message,
+      }),
+    ),
+  );
   const role = c.dbRole ? { role: c.dbRole } : {};
   const store = new PgControlPlaneStore({ pool, ...role });
   const audit = new PgAuditLog({ pool, ...role });
@@ -152,6 +161,7 @@ export async function startStandalone(
       allowedOrigins: c.allowedOrigins,
       ...(c.trustedProxies.length ? { trustedProxies: c.trustedProxies } : {}),
       ...(c.rate ? { rate: c.rate } : {}),
+      maxSseStreamsPerTenant: c.maxSseStreams,
       log: (level, msg, fields) => {
         if (level !== "info") console.error(JSON.stringify({ level, msg, ...fields }));
       },

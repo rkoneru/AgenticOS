@@ -28,6 +28,15 @@ async function main(): Promise<void> {
   };
   const region = env["CP_REGION"] ?? "us-east-1";
   const pool = new pg.Pool({ connectionString: url, max: 10 });
+  pool.on("error", (e) =>
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "idle postgres client error (connection lost; the pool reconnects on next use)",
+        error: e.message,
+      }),
+    ),
+  );
   const audit = new PgAuditLog({ pool });
   const cp = wireControlPlane({
     store: new PgControlPlaneStore({ pool }),

@@ -203,14 +203,15 @@ export function gateRequest(
   tenantId: string,
   tool = "lookup-claim",
   traceId?: string,
+  agent = "load-agent",
 ): Record<string, unknown> {
   const hex = (n: number): string =>
     Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
   return {
     tenant_id: tenantId,
     trace: { trace_id: traceId ?? hex(32), span_id: hex(16) },
-    actor: { type: "TYPE_AGENT", id: "load-agent", pid: "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
-    blueprint: { name: "claims-agent", version: "1.0.0" },
+    actor: { type: "TYPE_AGENT", id: agent, pid: "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
+    blueprint: { name: agent === "load-agent" ? "claims-agent" : agent, version: "1.0.0" },
     enforcement_point: "ENFORCEMENT_POINT_TOOL_CALL",
     action: tool,
     context: pbStruct({

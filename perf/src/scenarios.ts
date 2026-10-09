@@ -72,8 +72,13 @@ export const runComplete =
 export function gate(info: StackInfo, t: Tenant): { scenario: Scenario; close: () => void } {
   const c = gateClient(info.kernel_target);
   return {
-    scenario: async () => {
-      const res = await evaluate(c, t.kernelToken, gateRequest(t.tenantId));
+    // the baseline pack rate-limits 30 calls/min PER AGENT (blueprint name): spread the load over many agents so the limit is not what is measured
+    scenario: async (i) => {
+      const res = await evaluate(
+        c,
+        t.kernelToken,
+        gateRequest(t.tenantId, "lookup-claim", undefined, `load-agent-${i % 20000}`),
+      );
       return res.decision === "DECISION_ALLOW"
         ? { ok: true }
         : { ok: false, label: `decision_${res.decision}` };

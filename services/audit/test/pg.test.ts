@@ -53,8 +53,24 @@ describe("PgAuditLog concurrency", () => {
     const stored = await log.read(t, {});
     expect(seqs(stored)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
     expect(await log.verify(t)).toEqual({ ok: true, length: 30 });
-    expect(counted.count()).toBeGreaterThan(0); // the DB guard did reject racers and they retried
+    expect(counted.count()).toBeGreaterThan(0);
   });
+
+  it("with NO retries allowed, 60 parallel appends to one tenant still all succeed: racers queue on the lock instead of losing an optimistic attempt (perf regression: the retry storm cut a hot chain from ~270 to ~170 appends/s)", async () => {
+    const t = await newTenant(admin);
+    const once = new PgAuditLog({ pool, role: ROLE, maxAttempts: 1 });
+    const out = await Promise.allSettled(Array.from({ length: 60 }, () => once.append(ev(t))));
+    expect(out.filter((o) => o.status === "rejected")).toHaveLength(0);
+    expect(await log.verify(t)).toEqual({ ok: true, length: 60 });
+  });
+
+  it("200 parallel appends to one tenant ALL succeed (perf regression: a hot chain must not exhaust the retries and DENY the callers)", async () => {
+    const t = await newTenant(admin);
+    const out = await Promise.allSettled(Array.from({ length: 200 }, () => log.append(ev(t))));
+    const failed = out.filter((o) => o.status === "rejected");
+    expect(failed.map((f) => String((f as PromiseRejectedResult).reason))).toEqual([]);
+    expect(await log.verify(t)).toEqual({ ok: true, length: 200 });
+  }, 60_000);
 
   it("two tenants interleaved under load stay independent", async () => {
     const [t1, t2] = [await newTenant(admin), await newTenant(admin)];

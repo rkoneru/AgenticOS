@@ -430,6 +430,12 @@ const ops = {
     );
     return { ok: true };
   },
+  // Phase 9 DR drill: close + seal a period, and verify a stored seal (HMAC with the seal key, which must be restored separately).
+  "billing/close": async (b) => {
+    const seal = await ledger.closePeriod(b.tenant_id, b.period);
+    return { seal_hash: seal.sealHash, event_count: seal.eventCount, seq: seal.seq };
+  },
+  "billing/verify-seal": async (b) => ({ verdict: await ledger.verifySeal(b.tenant_id, b.period) }),
   "billing/totals": async (b) => ({
     totals: (await ledger.totals(b.tenant_id, b.period)).map((t) => ({ ...t })),
   }),

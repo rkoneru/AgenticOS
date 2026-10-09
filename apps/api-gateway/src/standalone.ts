@@ -25,6 +25,8 @@ export interface StandaloneConfig {
   approvals: { url: string; tokensFile: string };
   bundleDir: string | undefined;
   rate: { burst: number; perSecond: number } | undefined;
+  /** open SSE streams allowed per tenant (GW_MAX_SSE_STREAMS, default 16) */
+  maxSseStreams: number;
   /**
    * The Eval Hub's RUNNER-facing HTTP surface (claim, suites, datasets, results, manifests, online). Off unless a tokens file is given.
    * The tenant-facing evals API stays on the gateway port; this second loopback listener exists because runners authenticate with
@@ -113,6 +115,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
     approvals: { url: url("GW_APPROVALS_URL"), tokensFile: need("GW_APPROVALS_TOKENS_FILE") },
     bundleDir: env["GW_BUNDLE_DIR"] || undefined,
     rate,
+    maxSseStreams: int("GW_MAX_SSE_STREAMS", 16, 1, 100000),
     evalRunner: env["GW_EVAL_RUNNER_TOKENS_FILE"]
       ? {
           tokensFile: env["GW_EVAL_RUNNER_TOKENS_FILE"],

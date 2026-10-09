@@ -31,6 +31,9 @@ select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
 "**/tests/**" = ["S101", "S105", "S106", "S311", "E501", "ASYNC109", "ASYNC110"]
 # e2e is a test harness: asserts, subprocesses and SQL built from test-generated constants are intended.
 "e2e/**" = ["S101", "S106", "S603", "S607", "S608", "E501"]
+# chaos and DR drills are harnesses of the same kind.
+"chaos/**" = ["S101", "S106", "S603", "S607", "S608", "E501", "ASYNC110"]
+"infra/dr/**" = ["S101", "S106", "S603", "S607", "S608", "E501"]
 
 [tool.mypy]
 strict = true

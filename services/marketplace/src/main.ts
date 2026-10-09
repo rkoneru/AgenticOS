@@ -17,6 +17,15 @@ if (!url || !tokens) {
 }
 const role = process.env["AXIS_MARKETPLACE_ROLE"];
 const pool = new pg.Pool({ connectionString: url });
+pool.on("error", (e) =>
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "idle postgres client error (connection lost; the pool reconnects on next use)",
+      error: e.message,
+    }),
+  ),
+);
 const audit = new MemoryAuditLog();
 const registry = new RegistryService({
   store: new PgRegistryStore({ pool, ...(role ? { role } : {}) }),

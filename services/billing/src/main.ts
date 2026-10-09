@@ -26,6 +26,15 @@ if (!url || !tokens || !sealKey) {
 }
 const role = process.env["AXIS_BILLING_ROLE"]; // e.g. axis_app when connecting as a superuser in dev
 const pool = new pg.Pool({ connectionString: url });
+pool.on("error", (e) =>
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "idle postgres client error (connection lost; the pool reconnects on next use)",
+      error: e.message,
+    }),
+  ),
+);
 const ledger = new PgUsageLedger({
   pool,
   signer: new HmacSealSigner(Buffer.from(sealKey, "utf8")),

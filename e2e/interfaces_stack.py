@@ -25,7 +25,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -128,10 +128,11 @@ class Stack:
             return
         p.wait(30)
 
-    def restart(self, name: str) -> dict[str, Any]:
-        """Start a previously killed process again with its original arguments and environment (stderr is appended)."""
-        args, env, err, ready, cwd = self.specs[name]
-        proc, info = _spawn(args, env, err, ready, cwd, append=True)
+    def restart(self, name: str, env: dict[str, str] | None = None) -> dict[str, Any]:
+        """Start a previously killed process again with its original arguments and environment (stderr is appended).
+        ``env`` overrides/extends the environment for this start only."""
+        args, base_env, err, ready, cwd = self.specs[name]
+        proc, info = _spawn(args, {**base_env, **(env or {})}, err, ready, cwd, append=True)
         self.named[name] = proc
         self.procs.append(proc)
         return info
@@ -323,7 +324,13 @@ def boot(
     *,
     console_origin: str = "http://localhost:3100",
     gateway_env: dict[str, str] | None = None,
+    hop: Callable[[str, int], int] | None = None,
+    kernel_env: dict[str, str] | None = None,
 ) -> Iterator[Stack]:
+    """``hop(name, real_port) -> port`` lets a fault-injection proxy sit on one dependency edge: ``kernel`` (the run service and the
+    gateway reach the Risk Kernel through it), ``kernel_db`` / ``gateway_db`` (that process's Postgres connection) and ``cp`` (the run
+    service's control-plane URL). Without it every edge is direct."""
+    hop_ = hop or (lambda _name, port: port)
     suffix = secrets.token_hex(4)
     db = f"axis_e2e7_{suffix}"
     psql(admin_url, f"CREATE DATABASE {db}")
@@ -358,6 +365,9 @@ def boot(
             procs.append(proc)
             return info
 
+        db_port = int(db_url.rsplit(":", 1)[1].split("/")[0])
+        kernel_db_url = db_url.replace(f":{db_port}/", f":{hop_('kernel_db', db_port)}/")
+        gateway_db_url = db_url.replace(f":{db_port}/", f":{hop_('gateway_db', db_port)}/")
         kinfo = launch(
             "kernel",
             ["node", "--import", "tsx", "services/risk-kernel/src/main.ts"],
@@ -365,7 +375,8 @@ def boot(
                 "AXIS_RK_PORT": str(kernel_port),
                 "AXIS_POLICY_BUNDLE_DIR": str(bundle_dir),
                 "AXIS_RK_TOKENS": str(files["kernel_principals"]),
-                "AXIS_AUDIT_PG_URL": db_url,
+                "AXIS_AUDIT_PG_URL": kernel_db_url,
+                **(kernel_env or {}),
                 "AXIS_AUDIT_PG_ROLE": "axis_app",
                 "AXIS_APPROVALS_HMAC_KEY": hmac_key,
                 "AXIS_APPROVALS_DEV_BRIDGE": "1",
@@ -373,7 +384,7 @@ def boot(
             },
             "port",
         )
-        kernel_target = f"127.0.0.1:{kinfo['port']}"
+        kernel_target = f"127.0.0.1:{hop_('kernel', kinfo['port'])}"
         secrets_cfg = {k: secrets.token_hex(32) for k in ("pepper", "cookie_key", "signing_key")}
         ops_token = "e2e-ops-" + secrets.token_hex(8)
         platform_token = "e2e-platform-" + secrets.token_hex(8)
@@ -409,7 +420,7 @@ def boot(
                     "tokens": {},
                     "kernel_target": kernel_target,
                     "kernel_tokens": {},
-                    "control_plane_url": cp,
+                    "control_plane_url": f"http://127.0.0.1:{hop_('cp', sinfo['cp'])}",
                     "runtime_tokens": {},
                     "billing_url": billing,
                     "ingest_tokens": {},
@@ -437,10 +448,10 @@ def boot(
             "gateway",
             ["node", "apps/api-gateway/dist/main.js"],
             {
-                "GW_DATABASE_URL": db_url, "GW_DB_ROLE": "axis_app", "GW_PORT": str(gw_port),
+                "GW_DATABASE_URL": gateway_db_url, "GW_DB_ROLE": "axis_app", "GW_PORT": str(gw_port),
                 "GW_ALLOWED_ORIGINS": console_origin, "GW_PEPPER": secrets_cfg["pepper"],
                 "GW_COOKIE_KEY": secrets_cfg["cookie_key"], "GW_SIGNING_KEY": secrets_cfg["signing_key"],
-                "GW_SEAL_KEY": seal_key, "GW_RUN_SERVICE_URL": run_service,
+                "GW_SEAL_KEY": seal_key, "GW_RUN_SERVICE_URL": f"http://127.0.0.1:{hop_('run', rinfo['port'])}",
                 "GW_RUN_TOKENS_FILE": str(files["gw_run"]), "GW_KERNEL_TARGET": kernel_target,
                 "GW_KERNEL_TOKENS_FILE": str(files["gw_kernel"]),
                 "GW_APPROVALS_URL": f"http://127.0.0.1:{approvals_port}",

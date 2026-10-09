@@ -115,6 +115,26 @@ export class ChaosProxy {
     this.timers.add(t);
   }
 
+  /**
+   * Release ``fragments`` of one chunk in ORDER on a direction (``lane``): a fragment is never released before the previous fragment of the
+   * same lane, whatever toxics are on, so TCP's byte order (and therefore HTTP/2 framing) is preserved. ``gapMs`` spaces the fragments.
+   */
+  private release(
+    lane: Lane,
+    base: number,
+    gapMs: number,
+    fragments: Buffer[],
+    write: (b: Buffer) => void,
+  ): void {
+    let due = Math.max(performance.now() + base, lane.tail);
+    for (const f of fragments) {
+      const at = due;
+      this.later(at - performance.now(), () => write(f));
+      lane.tail = at;
+      due = at + gapMs;
+    }
+  }
+
   private delay(): number {
     const { latencyMs, jitterMs } = this.toxics;
     return latencyMs + (jitterMs > 0 ? this.rng() * jitterMs : 0);
@@ -150,10 +170,13 @@ export class ChaosProxy {
       if (!client.destroyed) client.end();
     });
     let down = 0;
+    const upLane: Lane = { tail: 0 };
+    const downLane: Lane = { tail: 0 };
     client.on("data", (b: Buffer) => {
       this.stats.bytesUp += b.length;
       if (this.toxics.blackhole) return;
-      this.later(this.delay(), () => this.pace(b, (x) => upstream.write(x)));
+      const { frags, gap } = this.split(b, false);
+      this.release(upLane, this.delay(), gap, frags, (x) => upstream.write(x));
     });
     upstream.on("data", (b: Buffer) => {
       if (this.toxics.blackhole) return;
@@ -170,27 +193,32 @@ export class ChaosProxy {
       }
       down += b.length;
       this.stats.bytesDown += b.length;
-      this.later(this.delay(), () => {
-        if (this.toxics.trickleMs > 0) this.trickle(b, client);
-        else this.pace(b, (x) => client.write(x));
+      const { frags, gap } = this.split(b, true);
+      this.release(downLane, this.delay(), gap, frags, (x) => {
+        if (!client.destroyed) client.write(x);
       });
     });
   }
 
-  private pace(b: Buffer, write: (x: Buffer) => void): void {
+  /** Fragments of a chunk and the gap between them: whole chunk, bandwidth-capped slices, or single bytes (trickle, responses only). */
+  private split(b: Buffer, response: boolean): { frags: Buffer[]; gap: number } {
+    if (response && this.toxics.trickleMs > 0) {
+      return {
+        frags: Array.from({ length: b.length }, (_, i) => b.subarray(i, i + 1)),
+        gap: this.toxics.trickleMs,
+      };
+    }
     const bps = this.toxics.bytesPerSec;
-    if (bps <= 0) return void write(b);
-    const slice = Math.max(1, Math.floor(bps / 20)); // 50 ms ticks
-    for (let i = 0, k = 0; i < b.length; i += slice, k++) {
-      this.later(k * 50, () => write(b.subarray(i, i + slice)));
+    if (bps > 0) {
+      const slice = Math.max(1, Math.floor(bps / 20)); // 50 ms ticks
+      const frags: Buffer[] = [];
+      for (let i = 0; i < b.length; i += slice) frags.push(b.subarray(i, i + slice));
+      return { frags, gap: 50 };
     }
+    return { frags: [b], gap: 0 };
   }
+}
 
-  private trickle(b: Buffer, client: net.Socket): void {
-    for (let i = 0; i < b.length; i++) {
-      this.later(i * this.toxics.trickleMs, () => {
-        if (!client.destroyed) client.write(b.subarray(i, i + 1));
-      });
-    }
-  }
+interface Lane {
+  tail: number;
 }

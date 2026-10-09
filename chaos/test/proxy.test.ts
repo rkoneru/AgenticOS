@@ -128,3 +128,46 @@ describe("ChaosProxy", () => {
     expect(proxy.current.down).toBe(false);
   });
 });
+
+describe("ChaosProxy ordering (a reordered byte stream corrupts HTTP/2: found by the chaos suite)", () => {
+  it("back-to-back messages arrive in order under trickle, jitter and a bandwidth cap together", async () => {
+    proxy.set({ trickleMs: 3, latencyMs: 20, jitterMs: 40, bytesPerSec: 4000 });
+    const msgs = Array.from({ length: 6 }, (_, i) => `[${i}:${"x".repeat(40)}]`);
+    const got = await new Promise<string>((resolve) => {
+      const c = net.connect(proxy.port, "127.0.0.1");
+      let data = "";
+      c.on("connect", () => msgs.forEach((m) => c.write(m)));
+      c.on("data", (b) => {
+        data += b.toString();
+        if (data.length >= msgs.join("").length) {
+          c.destroy();
+          resolve(data);
+        }
+      });
+    });
+    expect(got).toBe(msgs.join(""));
+  });
+
+  it("changing toxics between chunks never lets a later chunk overtake an earlier one", async () => {
+    const got = await new Promise<string>((resolve) => {
+      const c = net.connect(proxy.port, "127.0.0.1");
+      let data = "";
+      c.on("connect", () => {
+        proxy.set({ trickleMs: 10 });
+        c.write("AAAAAAAAAA");
+        setTimeout(() => {
+          proxy.clear();
+          c.write("BBBBBBBBBB");
+        }, 20);
+      });
+      c.on("data", (b) => {
+        data += b.toString();
+        if (data.length >= 20) {
+          c.destroy();
+          resolve(data);
+        }
+      });
+    });
+    expect(got).toBe("AAAAAAAAAABBBBBBBBBB");
+  });
+});

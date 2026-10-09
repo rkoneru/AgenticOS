@@ -27,6 +27,13 @@ describe("configFromEnv (standalone DEV gateway)", () => {
     expect(c).toMatchObject({ port: 0, host: "127.0.0.1", allowedOrigins: [], rate: undefined });
     expect(c.secrets.pepper).toHaveLength(32);
   });
+  it("the per-tenant SSE stream cap defaults to 16 and is configurable within bounds (GW_MAX_SSE_STREAMS)", () => {
+    expect(configFromEnv(good()).maxSseStreams).toBe(16);
+    expect(configFromEnv({ ...good(), GW_MAX_SSE_STREAMS: "500" }).maxSseStreams).toBe(500);
+    expect(() => configFromEnv({ ...good(), GW_MAX_SSE_STREAMS: "0" })).toThrow(
+      /GW_MAX_SSE_STREAMS/,
+    );
+  });
   it("REFUSES NODE_ENV=production: the dev composition must never be mistaken for a production one", () => {
     expect(() => configFromEnv({ ...good(), NODE_ENV: "production" })).toThrow(ConfigError);
     expect(() => configFromEnv({ ...good(), NODE_ENV: "production" })).toThrow(/DEV composition/);

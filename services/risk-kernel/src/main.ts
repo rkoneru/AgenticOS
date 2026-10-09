@@ -44,9 +44,17 @@ const engine = bundleDir
   : await WasmPolicyEngine.fromBundle(readFileSync(bundle as string));
 // AXIS_AUDIT_PG_URL: durable hash-chained audit in Postgres (connect as the axis_app role). Otherwise in-memory (dev only).
 const pgUrl = process.env["AXIS_AUDIT_PG_URL"];
-const audit: AuditSink = pgUrl
+// An idle pooled connection that Postgres drops (failover, restart, network cut) emits "error" on the POOL; unhandled it would crash the
+// kernel (found by the Phase 9 chaos suite). The next use reconnects; meanwhile every decision is DENIED "audit unavailable".
+const auditPool = pgUrl ? new pg.Pool({ connectionString: pgUrl }) : undefined;
+auditPool?.on("error", (e) =>
+  console.error(
+    JSON.stringify({ level: "error", msg: "idle postgres client error", error: e.message }),
+  ),
+);
+const audit: AuditSink = auditPool
   ? new PgAuditLog({
-      pool: new pg.Pool({ connectionString: pgUrl }),
+      pool: auditPool,
       ...(process.env["AXIS_AUDIT_PG_ROLE"] ? { role: process.env["AXIS_AUDIT_PG_ROLE"] } : {}),
     })
   : new MemoryAuditSink();

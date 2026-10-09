@@ -4,15 +4,15 @@ Generated 2026-10-08T19:12:21.673Z. **Machine:** 4 x Intel(R) Xeon(R) Processor 
 
 Latencies are milliseconds from the INTENDED start of each request (open model, coordinated-omission aware); `svc p99` is from the actual send.
 
-| scenario | rate/s | ok | errors | achieved/s | p50 | p95 | p99 | p99.9 | max | svc p99 | gen lag max |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| me | 300 | 2991 | 0 | 299.1 | 10.8 | 45.6 | 63.5 | 83.8 | 113.7 | 62.7 | 30.67 ms |
-| auditList | 60 | 590 | 0 | 59 | 7.647 | 20.6 | 38.5 | 65.2 | 65.2 | 38.9 | 15.88 ms |
-| auditVerify | 5 | 59 | 0 | 5.9 | 9.519 | 17.5 | 19.6 | 19.6 | 19.6 | 19.6 | 2.17 ms |
-| registryResolve | 60 | 590 | 0 | 59 | 11.9 | 26.2 | 36.9 | 44.1 | 44.1 | 35.1 | 4.44 ms |
-| runStartAck | 20 | 206 | 0 | 20.6 | 34.5 | 76.5 | 99.5 | 119.8 | 119.8 | 99.1 | 4.03 ms |
-| runComplete | 10 | 98 | 0 | 9.8 | 81.7 | 130.7 | 148.0 | 148.0 | 148.0 | 148.7 | 2.48 ms |
-| gate | 400 | 0 | 3953 | 394.3 | 5001.2 | 5025.8 | 5218.3 | 5255.2 | 5260.6 | 5156.9 | 259.28 ms |
+| scenario        | rate/s |   ok | errors | achieved/s |    p50 |    p95 |    p99 |  p99.9 |    max | svc p99 | gen lag max |
+| --------------- | -----: | ---: | -----: | ---------: | -----: | -----: | -----: | -----: | -----: | ------: | ----------: |
+| me              |    300 | 2991 |      0 |      299.1 |   10.8 |   45.6 |   63.5 |   83.8 |  113.7 |    62.7 |    30.67 ms |
+| auditList       |     60 |  590 |      0 |         59 |  7.647 |   20.6 |   38.5 |   65.2 |   65.2 |    38.9 |    15.88 ms |
+| auditVerify     |      5 |   59 |      0 |        5.9 |  9.519 |   17.5 |   19.6 |   19.6 |   19.6 |    19.6 |     2.17 ms |
+| registryResolve |     60 |  590 |      0 |         59 |   11.9 |   26.2 |   36.9 |   44.1 |   44.1 |    35.1 |     4.44 ms |
+| runStartAck     |     20 |  206 |      0 |       20.6 |   34.5 |   76.5 |   99.5 |  119.8 |  119.8 |    99.1 |     4.03 ms |
+| runComplete     |     10 |   98 |      0 |        9.8 |   81.7 |  130.7 |  148.0 |  148.0 |  148.0 |   148.7 |     2.48 ms |
+| gate            |    400 |    0 |   3953 |      394.3 | 5001.2 | 5025.8 | 5218.3 | 5255.2 | 5260.6 |  5156.9 |   259.28 ms |
 
 ## Errors
 
@@ -20,14 +20,14 @@ Latencies are milliseconds from the INTENDED start of each request (open model, 
 
 ## NFR checks
 
-| id | target | measured | verdict | note |
-| --- | --- | ---: | --- | --- |
-| gate.grpc.p99 | gate adds < 25 ms p99 to a tool call | - | **Not measured** | 400/s, ALLOW with a Postgres audit row per call |
-| api.me.p99 | control-plane API p99 < 200 ms | 63.46 ms | **Met** | 300/s on one small machine; the 1k RPS part of the target is NOT demonstrated |
-| api.auditList.p99 | API p99 < 200 ms | 38.46 ms | **Met** |  |
-| api.registryResolve.p99 | API p99 < 200 ms | 36.9 ms | **Met** |  |
-| run.start.p99 | proposed: < 200 ms | 99.52 ms | **Met** |  |
-| audit.verify.100k | proposed: < 30 s | 3.38 s | **Met** |  |
+| id                      | target                               | measured | verdict          | note                                                                          |
+| ----------------------- | ------------------------------------ | -------: | ---------------- | ----------------------------------------------------------------------------- |
+| gate.grpc.p99           | gate adds < 25 ms p99 to a tool call |        - | **Not measured** | 400/s, ALLOW with a Postgres audit row per call                               |
+| api.me.p99              | control-plane API p99 < 200 ms       | 63.46 ms | **Met**          | 300/s on one small machine; the 1k RPS part of the target is NOT demonstrated |
+| api.auditList.p99       | API p99 < 200 ms                     | 38.46 ms | **Met**          |                                                                               |
+| api.registryResolve.p99 | API p99 < 200 ms                     |  36.9 ms | **Met**          |                                                                               |
+| run.start.p99           | proposed: < 200 ms                   | 99.52 ms | **Met**          |                                                                               |
+| audit.verify.100k       | proposed: < 30 s                     |   3.38 s | **Met**          |                                                                               |
 
 ## Other measurements
 
