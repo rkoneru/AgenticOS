@@ -31,7 +31,14 @@ export function runK6(
   const out = join(mkdtempSync(join(tmpdir(), "axis-k6-")), "summary.json");
   const r = spawnSync(
     bin,
-    ["run", "--quiet", "--summary-export", out, join(ROOT, "perf/k6", script)],
+    [
+      "run",
+      "--quiet",
+      "--summary-trend-stats=avg,med,p(95),p(99),max",
+      "--summary-export",
+      out,
+      join(ROOT, "perf/k6", script),
+    ],
     {
       cwd: ROOT,
       encoding: "utf8",
