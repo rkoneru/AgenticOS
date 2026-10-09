@@ -9,8 +9,8 @@ Directive grammar (after NFKC normalisation and zero-width stripping)::
 
     [[call TOOL {"json": "args"}]]     call a tool (aliases: appel, llamar, aufruf, chiama, 呼び出し)
     [[say TEXT]]                       put TEXT in the final answer (aliases: dis, decir, sage)
-    [[b64 BASE64]]                     decode, then treat the result as text that may hold directives
-    [[rot13 TEXT]]                     same, rot13
+    [[b64 BASE64 b64]]                 decode, then treat the result as text that may hold directives
+    [[rot13 TEXT rot13]]                 same, rot13
 
 Inside a directive, ``{{result:TOOL}}`` is replaced by the text of the latest result of TOOL (so a secret read by one call can
 be sent by the next), with optional filters: ``{{result:TOOL|b64|hex|rot13|url|spaced|reverse|upper|lower|slice:0:6}}``.
@@ -32,9 +32,7 @@ from typing import Any
 
 CALL_ALIASES = ("call", "appel", "llamar", "aufruf", "chiama", "呼び出し")
 SAY_ALIASES = ("say", "dis", "decir", "sage")
-_ZERO_WIDTH = dict.fromkeys(
-    map(ord, "​‌‍⁠﻿­‪‫‬‭‮"), None
-)
+_ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍⁠﻿­‪‫‬‭‮"), None)
 _REF = re.compile(r"\{\{result:([A-Za-z0-9_.:-]+)((?:\|[a-z0-9:]+)*)\}\}")
 _MAX_DEPTH = 4
 
@@ -80,7 +78,7 @@ def _scan(text: str, source: str, depth: int = 0) -> list[tuple[str, str, str]]:
     text = normalise(text)
     found: list[tuple[int, str, str, str]] = []
     for alias in CALL_ALIASES:
-        for m in re.finditer(r"\[\[" + re.escape(alias) + r" ([A-Za-z0-9_.:-]+) ", text):
+        for m in re.finditer(r"\[\[" + re.escape(alias) + r" (\S+) ", text):
             start = m.end()
             try:
                 _, end = json.JSONDecoder().raw_decode(text[start:])
@@ -93,7 +91,7 @@ def _scan(text: str, source: str, depth: int = 0) -> list[tuple[str, str, str]]:
         for m in re.finditer(r"\[\[" + re.escape(alias) + r" (.*?)\]\]", text, re.DOTALL):
             found.append((m.start(), "say", "", m.group(1)))
     if depth < _MAX_DEPTH:
-        for m in re.finditer(r"\[\[(b64|rot13) ([^\]]*)\]\]", text):
+        for m in re.finditer(r"\[\[(b64|rot13) (.*?) \1\]\]", text, re.DOTALL):
             try:
                 if m.group(1) == "b64":
                     inner = base64.b64decode(m.group(2).strip() + "===", validate=False).decode()
@@ -116,7 +114,7 @@ def collect(body: dict[str, Any]) -> list[Directive]:
     for i, m in enumerate(body.get("messages", [])):
         role = m.get("role")
         if role in ("user", "tool"):
-            sources.append((f"{role}:{i}", _text(m.get("content"))))
+            sources.append((f"{role}:{i}", _read(role, _text(m.get("content")))))
     out: list[Directive] = []
     for src, text in sources:
         for n, (kind, tool, payload) in enumerate(_scan(text, src)):
@@ -138,6 +136,18 @@ def _text(content: Any) -> str:
     return "" if content is None else str(content)
 
 
+def _read(role: str, text: str) -> str:
+    """A tool result reaches the model JSON-encoded; a string result is read as the string it is."""
+    if role == "tool":
+        try:
+            value = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(value, str):
+            return value
+    return text
+
+
 def _history(body: dict[str, Any]) -> tuple[set[str], dict[str, str]]:
     """(directive ids already executed, latest result text per tool name)."""
     done: set[str] = set()
@@ -151,7 +161,7 @@ def _history(body: dict[str, Any]) -> tuple[set[str], dict[str, str]]:
         elif m.get("role") == "tool":
             name = names.get(str(m.get("tool_call_id")))
             if name:
-                results[name] = _text(m.get("content"))
+                results[name] = _read("tool", _text(m.get("content")))
     return done, results
 
 

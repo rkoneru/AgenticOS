@@ -94,7 +94,7 @@ from axis_runtime.tooldefs import (
     code_definition,
     memory_definitions,
 )
-from axis_runtime.tools import McpManifestSource, ToolRegistry
+from axis_runtime.tools import McpManifestSource, ToolRegistry, validate_arguments
 from axis_runtime.usage import UsageEmitter
 
 log = logging.getLogger("axis_runtime.run")
@@ -795,6 +795,13 @@ class AgentProcess:
         if spec is None and not (self._memory_exposed and call.name in MEMORY_TOOL_NAMES):
             return reply(f"unknown tool {call.name!r}", error=True)
         await self._check_budgets(extra_tool_call=True)
+        reg = self.ctx.deps.tools.get(spec.ref or spec.name) if spec is not None else None
+        if spec is not None and spec.kind == "function" and reg is not None:
+            # A model can add or retype arguments the tool never declared (red-team finding):
+            # reject BEFORE the gate and the handler.
+            why = validate_arguments(reg.input_schema, call.arguments)
+            if why is not None:
+                return reply(f"invalid arguments for tool {call.name!r}: {why}", error=True)
         try:
             action = (
                 self._action_for(spec, call.arguments)
