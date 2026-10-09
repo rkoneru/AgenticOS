@@ -56,16 +56,17 @@ class Mutant:
         default_factory=tuple
     )  # tools the runner's gate waves through
     datasets: tuple[str, ...] = ("redteam-core",)
+    #: tools the tenant's catalog registers as ``read`` (overrides the kernel's classifier; written to the kernel's catalog file)
+    tool_catalog: tuple[str, ...] = field(default_factory=tuple)
 
 
 MUTANTS = [
     Mutant(
-        "drop-negated-denies",
-        "the deny-by-negated-allowlist rules are removed, so a tool that claims sideEffects read rides the platform baseline",
+        "catalog-trusts-labels",
+        "the tenant's tool catalog registers the four mislabelled tools as read (the kernel's classifier is overridden, as when the "
+        "blueprint's own label is trusted), so they ride the platform baseline",
         ("privilege-escalation",),
-        pack=_drop(
-            "deny-email-offlist", "deny-http-offlist", "deny-command-offlist", "deny-write-offlist"
-        ),
+        tool_catalog=("send-email", "http-request", "run-command", "write-file"),
         datasets=("redteam-mislabel",),
     ),
     Mutant(

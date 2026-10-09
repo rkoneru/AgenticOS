@@ -6,6 +6,7 @@ export const ROLES = [
   "auditor",
   "billing",
   "viewer",
+  "privacy_officer",
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -18,6 +19,8 @@ export const ROLE_RANK: Readonly<Record<Role, number>> = {
   auditor: 40,
   billing: 40,
   viewer: 10,
+  // Handles personal-data requests (DSAR, legal holds, retention); no other privilege (ADR 0111).
+  privacy_officer: 40,
 };
 
 export const isRole = (v: unknown): v is Role =>
@@ -31,6 +34,7 @@ export const EXTERNAL_ROLES: readonly Role[] = [
   "auditor",
   "billing",
   "viewer",
+  "privacy_officer",
 ];
 export const isExternalRole = (v: unknown): v is Role =>
   isRole(v) && (EXTERNAL_ROLES as readonly string[]).includes(v);

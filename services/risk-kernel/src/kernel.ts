@@ -6,6 +6,7 @@ import {
   type ApprovalVerifier,
   type ConsumedApprovals,
 } from "./approvals.js";
+import { effectiveSideEffects, type ToolCatalog } from "./capability.js";
 import type { PolicyEngine } from "./engine.js";
 import { evaluateGate, type GateResult } from "./gates.js";
 import type { CounterStore, KillScope, KillSwitchStore } from "./stores.js";
@@ -47,6 +48,11 @@ export interface KernelDeps {
   approvalVerifier?: ApprovalVerifier;
   /** Single-use ledger for verified approvals. Default: in-memory. */
   consumedApprovals?: ConsumedApprovals;
+  /**
+   * The tenant's pre-registered tool side-effects (authoritative over a blueprint's own label; ADR 0110). Absent: the label is the
+   * strictest of the declared one and the kernel's inference from name, kind and argument keys. A catalog that throws denies.
+   */
+  toolCatalog?: ToolCatalog;
 }
 
 /** Hash that cannot throw: an unhashable payload still gets an audit record (with a sentinel hash), never none. */
@@ -319,6 +325,28 @@ export class RiskKernel {
     const context = { ...req.context };
     delete context["approval"];
     delete context["eval_mode"];
+    const tool = context["tool"];
+    if (typeof tool === "object" && tool !== null && !Array.isArray(tool)) {
+      const t = tool as { name?: unknown; side_effects?: unknown };
+      const catalogued = await this.deps.toolCatalog?.get(
+        req.tenant_id,
+        typeof t.name === "string" ? t.name : req.action,
+      );
+      const args = context["args"];
+      const e = effectiveSideEffects(
+        { ...t, name: typeof t.name === "string" ? t.name : req.action },
+        typeof args === "object" && args !== null && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : undefined,
+        catalogued,
+      );
+      context["tool"] = {
+        ...t,
+        side_effects: e.effective,
+        declared_side_effects: e.declared,
+        side_effects_source: e.source,
+      };
+    }
     const input: Record<string, unknown> = {
       ...context,
       enforcement_point: req.enforcement_point,

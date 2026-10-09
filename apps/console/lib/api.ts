@@ -446,7 +446,8 @@ export interface AblCheckResult {
   version?: string;
 }
 
-export type Role = "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer";
+export type Role =
+  "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer" | "privacy_officer";
 
 export interface Session {
   member: { id: string; email: string; role: Role; display_name?: string };

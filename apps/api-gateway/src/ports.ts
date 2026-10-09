@@ -58,7 +58,15 @@ export interface IdentityDto {
     id: string;
     email?: string;
     display_name?: string;
-    role: "owner" | "admin" | "builder" | "operator" | "auditor" | "billing" | "viewer";
+    role:
+      | "owner"
+      | "admin"
+      | "builder"
+      | "operator"
+      | "auditor"
+      | "billing"
+      | "viewer"
+      | "privacy_officer";
   };
   credential: { kind: "session" | "api_key"; scopes?: string[] };
 }

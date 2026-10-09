@@ -78,6 +78,7 @@ def campaign(
     pack: dict[str, Any],
     datasets: list[str],
     gate_bypass: tuple[str, ...] = (),
+    tool_catalog: tuple[str, ...] = (),
     label: str = "control",
     timeout_s: int = 900,
     probes: bool = False,
@@ -85,6 +86,10 @@ def campaign(
     slug = "rt" + secrets.token_hex(3)
     tenant = stack.provision(slug, pack=pack)
     key = stack.api_key(tenant["tenant_id"], tenant["owner_member_id"])
+    catalog_file = stack.work / "tool-catalog.json"
+    catalog_file.write_text(
+        json.dumps({tenant["tenant_id"]: dict.fromkeys(tool_catalog, "read")} if tool_catalog else {})
+    )
     w = _W(stack, f"rt-{slug}")
     w.owner_key = key  # type: ignore[attr-defined]
     setup_publisher(w)  # type: ignore[arg-type]
@@ -190,7 +195,10 @@ def main() -> int:
     work = Path(tempfile.mkdtemp(prefix="redteam-"))
     out: dict[str, Any] = {}
     code = 0
-    with istack.boot(work, admin) as stack:
+    (work / "tool-catalog.json").write_text("{}")
+    with istack.boot(
+        work, admin, kernel_env={"AXIS_RK_TOOL_CATALOG_FILE": str(work / "tool-catalog.json")}
+    ) as stack:
         if not args.selfcheck:
             rep = campaign(stack, pack=PACK, datasets=ALL, probes=True)
             out = rep
@@ -228,6 +236,7 @@ def main() -> int:
                     pack=pack,
                     datasets=list(m.datasets),
                     gate_bypass=m.gate_bypass,
+                    tool_catalog=m.tool_catalog,
                     label=m.name,
                 )
                 s = rep["summary"]

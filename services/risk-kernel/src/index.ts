@@ -8,3 +8,4 @@ export * from "./approvals.js";
 export * from "./kernel.js";
 export * from "./memory-sink.js";
 export * from "./grpc.js";
+export * from "./capability.js";

@@ -69,6 +69,7 @@ describe("Authorizer (OPA Wasm, fail-closed)", () => {
       ],
       billing: ["tenant.read", "billing.read", "billing.write", "budgets.read", "budgets.write"],
       viewer: ["tenant.read", "policies.read", "budgets.read"],
+      privacy_officer: ["tenant.read", "settings.read"],
     };
     for (const role of ROLES) {
       for (const action of ACTIONS) {

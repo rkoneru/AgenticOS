@@ -18,7 +18,9 @@ export type Capability =
   | "marketplace.install"
   | "killswitch.set"
   | "evals.write"
-  | "evals.review";
+  | "evals.review"
+  | "governance.read"
+  | "governance.write";
 
 const RANK: Record<Role, number> = {
   owner: 100,
@@ -28,6 +30,7 @@ const RANK: Record<Role, number> = {
   auditor: 40,
   billing: 40,
   viewer: 10,
+  privacy_officer: 40,
 };
 
 const RULES: Record<Capability, (r: Role) => boolean> = {
@@ -37,8 +40,8 @@ const RULES: Record<Capability, (r: Role) => boolean> = {
   "approvals.decide": (r) => RANK[r] >= 50 || r === "auditor",
   "policies.write": (r) => RANK[r] >= 80,
   "policies.activate": (r) => RANK[r] >= 80,
-  "audit.read": (r) => RANK[r] >= 40,
-  "usage.read": (r) => RANK[r] >= 40,
+  "audit.read": (r) => RANK[r] >= 40 && r !== "privacy_officer",
+  "usage.read": (r) => RANK[r] >= 40 && r !== "privacy_officer",
   "admin.members": (r) => RANK[r] >= 80,
   "admin.keys": (r) => RANK[r] >= 50,
   "admin.modelkeys": (r) => RANK[r] >= 50,
@@ -48,6 +51,8 @@ const RULES: Record<Capability, (r: Role) => boolean> = {
   "killswitch.set": (r) => RANK[r] >= 80,
   "evals.write": (r) => RANK[r] >= 50 && r !== "operator",
   "evals.review": (r) => RANK[r] >= 50,
+  "governance.read": (r) => ["owner", "admin", "auditor", "privacy_officer"].includes(r),
+  "governance.write": (r) => r === "privacy_officer",
 };
 
 export const can = (role: Role | undefined, cap: Capability): boolean =>
@@ -61,6 +66,7 @@ export const ROLES: Role[] = [
   "auditor",
   "billing",
   "viewer",
+  "privacy_officer",
 ];
 
 export interface NavItem {

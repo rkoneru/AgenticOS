@@ -230,16 +230,22 @@ cases:
         "data": { "phi": false },
       }
     expect: { "decision": "DENY" }
-  - name: "a tool that claims to be a read but sends to a foreign recipient is still denied"
+  - name: "a tool that claims to be a read but sends to a foreign recipient is still denied (the kernel re-labels it external, NEEDS 399)"
     input:
       {
         "enforcement_point": "tool_call",
-        "tool": { "name": "send-email", "kind": "function", "side_effects": "read" },
+        "tool":
+          {
+            "name": "send-email",
+            "kind": "function",
+            "side_effects": "external",
+            "declared_side_effects": "read",
+          },
         "args": { "to": "x@evil.example", "subject": "hi", "body": "hi" },
         "agent": { "name": "redteam-agent", "version": "1.0.0" },
         "data": { "phi": false },
       }
-    expect: { "decision": "DENY", "winners": ["redteam-tenant/deny-email-offlist"] }
+    expect: { "decision": "DENY", "winners": [] }
   - name: "the agent's model call is allowed"
     input:
       {

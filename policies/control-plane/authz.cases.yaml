@@ -5462,3 +5462,704 @@ cases:
         classification: internal
     expect:
       decision: DENY
+  # ---- Phase 9 (ADR 0111): privacy_officer and the data-governance actions
+  - name: owner may api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: admin may api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: builder may not api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: billing may not api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may api.governance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: admin may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may api.governance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.write
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: owner may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: owner
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: admin may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: admin
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: builder may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: builder
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: operator may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: operator
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: auditor may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: auditor
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: billing may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: billing
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: viewer may not api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: viewer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may api.governance.erase
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: privacy_officer may not api.runs.start
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.runs.start
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may not api.audit.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.audit.read
+        side_effects: read
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may not api.blueprints.publish
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.blueprints.publish
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may tenant.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: tenant.read
+        side_effects: read
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: privacy_officer may settings.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: settings.read
+        side_effects: read
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: privacy_officer may not members.update_role
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: members.update_role
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may api.compliance.read
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.read
+        side_effects: read
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: privacy_officer may not api.compliance.write
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.compliance.write
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may not apikeys.create
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: apikeys.create
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY
+  - name: privacy_officer may api.governance.erase with an api key
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.erase
+        side_effects: write
+      actor:
+        role: privacy_officer
+        credential: api_key
+      tenant:
+        id: t1
+      args:
+        same_tenant: true
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: ALLOW
+  - name: privacy_officer may not api.governance.read across tenants
+    input:
+      enforcement_point: tool_call
+      tool:
+        name: api.governance.read
+        side_effects: read
+      actor:
+        role: privacy_officer
+        credential: session
+      tenant:
+        id: t1
+      args:
+        same_tenant: false
+        within_ceiling: true
+        owner_is_actor: true
+        environment: dev
+      data:
+        classification: internal
+    expect:
+      decision: DENY

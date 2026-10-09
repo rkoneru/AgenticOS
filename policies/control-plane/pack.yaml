@@ -25,7 +25,7 @@ spec:
         not:
           field: actor.role
           op: in
-          value: [owner, admin, builder, operator, auditor, billing, viewer]
+          value: [owner, admin, builder, operator, auditor, billing, viewer, privacy_officer]
       decision: DENY
     - id: deny-session-only-actions-for-api-keys
       priority: 1000
@@ -277,6 +277,7 @@ spec:
                 api.compliance.read,
                 api.compliance.write,
                 api.compliance.review,
+                api.governance.read,
               ]
       decision: ALLOW
     - id: api-builder
@@ -362,7 +363,25 @@ spec:
                 api.evals.read,
                 api.compliance.read,
                 api.compliance.review,
+                api.governance.read,
               ]
+      decision: ALLOW
+    - id: api-privacy-officer
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: privacy_officer }
+          - field: tool.name
+            op: in
+            value:
+              [api.governance.read, api.governance.write, api.governance.erase, api.compliance.read]
+      decision: ALLOW
+    - id: privacy-officer-read
+      enforcementPoints: [tool_call]
+      when:
+        all:
+          - { field: actor.role, op: eq, value: privacy_officer }
+          - { field: tool.name, op: in, value: [tenant.read, settings.read] }
       decision: ALLOW
     - id: api-billing
       enforcementPoints: [tool_call]

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AXIS Control Plane API
-  version: 1.5.0
+  version: 1.6.0
   summary: Governed agent runtime — REST API v1
   description: |
     Source of truth for the public `/v1` API. SDKs and server route schemas are generated from this file.
@@ -44,6 +44,10 @@ tags:
   - {
       name: Compliance,
       description: "AI system inventory, impact assessments and sealed technical documentation (designed for / evidence-ready; not a certification)",
+    }
+  - {
+      name: Governance,
+      description: "Data governance: DSAR requests (export, erasure, restriction), legal holds, retention and residency (designed for / evidence-ready; privacy_officer role)",
     }
 paths:
   /blueprints:
@@ -1692,6 +1696,359 @@ paths:
               schema: { $ref: "#/components/schemas/ComplianceDocumentView" }
         "404": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
+  /governance/dsar-requests:
+    get:
+      tags: [Governance]
+      operationId: listGovernanceDsarRequests
+      summary: List data-subject requests (the queue), newest first
+      parameters:
+        - {
+            name: status,
+            in: query,
+            schema: { enum: [received, verified, processing, completed, rejected, cancelled] },
+          }
+      responses:
+        "200":
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    { type: array, items: { $ref: "#/components/schemas/GovernanceDsarRequest" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Governance]
+      operationId: createGovernanceDsarRequest
+      summary: Open a data-subject request; the 30-day clock starts now. Identifiers are sealed at rest and never echoed back
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, identifiers]
+              additionalProperties: false
+              properties:
+                kind: { enum: [export, erase, restrict] }
+                identifiers:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items: { $ref: "#/components/schemas/GovernanceIdentifier" }
+                destination_region:
+                  {
+                    type: string,
+                    description: "Export only: the region the bundle is delivered to; refused when residency forbids it",
+                  }
+      responses:
+        "201":
+          description: Opened (status received)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceDsarRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/dsar-requests/{requestId}:
+    get:
+      tags: [Governance]
+      operationId: getGovernanceDsarRequest
+      summary: Get one request with its result (per-store counts, verification evidence)
+      parameters: [{ $ref: "#/components/parameters/GovernanceRequestId" }]
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceDsarRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/dsar-requests/{requestId}/verify:
+    post:
+      tags: [Governance]
+      operationId: verifyGovernanceDsarRequest
+      summary: Verify the requester's identity with the evidence the configured verifier accepts; nothing is exported or erased before this succeeds
+      parameters:
+        - { $ref: "#/components/parameters/GovernanceRequestId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evidence]
+              additionalProperties: false
+              properties:
+                evidence:
+                  type: object
+                  additionalProperties: true
+                  description: "Verifier-specific (the shipped verifier: a signed requester token and the tenant admin's attestation)"
+      responses:
+        "200":
+          description: The request; status verified when the evidence was accepted, unchanged (and the failure audited) when not
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceDsarRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/dsar-requests/{requestId}/export:
+    post:
+      tags: [Governance]
+      operationId: exportGovernanceDsarRequest
+      summary: Produce the signed export bundle of everything the stores hold about the verified subject
+      parameters:
+        - { $ref: "#/components/parameters/GovernanceRequestId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Manifest, records per store and an Ed25519 signature over the manifest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceExportBundle" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/dsar-requests/{requestId}/erase:
+    post:
+      tags: [Governance]
+      operationId: eraseGovernanceDsarRequest
+      summary: Erase the verified subject from every store, verify that nothing identifiable remains, then shred the lookup keys. Held data is not touched (status held)
+      parameters:
+        - { $ref: "#/components/parameters/GovernanceRequestId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: "Outcome per store; status completed, held (a legal hold covers a store) or partial"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceEraseOutcome" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/dsar-requests/{requestId}/restrict:
+    post:
+      tags: [Governance]
+      operationId: restrictGovernanceDsarRequest
+      summary: "Apply a restriction of processing for the verified subject (Art. 18): the data stays, active processing is refused"
+      parameters:
+        - { $ref: "#/components/parameters/GovernanceRequestId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200":
+          description: The request, completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceDsarRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/holds:
+    get:
+      tags: [Governance]
+      operationId: listGovernanceHolds
+      summary: List legal holds and restrictions (active ones unless `all`)
+      parameters:
+        - { name: all, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: Holds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/GovernanceHold" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Governance]
+      operationId: placeGovernanceHold
+      summary: Place a legal hold (tenant, subject or case scope); purge and erasure of matching data are suspended until it is released
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope, reason]
+              additionalProperties: false
+              properties:
+                scope: { enum: [tenant, subject, case] }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+                case_ref: { type: string, maxLength: 200 }
+                classes:
+                  type: array
+                  items: { $ref: "#/components/schemas/GovernanceDataClass" }
+                  description: Omitted = every class
+                groups:
+                  type: array
+                  description: "Subject and case scope: one list of identifiers per person the hold covers"
+                  items:
+                    type: array
+                    minItems: 1
+                    items: { $ref: "#/components/schemas/GovernanceIdentifier" }
+      responses:
+        "201":
+          description: Placed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceHold" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/holds/{holdId}/release:
+    post:
+      tags: [Governance]
+      operationId: releaseGovernanceHold
+      summary: Release a legal hold; suspended purges and erasures may proceed on their next run
+      parameters:
+        - { $ref: "#/components/parameters/GovernanceHoldId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Released
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceHold" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/retention:
+    get:
+      tags: [Governance]
+      operationId: getGovernanceRetention
+      summary: Requested and effective retention per data class (effective is clamped into the class's legal bounds)
+      responses:
+        "200":
+          description: One entry per class
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    {
+                      type: array,
+                      items: { $ref: "#/components/schemas/GovernanceRetentionClass" },
+                    }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/retention/{dataClass}:
+    put:
+      tags: [Governance]
+      operationId: setGovernanceRetention
+      summary: Set the retention period of a governance-owned class (run_logs, eval_data, telemetry, billing); the others are tenant settings
+      parameters: [{ $ref: "#/components/parameters/GovernanceDataClass" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [days]
+              additionalProperties: false
+              properties:
+                days: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data_class, days]
+                properties:
+                  data_class: { $ref: "#/components/schemas/GovernanceDataClass" }
+                  days: { type: integer }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/retention-runs:
+    get:
+      tags: [Governance]
+      operationId: listGovernanceRetentionRuns
+      summary: Retention reports (dry runs and purges), newest first
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    {
+                      type: array,
+                      items: { $ref: "#/components/schemas/GovernanceRetentionReport" },
+                    }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Governance]
+      operationId: runGovernanceRetention
+      summary: "Run retention. dry_run defaults to true: it reports what would be purged and changes nothing. The audit class is never purged"
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                dry_run: { type: boolean, default: true }
+                classes:
+                  type: array
+                  items: { $ref: "#/components/schemas/GovernanceDataClass" }
+      responses:
+        "200":
+          description: The report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceRetentionReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /governance/residency:
+    get:
+      tags: [Governance]
+      operationId: getGovernanceResidency
+      summary: The tenant's residency policy (home region and the regions its data may be written to)
+      responses:
+        "200":
+          description: The policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GovernanceResidency" }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1750,6 +2107,17 @@ components:
         in: path,
         required: true,
         schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$" },
+      }
+    GovernanceRequestId:
+      { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+    GovernanceHoldId:
+      { name: holdId, in: path, required: true, schema: { type: string, format: uuid } }
+    GovernanceDataClass:
+      {
+        name: dataClass,
+        in: path,
+        required: true,
+        schema: { $ref: "#/components/schemas/GovernanceDataClass" },
       }
     IdempotencyKey:
       name: Idempotency-Key
@@ -2414,7 +2782,8 @@ components:
             id: { type: string, format: uuid }
             email: { type: string }
             display_name: { type: string }
-            role: { enum: [owner, admin, builder, operator, auditor, billing, viewer] }
+            role:
+              { enum: [owner, admin, builder, operator, auditor, billing, viewer, privacy_officer] }
         credential:
           type: object
           required: [kind]
@@ -2956,3 +3325,153 @@ components:
             ok: { type: boolean }
             failed:
               { type: array, items: { enum: [content_hash, markdown, seal_key, seal_signature] } }
+    GovernanceDataClass:
+      enum: [conversation, memory, run_logs, transcripts, eval_data, telemetry, billing, audit]
+    GovernanceIdentifier:
+      type: object
+      required: [kind, value]
+      additionalProperties: false
+      properties:
+        kind:
+          {
+            enum:
+              [
+                email,
+                phone,
+                user_ref,
+                end_user_id,
+                channel_identity,
+                subject_key,
+                billing_customer,
+              ],
+          }
+        value: { type: string, minLength: 1, maxLength: 512 }
+    GovernanceDsarRequest:
+      type: object
+      required:
+        [
+          id,
+          kind,
+          subject_ref,
+          status,
+          received_at,
+          due_at,
+          extended,
+          verified_at,
+          verified_method,
+          destination_region,
+          result,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { enum: [export, erase, restrict] }
+        subject_ref:
+          { type: string, description: Opaque keyed pseudonym of the subject; never an identifier }
+        status: { enum: [received, verified, processing, completed, rejected, cancelled] }
+        received_at: { type: string, format: date-time }
+        due_at: { type: string, format: date-time }
+        extended: { type: boolean }
+        verified_at: { type: [string, "null"], format: date-time }
+        verified_method: { type: [string, "null"] }
+        destination_region: { type: [string, "null"] }
+        result: { type: object, additionalProperties: true }
+    GovernanceExportBundle:
+      type: object
+      required: [manifest, records, signature]
+      properties:
+        manifest: { type: object, additionalProperties: true }
+        records:
+          type: object
+          additionalProperties: true
+          description: store -> collection -> records
+        signature:
+          type: object
+          required: [alg, key_id, value]
+          properties:
+            alg: { const: Ed25519 }
+            key_id: { type: string }
+            value: { type: string }
+    GovernanceEraseOutcome:
+      type: object
+      required: [status, request, providers]
+      properties:
+        status: { enum: [completed, held, partial] }
+        request: { $ref: "#/components/schemas/GovernanceDsarRequest" }
+        providers:
+          type: array
+          items: { type: object, additionalProperties: true }
+    GovernanceHold:
+      type: object
+      required: [id, kind, scope, case_ref, classes, reason, placed_by, placed_at, released_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { enum: [legal_hold, restriction] }
+        scope: { enum: [tenant, subject, case] }
+        case_ref: { type: [string, "null"] }
+        classes:
+          oneOf:
+            - { type: "null" }
+            - { type: array, items: { $ref: "#/components/schemas/GovernanceDataClass" } }
+        reason: { type: string }
+        placed_by: { type: string }
+        placed_at: { type: string, format: date-time }
+        released_at: { type: [string, "null"], format: date-time }
+    GovernanceRetentionClass:
+      type: object
+      required: [data_class, requested_days, effective_days, clamped, source]
+      properties:
+        data_class: { $ref: "#/components/schemas/GovernanceDataClass" }
+        requested_days: { type: integer }
+        effective_days: { type: integer }
+        clamped: { enum: [min, max, null] }
+        source: { enum: [control_plane, governance, default] }
+    GovernanceRetentionReport:
+      type: object
+      required: [run_id, dry_run, started_at, classes]
+      properties:
+        run_id: { type: string, format: uuid }
+        dry_run: { type: boolean }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        classes:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                data_class,
+                status,
+                requested_days,
+                effective_days,
+                matched,
+                purged,
+                protected_by_hold,
+              ]
+            properties:
+              data_class: { $ref: "#/components/schemas/GovernanceDataClass" }
+              status:
+                enum:
+                  [
+                    purged,
+                    dry_run,
+                    skipped_hold,
+                    retained_by_policy,
+                    no_store,
+                    error,
+                    settings_unavailable,
+                  ]
+              requested_days: { type: integer }
+              effective_days: { type: integer }
+              clamped: { enum: [min, max, null] }
+              cutoff: { type: [string, "null"], format: date-time }
+              matched: { type: integer }
+              purged: { type: integer }
+              protected_by_hold: { type: integer }
+              hold_id: { type: string }
+              error: { type: string }
+    GovernanceResidency:
+      type: object
+      required: [home_region, allowed_regions]
+      properties:
+        home_region: { type: string }
+        allowed_regions: { type: array, items: { type: string } }
