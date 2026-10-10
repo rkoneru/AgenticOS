@@ -38,6 +38,7 @@ import {
   type KernelKillApplier,
 } from "./adapters/kernel.js";
 import { ComplianceAdapter, UnavailableCompliance } from "./adapters/compliance.js";
+import { UnavailableGovernance } from "./adapters/governance.js";
 import { gatewayComplianceSources } from "./adapters/compliance-sources.js";
 import { EvalsAdapter, UnavailableEvals } from "./adapters/evals.js";
 import { MarketplaceAdapter } from "./adapters/marketplace.js";
@@ -148,6 +149,7 @@ export function wireGateway(
     marketplace: new MarketplaceAdapter(w.marketplace),
     evals: evalsPort,
     compliance,
+    governance: new UnavailableGovernance(),
     idempotency: new MemoryIdempotencyStore(),
   };
   return { gateway: createGateway(deps, { validateResponses: true, ...options }), deps };

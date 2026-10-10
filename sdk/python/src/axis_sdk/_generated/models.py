@@ -901,7 +901,7 @@ class GovernanceRetentionClass(TypedDict):
     data_class: GovernanceDataClass
     requested_days: int
     effective_days: int
-    clamped: Literal["min", "max", null]
+    clamped: Literal["min", "max", None]
     source: Literal["control_plane", "governance", "default"]
 
 
@@ -910,7 +910,7 @@ class GovernanceRetentionReportClassesItem(TypedDict):
     status: Literal["purged", "dry_run", "skipped_hold", "retained_by_policy", "no_store", "error", "settings_unavailable"]
     requested_days: int
     effective_days: int
-    clamped: NotRequired[Literal["min", "max", null]]
+    clamped: NotRequired[Literal["min", "max", None]]
     cutoff: NotRequired[str | None]
     matched: int
     purged: int

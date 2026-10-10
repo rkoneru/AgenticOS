@@ -543,3 +543,28 @@ export interface CompliancePort {
   ): Promise<Rec[]>;
   getDocument(p: Principal, id: string): Promise<{ document: Rec; verification: Rec }>;
 }
+
+// ---- data governance ------------------------------------------------------------------------------------------------------
+
+/**
+ * Data-subject requests, legal holds, retention and residency (wire shapes = OpenAPI 1.6.0). The tenant, the member and the role come
+ * from the principal and nothing else; the adapter enforces the role (reads: owner, admin, auditor, privacy_officer; writes and erasure:
+ * privacy_officer only).
+ */
+export interface GovernancePort {
+  listDsarRequests(p: Principal, q: { status?: string }): Promise<Rec[]>;
+  createDsarRequest(p: Principal, body: Rec): Promise<Rec>;
+  getDsarRequest(p: Principal, id: string): Promise<Rec>;
+  verifyDsarRequest(p: Principal, id: string, evidence: Rec): Promise<Rec>;
+  exportDsarRequest(p: Principal, id: string): Promise<Rec>;
+  eraseDsarRequest(p: Principal, id: string): Promise<Rec>;
+  restrictDsarRequest(p: Principal, id: string, reason: string): Promise<Rec>;
+  listHolds(p: Principal, q: { all?: boolean }): Promise<Rec[]>;
+  placeHold(p: Principal, body: Rec): Promise<Rec>;
+  releaseHold(p: Principal, id: string): Promise<Rec>;
+  getRetention(p: Principal): Promise<Rec[]>;
+  setRetention(p: Principal, dataClass: string, days: number): Promise<Rec>;
+  listRetentionRuns(p: Principal): Promise<Rec[]>;
+  runRetention(p: Principal, q: { dry_run?: boolean; classes?: string[] }): Promise<Rec>;
+  getResidency(p: Principal): Promise<Rec>;
+}

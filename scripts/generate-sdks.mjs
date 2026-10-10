@@ -417,7 +417,12 @@ function pyType(ir) {
         unknown: "Any",
       }[ir.t];
     case "enum":
-      return `Literal[${ir.values.map((v) => JSON.stringify(v)).join(", ")}]`;
+      // JSON literals are not Python literals: null -> None, true/false -> True/False.
+      return `Literal[${ir.values
+        .map((v) =>
+          v === null ? "None" : typeof v === "boolean" ? (v ? "True" : "False") : JSON.stringify(v),
+        )
+        .join(", ")}]`;
     case "array":
       return `list[${pyType(ir.item)}]`;
     case "record":

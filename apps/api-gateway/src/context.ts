@@ -10,6 +10,7 @@ import type {
   CompliancePort,
   EvalsPort,
   ExplainPort,
+  GovernancePort,
   IdempotencyStore,
   IdentityPort,
   KillSwitchPort,
@@ -40,6 +41,7 @@ export interface GatewayDeps {
   marketplace: MarketplacePort;
   evals: EvalsPort;
   compliance: CompliancePort;
+  governance: GovernancePort;
   idempotency: IdempotencyStore;
   /** Per-tenant buckets (key = tenant id). Defaults to `TokenBuckets` from the options. */
   limiter?: RateLimiter;

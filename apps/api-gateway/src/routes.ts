@@ -814,6 +814,89 @@ async function getComplianceDocument(c: Ctx): Promise<HandlerResult> {
   return ok(await c.deps.compliance.getDocument(c.principal, str(c.params["documentId"])));
 }
 
+// ---- data governance --------------------------------------------------------------------------------------------------------------
+
+async function listGovernanceDsarRequests(c: Ctx): Promise<HandlerResult> {
+  const status = optStr(c, "status");
+  return ok({
+    items: await c.deps.governance.listDsarRequests(c.principal, status ? { status } : {}),
+  });
+}
+async function createGovernanceDsarRequest(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.governance.createDsarRequest(c.principal, c.body as Record<string, unknown>),
+    201,
+  );
+}
+async function getGovernanceDsarRequest(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.governance.getDsarRequest(c.principal, str(c.params["requestId"])));
+}
+async function verifyGovernanceDsarRequest(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.governance.verifyDsarRequest(
+      c.principal,
+      str(c.params["requestId"]),
+      (c.body as { evidence: Record<string, unknown> }).evidence,
+    ),
+  );
+}
+async function exportGovernanceDsarRequest(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.governance.exportDsarRequest(c.principal, str(c.params["requestId"])));
+}
+async function eraseGovernanceDsarRequest(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.governance.eraseDsarRequest(c.principal, str(c.params["requestId"])));
+}
+async function restrictGovernanceDsarRequest(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.governance.restrictDsarRequest(
+      c.principal,
+      str(c.params["requestId"]),
+      (c.body as { reason: string }).reason,
+    ),
+  );
+}
+async function listGovernanceHolds(c: Ctx): Promise<HandlerResult> {
+  const all = c.query["all"];
+  return ok({
+    items: await c.deps.governance.listHolds(c.principal, {
+      ...(all !== undefined ? { all: all === true || all === "true" } : {}),
+    }),
+  });
+}
+async function placeGovernanceHold(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.governance.placeHold(c.principal, c.body as Record<string, unknown>), 201);
+}
+async function releaseGovernanceHold(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.governance.releaseHold(c.principal, str(c.params["holdId"])));
+}
+async function getGovernanceRetention(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.governance.getRetention(c.principal) });
+}
+async function setGovernanceRetention(c: Ctx): Promise<HandlerResult> {
+  return ok(
+    await c.deps.governance.setRetention(
+      c.principal,
+      str(c.params["dataClass"]),
+      (c.body as { days: number }).days,
+    ),
+  );
+}
+async function listGovernanceRetentionRuns(c: Ctx): Promise<HandlerResult> {
+  return ok({ items: await c.deps.governance.listRetentionRuns(c.principal) });
+}
+async function runGovernanceRetention(c: Ctx): Promise<HandlerResult> {
+  const b = (c.body ?? {}) as { dry_run?: boolean; classes?: string[] };
+  return ok(
+    await c.deps.governance.runRetention(c.principal, {
+      ...(b.dry_run !== undefined ? { dry_run: b.dry_run } : {}),
+      ...(b.classes ? { classes: b.classes } : {}),
+    }),
+  );
+}
+async function getGovernanceResidency(c: Ctx): Promise<HandlerResult> {
+  return ok(await c.deps.governance.getResidency(c.principal));
+}
+
 export const ROUTES: Record<string, Route> = {
   listBlueprints: { action: "api.blueprints.read", handler: listBlueprints, mutation: false },
   publishBlueprintVersion: {
@@ -1032,6 +1115,81 @@ export const ROUTES: Record<string, Route> = {
   getComplianceDocument: {
     action: "api.compliance.read",
     handler: getComplianceDocument,
+    mutation: false,
+  },
+  listGovernanceDsarRequests: {
+    action: "api.governance.read",
+    handler: listGovernanceDsarRequests,
+    mutation: false,
+  },
+  createGovernanceDsarRequest: {
+    action: "api.governance.write",
+    handler: createGovernanceDsarRequest,
+    mutation: true,
+  },
+  getGovernanceDsarRequest: {
+    action: "api.governance.read",
+    handler: getGovernanceDsarRequest,
+    mutation: false,
+  },
+  verifyGovernanceDsarRequest: {
+    action: "api.governance.write",
+    handler: verifyGovernanceDsarRequest,
+    mutation: true,
+  },
+  exportGovernanceDsarRequest: {
+    action: "api.governance.write",
+    handler: exportGovernanceDsarRequest,
+    mutation: true,
+  },
+  eraseGovernanceDsarRequest: {
+    action: "api.governance.erase",
+    handler: eraseGovernanceDsarRequest,
+    mutation: true,
+  },
+  restrictGovernanceDsarRequest: {
+    action: "api.governance.write",
+    handler: restrictGovernanceDsarRequest,
+    mutation: true,
+  },
+  listGovernanceHolds: {
+    action: "api.governance.read",
+    handler: listGovernanceHolds,
+    mutation: false,
+  },
+  placeGovernanceHold: {
+    action: "api.governance.write",
+    handler: placeGovernanceHold,
+    mutation: true,
+  },
+  releaseGovernanceHold: {
+    action: "api.governance.write",
+    handler: releaseGovernanceHold,
+    mutation: true,
+  },
+  getGovernanceRetention: {
+    action: "api.governance.read",
+    handler: getGovernanceRetention,
+    mutation: false,
+  },
+  setGovernanceRetention: {
+    action: "api.governance.write",
+    handler: setGovernanceRetention,
+    mutation: true,
+  },
+  listGovernanceRetentionRuns: {
+    action: "api.governance.read",
+    handler: listGovernanceRetentionRuns,
+    mutation: false,
+  },
+  runGovernanceRetention: {
+    action: "api.governance.write",
+    handler: runGovernanceRetention,
+    mutation: true,
+  },
+  getGovernanceResidency: {
+    action: "api.governance.read",
+    handler: getGovernanceResidency,
     mutation: false,
   },
 };

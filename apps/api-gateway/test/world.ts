@@ -64,6 +64,7 @@ import {
   EvalsAdapter,
   ComplianceAdapter,
   UnavailableCompliance,
+  UnavailableGovernance,
   gatewayComplianceSources,
   LedgerUsage,
   MemoryBlueprintStore,
@@ -203,6 +204,7 @@ export async function makeWorld(
     marketplace: new MarketplaceAdapter(marketplace),
     evals: new EvalsAdapter(evals),
     compliance: new UnavailableCompliance(),
+    governance: new UnavailableGovernance(),
     idempotency: idem,
     ...over,
   };

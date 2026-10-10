@@ -138,6 +138,31 @@ const ERGONOMIC: Record<OperationId, (ax: Axis) => Promise<unknown>> = {
     ax.compliance.documents.list({ blueprint_name: "agent-one", blueprint_version: "1.0.0" }),
   generateComplianceDocument: (ax) => ax.compliance.documents.generate("agent-one@1.0.0"),
   getComplianceDocument: (ax) => ax.compliance.documents.get("cdoc-abc"),
+  listGovernanceDsarRequests: (ax) => ax.governance.requests.list({ status: "received" }),
+  createGovernanceDsarRequest: (ax) =>
+    ax.governance.requests.create({
+      kind: "export",
+      identifiers: [{ kind: "email", value: "subject@example.test" }],
+    }),
+  getGovernanceDsarRequest: (ax) =>
+    ax.governance.requests.get("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  verifyGovernanceDsarRequest: (ax) =>
+    ax.governance.requests.verify("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f", { token: "t" }),
+  exportGovernanceDsarRequest: (ax) =>
+    ax.governance.requests.export("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  eraseGovernanceDsarRequest: (ax) =>
+    ax.governance.requests.erase("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  restrictGovernanceDsarRequest: (ax) =>
+    ax.governance.requests.restrict("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f", "objection"),
+  listGovernanceHolds: (ax) => ax.governance.holds.list({ all: true }),
+  placeGovernanceHold: (ax) => ax.governance.holds.place({ scope: "tenant", reason: "case 1" }),
+  releaseGovernanceHold: (ax) =>
+    ax.governance.holds.release("3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"),
+  getGovernanceRetention: (ax) => ax.governance.retention.get(),
+  setGovernanceRetention: (ax) => ax.governance.retention.set("run_logs", 90),
+  listGovernanceRetentionRuns: (ax) => ax.governance.retention.runs(),
+  runGovernanceRetention: (ax) => ax.governance.retention.run({ dry_run: true }),
+  getGovernanceResidency: (ax) => ax.governance.residency(),
 };
 
 describe("coverage of the spec", () => {

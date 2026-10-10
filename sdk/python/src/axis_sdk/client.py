@@ -22,6 +22,7 @@ from ._generated.models import (
     Decision,
     EvalRun,
     GateDecision,
+    GovernanceDataClass,
     KillSwitch,
     ProcessState,
     Run,
@@ -1272,6 +1273,171 @@ class Compliance:
         self.documents = ComplianceDocuments(ax)
 
 
+class GovernanceRequests:
+    """Data-subject requests (privacy_officer; reads also owner, admin and auditor).
+
+    The 30-day clock starts when a request is opened."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(
+        self,
+        *,
+        status: Literal["received", "verified", "processing", "completed", "rejected", "cancelled"]
+        | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.list_governance_dsar_requests(status=status, options=options)
+
+    def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Identifiers are sealed at rest and never echoed back."""
+        return self._ax.api.create_governance_dsar_request(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    def get(self, request_id: str, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.get_governance_dsar_request(request_id=request_id, options=options)
+
+    def verify(
+        self,
+        request_id: str,
+        evidence: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Nothing is exported or erased before this succeeds."""
+        return self._ax.api.verify_governance_dsar_request(
+            request_id=request_id,
+            body={"evidence": evidence},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    def export(
+        self,
+        request_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """The signed export bundle."""
+        return self._ax.api.export_governance_dsar_request(
+            request_id=request_id, idempotency_key=idempotency_key, options=options
+        )
+
+    def erase(
+        self,
+        request_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Erase from every store, verify, then shred the lookup keys. Held data is not touched."""
+        return self._ax.api.erase_governance_dsar_request(
+            request_id=request_id, idempotency_key=idempotency_key, options=options
+        )
+
+    def restrict(
+        self,
+        request_id: str,
+        reason: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.restrict_governance_dsar_request(
+            request_id=request_id,
+            body={"reason": reason},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+
+class GovernanceHolds:
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def list(self, *, all: bool | None = None, options: RequestOptions | None = None) -> Any:  # noqa: A002
+        return self._ax.api.list_governance_holds(all=all, options=options)
+
+    def place(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.place_governance_hold(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    def release(
+        self,
+        hold_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return self._ax.api.release_governance_hold(
+            hold_id=hold_id, idempotency_key=idempotency_key, options=options
+        )
+
+
+class GovernanceRetention:
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+
+    def get(self, *, options: RequestOptions | None = None) -> Any:
+        """Requested and effective retention per data class."""
+        return self._ax.api.get_governance_retention(options=options)
+
+    def set(
+        self, data_class: GovernanceDataClass, days: int, *, options: RequestOptions | None = None
+    ) -> Any:
+        return self._ax.api.set_governance_retention(
+            data_class=data_class, body={"days": days}, options=options
+        )
+
+    def runs(self, *, options: RequestOptions | None = None) -> Any:
+        """Retention reports, newest first."""
+        return self._ax.api.list_governance_retention_runs(options=options)
+
+    def run(
+        self,
+        body: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """``dry_run`` defaults to true on the server; pass ``dry_run=False`` to purge."""
+        return self._ax.api.run_governance_retention(
+            body=cast("Any", body if body is not None else {}),
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+
+class Governance:
+    """Data governance: DSAR requests, legal holds, retention, residency."""
+
+    def __init__(self, ax: Axis) -> None:
+        self._ax = ax
+        self.requests = GovernanceRequests(ax)
+        self.holds = GovernanceHolds(ax)
+        self.retention = GovernanceRetention(ax)
+
+    def residency(self, *, options: RequestOptions | None = None) -> Any:
+        return self._ax.api.get_governance_residency(options=options)
+
+
 class Axis:
     """Synchronous AXIS client."""
 
@@ -1316,6 +1482,7 @@ class Axis:
         self.evals = Evals(self)
         self.registry = Registry(self)
         self.compliance = Compliance(self)
+        self.governance = Governance(self)
         self.marketplace = Marketplace(self)
 
     @property
@@ -2521,6 +2688,173 @@ class AsyncCompliance:
         self.documents = AsyncComplianceDocuments(ax)
 
 
+class AsyncGovernanceRequests:
+    """Data-subject requests (privacy_officer; reads also owner, admin and auditor).
+
+    The 30-day clock starts when a request is opened."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(
+        self,
+        *,
+        status: Literal["received", "verified", "processing", "completed", "rejected", "cancelled"]
+        | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.list_governance_dsar_requests(status=status, options=options)
+
+    async def create(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Identifiers are sealed at rest and never echoed back."""
+        return await self._ax.api.create_governance_dsar_request(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    async def get(self, request_id: str, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.get_governance_dsar_request(
+            request_id=request_id, options=options
+        )
+
+    async def verify(
+        self,
+        request_id: str,
+        evidence: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Nothing is exported or erased before this succeeds."""
+        return await self._ax.api.verify_governance_dsar_request(
+            request_id=request_id,
+            body={"evidence": evidence},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+    async def export(
+        self,
+        request_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """The signed export bundle."""
+        return await self._ax.api.export_governance_dsar_request(
+            request_id=request_id, idempotency_key=idempotency_key, options=options
+        )
+
+    async def erase(
+        self,
+        request_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """Erase from every store, verify, then shred the lookup keys. Held data is not touched."""
+        return await self._ax.api.erase_governance_dsar_request(
+            request_id=request_id, idempotency_key=idempotency_key, options=options
+        )
+
+    async def restrict(
+        self,
+        request_id: str,
+        reason: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.restrict_governance_dsar_request(
+            request_id=request_id,
+            body={"reason": reason},
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+
+class AsyncGovernanceHolds:
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def list(self, *, all: bool | None = None, options: RequestOptions | None = None) -> Any:  # noqa: A002
+        return await self._ax.api.list_governance_holds(all=all, options=options)
+
+    async def place(
+        self,
+        body: dict[str, Any],
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.place_governance_hold(
+            body=cast("Any", body), idempotency_key=idempotency_key, options=options
+        )
+
+    async def release(
+        self,
+        hold_id: str,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        return await self._ax.api.release_governance_hold(
+            hold_id=hold_id, idempotency_key=idempotency_key, options=options
+        )
+
+
+class AsyncGovernanceRetention:
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+
+    async def get(self, *, options: RequestOptions | None = None) -> Any:
+        """Requested and effective retention per data class."""
+        return await self._ax.api.get_governance_retention(options=options)
+
+    async def set(
+        self, data_class: GovernanceDataClass, days: int, *, options: RequestOptions | None = None
+    ) -> Any:
+        return await self._ax.api.set_governance_retention(
+            data_class=data_class, body={"days": days}, options=options
+        )
+
+    async def runs(self, *, options: RequestOptions | None = None) -> Any:
+        """Retention reports, newest first."""
+        return await self._ax.api.list_governance_retention_runs(options=options)
+
+    async def run(
+        self,
+        body: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None = None,
+        options: RequestOptions | None = None,
+    ) -> Any:
+        """``dry_run`` defaults to true on the server; pass ``dry_run=False`` to purge."""
+        return await self._ax.api.run_governance_retention(
+            body=cast("Any", body if body is not None else {}),
+            idempotency_key=idempotency_key,
+            options=options,
+        )
+
+
+class AsyncGovernance:
+    """Data governance: DSAR requests, legal holds, retention, residency."""
+
+    def __init__(self, ax: AsyncAxis) -> None:
+        self._ax = ax
+        self.requests = AsyncGovernanceRequests(ax)
+        self.holds = AsyncGovernanceHolds(ax)
+        self.retention = AsyncGovernanceRetention(ax)
+
+    async def residency(self, *, options: RequestOptions | None = None) -> Any:
+        return await self._ax.api.get_governance_residency(options=options)
+
+
 class AsyncAxis:
     """Asynchronous AXIS client (same surface as :class:`Axis`, every call is awaitable)."""
 
@@ -2565,6 +2899,7 @@ class AsyncAxis:
         self.evals = AsyncEvals(self)
         self.registry = AsyncRegistry(self)
         self.compliance = AsyncCompliance(self)
+        self.governance = AsyncGovernance(self)
         self.marketplace = AsyncMarketplace(self)
 
     @property
