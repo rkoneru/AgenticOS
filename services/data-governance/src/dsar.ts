@@ -35,7 +35,16 @@ export const AT_RISK_DAYS = 7;
 
 export interface RequesterVerifier {
   verify(
-    req: { tenantId: string; requestId: string; subjectRef: string; kind: RequestKind },
+    req: {
+      tenantId: string;
+      requestId: string;
+      subjectRef: string;
+      kind: RequestKind;
+      /** The member who opened the request. A verifier that enforces dual control refuses this member as the attester. */
+      requestedBy: string;
+      /** The member submitting this verification. */
+      verifiedBy: string;
+    },
     evidence: unknown,
   ): Promise<{ ok: boolean; method: string }>;
 }
@@ -178,7 +187,14 @@ export class DsarEngine {
     const r = await this.load(p, id);
     if (r.status !== "received") return r; // idempotent: already verified or closed
     const v = await this.d.verifier.verify(
-      { tenantId: r.tenantId, requestId: r.id, subjectRef: r.subjectRef, kind: r.kind },
+      {
+        tenantId: r.tenantId,
+        requestId: r.id,
+        subjectRef: r.subjectRef,
+        kind: r.kind,
+        requestedBy: r.requestedBy,
+        verifiedBy: p.id,
+      },
       evidence,
     );
     if (!v.ok) {
