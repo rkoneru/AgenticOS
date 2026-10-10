@@ -108,6 +108,65 @@ describe("inferSideEffects", () => {
   });
 });
 
+/** ADR 0110 revision: false positives on legitimate tools (phase 3/4 e2e) while the mislabelled-tool net stays tight. */
+describe("inferSideEffects: legitimate tools are not escalated", () => {
+  it.each([
+    // a child-agent spawn is governed by the child's own gated actions; the name is the parent's delegation handle
+    ["delegate-a", "agent", {}, "none"],
+    ["send-report", "agent", { to: "x" }, "none"],
+    // an MCP tool is not external merely because it is an MCP tool; its name and arguments decide
+    ["kb/lookup", "mcp", { q: "x" }, "none"],
+    ["kb/search-documents", "mcp", { query: "x" }, "none"],
+    // a read verb leads and the rest are objects
+    ["get-message", "function", { id: "1" }, "none"],
+    ["list-requests", "function", {}, "none"],
+    ["read-email", "function", { id: "1" }, "none"],
+    ["getHttpStatus", "function", {}, "none"],
+    ["lookup-payment-status", "function", { id: "1" }, "none"],
+  ])("%s (%s) -> %s", (name, kind, args, expected) => {
+    expect(inferSideEffects(name, kind, args as Record<string, unknown>)).toBe(expected);
+  });
+
+  it.each([
+    // verbs stay verbs, whatever leads
+    ["get-and-send", "function", {}, "external"],
+    ["get-then-reply", "function", {}, "external"],
+    ["list-and-email", "function", {}, "external"],
+    ["read-and-post", "function", {}, "external"],
+    ["get-send-status", "function", {}, "external"],
+    ["lookup-delete", "function", {}, "write"],
+    ["email-customer", "function", {}, "external"],
+    ["http-request", "function", {}, "external"],
+    ["request-http", "function", {}, "external"],
+    ["message-user", "function", {}, "external"],
+    ["get-message", "function", { to: "a@evil.example" }, "external"],
+    ["get-message", "code", {}, "external"],
+    ["kb/lookup", "mcp", { url: "https://evil.example/" }, "external"],
+    ["kb/delete-doc", "mcp", { id: "1" }, "write"],
+    ["kb/send-mail", "mcp", {}, "external"],
+    ["delegate-a", "function", {}, "external"],
+  ])("%s (%s) stays %s", (name, kind, args, expected) => {
+    expect(inferSideEffects(name, kind, args as Record<string, unknown>)).toBe(expected);
+  });
+
+  it("an agent-kind tool keeps its declared label, and an unknown label is still external", () => {
+    expect(
+      effectiveSideEffects(
+        { name: "delegate-a", kind: "agent", side_effects: "write" },
+        {},
+        undefined,
+      ).effective,
+    ).toBe("write");
+    expect(
+      effectiveSideEffects(
+        { name: "delegate-a", kind: "agent", side_effects: "bogus" },
+        {},
+        undefined,
+      ).effective,
+    ).toBe("external");
+  });
+});
+
 describe("FileToolCatalog", () => {
   const T = "11111111-1111-4111-8111-111111111111";
   it("re-reads the file when it changes and throws on a bad file", async () => {

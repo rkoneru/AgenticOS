@@ -29,3 +29,23 @@ the kernel process reads `AXIS_RK_TOOL_CATALOG_FILE` (`{tenant: {tool: effect}}`
 - The inference is a net, not proof: a hostile tool with an innocuous name and argument keys, declared `read`, still gets the baseline allow unless the tenant catalog says otherwise.
   The robust control is the catalog; the registry/marketplace capability scan (NEEDS 260-274) is the other half. Recorded as NEEDS 407.
 - The red-team fixture pack lost its four deny-by-negation rules (email, http, command, write): the platform now contains the mislabelled tools by itself.
+
+## Revision 2 (Phase 9 integration): false positives on legitimate tools
+
+The first version of the classifier denied legitimate tools in the real stacks: `make e2e-phase3` (a child-agent spawn `delegate-a`: "delegate" is an external word),
+`make e2e-phase4` (a read-only MCP lookup `kb/lookup`: kind `mcp` was a blanket external floor). Changes, each with a failing-first test and a mutation check
+(`services/risk-kernel/test/capability.test.ts`):
+
+1. **`kind: agent`** is not inferred from the name or the arguments: the runtime executes that kind as a spawn and nothing else, and what the child may do is decided by
+   the child's own gated actions. The declared label stands (an unknown label is still `external`).
+2. **`kind: mcp`** has no blanket floor any more; the tool name (`server/tool`, judged on the tool part) and the argument keys decide, like a function tool.
+   `code`, `browser`, `channel` and `voice` remain external by kind. A catalog entry stays authoritative for MCP servers whose tool names say nothing.
+3. **A leading read verb** (`get`, `list`, `lookup`, `read`, `search`, `find`, `query`, `describe`, `show`, `view`, `count`, `check`, `recall`, `inspect`, `browse`) makes the
+   remaining ambiguous object nouns (`message`, `request`, `email`, `http`, `payment`, ... ) objects of the read, not verbs: `get-message`, `listRequests`,
+   `lookup-payment-status` stay `none`. Real verbs (`send`, `post`, `delete`, `exec`, ...) keep their meaning wherever they stand, and any connector word
+   (`and`, `then`, `to`, `via`, `with`, ...) switches the carve-out off (`get-and-send`, `read-then-reply` stay external). Argument keys (`to`, `url`, `command`, ...) are unchanged.
+
+Not weakened: the red-team `mislabel` suite passes WITHOUT deny-by-negation rules in the fixture pack, and the self-check mutant `catalog-trusts-labels` is still detected
+(every mislabelled tool there is a `function` tool led by a write or external verb). The inference remains a net, not proof. For ecosystems where names are ambiguous the
+robust control is the tenant catalog (`AXIS_RK_TOOL_CATALOG_FILE`), which the e2e harnesses use where inference is inherently ambiguous. NEEDS 399 is resolved in part (the
+classifier is the net, the catalog is the control); the rest is NEEDS 407 and the registry/marketplace capability scan.

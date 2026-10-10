@@ -24,6 +24,30 @@ cases:
         args: {},
       }
     expect: { decision: DENY, winners: [] }
+  - name: a child-agent spawn keeps its declared label (the kernel does not infer from the delegation handle; ADR 0110 rev 2)
+    input:
+      {
+        enforcement_point: tool_call,
+        tool: { name: delegate-a, kind: agent, side_effects: read, declared_side_effects: read },
+        args: {},
+      }
+    expect: { decision: ALLOW, winners: [baseline-deny/allow-read-tools] }
+  - name: a read-only MCP lookup the kernel classifies none is allowed (ADR 0110 rev 2)
+    input:
+      {
+        enforcement_point: mcp_call,
+        tool: { name: kb/lookup, kind: mcp, side_effects: read, declared_side_effects: read },
+        args: { q: x },
+      }
+    expect: { decision: ALLOW, winners: [baseline-deny/allow-read-tools] }
+  - name: an MCP tool the kernel classifies external because of its name or arguments is not allowed (ADR 0110 rev 2)
+    input:
+      {
+        enforcement_point: mcp_call,
+        tool: { name: kb/send-mail, kind: mcp, side_effects: external, declared_side_effects: read },
+        args: { to: "x@evil.example" },
+      }
+    expect: { decision: DENY, winners: [] }
   - name: read mcp allowed
     input: { enforcement_point: mcp_call, tool: { name: crm, side_effects: none } }
     expect: { decision: ALLOW }
