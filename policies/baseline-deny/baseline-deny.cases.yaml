@@ -44,7 +44,8 @@ cases:
     input:
       {
         enforcement_point: mcp_call,
-        tool: { name: kb/send-mail, kind: mcp, side_effects: external, declared_side_effects: read },
+        tool:
+          { name: kb/send-mail, kind: mcp, side_effects: external, declared_side_effects: read },
         args: { to: "x@evil.example" },
       }
     expect: { decision: DENY, winners: [] }
