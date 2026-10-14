@@ -24,9 +24,9 @@ identity proofing); every number below was measured on the 4-core development VM
   raw subject in the audit chain, residency default-allow in the Eval Hub, billing, registry, policy and ModelGateway, redaction-net bypass in the run log, channels, memory and
   eval ingest, red-team gate default-allow): see the result line in `docs/runbooks/hardening-e2e.md`.
 - **Sweep at this commit** (one target at a time, logs kept): `pnpm build lint typecheck cov`, `make policy-test contracts-lint compliance-check threatmodel-check redteam-lint
-  e2e-core e2e-phase3 .. e2e-phase9 e2e-compliance e2e-governance console-e2e docs-build evals redteam redteam-selfcheck chaos dr-drill`, ruff, mypy, 3004 Python tests: all green.
+e2e-core e2e-phase3 .. e2e-phase9 e2e-compliance e2e-governance console-e2e docs-build evals redteam redteam-selfcheck chaos dr-drill`, ruff, mypy, 3004 Python tests: all green.
   One red on the way, fixed: `pnpm lint` (prettier on two new files). `make redteam`: 254 counted cases, containment 1.0000, 0 unsafe, all six release gates allow;
-  `make redteam-selfcheck`: control passes, all 10 mutants detected. `make dr-drill` re-run: RTO 1.31 s logical / 1.33 s physical, 0 audit events lost (window 0.0 s; earlier drills lost 0-2).
+  `make redteam-selfcheck`: control passes, all 10 mutants detected. `make dr-drill` re-run twice at this commit: RTO 1.31 s logical and 1.28-1.33 s physical, 0 audit events lost (window 0.0 s; the earlier drills lost 0-2).
 - **Honest gaps** (NEEDS 413-421): the `runs`/`run_events`/`approvals` tables have no writer on the dev stack, so the e2e inserts those rows by SQL and a person's data inside the
   live run service's memory is outside any DSAR; the run-log net is a heuristic; registry residency is enforced on version inserts only; model-region residency is proven on the gateway class
   but not wired for real runs (nothing sets `ModelTarget.region`); billing residency is proven on the ledger, not the HTTP ingest; the red-team gate is exercised through the marketplace's
