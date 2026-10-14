@@ -1058,6 +1058,186 @@ axis compliance documents get <document-id> [options]
 | `--markdown` | Print (or write) the Markdown rendering |
 | `--out <path>` | Write the document to a file |
 
+### `axis governance requests list`
+
+List data-subject requests
+
+```
+axis governance requests list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--status <status>` | Only this status |
+
+### `axis governance requests get`
+
+Show one request
+
+```
+axis governance requests get <request-id> [options]
+```
+
+### `axis governance requests create`
+
+Open a request (the 30-day clock starts now)
+
+```
+axis governance requests create [options]
+```
+
+Identifiers are sealed at rest and never printed back; the request shows an opaque subject reference.
+
+| Option | Description |
+| --- | --- |
+| `--kind <kind>` | export, erase or restrict |
+| `--identifier <kind:value>` | Subject identifier (repeatable; lands in shell history, prefer --file). Kinds: email, phone, user_ref, end_user_id, channel_identity, subject_key, billing_customer |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--destination-region <region>` | Export destination (must be allowed for the tenant) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance requests verify`
+
+Verify the requester (nothing is exported or erased before this succeeds; exit 1 if refused)
+
+```
+axis governance requests verify <request-id> [options]
+```
+
+The file holds the evidence object: requester_token and admin_attestation. An independent tenant admin must attest (dual control).
+
+| Option | Description |
+| --- | --- |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance requests export`
+
+Produce the signed export bundle of a verified request
+
+```
+axis governance requests export <request-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--out <path>` | Write the bundle to a file (mode 0600) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance requests erase`
+
+Erase a verified subject from every store (exit 1 unless completed; held data is not touched)
+
+```
+axis governance requests erase <request-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance requests restrict`
+
+Apply a restriction of processing for a verified subject
+
+```
+axis governance requests restrict <request-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--reason <text>` | Why |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance holds list`
+
+List active holds
+
+```
+axis governance holds list [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--all` | Include released holds |
+
+### `axis governance holds place`
+
+Place a legal hold
+
+```
+axis governance holds place [options]
+```
+
+Subject and case scope read the people covered from the file's groups list (identifiers per person).
+
+| Option | Description |
+| --- | --- |
+| `--scope <scope>` | tenant, subject or case |
+| `--reason <text>` | Why |
+| `--case-ref <ref>` | Case reference |
+| `--class <class>` | Data class (repeatable): conversation, memory, run_logs, transcripts, eval_data, telemetry, billing, audit |
+| `-f, --file <path|->` | YAML or JSON document ('-' reads stdin) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance holds release`
+
+Release a hold
+
+```
+axis governance holds release <hold-id> [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance retention get`
+
+Requested and effective retention per data class
+
+```
+axis governance retention get [options]
+```
+
+### `axis governance retention set`
+
+Set the retention period of one data class (clamped to its legal bounds)
+
+```
+axis governance retention set <data-class> <days> [options]
+```
+
+### `axis governance retention runs`
+
+Stored retention reports, newest first
+
+```
+axis governance retention runs [options]
+```
+
+### `axis governance retention run`
+
+Run retention (a dry run unless --execute; exit 1 if a class errored)
+
+```
+axis governance retention run [options]
+```
+
+| Option | Description |
+| --- | --- |
+| `--class <class>` | Data class (repeatable): conversation, memory, run_logs, transcripts, eval_data, telemetry, billing, audit |
+| `--execute` | Actually purge (default is a dry run) |
+| `--idempotency-key <key>` | Idempotency key (default: generated) |
+
+### `axis governance residency`
+
+The tenant's home region and the regions its data may be written to
+
+```
+axis governance residency [options]
+```
+
 ### `axis api`
 
 Call any API operation by operationId
