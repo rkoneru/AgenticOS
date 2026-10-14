@@ -343,3 +343,21 @@ describe("RetentionEngine", () => {
     expect(randomUUID()).not.toBe(randomUUID());
   });
 });
+
+describe("RetentionEngine.runs", () => {
+  it("lists stored reports newest first, ties broken by id, and only for the privacy officer", async () => {
+    const r = rig([new FakeProvider("p")]);
+    const t = setupTenant(r);
+    const p = officer(t);
+    const a = await r.retention.run(p, { dryRun: true, classes: ["memory"] });
+    const b = await r.retention.run(p, { dryRun: true, classes: ["memory"] });
+    r.clock.now = new Date(r.clock.now.getTime() + DAY);
+    const c = await r.retention.run(p, { dryRun: true, classes: ["memory"] });
+    const ids = (await r.retention.runs(p)).map((x) => x.id);
+    expect(ids[0]).toBe(c.runId);
+    expect(new Set(ids)).toEqual(new Set([a.runId, b.runId, c.runId]));
+    expect(ids.slice(1)).toEqual([a.runId, b.runId].sort().reverse());
+    expect(await r.retention.runs(officer(randomUUID()))).toEqual([]);
+    await expect(r.retention.runs(adminOnly(t))).rejects.toMatchObject({ code: "forbidden" });
+  });
+});

@@ -32,6 +32,7 @@ describe("migration runner", () => {
       "0014_compliance",
       "0015_data_governance",
       "0016_privacy_officer_role",
+      "0017_governance_settings_read",
     ]);
     for (const x of m) expect(x.checksum).toMatch(/^[0-9a-f]{64}$/);
   });
