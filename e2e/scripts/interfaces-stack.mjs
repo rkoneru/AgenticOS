@@ -414,7 +414,10 @@ const ops = {
     return { ok: true };
   },
   "tenant/set-phi": async (b) => {
-    await pool.query("UPDATE tenants SET phi_mode = $2 WHERE id = $1", [b.tenant_id, b.phi === true]);
+    await pool.query("UPDATE tenants SET phi_mode = $2 WHERE id = $1", [
+      b.tenant_id,
+      b.phi === true,
+    ]);
     return { ok: true };
   },
   "channels/route": async (b) => {
