@@ -28,7 +28,7 @@
   wrappers in both SDKs; `axis compliance ...`; read-only console pages (axe in both themes, XSS).
 - Spec `docs/spec/compliance.md`, runbook, threat model; NEEDS #346-361 (the parent renumbers).
 
-## Phase 9 / B - data governance (`services/data-governance`, migration 0020, ADR 0080-0083)
+## Phase 9 / B - data governance (`services/data-governance`, migration 0015, ADR 0080-0083)
 
 DSAR engine (30-day SLA, verification hook, signed export bundle, idempotent resumable erase with a mandatory verification pass and crypto-shred), retention engine
 (class bounds, legal holds, dry run, purge reports), providers for memory, channels, voice transcripts, control-plane members, billing, eval hub, run logs, approvals,
@@ -116,7 +116,7 @@ CLI `axis registry attestations`). No migration. Status: Prototype (scripted mod
 - `services/registry` (`@axis/registry`): immutable semver blueprint versions per tenant namespace, ABL content hash, detached Ed25519 signatures with
   a per-namespace key registry (add/rotate/revoke, effective times, compromised vs retired), in-toto/DSSE provenance, verify-on-resolve (fail closed, no
   silent fallback), range resolution checked against the reference `semver`, typosquat/dependency-confusion guards, yank/deprecate, Postgres store with
-  forced owner-checked RLS (migration 0020) + memory port (ADR 0030).
+  forced owner-checked RLS (migration 0010) + memory port (ADR 0030).
 - `services/marketplace` (`@axis/marketplace`): publisher verification workflow, security review state machine with a static capability scan, listings
   and an anonymous catalog, consented installs (permission diff, digest-bound consent, pinned reference, deny-by-default policy pack stub), updates with
   re-consent on widening, takedown, `marketplace_installs` metering hook (migration 0021, ADR 0031). Dev servers are non-production. NEEDS #260-#271.
