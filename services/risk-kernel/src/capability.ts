@@ -301,6 +301,7 @@ function foldName(name: string): string {
 }
 
 /** Letters that survive folding yet are not ASCII (Cyrillic `\u0435` in `s\u0435nd`, Greek, ...): a homoglyph net, see inferSideEffects. */
+// eslint-disable-next-line no-control-regex -- \x00-\x7f is the ASCII range, not a control-character literal
 const hasNonAsciiWord = (name: string): boolean => /[^\x00-\x7f]/u.test(foldName(name));
 
 // Verbs unambiguous enough to be recognised INSIDE a glued word (`sendemail`, `deleterecord`). Deliberately not `post`, `run`, `set`,
