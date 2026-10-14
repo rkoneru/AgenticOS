@@ -198,7 +198,7 @@ class ToolCall(_ArgsAction):
 
     def tool_descriptor(self) -> dict[str, str]:
         d = {"name": self.name, "kind": self.kind, "side_effects": self.side_effects}
-        # The tool that actually runs is `ref` when the blueprint aliases it; the kernel classifies and catalogues THAT name (ADR 0114).
+        # The tool that runs is `ref` when aliased; the kernel classifies THAT name (ADR 0114).
         if self.ref:
             d["ref"] = self.ref
         return d
