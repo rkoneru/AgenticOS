@@ -83,6 +83,7 @@ async def test_generated_async_method_sends_spec_valid_request(op_id: str) -> No
     assert out is not None
 
 
+RID = "3f2b8c1e-5d4a-4b7e-9c11-0a1b2c3d4e5f"
 ERGONOMIC = {
     "listBlueprints": lambda ax: ax.blueprints.list(),
     "publishBlueprintVersion": lambda ax: ax.blueprints.publish({"apiVersion": "abl.axis.dev/v1"}),
@@ -223,6 +224,25 @@ ERGONOMIC = {
     ),
     "generateComplianceDocument": lambda ax: ax.compliance.documents.generate("agent-one@1.0.0"),
     "getComplianceDocument": lambda ax: ax.compliance.documents.get("cdoc-abc"),
+    "listGovernanceDsarRequests": lambda ax: ax.governance.requests.list(status="received"),
+    "createGovernanceDsarRequest": lambda ax: ax.governance.requests.create(
+        {"kind": "export", "identifiers": [{"kind": "email", "value": "subject@example.test"}]}
+    ),
+    "getGovernanceDsarRequest": lambda ax: ax.governance.requests.get(RID),
+    "verifyGovernanceDsarRequest": lambda ax: ax.governance.requests.verify(RID, {"token": "t"}),
+    "exportGovernanceDsarRequest": lambda ax: ax.governance.requests.export(RID),
+    "eraseGovernanceDsarRequest": lambda ax: ax.governance.requests.erase(RID),
+    "restrictGovernanceDsarRequest": lambda ax: ax.governance.requests.restrict(RID, "objection"),
+    "listGovernanceHolds": lambda ax: ax.governance.holds.list(all=True),
+    "placeGovernanceHold": lambda ax: ax.governance.holds.place(
+        {"scope": "tenant", "reason": "case 1"}
+    ),
+    "releaseGovernanceHold": lambda ax: ax.governance.holds.release(RID),
+    "getGovernanceRetention": lambda ax: ax.governance.retention.get(),
+    "setGovernanceRetention": lambda ax: ax.governance.retention.set("run_logs", 90),
+    "listGovernanceRetentionRuns": lambda ax: ax.governance.retention.runs(),
+    "runGovernanceRetention": lambda ax: ax.governance.retention.run({"dry_run": True}),
+    "getGovernanceResidency": lambda ax: ax.governance.residency(),
 }
 
 

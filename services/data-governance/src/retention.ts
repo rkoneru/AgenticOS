@@ -3,7 +3,7 @@ import type { GovernanceAudit } from "./audit.js";
 import { requireOfficer } from "./authz.js";
 import { classWideHold, subjectScopedHolds } from "./holds.js";
 import type { HoldRegistry } from "./registry.js";
-import type { GovernanceStore } from "./store.js";
+import type { GovernanceStore, RetentionRun } from "./store.js";
 import {
   DATA_CLASSES,
   GovernanceError,
@@ -221,6 +221,14 @@ export class RetentionEngine {
       input: { class: cls, days },
     });
     await this.d.store.setPolicy(p.tenantId, cls, days, p.id, this.now());
+  }
+
+  /** Stored retention reports (dry runs and purges), newest first. */
+  async runs(p: Principal): Promise<RetentionRun[]> {
+    requireOfficer(p, p.tenantId);
+    return (await this.d.store.listRuns(p.tenantId)).sort(
+      (a, b) => b.startedAt.getTime() - a.startedAt.getTime() || (a.id < b.id ? 1 : -1),
+    );
   }
 
   async run(

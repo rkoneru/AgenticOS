@@ -21,6 +21,7 @@ import { CliError, EXIT, UsageError } from "./exit.js";
 import { inert, keyValues, structured, table, asJson, type Column } from "./render.js";
 import { COMPLIANCE_COMMANDS } from "./compliance.js";
 import { EVALS_COMMANDS } from "./evals.js";
+import { GOVERNANCE_COMMANDS } from "./governance.js";
 import { REGISTRY_COMMANDS } from "./registry.js";
 
 // ------------------------------------------------------------------------------------------- helpers
@@ -1361,6 +1362,8 @@ export const COMMANDS: Command[] = [
   ...REGISTRY_COMMANDS,
 
   ...COMPLIANCE_COMMANDS,
+
+  ...GOVERNANCE_COMMANDS,
 
   {
     path: ["api"],

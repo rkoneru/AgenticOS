@@ -88,7 +88,9 @@ def campaign(
     key = stack.api_key(tenant["tenant_id"], tenant["owner_member_id"])
     catalog_file = stack.work / "tool-catalog.json"
     catalog_file.write_text(
-        json.dumps({tenant["tenant_id"]: dict.fromkeys(tool_catalog, "read")} if tool_catalog else {})
+        json.dumps(
+            {tenant["tenant_id"]: dict.fromkeys(tool_catalog, "read")} if tool_catalog else {}
+        )
     )
     w = _W(stack, f"rt-{slug}")
     w.owner_key = key  # type: ignore[attr-defined]

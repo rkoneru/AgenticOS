@@ -13,6 +13,12 @@ import type {
   ComplianceImpactAssessmentUpdate,
   ComplianceSystemInput,
   ComplianceSystemUpdate,
+  CreateGovernanceDsarRequestRequest,
+  GovernanceDataClass,
+  ListGovernanceDsarRequestsParams,
+  ListGovernanceHoldsParams,
+  PlaceGovernanceHoldRequest,
+  RunGovernanceRetentionRequest,
   ListComplianceDocumentsParams,
   ListComplianceImpactAssessmentsParams,
   ListComplianceSystemsParams,
@@ -1008,6 +1014,112 @@ export class Compliance {
   }
 }
 
+/** Data-subject requests (privacy_officer; reads also owner, admin and auditor). The 30-day clock starts when a request is opened. */
+export class GovernanceRequests {
+  constructor(private readonly ax: Axis) {}
+  list(args: ListGovernanceDsarRequestsParams = {}, options?: Opts) {
+    return this.ax.api.listGovernanceDsarRequests(pick(args), options);
+  }
+  /** Identifiers are sealed at rest and never echoed back. */
+  create(body: CreateGovernanceDsarRequestRequest, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.createGovernanceDsarRequest(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  get(requestId: string, options?: Opts) {
+    return this.ax.api.getGovernanceDsarRequest({ requestId }, options);
+  }
+  /** Nothing is exported or erased before this succeeds; the evidence is whatever the configured verifier accepts. */
+  verify(
+    requestId: string,
+    evidence: Record<string, unknown>,
+    args: IdemArgs = {},
+    options?: Opts,
+  ) {
+    return this.ax.api.verifyGovernanceDsarRequest(
+      pick({ requestId, body: { evidence }, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  /** The signed export bundle. */
+  export(requestId: string, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.exportGovernanceDsarRequest(
+      pick({ requestId, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  /** Erases from every store, verifies, then shreds the lookup keys. Held data is not touched. */
+  erase(requestId: string, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.eraseGovernanceDsarRequest(
+      pick({ requestId, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  restrict(requestId: string, reason: string, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.restrictGovernanceDsarRequest(
+      pick({ requestId, body: { reason }, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+}
+
+export class GovernanceHolds {
+  constructor(private readonly ax: Axis) {}
+  list(args: ListGovernanceHoldsParams = {}, options?: Opts) {
+    return this.ax.api.listGovernanceHolds(pick(args), options);
+  }
+  place(body: PlaceGovernanceHoldRequest, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.placeGovernanceHold(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+  release(holdId: string, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.releaseGovernanceHold(
+      pick({ holdId, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+}
+
+export class GovernanceRetention {
+  constructor(private readonly ax: Axis) {}
+  /** Requested and effective retention per data class. */
+  get(options?: Opts) {
+    return this.ax.api.getGovernanceRetention(options);
+  }
+  set(dataClass: GovernanceDataClass, days: number, options?: Opts) {
+    return this.ax.api.setGovernanceRetention({ dataClass, body: { days } }, options);
+  }
+  /** Retention reports, newest first. */
+  runs(options?: Opts) {
+    return this.ax.api.listGovernanceRetentionRuns(options);
+  }
+  /** `dry_run` defaults to true on the server: nothing is purged unless you pass `dry_run: false`. */
+  run(body: RunGovernanceRetentionRequest = {}, args: IdemArgs = {}, options?: Opts) {
+    return this.ax.api.runGovernanceRetention(
+      pick({ body, idempotencyKey: args.idempotencyKey }),
+      options,
+    );
+  }
+}
+
+/** Data governance: DSAR requests, legal holds, retention and residency. Evidence-ready engineering, not a compliance certification. */
+export class Governance {
+  readonly requests: GovernanceRequests;
+  readonly holds: GovernanceHolds;
+  readonly retention: GovernanceRetention;
+  constructor(private readonly ax: Axis) {
+    this.requests = new GovernanceRequests(ax);
+    this.holds = new GovernanceHolds(ax);
+    this.retention = new GovernanceRetention(ax);
+  }
+  residency(options?: Opts) {
+    return this.ax.api.getGovernanceResidency(options);
+  }
+}
+
 export class Axis {
   readonly transport: HttpTransport;
   /** One method per operationId (generated). */
@@ -1022,6 +1134,7 @@ export class Axis {
   readonly evals: Evals;
   readonly registry: Registry;
   readonly compliance: Compliance;
+  readonly governance: Governance;
   readonly marketplace: Marketplace;
   readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
 
@@ -1064,6 +1177,7 @@ export class Axis {
     this.evals = new Evals(this);
     this.registry = new Registry(this);
     this.compliance = new Compliance(this);
+    this.governance = new Governance(this);
     this.marketplace = new Marketplace(this);
   }
 

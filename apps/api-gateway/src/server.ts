@@ -302,6 +302,16 @@ export function createGateway(deps: GatewayDeps, options: GatewayOptions = {}): 
     if (e instanceof PortForbidden) return forbidden(e.message);
     if (e instanceof PortInvalid) return validation(e.message, e.issues);
     if (e instanceof PortUnavailable) return unavailable(e.message);
+    // A residency refusal from any service behind the gateway (duck-typed: ResidencyError.code): the tenant's data may not be written
+    // from this region. The region names stay in the service's own log, not in the response.
+    if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "region_mismatch")
+      return new ApiError(
+        403,
+        "residency_violation",
+        "Residency violation",
+        "forbidden",
+        "this tenant's data may not be written from this region",
+      );
     return internal();
   }
 

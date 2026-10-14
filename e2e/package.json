@@ -12,6 +12,7 @@
     "@axis/channels": "workspace:*",
     "@axis/contracts": "workspace:*",
     "@axis/control-plane": "workspace:*",
+    "@axis/data-governance": "workspace:*",
     "@axis/db": "workspace:*",
     "@axis/eval-hub": "workspace:*",
     "@axis/marketplace": "workspace:*",

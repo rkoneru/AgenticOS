@@ -407,6 +407,63 @@ test("compliance: the billing role has no navigation entry and the records are r
   await expect(page.locator("main").getByRole("alert")).toBeVisible();
 });
 
+test("governance: requests, holds and retention are read-only, never show identifiers, and are inert against hostile text", async ({
+  page,
+}) => {
+  const dialogs: string[] = [];
+  page.on("dialog", (d) => {
+    dialogs.push(d.message());
+    void d.dismiss();
+  });
+  await login(page, "privacy_officer", "/governance");
+  await expect(page.getByTestId("governance-note")).toContainText("not a statement");
+  const queue = page.getByRole("table", { name: "Data-subject requests" });
+  await expect(queue).toContainText("sub_9f2c41d0");
+  await expect(queue).toContainText("overdue");
+  await expect(queue).toContainText("(extended)");
+  await expect(
+    page.getByRole("button", { name: /erase|export|verify|place|release|run/i }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "0a1b2c3d" }).click();
+  await expect(page.getByTestId("request-status")).toContainText("processing");
+  await expect(page.getByTestId("request-result")).toContainText("<img src=x");
+  await page.getByRole("link", { name: "Legal holds" }).click();
+  const holds = page.getByRole("table", { name: "Legal holds" });
+  await expect(holds).toContainText("<img src=x");
+  await expect(holds).not.toContainText("objection");
+  await page.getByLabel("Include released holds").check();
+  await expect(holds).toContainText("objection");
+  await page.getByRole("link", { name: "Retention and residency" }).click();
+  await expect(page.getByTestId("residency")).toContainText("eu-west-1");
+  await expect(page.getByRole("table", { name: "Retention periods" })).toContainText(
+    "raised to minimum",
+  );
+  await expect(page.getByRole("table", { name: /^Run / })).toContainText("<img src=x");
+  for (const url of [
+    "/governance",
+    `/governance/requests/0a1b2c3d-1111-4222-8333-444455556666`,
+    "/governance/holds",
+    "/governance/retention",
+  ]) {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+    expect(await page.locator("main img[src='x'], main script:not([src])").count(), url).toBe(0);
+  }
+  expect(
+    await page.evaluate(() => (window as unknown as { __xss?: unknown }).__xss),
+  ).toBeUndefined();
+  expect(dialogs).toEqual([]);
+});
+
+test("governance: builder and viewer have no navigation entry and the data is refused", async ({
+  page,
+}) => {
+  await login(page, "builder", "/runs");
+  await expect(page.getByRole("link", { name: "Governance" })).toHaveCount(0);
+  await page.goto("/governance");
+  await expect(page.locator("main").getByRole("alert")).toBeVisible();
+});
+
 test("evals: datasets, suites, baselines and online pages", async ({ page }) => {
   await login(page, "admin", "/evals/datasets");
   await expect(page.getByRole("table", { name: "Dataset versions" })).toContainText(
@@ -567,6 +624,10 @@ const PAGES: Array<[string, string, string]> = [
   ["compliance assessments", "/compliance/assessments", "admin"],
   ["compliance documents", "/compliance/documents", "admin"],
   ["compliance document", "/compliance/documents/cdoc-0123456789abcdef01234567", "auditor"],
+  ["governance requests", "/governance", "privacy_officer"],
+  ["governance request", "/governance/requests/0a1b2c3d-1111-4222-8333-444455556666", "auditor"],
+  ["governance holds", "/governance/holds", "admin"],
+  ["governance retention", "/governance/retention", "privacy_officer"],
 ];
 
 for (const theme of ["light", "dark"] as const) {

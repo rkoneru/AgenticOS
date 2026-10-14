@@ -44,6 +44,7 @@ import {
 } from "@axis/marketplace";
 import { PgRegistryStore, RegistryService, ServiceAudit } from "@axis/registry";
 import { PgDocStore as PgEvalDocStore, createEvalHub } from "@axis/eval-hub";
+import { EvidenceVerifier, MasterKeyProvider } from "@axis/data-governance";
 
 const cfg = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const hex = (s) => Buffer.from(s, "hex");
@@ -306,8 +307,31 @@ async function provision(b) {
   };
 }
 
+// The out-of-band identity-proofing step of a data-subject request (ADR 0111): the tenant's proofing tooling and an admin mint the signed
+// tokens the gateway's verifier checks. Same governance master key as the gateway process; the member directory is not consulted here.
+const evidenceMinter = cfg.gov_master_key
+  ? new EvidenceVerifier(new MasterKeyProvider(hex(cfg.gov_master_key)), {
+      isTenantAdmin: async () => true,
+    })
+  : undefined;
+
 const ops = {
   "provision-tenant": provision,
+  "governance/evidence": async (b) => {
+    if (!evidenceMinter) throw new Error("governance is not configured on this stack");
+    return {
+      requester_token: await evidenceMinter.issueRequesterToken({
+        tenantId: b.tenant_id,
+        requestId: b.request_id,
+        subjectRef: b.subject_ref,
+      }),
+      admin_attestation: await evidenceMinter.issueAdminAttestation({
+        tenantId: b.tenant_id,
+        requestId: b.request_id,
+        memberId: b.attester_member_id,
+      }),
+    };
+  },
   member: async (b) => {
     const id = randomUUID();
     const email =

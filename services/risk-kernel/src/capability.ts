@@ -165,7 +165,73 @@ const EXTERNAL_ARG_KEYS = new Set([
   "phone",
   "email_to",
 ]);
-const EXTERNAL_KINDS = new Set(["code", "browser", "channel", "voice", "mcp"]);
+// Kinds whose very nature is an effect outside the process. `mcp` is NOT here (ADR 0110, revision 2): an MCP tool is judged by its
+// name and arguments like a function tool, because a blanket floor denied every legitimate read-only lookup; the tenant catalog is
+// the control for MCP servers whose tool names say nothing. `agent` is handled separately (a spawn: the child's own actions are gated).
+const EXTERNAL_KINDS = new Set(["code", "browser", "channel", "voice"]);
+
+/**
+ * Verbs that clearly READ. When one LEADS the tool name (`get-message`, `listRequests`, `lookup-payment-status`), the remaining words
+ * are its object: the nouns below (`message`, `request`, `email`, `http`, ...) are not read as the verbs they can also be. A
+ * connector word (`get-and-send`, `list-then-reply`) switches the carve-out off, and real verbs (`send`, `post`, `delete`, ...)
+ * keep their meaning wherever they stand.
+ */
+const READ_VERBS = new Set([
+  "get",
+  "list",
+  "lookup",
+  "read",
+  "search",
+  "find",
+  "query",
+  "describe",
+  "show",
+  "view",
+  "count",
+  "check",
+  "recall",
+  "inspect",
+  "browse",
+]);
+const OBJECT_NOUNS = new Set([
+  "email",
+  "mail",
+  "sms",
+  "message",
+  "msg",
+  "request",
+  "http",
+  "https",
+  "webhook",
+  "command",
+  "cmd",
+  "shell",
+  "bash",
+  "sh",
+  "payment",
+  "export",
+  "reply",
+  "share",
+  "call",
+  "sync",
+  "store",
+  "commit",
+  "merge",
+  "close",
+  "cancel",
+]);
+const CONNECTORS = new Set([
+  "and",
+  "then",
+  "to",
+  "via",
+  "with",
+  "after",
+  "before",
+  "plus",
+  "into",
+  "on",
+]);
 
 /** Words of a tool name: split on non-alphanumerics and camelCase / digit boundaries, lower-cased. */
 export function nameWords(name: string): string[] {
@@ -182,10 +248,19 @@ export function inferSideEffects(
   kind: string | undefined,
   args: Readonly<Record<string, unknown>> | undefined,
 ): SideEffect {
+  // A child-agent spawn: the name is the parent's delegation handle (`delegate-a`), and what the child may do is decided by the
+  // child's own gated actions. The runtime executes kind `agent` as a spawn and nothing else, so claiming the kind buys no capability.
+  if (kind === "agent") return "none";
   let level: SideEffect = "none";
   if (kind !== undefined && EXTERNAL_KINDS.has(kind.split(":")[0] ?? kind)) level = "external";
   if (kind?.startsWith("memory:") && kind !== "memory:read") level = strictest(level, "write");
-  for (const w of nameWords(name)) {
+  const words = nameWords(name);
+  // `server/tool` of an MCP call: the leading read verb is the tool's, not the server's.
+  const verbFirst = nameWords(name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name)[0];
+  const readLeads =
+    verbFirst !== undefined && READ_VERBS.has(verbFirst) && !words.some((w) => CONNECTORS.has(w));
+  for (const w of words) {
+    if (readLeads && OBJECT_NOUNS.has(w)) continue;
     if (EXTERNAL_WORDS.has(w)) level = strictest(level, "external");
     else if (WRITE_WORDS.has(w)) level = strictest(level, "write");
   }

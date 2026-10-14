@@ -67,6 +67,9 @@ export function synthesize(schema: Record<string, unknown>): unknown {
   };
   if (s.const !== undefined) return s.const;
   if (s.enum) return s.enum[0];
+  const alt = schema as { oneOf?: Record<string, unknown>[]; anyOf?: Record<string, unknown>[] };
+  const first = (alt.oneOf ?? alt.anyOf)?.[0];
+  if (first) return synthesize(first);
   const types = Array.isArray(s.type) ? s.type : s.type ? [s.type] : [];
   if (types.includes("null")) return null;
   const t = types[0];

@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from "node:crypto";
 import { GovernanceError, norm, type Identifier } from "./types.js";
 
-export type KeyPurpose = "lookup" | "seal" | "audit";
+export type KeyPurpose = "lookup" | "seal" | "audit" | "evidence";
 
 /**
  * Per-tenant key material. Production: derived inside a KMS (docs/NEEDS.md); here a master secret and HKDF. Destroying a tenant's

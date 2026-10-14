@@ -25,6 +25,7 @@ import {
 const spec = new ApiSpec();
 let w: World;
 let s: Seed;
+let po: { token: string };
 
 interface Fx {
   method: string;
@@ -34,6 +35,8 @@ interface Fx {
   status: number;
   /** Identity-only operation: any authenticated credential is allowed, so there is no role the matrix refuses. */
   anyRole?: boolean;
+  /** Governance writes need the tenant's privacy_officer; the owner may only read. */
+  actor?: "privacy_officer";
 }
 const rid = (): string => Array.from(randomBytes(6), (b) => "cdfghjkpquxyz"[b % 13]).join("");
 const ok = (
@@ -47,6 +50,8 @@ const ok = (
   status,
   ...(body ? { body } : {}),
 });
+
+const asPo = (f: Fx): Fx => ({ ...f, actor: "privacy_officer" });
 
 const FIXTURES: Record<string, Fx> = {
   listBlueprints: ok("GET", "/blueprints?limit=5"),
@@ -290,6 +295,57 @@ const FIXTURES: Record<string, Fx> = {
     blueprint: s.blueprint,
   })),
   getComplianceDocument: ok("GET", (s) => `/compliance/documents/${s.compliance.documentId}`),
+  // TEMPORARY (replaced when the real governance kit is wired): the unconfigured gateway answers 503 problem+json, never an empty success.
+  listGovernanceDsarRequests: ok("GET", "/governance/dsar-requests?status=received", 503),
+  createGovernanceDsarRequest: asPo(
+    ok("POST", "/governance/dsar-requests", 503, () => ({
+      kind: "export",
+      identifiers: [{ kind: "email", value: "a@example.test" }],
+    })),
+  ),
+  getGovernanceDsarRequest: ok(
+    "GET",
+    "/governance/dsar-requests/00000000-0000-4000-8000-000000000001",
+    503,
+  ),
+  verifyGovernanceDsarRequest: asPo(
+    ok(
+      "POST",
+      "/governance/dsar-requests/00000000-0000-4000-8000-000000000001/verify",
+      503,
+      () => ({ evidence: { token: "t" } }),
+    ),
+  ),
+  exportGovernanceDsarRequest: asPo(
+    ok("POST", "/governance/dsar-requests/00000000-0000-4000-8000-000000000001/export", 503),
+  ),
+  eraseGovernanceDsarRequest: asPo(
+    ok("POST", "/governance/dsar-requests/00000000-0000-4000-8000-000000000001/erase", 503),
+  ),
+  restrictGovernanceDsarRequest: asPo(
+    ok(
+      "POST",
+      "/governance/dsar-requests/00000000-0000-4000-8000-000000000001/restrict",
+      503,
+      () => ({ reason: "objection" }),
+    ),
+  ),
+  listGovernanceHolds: ok("GET", "/governance/holds?all=true", 503),
+  placeGovernanceHold: asPo(
+    ok("POST", "/governance/holds", 503, () => ({ scope: "tenant", reason: "case" })),
+  ),
+  releaseGovernanceHold: asPo(
+    ok("POST", "/governance/holds/00000000-0000-4000-8000-000000000001/release", 503),
+  ),
+  getGovernanceRetention: ok("GET", "/governance/retention", 503),
+  setGovernanceRetention: asPo(
+    ok("PUT", "/governance/retention/run_logs", 503, () => ({ days: 90 })),
+  ),
+  listGovernanceRetentionRuns: ok("GET", "/governance/retention-runs", 503),
+  runGovernanceRetention: asPo(
+    ok("POST", "/governance/retention-runs", 503, () => ({ dry_run: true })),
+  ),
+  getGovernanceResidency: ok("GET", "/governance/residency", 503),
 };
 
 const check = (op: (typeof spec.operations)[number], r: Res): void => {
@@ -305,6 +361,7 @@ beforeAll(async () => {
     unauthRate: { burst: 1e6, perSecond: 1e6 },
   });
   s = await seed(w);
+  po = await w.member(s.owner.tenantId, "privacy_officer");
 });
 afterAll(() => w.close());
 
@@ -313,8 +370,8 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     const ids = spec.operations.map((o) => o.id).sort();
     expect(Object.keys(ROUTES).sort()).toEqual(ids);
     expect(Object.keys(FIXTURES).sort()).toEqual(ids);
-    expect(ids.length).toBe(75);
-    expect(spec.version).toBe("1.5.0");
+    expect(ids.length).toBe(90);
+    expect(spec.version).toBe("1.6.0");
   });
 
   it("every operation has a security requirement in the document (nothing is public)", () => {
@@ -325,8 +382,9 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
     describe(`${op.method.toUpperCase()} ${op.template} (${op.id})`, () => {
       const fx = FIXTURES[op.id] as Fx;
       const url = (): string => fx.path(s);
+      const tk = (): string => (fx.actor === "privacy_officer" ? po.token : s.owner.token);
       const asOwner = (extra: Record<string, string> = {}) => ({
-        token: s.owner.token,
+        token: tk(),
         ...(fx.body ? { body: fx.body(s) } : {}),
         headers: { ...(fx.headers ?? {}), ...extra },
       });
@@ -365,7 +423,7 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
       if (op.bodyPtr && fx.body) {
         it("a body the schema rejects: 422 ValidationProblem with errors", async () => {
           const r = await call(w, fx.method, url(), {
-            token: s.owner.token,
+            token: tk(),
             body: ["not", "an", "object"],
           });
           expect(r.status, r.text).toBe(422);
@@ -375,7 +433,7 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
         });
         it("an unknown property in the body is rejected where the schema forbids it, never silently used", async () => {
           const body = { ...(fx.body!(s) as object), unexpected_field: true };
-          const r = await call(w, fx.method, url(), { token: s.owner.token, body });
+          const r = await call(w, fx.method, url(), { token: tk(), body });
           // additionalProperties:false operations answer 422; the open ones (policy test request, input) accept it but ignore it.
           expect([422, fx.status]).toContain(r.status);
         });
@@ -391,7 +449,7 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
               "00000000-0000-4000-8000-000000000000",
             );
           const r = await call(w, fx.method, bad, {
-            token: s.owner.token,
+            token: tk(),
             ...(fx.body ? { body: fx.body(s) } : {}),
           });
           expect(r.status, r.text).toBe(404);
@@ -403,7 +461,7 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
             .path(s)
             .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/, "not-a-uuid");
           const r = await call(w, fx.method, bad, {
-            token: s.owner.token,
+            token: tk(),
             ...(fx.body ? { body: fx.body(s) } : {}),
           });
           expect(r.status, r.text).toBe(422);
@@ -420,7 +478,7 @@ describe("the gateway implements EVERY operation of the frozen OpenAPI", () => {
 
       it("a method the path does not offer: 405 with Allow", async () => {
         const wrong = op.method === "delete" ? "GET" : "DELETE";
-        const r = await call(w, wrong, url().split("?")[0] as string, { token: s.owner.token });
+        const r = await call(w, wrong, url().split("?")[0] as string, { token: tk() });
         expect(r.status).toBe(405);
         expect(r.headers.get("allow")).toContain(op.method.toUpperCase());
       });

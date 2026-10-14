@@ -177,6 +177,12 @@ e2e-compliance:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_compliance.py -p no:cacheprovider --no-cov
 
+# Phase 9 B: data governance (DSAR, holds, retention, residency) on the real stack: the gateway with the governance kit on Postgres 16.
+.PHONY: e2e-governance
+e2e-governance:
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_governance.py -p no:cacheprovider --no-cov
+
 # Phase 9 D: load test of the REAL stack (docs/runbooks/loadtest.md). Open-model Node harness (executed) + the committed k6 scripts (run when
 # perf/install-k6.sh has installed k6). ~2-3 minutes. Writes perf/results/loadtest-short.{json,md}. Same prerequisites as e2e-core.
 loadtest:

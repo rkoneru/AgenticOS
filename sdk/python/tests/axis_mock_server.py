@@ -55,6 +55,8 @@ def synthesize(schema: dict[str, Any]) -> Any:
         return schema["const"]
     if "enum" in schema:
         return schema["enum"][0]
+    if "oneOf" in schema:
+        return synthesize(schema["oneOf"][0])
     types = _types(schema)
     if "null" in types:
         return None
@@ -95,6 +97,9 @@ def validate(schema: dict[str, Any], value: Any, path: str = "$") -> list[str]:
         return [f"{path}: expected const {schema['const']!r}"]
     if "enum" in schema:
         return [] if value in schema["enum"] else [f"{path}: {value!r} not in enum"]
+    if "oneOf" in schema:
+        matching = [o for o in schema["oneOf"] if not validate(o, value, path)]
+        return [] if len(matching) == 1 else [f"{path}: matches {len(matching)} oneOf branches"]
     types = _types(schema)
     if types:
         ok = any(

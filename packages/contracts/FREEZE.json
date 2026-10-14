@@ -28,6 +28,7 @@
     "packages/db/migrations/0013_eval_hub.sql": "1637e9a7de544e8db02ea107cb88f264f297f0280c68be2b5cf6c2b3d1491046",
     "packages/db/migrations/0014_compliance.sql": "3ae9058af77ddbae1b15827adddd2a70f28e50e500b7ec2db33db6c0e7efa6b6",
     "packages/db/migrations/0015_data_governance.sql": "71396b28ea95c745cb6b3623238bc39a33c0786ec40364660097a34b94c29814",
-    "packages/db/migrations/0016_privacy_officer_role.sql": "3dcd8a4c90f838f1e23bf120c6078307ceec370217bb28bc964010e8024f31a2"
+    "packages/db/migrations/0016_privacy_officer_role.sql": "3dcd8a4c90f838f1e23bf120c6078307ceec370217bb28bc964010e8024f31a2",
+    "packages/db/migrations/0017_governance_settings_read.sql": "79d35cf7732fcda7d11377fdb96f4fd5d1e68b3f79cede3f3faccf90411259c8"
   }
 }

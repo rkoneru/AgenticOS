@@ -1,5 +1,20 @@
 # Changelog
 
+## Phase 9 / B2 - data-governance surface (gateway, SDKs, CLI, console; ADR 0111, 0112)
+
+- OpenAPI 1.6.0: 15 `/governance` operations (DSAR list/open/get/verify/export/erase/restrict, holds, retention, residency), the `privacy_officer` role
+  (migration 0016; reads owner/admin/auditor/privacy_officer, every write and erasure privacy_officer only, checked by the control-plane pack AND the
+  gateway adapter). The gateway answers 503 until `GW_GOV_MASTER_KEY` wires the kit; identifiers are never returned.
+- Real wiring: `EvidenceVerifier` (signed requester token + independent admin attestation, dual control, fail-closed), `PgRetentionSettings`,
+  `PgRegionResolver`, `PgAttesterDirectory`, the tenant's Postgres audit chain, stored retention runs; residency write guard in the registry, eval-hub
+  and billing stores the gateway hosts; a `region_mismatch` refusal is a 403 `residency_violation`. Migration 0017 grants the governance role the
+  `tenant_settings` read.
+- `ax.governance` (TS and Python), `axis governance ...` (CLI reference regenerated), read-only console pages (axe in both themes, XSS, real stack).
+- Tests: verifier, Postgres ports and kit on Postgres 16; gateway governance routes over the real kit (role matrix, IDOR, dual control, holds,
+  fail-closed); `make e2e-governance` on the real stack; 13 new mutants in `services/data-governance/scripts/mutation.py`.
+- Fixed on the way: classifier false positives broke `e2e-phase3/4` (ADR 0110 rev 2); the `catalog-trusts-labels` red-team mutant edits the tool
+  catalog, not the pack (corpus test); the Python generator emits `None` for nullable enums. NEEDS 362/367/369/370/372/379/399 updated, 407-412 added.
+
 ## Phase 9 / A — 2026-10-08 — Compliance matrix, technical documentation, ISO 42001 records
 
 - `docs/compliance/`: control matrices (YAML source, generated Markdown) for SOC 2, GDPR, HIPAA, the EU AI Act and ISO/IEC 42001: 118 rows, each
