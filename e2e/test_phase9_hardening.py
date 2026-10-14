@@ -519,3 +519,152 @@ def test_c6_nothing_raw_anywhere_a_database_log_or_the_audit_chain_can_hold(phiw
     assert phiw.ax.audit.verify()["ok"] is True
     logs = p9.stderr_logs(st)
     assert p9.leaked(logs) == [], f"raw PHI in a process log: {p9.leaked(logs)}"
+
+
+# =================================================================================================================================
+# d. residency
+# =================================================================================================================================
+
+
+class ResidencyWorld:
+    """Two tenants in the same stack: one homed where the stack's services run (us-east-1), one re-homed to eu-west-1 AFTER its
+    publisher setup. The stack's services (gateway: registry + Eval Hub; billing) run in us-east-1."""
+
+    def __init__(self, stack: istack.Stack) -> None:
+        self.stack = stack
+        slug = secrets.token_hex(3)
+        self.home = stack.provision(f"rh{slug}")
+        self.pinned = stack.provision(f"rp{slug}")
+        self.k_home = stack.api_key(self.home["tenant_id"], self.home["owner_member_id"])
+        self.k_pinned = stack.api_key(self.pinned["tenant_id"], self.pinned["owner_member_id"])
+        self.signed: dict[str, dict[str, Any]] = {}
+        self.ns: dict[str, str] = {}
+        # a publisher for each (claim, key, signed bundle) is set up while the tenant is still homed in us-east-1
+        from evals_world import Cli, setup_publisher  # noqa: PLC0415
+
+        for label, tenant, key in (("home", self.home, self.k_home), ("pinned", self.pinned, self.k_pinned)):
+            w = type("W", (), {})()
+            w.stack, w.ns, w.state, w.owner_key = stack, f"res-{label}-{slug}", {}, key  # type: ignore[attr-defined]
+            setup_publisher(w)  # type: ignore[arg-type]
+            cli: Cli = w.state["publisher_cli"]  # type: ignore[attr-defined]
+            abl = _abl(f"res-{label}-agent", phi=False)
+            f = cli.file(f"res-{label}.json", abl)
+            signed = cli.run("registry", "sign", f, "--namespace", w.ns, "--key", str(cli.tmp / "publisher.pem")).stdout  # type: ignore[attr-defined]
+            self.signed[label] = json.loads(signed)
+            self.ns[label] = w.ns
+        stack.ops("tenant/set-region", tenant_id=self.pinned["tenant_id"], region="eu-west-1")
+
+
+@pytest.fixture(scope="module")
+def resw(stack: istack.Stack) -> ResidencyWorld:
+    return ResidencyWorld(stack)
+
+
+def refused(call: Any) -> AxisError:
+    with pytest.raises(AxisError) as e:
+        call()
+    return e.value
+
+
+def is_residency_violation(err: AxisError) -> bool:
+    """403 with the gateway's `residency_violation` problem (title "Residency violation"; the SDK's slug is the generic `forbidden`)."""
+    p = err.problem or {}
+    return err.status == 403 and "residency_violation" in json.dumps(p) + str(err.message).lower().replace(" ", "_")
+
+
+def test_d1_registry_refuses_a_cross_region_write_and_allows_the_home_tenant(resw: ResidencyWorld) -> None:
+    """Scenario d: publishing a registry version for the tenant homed in eu-west-1 is refused by the us-east-1 registry with 403
+    residency_violation (no region names in the answer); the same call for the home-region tenant succeeds."""
+    ok = ax_of(resw.stack, resw.k_home).registry.publish(resw.ns["home"], resw.signed["home"])
+    assert ok["version"] == "1.0.0"
+    err = refused(lambda: ax_of(resw.stack, resw.k_pinned).registry.publish(resw.ns["pinned"], resw.signed["pinned"]))
+    assert is_residency_violation(err), (err.status, err.code, err.problem, str(err))
+    assert "eu-west-1" not in str(err) and "us-east-1" not in str(err)
+
+
+def test_d2_the_eval_hub_refuses_a_cross_region_write(resw: ResidencyWorld) -> None:
+    cases = [{"id": "c1", "input": "hello", "expected": "hi"}]
+    assert ax_of(resw.stack, resw.k_home).evals.datasets.create("res-home", cases)["name"] == "res-home"
+    err = refused(lambda: ax_of(resw.stack, resw.k_pinned).evals.datasets.create("res-pinned", cases))
+    assert is_residency_violation(err), (err.status, err.code, err.problem)
+    assert p9.count(resw.stack, "eval_hub_docs", resw.pinned["tenant_id"]) == 0
+    # reads are not writes: the pinned tenant can still read its own data
+    assert ax_of(resw.stack, resw.k_pinned).evals.datasets.list() is not None
+
+
+def test_d3_billing_refuses_a_cross_region_write(resw: ResidencyWorld) -> None:
+    st = resw.stack
+    assert st.ops("billing/usage", tenant_id=resw.home["tenant_id"], key="res-ok")["ok"] is True
+    bad = st.ops("billing/usage", tenant_id=resw.pinned["tenant_id"], key="res-bad")
+    assert bad["ok"] is False and bad["code"] == "region_mismatch", bad
+    assert p9.count(st, "usage_events", resw.pinned["tenant_id"]) == 0
+    assert p9.count(st, "usage_events", resw.home["tenant_id"]) == 1
+
+
+def test_d4_a_model_call_to_a_provider_outside_the_allowed_regions_is_refused_before_any_network_call(
+    resw: ResidencyWorld,
+) -> None:
+    """Scenario d, model egress: the ModelGateway with the pinned tenant's allowed regions (read from its REAL home region in the
+    database) refuses a provider in another region, a provider with no declared region, and an empty allow-list, each BEFORE the
+    transport is touched; a provider in the allowed region goes through. (The run service of this stack does not configure
+    ``allowed_regions`` for real runs: NEEDS #418.)"""
+    import asyncio
+    import dataclasses
+
+    from axis_runtime.models import (
+        InMemorySecretStore,
+        Message,
+        ModelError,
+        ModelGateway,
+        ModelRequest,
+        ModelTarget,
+        TenantModelPolicy,
+    )
+    from axis_runtime.models.adapters import HttpxTransport
+    from axis_runtime.models.types import ErrorKind
+
+    tid = resw.pinned["tenant_id"]
+    home_region = p9.q(resw.stack, f"SELECT region FROM tenants WHERE id='{tid}'")
+    assert home_region == "eu-west-1"
+    calls: list[str] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        calls.append(str(req.url))
+        return httpx.Response(
+            200,
+            json={
+                "model": "gpt-4o",
+                "choices": [{"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    async def public(_h: str, _p: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    def gateway(allowed: frozenset[str] | None) -> Any:
+        gw = ModelGateway(
+            InMemorySecretStore({(tid, "openai", "default"): "sk-e2e-residency-1234567890"}),
+            tenant_policy=lambda _t: TenantModelPolicy(allowed_regions=allowed),
+            transport=HttpxTransport(httpx.AsyncClient(transport=httpx.MockTransport(handler))),
+            resolver=public,
+        )
+        return gw.unguarded_for_tests()
+
+    def req(region: str | None) -> ModelRequest:
+        return ModelRequest(
+            tenant_id=tid,
+            messages=(Message("user", "hello"),),
+            target=dataclasses.replace(ModelTarget("openai", "gpt-4o", None, {}), region=region),
+        )
+
+    allowed = frozenset({home_region})
+    for region in ("us-east-1", None, "", "ap-south-1"):
+        with pytest.raises(ModelError) as e:
+            asyncio.run(gateway(allowed).complete(req(region)))
+        assert e.value.kind is ErrorKind.CONFIGURATION
+    with pytest.raises(ModelError):
+        asyncio.run(gateway(frozenset()).complete(req("eu-west-1")))  # an empty allow-list permits nothing
+    assert calls == [], f"a refused model call reached the network: {calls}"
+    assert asyncio.run(gateway(allowed).complete(req("EU-West-1"))).text == "ok"
+    assert len(calls) == 1
