@@ -265,3 +265,257 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     other = ax_of(st, d.k_po_b)
     assert other.governance.requests.list()["items"] == []
     assert rest(st, d.k_po_b, "POST", f"/governance/dsar-requests/{req['id']}/erase").status_code == 404
+
+
+# =================================================================================================================================
+# b. retention: dry run, legal hold, purge, audit never purged
+# =================================================================================================================================
+
+
+class RetentionWorld:
+    def __init__(self, stack: istack.Stack) -> None:
+        self.stack = stack
+        t = stack.provision("ret" + secrets.token_hex(3))
+        self.tid = t["tenant_id"]
+        self.po_member = stack.ops("member", tenant_id=self.tid, role="privacy_officer")
+        self.k_po = stack.api_key(self.tid, self.po_member["member_id"])
+        self.k_owner = stack.api_key(self.tid, t["owner_member_id"])
+        self.tag = secrets.token_hex(3)
+        self.route = stack.ops("channels/route", tenant_id=self.tid, team_id=f"TR{self.tag}", transcript_mode="full")
+        for i in range(3):
+            stack.ops("memory/write", tenant_id=self.tid, content=f"old note {i} {self.tag}")
+        stack.ops("memory/write", tenant_id=self.tid, content=f"fresh note {self.tag}")
+        for i in range(2):
+            assert p9.slack_post(self.route, f"UOLD{i}", f"old question {i} {self.tag}").status_code == 200
+        assert p9.slack_post(self.route, "UFRESH", f"fresh question {self.tag}").status_code == 200
+        # age the "old" rows past every retention period (the table owner; the application cannot rewrite history)
+        tid = self.tid
+        istack.psql(
+            stack.db_url,
+            f"UPDATE memory_chunks SET created_at = now() - interval '800 days' WHERE tenant_id='{tid}' AND content LIKE 'old note%';"
+            f"UPDATE conversation_messages SET created_at = now() - interval '800 days' WHERE tenant_id='{tid}' AND content LIKE 'old question%';"
+            f"UPDATE conversations SET updated_at = now() - interval '800 days' WHERE tenant_id='{tid}' AND id IN "
+            f"(SELECT conversation_id FROM conversation_messages WHERE tenant_id='{tid}' AND content LIKE 'old question%');",
+        )
+
+    def old_notes(self) -> int:
+        return p9.count(self.stack, "memory_chunks", self.tid, "content LIKE 'old note%'")
+
+    def old_messages(self) -> int:
+        return p9.count(self.stack, "conversation_messages", self.tid, "content LIKE 'old question%'")
+
+    def fresh(self) -> int:
+        return p9.count(self.stack, "memory_chunks", self.tid, "content LIKE 'fresh note%'") + p9.count(
+            self.stack, "conversation_messages", self.tid, "content LIKE 'fresh question%'"
+        )
+
+    def audit_count(self) -> int:
+        return p9.count(self.stack, "audit_events", self.tid)
+
+
+@pytest.fixture(scope="module")
+def ret(stack: istack.Stack) -> RetentionWorld:
+    return RetentionWorld(stack)
+
+
+def by_class(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {c["data_class"]: c for c in report["classes"]}
+
+
+def test_b1_dry_run_reports_matches_and_changes_nothing(ret: RetentionWorld) -> None:
+    """Scenario b: a dry run (the default) says what WOULD go, stores the report, and every row is still there."""
+    po = ax_of(ret.stack, ret.k_po)
+    before = (ret.old_notes(), ret.old_messages(), ret.fresh())
+    assert before == (3, 2, 2)
+    rep = po.governance.retention.run({"classes": ["memory", "conversation"]})
+    assert rep["dry_run"] is True
+    c = by_class(rep)
+    assert c["memory"]["status"] == "dry_run" and c["memory"]["matched"] == 3 and c["memory"]["purged"] == 0
+    assert c["conversation"]["status"] == "dry_run" and c["conversation"]["matched"] == 2 and c["conversation"]["purged"] == 0
+    assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == before
+    assert any(r["run_id"] == rep["run_id"] for r in po.governance.retention.runs()["items"])
+
+
+def test_b2_a_legal_hold_stops_the_purge_and_releasing_it_lets_it_run(ret: RetentionWorld) -> None:
+    """Scenario b: with a tenant-wide legal hold the real run skips the held classes and deletes nothing; after the release the same
+    run purges exactly the expired rows and leaves the fresh ones."""
+    po = ax_of(ret.stack, ret.k_po)
+    hold = po.governance.holds.place({"scope": "tenant", "reason": "litigation hold (e2e)"})
+    held = po.governance.retention.run({"classes": ["memory", "conversation"], "dry_run": False})
+    for cls in ("memory", "conversation"):
+        assert by_class(held)[cls]["status"] == "skipped_hold", by_class(held)[cls]
+        assert by_class(held)[cls]["purged"] == 0
+    assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == (3, 2, 2), "a held tenant lost data"
+    po.governance.holds.release(hold["id"])
+    done = po.governance.retention.run({"classes": ["memory", "conversation"], "dry_run": False})
+    c = by_class(done)
+    assert c["memory"]["status"] == "purged" and c["memory"]["purged"] == 3, c["memory"]
+    assert c["conversation"]["status"] == "purged" and c["conversation"]["purged"] == 2, c["conversation"]
+    assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == (0, 0, 2)
+
+
+def test_b3_audit_is_never_purged(ret: RetentionWorld) -> None:
+    """Scenario b: asking for the audit class (dry or real) purges nothing, and the chain still verifies; the reports of all of the
+    above are themselves audited without raw data."""
+    po = ax_of(ret.stack, ret.k_po)
+    n = ret.audit_count()
+    assert n > 0
+    for dry in (True, False):
+        rep = po.governance.retention.run({"classes": ["audit"], "dry_run": dry})
+        a = by_class(rep)["audit"]
+        assert a["purged"] == 0 and a["status"] in ("retained_by_policy", "dry_run"), a
+    assert ret.audit_count() >= n
+    assert ax_of(ret.stack, ret.k_owner).audit.verify()["ok"] is True
+    audit_text = p9.q(ret.stack, f"SELECT t::text FROM audit_events t WHERE tenant_id='{ret.tid}'")
+    assert f"old note 0 {ret.tag}" not in audit_text and f"old question 0 {ret.tag}" not in audit_text
+
+
+# =================================================================================================================================
+# c. PHI canary through the real ingress paths
+# =================================================================================================================================
+
+
+def _abl(name: str, *, phi: bool) -> dict[str, Any]:
+    return {
+        "apiVersion": "abl.axis.dev/v1",
+        "kind": "Agent",
+        "metadata": {"name": name, "version": "1.0.0", "description": "Phase 9 PHI canary target"},
+        "spec": {
+            "riskClassification": {
+                "level": "limited",
+                "rationale": "Test fixture: reads claims, nothing leaves the tenant.",
+                "transparencyNotice": "You are interacting with an AI system.",
+            },
+            "model": {
+                "primary": {"provider": "openai", "model": "gpt-4o", "params": {"maxOutputTokens": 128}}
+            },
+            "instructions": {"system": "You look claims up for the tenant. Use the tools you are given."},
+            "routing": {"stages": ["llm"]},
+            "tools": [
+                {"name": "lookup-claim", "kind": "function", "sideEffects": "read"},
+                {"name": "strict-lookup", "kind": "function", "sideEffects": "read"},
+            ],
+            "budgets": {"tokens": {"soft": 40000, "hard": 60000}, "toolCalls": {"hard": 20}},
+            "policy": {"packs": ["tenant-claims@^1.0.0"]},
+            **({"data": {"phi": True, "residency": "us-east-1"}} if phi else {}),
+        },
+    }
+
+
+def _phi_pack() -> dict[str, Any]:
+    import copy
+
+    from evals_world import yaml_json
+
+    pack = copy.deepcopy(yaml_json("policies/phase7-interfaces/pack.yaml"))
+    pack["spec"]["rules"].append(
+        {
+            "id": "allow-strict-lookup",
+            "enforcementPoints": ["tool_call"],
+            "when": {"field": "tool.name", "op": "eq", "value": "strict-lookup"},
+            "gates": ["tenant-kill"],
+            "decision": "ALLOW",
+        }
+    )
+    return pack
+
+
+class PhiWorld:
+    def __init__(self, stack: istack.Stack) -> None:
+        self.stack = stack
+        pack = _phi_pack()
+        slug = secrets.token_hex(3)
+        self.phi = stack.ops("provision-tenant", slug=f"phi{slug}", byo_key=istack.BYO_KEY, pack=pack, phi_mode=True)
+        self.plain = stack.provision(f"pln{slug}", pack=pack)
+        self.tid = self.phi["tenant_id"]
+        self.k = stack.api_key(self.tid, self.phi["owner_member_id"])
+        self.k_plain = stack.api_key(self.plain["tenant_id"], self.plain["owner_member_id"])
+        self.ax = ax_of(stack, self.k)
+        self.ax.blueprints.publish(_abl("phi-intake", phi=True))
+        ax_of(stack, self.k_plain).blueprints.publish(_abl("plain-intake", phi=False))
+        self.runs: list[str] = []
+
+    def run(self, ax: Axis, name: str, text: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        r = ax.runs.start({"name": name, "version": "1.0.0"}, {"prompt": f"phi-canary: {text}"})
+        final = ax.runs.wait(r["id"], timeout=120, poll_interval=0.3)
+        return final, list(ax.runs.all_events(r["id"]))
+
+
+@pytest.fixture(scope="module")
+def phiw(stack: istack.Stack) -> PhiWorld:
+    return PhiWorld(stack)
+
+
+def test_c1_the_phi_tenant_is_in_phi_mode_and_the_control_tenant_is_not(phiw: PhiWorld) -> None:
+    st = phiw.stack
+    assert p9.q(st, f"SELECT phi_mode FROM tenants WHERE id='{phiw.tid}'") == "t"
+    assert p9.q(st, f"SELECT phi_mode FROM tenants WHERE id='{phiw.plain['tenant_id']}'") == "f"
+
+
+def test_c2_channel_messages_are_redacted_before_they_are_stored(phiw: PhiWorld) -> None:
+    """Scenario c, channel ingress: a Slack message on a PHI route carries each canary; the stored conversation holds none of them
+    (the route is configured to keep FULL text, which PHI mode caps at a redacted preview)."""
+    st = phiw.stack
+    route = st.ops("channels/route", tenant_id=phiw.tid, team_id="TPHI" + secrets.token_hex(2), phi=True, transcript_mode="full")
+    for i, (text, _core) in enumerate(p9.CANARIES):
+        r = p9.slack_post(route, f"UPHI{i}", text)
+        assert r.status_code == 200, (text, r.status_code, r.text)
+    stored = p9.q(st, f"SELECT content FROM conversation_messages WHERE tenant_id='{phiw.tid}'")
+    assert stored.count("\n") + 1 >= len(p9.CANARIES)
+    assert p9.leaked(stored) == [], f"raw PHI in the conversation log: {p9.leaked(stored)}"
+    # the control: a non-PHI route with full transcripts DOES keep the words (so the redaction above is the PHI path, not the transport)
+    plain = st.ops("channels/route", tenant_id=phiw.plain["tenant_id"], team_id="TPLN" + secrets.token_hex(2), transcript_mode="full")
+    assert p9.slack_post(plain, "UPLAIN", p9.CANARIES[0][0]).status_code == 200
+    kept = p9.q(st, f"SELECT content FROM conversation_messages WHERE tenant_id='{phiw.plain['tenant_id']}'")
+    assert "123-45-6789" in kept
+
+
+def test_c3_memory_writes_are_redacted_before_they_are_stored(phiw: PhiWorld) -> None:
+    st = phiw.stack
+    for text, _core in p9.CANARIES:
+        st.ops("memory/write", tenant_id=phiw.tid, content=text, metadata={"note": text})
+    stored = p9.q(st, f"SELECT t::text FROM memory_chunks t WHERE tenant_id='{phiw.tid}'")
+    assert p9.leaked(stored) == [], f"raw PHI in memory: {p9.leaked(stored)}"
+    st.ops("memory/write", tenant_id=phiw.plain["tenant_id"], content=p9.CANARIES[0][0])
+    assert "123-45-6789" in p9.q(st, f"SELECT content FROM memory_chunks WHERE tenant_id='{phiw.plain['tenant_id']}'")
+
+
+def test_c4_eval_datasets_are_redacted_at_ingest(phiw: PhiWorld) -> None:
+    st = phiw.stack
+    cases = [
+        {"id": f"k{i}", "input": text, "expected": text, "metadata": {"note": text}}
+        for i, (text, _core) in enumerate(p9.CANARIES)
+    ]
+    phiw.ax.evals.datasets.create("phi-cases", cases, description="canaries", phi=True)
+    stored = p9.q(st, f"SELECT t::text FROM eval_hub_docs t WHERE tenant_id='{phiw.tid}'")
+    assert p9.leaked(stored) == [], f"raw PHI in the Eval Hub: {p9.leaked(stored)}"
+    served = json.dumps(phiw.ax.evals.datasets.get("phi-cases", "latest"))
+    assert p9.leaked(served) == [], "the API serves raw PHI"
+
+
+def test_c5_run_input_tool_args_tool_errors_and_answers_are_redacted_in_the_run_log(phiw: PhiWorld) -> None:
+    """Scenario c, run path (the gap closed in this phase): each canary is the run INPUT, becomes the argument of two tool calls, comes
+    back in a tool result and in a tool ERROR, and is echoed in the final answer. None of it is in the events the API serves, and
+    the control (a non-PHI blueprint) shows the same flow DOES carry the words."""
+    seen: list[str] = []
+    for text, _core in p9.CANARIES:
+        final, events = phiw.run(phiw.ax, "phi-intake", text)
+        assert final["state"] == "terminated", final
+        seen.append(json.dumps(events) + json.dumps(final))
+    assert any("tool_call" in e["type"] or "tool" in e["type"] for e in events)
+    assert p9.leaked("\n".join(seen)) == [], f"raw PHI in the run log: {p9.leaked(chr(10).join(seen))}"
+    _final, ctl = phiw.run(ax_of(phiw.stack, phiw.k_plain), "plain-intake", p9.CANARIES[0][0])
+    assert "123-45-6789" in json.dumps(ctl), "control: the non-PHI run log is expected to keep the words"
+
+
+def test_c6_nothing_raw_anywhere_a_database_log_or_the_audit_chain_can_hold(phiw: PhiWorld) -> None:
+    """Scenario c, the sweep: the whole PHI tenant's database (every table, audit chain included), the audit API, and every stack
+    process's log contain no raw canary."""
+    st = phiw.stack
+    dump = p9.dump_tenant(st, phiw.tid)
+    assert p9.leaked(dump) == [], f"raw PHI in the PHI tenant's database: {p9.leaked(dump)}"
+    audit = json.dumps(list(phiw.ax.audit.iterate()))
+    assert p9.leaked(audit) == []
+    assert phiw.ax.audit.verify()["ok"] is True
+    logs = p9.stderr_logs(st)
+    assert p9.leaked(logs) == [], f"raw PHI in a process log: {p9.leaked(logs)}"
