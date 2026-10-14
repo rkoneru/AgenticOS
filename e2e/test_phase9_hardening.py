@@ -668,3 +668,104 @@ def test_d4_a_model_call_to_a_provider_outside_the_allowed_regions_is_refused_be
     assert calls == [], f"a refused model call reached the network: {calls}"
     assert asyncio.run(gateway(allowed).complete(req("EU-West-1"))).text == "ok"
     assert len(calls) == 1
+
+
+# =================================================================================================================================
+# e. compliance: Annex IV technical documentation from real records, sealed, verified
+# =================================================================================================================================
+
+
+def test_e1_annex_iv_document_for_a_real_blueprint_version_is_sealed_and_verifies(phiw: PhiWorld) -> None:
+    """Scenario e: the tenant of scenario c published ``phi-intake@1.0.0``, runs it through the kernel (c5) and holds a hash-chained
+    audit log. The Annex IV document is generated from those REAL records (blueprint, policy packs, audit statistics, risk
+    classification), is sealed, verifies on read, is idempotent for unchanged sources, and FAILS verification when a stored byte is
+    altered behind the service's back. Sections without a source are reported as gaps, not invented."""
+    st = phiw.stack
+    if p9.count(st, "audit_events", phiw.tid) < 5:  # when run alone, give the tenant a run to document
+        phiw.run(phiw.ax, "phi-intake", "claim 7")
+    comp = phiw.ax.compliance
+    # the version is also signed and published to a registry namespace (provenance is one of the document's real sources)
+    from evals_world import publish_version, setup_publisher  # noqa: PLC0415
+
+    w = type("W", (), {})()
+    w.stack, w.ns, w.state, w.owner_key = st, f"ann-{secrets.token_hex(3)}", {}, phiw.k  # type: ignore[attr-defined]
+    setup_publisher(w)  # type: ignore[arg-type]
+    publish_version(w, _abl("phi-intake", phi=True))  # type: ignore[arg-type]
+    first = comp.documents.generate({"name": "phi-intake", "version": "1.0.0"})
+    doc = first["document"]
+    body = doc["body"]
+    secs = body["sections"]
+    assert secs["general"]["status"] in ("complete", "partial"), secs["general"]
+    assert secs["record_keeping"]["status"] == "complete"
+    assert secs["record_keeping"]["data"]["chain_verified"] is True
+    assert secs["record_keeping"]["data"]["event_count"] > 0
+    assert {s["status"] for s in secs.values()} <= {"complete", "partial", "gap"}
+    gaps = sorted(k for k, s in secs.items() if s["status"] == "gap")  # honest: whatever has no source says so
+    assert doc["content_hash"] and len(doc["content_hash"]) == 64
+    got = comp.documents.get(doc["meta"]["document_id"])
+    assert got["verification"] == {"ok": True, "failed": []}, got["verification"]
+    # unchanged sources -> the same document (idempotent), not a new version
+    again = comp.documents.generate({"name": "phi-intake", "version": "1.0.0"})
+    assert again["created"] is False and again["document"]["content_hash"] == doc["content_hash"]
+    # a document about a blueprint that does not exist is a gap, never a fabrication
+    ghost = comp.documents.generate({"name": "no-such-agent", "version": "1.0.0"})
+    assert ghost["document"]["body"]["sections"]["general"]["status"] == "gap"
+    # altered behind the service's back: verification fails and says which seal part broke
+    # (the database forbids this for every role; the table owner switches the guard off to simulate an attacker with storage access)
+    p9.q(st, "ALTER TABLE compliance_docs DISABLE TRIGGER compliance_docs_guard")
+    try:
+        p9.q(
+            st,
+            "UPDATE compliance_docs SET data = jsonb_set(data, '{document,body,sections,general,status}', '\"complete\"') "
+            f"WHERE coll = 'documents' AND key = '{doc['meta']['document_id']}'",
+        )
+    finally:
+        p9.q(st, "ALTER TABLE compliance_docs ENABLE TRIGGER compliance_docs_guard")
+    bad = comp.documents.get(doc["meta"]["document_id"])
+    assert bad["verification"]["ok"] is False and "content_hash" in bad["verification"]["failed"]
+    assert isinstance(gaps, list)
+
+
+# =================================================================================================================================
+# g. chaos subset (the full suite is `make chaos`; these are the three fail-closed properties the exit criteria name)
+# =================================================================================================================================
+
+sys.path.insert(0, str(ROOT / "chaos"))
+import test_chaos as chaos_suite  # noqa: E402  (imported as a module so its tests are not collected here)
+
+
+@pytest.fixture(scope="module")
+def ch(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Any]:
+    with chaos_suite.chaos_stack(tmp_path_factory.mktemp("chaos9")) as c:
+        yield c
+
+
+@pytest.fixture(autouse=True)
+def _healed(request: pytest.FixtureRequest) -> Iterator[None]:
+    yield
+    if "ch" in request.fixturenames:  # only the chaos tests break anything
+        request.getfixturevalue("ch").heal()
+
+
+def test_g0_the_chaos_stack_is_sound(ch: Any) -> None:
+    """A healthy run performs its model call and is audited: otherwise the fail-closed tests below would prove nothing."""
+    chaos_suite.test_00_baseline_run_performs_and_is_audited(ch)
+
+
+def test_g1_kernel_killed_mid_run_nothing_executes(ch: Any) -> None:
+    """Scenario g: a run waits at a REQUIRE_APPROVAL gate, the kernel is killed, the approval is "granted": the pending action never
+    runs (its approval could not be verified), no ALLOW for it exists in the audit chain, and the run ends."""
+    chaos_suite.test_02_kernel_killed_mid_run_the_pending_action_never_executes(ch)
+    chaos_suite.test_01_kernel_killed_before_a_run_nothing_executes_then_recovers(ch)
+
+
+def test_g2_losing_the_audit_database_refuses_mutations_with_503_and_decisions_deny(ch: Any) -> None:
+    """Scenario g: the kernel loses its audit database -> every decision is DENY and nothing runs unaudited; the gateway loses its
+    database -> run starts answer 503 and create nothing; both recover without a restart."""
+    chaos_suite.test_05_kernel_loses_its_audit_database_decisions_deny_and_nothing_runs_unaudited(ch)
+    chaos_suite.test_06_gateway_loses_its_database_mutations_refuse_with_503_and_create_nothing(ch)
+
+
+def test_g3_a_kill_switch_survives_a_kernel_restart(ch: Any) -> None:
+    """Scenario g: engage the tenant kill switch, restart the kernel: it is still engaged (it used to be released: fail-open)."""
+    chaos_suite.test_03_kernel_restart_keeps_the_kill_switch_engaged(ch)
