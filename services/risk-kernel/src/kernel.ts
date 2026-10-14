@@ -327,11 +327,16 @@ export class RiskKernel {
     delete context["eval_mode"];
     const tool = context["tool"];
     if (typeof tool === "object" && tool !== null && !Array.isArray(tool)) {
-      const t = tool as { name?: unknown; side_effects?: unknown };
-      const catalogued = await this.deps.toolCatalog?.get(
-        req.tenant_id,
-        typeof t.name === "string" ? t.name : req.action,
-      );
+      const t = tool as { name?: unknown; side_effects?: unknown; ref?: unknown };
+      // The tool that RUNS is `ref` when the blueprint aliases it (a function tool `lookup` with ref `send_email` executes `send_email`):
+      // the catalog is asked about that name, and the classifier reads every name the call has (ADR 0114).
+      const executed =
+        typeof t.ref === "string" && t.ref !== ""
+          ? t.ref
+          : typeof t.name === "string"
+            ? t.name
+            : req.action;
+      const catalogued = await this.deps.toolCatalog?.get(req.tenant_id, executed);
       const args = context["args"];
       const e = effectiveSideEffects(
         { ...t, name: typeof t.name === "string" ? t.name : req.action },
@@ -339,6 +344,7 @@ export class RiskKernel {
           ? (args as Record<string, unknown>)
           : undefined,
         catalogued,
+        [req.action],
       );
       context["tool"] = {
         ...t,

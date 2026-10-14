@@ -108,6 +108,26 @@ const EXTERNAL_WORDS = new Set([
   "approve",
   "sudo",
   "download",
+  "dispatch",
+  "trigger",
+  "submit",
+  "broadcast",
+  "text",
+  "whatsapp",
+  "slack",
+  "telegram",
+  "discord",
+  "twilio",
+  "smtp",
+  "sendgrid",
+  "ssh",
+  "scp",
+  "sftp",
+  "ftp",
+  "netcat",
+  "nc",
+  "kill",
+  "terminate",
 ]);
 const WRITE_WORDS = new Set([
   "write",
@@ -139,6 +159,24 @@ const WRITE_WORDS = new Set([
   "merge",
   "close",
   "cancel",
+  "destroy",
+  "wipe",
+  "replace",
+  "overwrite",
+  "upsert",
+  "mutate",
+  "persist",
+  "flush",
+  "rm",
+  "mv",
+  "chmod",
+  "chown",
+  "unlink",
+  "revert",
+  "rollback",
+  "restore",
+  "enable",
+  "disable",
 ]);
 const EXTERNAL_ARG_KEYS = new Set([
   "to",
@@ -233,9 +271,20 @@ const CONNECTORS = new Set([
   "on",
 ]);
 
-/** Words of a tool name: split on non-alphanumerics and camelCase / digit boundaries, lower-cased. */
+/** Every name longer than this is classified `external`: a megabyte-long name buys nothing legitimate and is only a way to burn time. */
+export const MAX_NAME_LENGTH = 256;
+/** Arguments are scanned to this depth and key count (a bound, then `external`: an argument tree that deep is not a lookup). */
+const MAX_ARG_DEPTH = 6;
+const MAX_ARG_KEYS = 512;
+
+/**
+ * Words of a tool name: split on non-alphanumerics and camelCase / digit boundaries, lower-cased. Compatibility forms are folded
+ * (NFKC, so full-width letters become ASCII) and zero-width / combining characters are dropped so `se\u200bnd` reads as `send`.
+ */
 export function nameWords(name: string): string[] {
-  return name
+  return foldName(name)
+    .replace(/([a-z])([0-9])/gi, "$1 $2")
+    .replace(/([0-9])([a-z])/gi, "$1 $2")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .toLowerCase()
@@ -243,8 +292,152 @@ export function nameWords(name: string): string[] {
     .filter(Boolean);
 }
 
+function foldName(name: string): string {
+  return name
+    .normalize("NFKC")
+    .normalize("NFD")
+    .replace(/[\p{M}\p{Cf}]/gu, "")
+    .normalize("NFC");
+}
+
+/** Letters that survive folding yet are not ASCII (Cyrillic `\u0435` in `s\u0435nd`, Greek, ...): a homoglyph net, see inferSideEffects. */
+const hasNonAsciiWord = (name: string): boolean => /[^\x00-\x7f]/u.test(foldName(name));
+
+// Verbs unambiguous enough to be recognised INSIDE a glued word (`sendemail`, `deleterecord`). Deliberately not `post`, `run`, `set`,
+// `put`, `add`, `drop`, ...: those are inside too many ordinary words (`postgres`, `runtime`, `setting`).
+const GLUED_EXTERNAL = [
+  "send",
+  "publish",
+  "notify",
+  "webhook",
+  "execute",
+  "transfer",
+  "payout",
+  "refund",
+  "deploy",
+  "forward",
+  "approve",
+  "revoke",
+  "download",
+  "email",
+  "dispatch",
+  "broadcast",
+  "terminate",
+];
+const GLUED_WRITE = [
+  "write",
+  "create",
+  "update",
+  "delete",
+  "remove",
+  "insert",
+  "upload",
+  "purge",
+  "modify",
+  "rename",
+  "append",
+  "erase",
+  "truncate",
+  "destroy",
+  "overwrite",
+  "replace",
+  "upsert",
+  "persist",
+];
+const INFLECTED = /^(?:d|ed|s|es|ing|er|ers|ion|ions|or|ors|able)?$/;
+
+function gluedLevel(token: string, skipNouns: boolean): SideEffect {
+  for (const [list, lvl] of [
+    [GLUED_EXTERNAL, "external"],
+    [GLUED_WRITE, "write"],
+  ] as const)
+    for (const kw of list) {
+      const i = token.indexOf(kw);
+      if (i < 0) continue;
+      // A read-led name keeps its object nouns (`get-email`, `list-messages`) and its past participles (`get-updated-items`).
+      if (skipNouns && OBJECT_NOUNS.has(kw)) continue;
+      if (skipNouns && i === 0 && INFLECTED.test(token.slice(kw.length))) continue;
+      return lvl;
+    }
+  return "none";
+}
+
+const EXTERNAL_ARG_WORDS = new Set([
+  "url",
+  "uri",
+  "webhook",
+  "recipient",
+  "recipients",
+  "cc",
+  "bcc",
+  "destination",
+  "endpoint",
+  "href",
+  "command",
+  "cmd",
+  "script",
+  "shell",
+  "argv",
+  "phone",
+  "callback",
+]);
+
+/** Walks an argument tree: every key, however deep, and the sets of key words it saw. */
+function argKeys(args: unknown): { keys: string[]; truncated: boolean } {
+  const keys: string[] = [];
+  let truncated = false;
+  const walk = (v: unknown, depth: number): void => {
+    if (typeof v !== "object" || v === null) return;
+    if (depth > MAX_ARG_DEPTH) {
+      truncated = true;
+      return;
+    }
+    const entries = Array.isArray(v) ? v.map((x, i) => [String(i), x] as const) : Object.entries(v);
+    for (const [k, x] of entries) {
+      if (keys.length >= MAX_ARG_KEYS) {
+        truncated = true;
+        return;
+      }
+      if (!Array.isArray(v)) keys.push(k);
+      walk(x, depth + 1);
+    }
+  };
+  walk(args, 0);
+  return { keys, truncated };
+}
+
+function inferOne(name: string, kind: string | undefined): SideEffect {
+  if (name.length > MAX_NAME_LENGTH || hasNonAsciiWord(name)) return "external";
+  let level: SideEffect = "none";
+  const words = nameWords(name);
+  // `server/tool` of an MCP call: the leading read verb is the tool's, not the server's.
+  const verbFirst = nameWords(name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name)[0];
+  // `getanddelete`: a glued read verb leads only when what follows it is not a connector.
+  const gluedRead =
+    verbFirst === undefined
+      ? undefined
+      : [...READ_VERBS].find(
+          (v) =>
+            verbFirst.startsWith(v) &&
+            verbFirst.length > v.length &&
+            ![...CONNECTORS].some((c) => verbFirst.slice(v.length).startsWith(c)),
+        );
+  const readLeads =
+    verbFirst !== undefined &&
+    (READ_VERBS.has(verbFirst) || gluedRead !== undefined) &&
+    !words.some((w) => CONNECTORS.has(w));
+  for (const w of words) {
+    if (readLeads && OBJECT_NOUNS.has(w)) continue;
+    if (EXTERNAL_WORDS.has(w)) level = strictest(level, "external");
+    else if (WRITE_WORDS.has(w)) level = strictest(level, "write");
+    else level = strictest(level, gluedLevel(w, readLeads));
+  }
+  if (kind !== undefined && EXTERNAL_KINDS.has(kind.split(":")[0] ?? kind)) level = "external";
+  return level;
+}
+
 export function inferSideEffects(
-  name: string,
+  name: string | readonly string[],
   kind: string | undefined,
   args: Readonly<Record<string, unknown>> | undefined,
 ): SideEffect {
@@ -252,24 +445,25 @@ export function inferSideEffects(
   // child's own gated actions. The runtime executes kind `agent` as a spawn and nothing else, so claiming the kind buys no capability.
   if (kind === "agent") return "none";
   let level: SideEffect = "none";
-  if (kind !== undefined && EXTERNAL_KINDS.has(kind.split(":")[0] ?? kind)) level = "external";
   if (kind?.startsWith("memory:") && kind !== "memory:read") level = strictest(level, "write");
-  const words = nameWords(name);
-  // `server/tool` of an MCP call: the leading read verb is the tool's, not the server's.
-  const verbFirst = nameWords(name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name)[0];
-  const readLeads =
-    verbFirst !== undefined && READ_VERBS.has(verbFirst) && !words.some((w) => CONNECTORS.has(w));
-  for (const w of words) {
-    if (readLeads && OBJECT_NOUNS.has(w)) continue;
-    if (EXTERNAL_WORDS.has(w)) level = strictest(level, "external");
-    else if (WRITE_WORDS.has(w)) level = strictest(level, "write");
-  }
+  // Every name the call is known by: the agent-facing name, the action and the executed `ref` (ADR 0114).
+  for (const n of Array.isArray(name) ? name : [name as string])
+    level = strictest(level, inferOne(n, kind));
   if (args && typeof args === "object") {
-    const keys = Object.keys(args).map((k) => k.toLowerCase());
-    if (keys.some((k) => EXTERNAL_ARG_KEYS.has(k))) level = strictest(level, "external");
+    const { keys, truncated } = argKeys(args);
+    if (truncated) level = strictest(level, "external");
+    const lower = keys.map((k) => k.toLowerCase());
+    const wordSets = keys.map((k) => nameWords(k));
+    if (
+      lower.some((k) => EXTERNAL_ARG_KEYS.has(k)) ||
+      wordSets.some((ws) => ws.some((w) => EXTERNAL_ARG_WORDS.has(w)))
+    )
+      level = strictest(level, "external");
     else if (
-      keys.some((k) => ["content", "body", "data", "text", "payload"].includes(k)) &&
-      keys.some((k) => ["path", "file", "filename", "key", "id"].includes(k))
+      wordSets.some((ws) =>
+        ws.some((w) => ["content", "body", "data", "text", "payload"].includes(w)),
+      ) &&
+      wordSets.some((ws) => ws.some((w) => ["path", "file", "filename", "key", "id"].includes(w)))
     )
       level = strictest(level, "write");
   }
@@ -283,15 +477,20 @@ export interface Effective {
 }
 
 export function effectiveSideEffects(
-  tool: { name?: unknown; kind?: unknown; side_effects?: unknown },
+  tool: { name?: unknown; kind?: unknown; side_effects?: unknown; ref?: unknown },
   args: Readonly<Record<string, unknown>> | undefined,
   catalogued: SideEffect | undefined,
+  alsoNamed: readonly string[] = [],
 ): Effective {
   const declared = typeof tool.side_effects === "string" ? tool.side_effects : null;
   if (catalogued !== undefined) return { effective: catalogued, declared, source: "catalog" };
   const claimed: SideEffect = isSideEffect(declared) ? declared : "external";
   const inferred = inferSideEffects(
-    typeof tool.name === "string" ? tool.name : "",
+    [
+      typeof tool.name === "string" ? tool.name : "",
+      ...(typeof tool.ref === "string" ? [tool.ref] : []),
+      ...alsoNamed,
+    ],
     typeof tool.kind === "string" ? tool.kind : undefined,
     args,
   );

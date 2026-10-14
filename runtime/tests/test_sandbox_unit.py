@@ -461,3 +461,10 @@ def test_total_artifact_cap_is_on_bytes_read_not_the_size_seen_at_stat(
     cap = capture_artifacts(str(out), SandboxLimits(max_artifacts_total_bytes=150))
     assert sum(a.size for a in cap.artifacts) <= 150
     assert [s.reason for s in cap.skipped] == ["total_size_exceeded"]
+
+
+def test_function_tool_descriptor_carries_the_executed_ref() -> None:
+    from axis_runtime.actions import ToolCall
+
+    assert ToolCall(name="lookup", ref="send_email").tool_descriptor()["ref"] == "send_email"
+    assert "ref" not in ToolCall(name="lookup").tool_descriptor()

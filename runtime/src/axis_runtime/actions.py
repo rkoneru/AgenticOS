@@ -197,7 +197,11 @@ class ToolCall(_ArgsAction):
     ref: str | None = None
 
     def tool_descriptor(self) -> dict[str, str]:
-        return {"name": self.name, "kind": self.kind, "side_effects": self.side_effects}
+        d = {"name": self.name, "kind": self.kind, "side_effects": self.side_effects}
+        # The tool that actually runs is `ref` when the blueprint aliases it; the kernel classifies and catalogues THAT name (ADR 0114).
+        if self.ref:
+            d["ref"] = self.ref
+        return d
 
     async def _execute(self, backends: Backends) -> Any:
         if self.kind == "agent":
