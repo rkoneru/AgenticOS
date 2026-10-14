@@ -257,9 +257,6 @@ export class RetentionEngine {
       finishedAt: null,
       report: {},
     });
-    const holds = await this.d.store.listHolds(t, true);
-    const groups = await this.d.holds.activeGroups(t, holds);
-
     for (const cls of classes) {
       const r = resolved?.find((x) => x.dataClass === cls);
       const base: ClassReport = {
@@ -280,6 +277,11 @@ export class RetentionEngine {
         base.status = "retained_by_policy";
         continue;
       }
+      // Holds are re-read for EVERY class, not once before the loop: another request can place a hold WHILE this run is still
+      // purging earlier classes (TOCTOU, found in review). A snapshot taken before the loop would let a class purge straight
+      // through a hold placed moments earlier but after that snapshot.
+      const holds = await this.d.store.listHolds(t, true);
+      const groups = await this.d.holds.activeGroups(t, holds);
       const wide = classWideHold(holds, cls);
       if (wide) {
         base.status = "skipped_hold";
@@ -297,6 +299,14 @@ export class RetentionEngine {
         (h) => groups.get(h.id) ?? [],
       );
       try {
+        // Fail-closed audit ordering (found in review): this is recorded BEFORE any provider purges, so a down audit sink
+        // stops the purge instead of only failing to record one that already happened.
+        await this.d.audit.emit({
+          tenantId: t,
+          action: dryRun ? "retention.class.dry_run.started" : "retention.class.purge.started",
+          actorId: p.id,
+          input: { run_id: runId, class: cls, cutoff: base.cutoff },
+        });
         for (const prov of provs) {
           const ctx = {
             tenantId: t,

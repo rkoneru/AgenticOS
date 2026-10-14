@@ -463,12 +463,16 @@ export class DsarEngine {
       );
     }
 
-    const holds = await this.d.store.listHolds(r.tenantId, true);
-    const held = await this.heldProviders(r, holds, ids);
+    // Re-read holds on every provider, not once before the loop: a hold can be placed by another request WHILE this erase is in
+    // flight (TOCTOU, found in review). A hold snapshot taken before the loop would let an erase started a moment earlier run
+    // straight through a hold placed a moment later.
+    const held = new Set<string>();
     const outcomes: ProviderOutcome[] = [];
 
     for (const prov of this.d.providers) {
-      if (held.has(prov.id)) {
+      const holds = await this.d.store.listHolds(r.tenantId, true);
+      if ((await this.heldProviders(r, holds, ids)).has(prov.id)) {
+        held.add(prov.id);
         outcomes.push({ provider: prov.id, held: true });
         continue;
       }
