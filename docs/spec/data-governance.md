@@ -19,7 +19,7 @@ Tenant-scoped, role-gated (`privacy_officer` of that tenant; the tenant and role
 `received -> verified -> processing -> completed | rejected | cancelled`.
 
 - **open**: identifiers normalised, subject resolved, identifiers sealed, due date = received + 30 days, audit `dsar.received`.
-- **verify**: `RequesterVerifier` hook (evidence is opaque to the engine). Nothing exports or erases before `verified`. `main.ts` ships a verifier that always refuses.
+- **verify**: `RequesterVerifier` hook (evidence is opaque to the engine). Nothing exports or erases before `verified`. The gateway ships `EvidenceVerifier` (ADR 0111): two signed tokens, a `requester_token` and an `admin_attestation` by an independent active owner/admin; the loopback `main.ts` still ships a verifier that always refuses.
 - **extend**: once, +60 days, before the deadline, with a reason (Art. 12(3)). **sweepSla**: emits `dsar.sla.at_risk` (<= 7 days) and `dsar.sla.breached` once each.
 - **export**: signed (Ed25519) bundle: `manifest {request, subject_ref, stores[{provider, declaration, collections[{name,count,sha256}]}], total_records, records_sha256}`
   - `records` + `signature`. `verifyBundle` checks signature, counts, hashes and totals offline. Destination must pass the residency egress check.
@@ -57,8 +57,20 @@ ADR 0083, `src/residency.ts`, `test/residency*.test.ts`, `runtime/tests/test_mod
 
 ## 9. Admin surface
 
-Internal only: `/admin/v1` on a loopback dev server (`src/dev-server.ts`, `src/main.ts`). Not in OpenAPI, SDKs, CLI or console (NEEDS 362, 370).
+Public: OpenAPI 1.6.0 `/governance/*` served by the gateway (ADR 0111, 0112), `axis governance ...`, `ax.governance` in both SDKs, read-only console pages
+(`/governance`). Roles: reads `owner | admin | auditor | privacy_officer`; every write, export and erasure `privacy_officer` only, checked by the control-plane
+pack AND by the gateway adapter. The gateway answers **503** until `GW_GOV_MASTER_KEY` wires the kit (no residency guard is installed either).
+Operations: DSAR list/open/get/verify/export/erase/restrict, holds list/place/release, retention get/set/runs/run (`dry_run` defaults to true), residency.
+Responses carry the opaque `subject_ref`, never an identifier. Status mapping: not found 404, forbidden/restricted/residency 403, conflict/not verified/held 409,
+invalid 422, unavailable 503, residual data 500; an erasure stopped by a hold is a 200 with outcome `held`. The loopback `/admin/v1` dev server
+(`src/dev-server.ts`, `src/main.ts`) remains for local use.
+
+### Verification of the requester
+
+`evidence = { requester_token, admin_attestation }`, both HMAC-signed with a per-tenant key (HKDF from the governance master key), bound to tenant, request and
+expiry (at most 7 days). The attester must differ from the member who opened the request and from the member verifying, and must be an active `owner` or
+`admin` of the tenant (looked up in Postgres under forced RLS). Anything else leaves the request `received`.
 
 ## 10. Honest limits
 
-Exact-match discovery only; backups not covered; KMS not built; eval hashes break by design; see NEEDS 362-379.
+Exact-match discovery only; backups not covered; KMS not built; eval hashes break by design; see NEEDS 362-379 and 407-412.
