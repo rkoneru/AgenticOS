@@ -24,6 +24,12 @@ citation that does not exist), then `e2e/test_phase9_hardening.py` (23 tests) an
 | g chaos      | g0-g3 | kernel killed mid-approval: the action never runs; kernel and gateway lose their database: DENY / 503 and nothing created; a kill switch survives a kernel restart                                                                                                                                                                                                         |
 | h DR         | h1    | `infra/dr/results/dr-drill.json` is well-formed, both tamper negatives were detected, RPO/RTO within the targets parsed from `docs/nfr.md`                                                                                                                                                                                                                                 |
 
+## Mutation check result
+
+`uv run python e2e/mutation_phase9.py` at the Phase 9 exit commit: **14/14 mutants killed** (about 3 minutes of tests plus rebuilds). A first full run reported the channels-net
+mutant as errored (the pytest fixture failed in 3.4 s, so it was not counted as a kill); two reruns, alone and after the preceding mutant, killed it and the cause was not reproduced
+(suspected stack boot race). The script now keeps the output of any mutant that is not killed (`/tmp/axis-mutation9-<n>.log`) and prints `ERRORED` instead of `SURVIVED` for it.
+
 ## Triage
 
 - A scenario fails alone but not in the module: ordering. Each fixture builds its own tenants; the stack is module-scoped.

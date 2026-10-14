@@ -22,7 +22,7 @@ identity proofing); every number below was measured on the 4-core development VM
   structural values exempt; 14 failing-first tests, runtime suite 3004 passed at 97.5% coverage. Consequence recorded: the served output of a PHI run is the redacted form.
 - **Mutation check** (`e2e/mutation_phase9.py`): 14 wiring mutants (skipped residual verification, erase that leaves memory behind with a blind verification, purge of held data,
   raw subject in the audit chain, residency default-allow in the Eval Hub, billing, registry, policy and ModelGateway, redaction-net bypass in the run log, channels, memory and
-  eval ingest, red-team gate default-allow): see the result line in `docs/runbooks/hardening-e2e.md`.
+  eval ingest, red-team gate default-allow): **14/14 killed** (one earlier run errored on the channels mutant without reproducing; see `docs/runbooks/hardening-e2e.md`).
 - **Sweep at this commit** (one target at a time, logs kept): `pnpm build lint typecheck cov`, `make policy-test contracts-lint compliance-check threatmodel-check redteam-lint
 e2e-core e2e-phase3 .. e2e-phase9 e2e-compliance e2e-governance console-e2e docs-build evals redteam redteam-selfcheck chaos dr-drill`, ruff, mypy, 3004 Python tests: all green.
   One red on the way, fixed: `pnpm lint` (prettier on two new files). `make redteam`: 254 counted cases, containment 1.0000, 0 unsafe, all six release gates allow;
