@@ -46,7 +46,7 @@ import { MarketplaceAdapter } from "./adapters/marketplace.js";
 import { RegistryAdapter } from "./adapters/registry.js";
 import { HttpRunsPort } from "./adapters/runs-http.js";
 import { LedgerUsage } from "./adapters/usage.js";
-import type { BlueprintStore, RunsPort } from "./ports.js";
+import type { BlueprintStore, GovernancePort, RunsPort } from "./ports.js";
 import { createGateway, type Gateway } from "./server.js";
 
 export interface DevWiring {

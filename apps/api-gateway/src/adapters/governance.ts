@@ -235,7 +235,8 @@ export class GovernanceAdapter implements GovernancePort {
     const g = this.reader(p);
     return wrap(async () => {
       const r = await this.kit.retention.resolve(g.tenantId);
-      if (!r) throw new GovernanceError("unavailable", "the tenant's retention settings are unavailable");
+      if (!r)
+        throw new GovernanceError("unavailable", "the tenant's retention settings are unavailable");
       return r.map((x) => ({
         data_class: x.dataClass,
         requested_days: x.requestedDays,
@@ -279,7 +280,8 @@ export class GovernanceAdapter implements GovernancePort {
     const g = this.reader(p);
     return wrap(async () => {
       const t = await this.kit.regions.resolve(g.tenantId).catch(() => undefined);
-      if (!t) throw new GovernanceError("unavailable", "the tenant's residency policy is unavailable");
+      if (!t)
+        throw new GovernanceError("unavailable", "the tenant's residency policy is unavailable");
       return {
         home_region: t.homeRegion,
         allowed_regions: await this.kit.residency.allowedRegions(g.tenantId),
