@@ -253,4 +253,4 @@ def test_it_does_not_repeat_a_call_and_ends_with_the_say_text_or_done() -> None:
 
 def test_the_mutants_are_well_formed_and_edit_the_pack() -> None:
     assert len({m.name for m in mutants.MUTANTS}) == len(mutants.MUTANTS) >= 6
-    assert all(m.pack is not None or m.gate_bypass for m in mutants.MUTANTS)
+    assert all(m.pack is not None or m.gate_bypass or m.tool_catalog for m in mutants.MUTANTS)
