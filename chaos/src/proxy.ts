@@ -1,4 +1,5 @@
 import net from "node:net";
+import { OrderedLane } from "./lane.js";
 
 /**
  * A small TCP fault-injection proxy (the in-repo equivalent of Toxiproxy). It sits between a client and one upstream and applies "toxics"
@@ -43,7 +44,7 @@ export interface ProxyStats {
 export class ChaosProxy {
   private server = net.createServer((c) => this.onClient(c));
   private pairs = new Set<{ client: net.Socket; upstream: net.Socket }>();
-  private timers = new Set<NodeJS.Timeout>();
+  private lanes = new Set<OrderedLane>();
   private toxics: Toxics = { ...NONE };
   readonly stats: ProxyStats = {
     accepted: 0,
@@ -101,38 +102,9 @@ export class ChaosProxy {
 
   async stop(): Promise<void> {
     this.resetAll();
-    for (const t of this.timers) clearTimeout(t);
-    this.timers.clear();
+    for (const l of this.lanes) l.stop();
+    this.lanes.clear();
     await new Promise<void>((r) => this.server.close(() => r()));
-  }
-
-  private later(ms: number, fn: () => void): void {
-    if (ms <= 0) return fn();
-    const t = setTimeout(() => {
-      this.timers.delete(t);
-      fn();
-    }, ms);
-    this.timers.add(t);
-  }
-
-  /**
-   * Release ``fragments`` of one chunk in ORDER on a direction (``lane``): a fragment is never released before the previous fragment of the
-   * same lane, whatever toxics are on, so TCP's byte order (and therefore HTTP/2 framing) is preserved. ``gapMs`` spaces the fragments.
-   */
-  private release(
-    lane: Lane,
-    base: number,
-    gapMs: number,
-    fragments: Buffer[],
-    write: (b: Buffer) => void,
-  ): void {
-    let due = Math.max(performance.now() + base, lane.tail);
-    for (const f of fragments) {
-      const at = due;
-      this.later(at - performance.now(), () => write(f));
-      lane.tail = at;
-      due = at + gapMs;
-    }
   }
 
   private delay(): number {
@@ -152,6 +124,10 @@ export class ChaosProxy {
     this.pairs.add(pair);
     this.stats.open = this.pairs.size;
     const drop = (): void => {
+      for (const l of [upLane, downLane]) {
+        l.stop();
+        this.lanes.delete(l);
+      }
       this.pairs.delete(pair);
       this.stats.open = this.pairs.size;
       client.destroy();
@@ -170,13 +146,14 @@ export class ChaosProxy {
       if (!client.destroyed) client.end();
     });
     let down = 0;
-    const upLane: Lane = { tail: 0 };
-    const downLane: Lane = { tail: 0 };
+    const upLane = new OrderedLane();
+    const downLane = new OrderedLane();
+    this.lanes.add(upLane).add(downLane);
     client.on("data", (b: Buffer) => {
       this.stats.bytesUp += b.length;
       if (this.toxics.blackhole) return;
       const { frags, gap } = this.split(b, false);
-      this.release(upLane, this.delay(), gap, frags, (x) => upstream.write(x));
+      upLane.release(this.delay(), gap, frags, (x) => upstream.write(x));
     });
     upstream.on("data", (b: Buffer) => {
       if (this.toxics.blackhole) return;
@@ -194,7 +171,7 @@ export class ChaosProxy {
       down += b.length;
       this.stats.bytesDown += b.length;
       const { frags, gap } = this.split(b, true);
-      this.release(downLane, this.delay(), gap, frags, (x) => {
+      downLane.release(this.delay(), gap, frags, (x) => {
         if (!client.destroyed) client.write(x);
       });
     });
@@ -217,8 +194,4 @@ export class ChaosProxy {
     }
     return { frags: [b], gap: 0 };
   }
-}
-
-interface Lane {
-  tail: number;
 }

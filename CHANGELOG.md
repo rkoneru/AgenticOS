@@ -1,5 +1,38 @@
 # Changelog
 
+## Phase 9 - EXIT: compliance, data governance and hardening proven together (`make e2e-phase9`, ADR 0113)
+
+No contract change. Status: Built as an integration proof on the dev stack (fakes at the IdP, KMS, DNS, the model provider, Slack's servers and data-subject
+identity proofing); every number below was measured on the 4-core development VM described in `docs/nfr.md`.
+
+- **`make e2e-phase9`** (23 tests, 98 s with the build cached; CI job `e2e-phase9` mirrors `e2e-phase8` and has not run remotely): `compliance-check` and
+  `threatmodel-check` first, then `e2e/test_phase9_hardening.py` on the Phase 7/8 interfaces stack, extended with the real channels gateway (signed Slack webhooks) and the
+  real memory service. Scenarios: **a** one person with data in 7 stores (member, a signed Slack message, memory, run logs, an eval case, approvals, billing refs): signed
+  export, privacy-officer erase through the public API, the verification pass re-queries every provider, nothing of the person is left in the tenant's database, the audit chain
+  verifies and holds no raw subject data, the colleague is untouched and the SAME human in another tenant is byte-identical; **b** retention dry run, tenant legal hold, release,
+  audit never purged; **c** PHI canaries (SSN incl. fullwidth and zero-width, MRN, email, phone) through a PHI Slack route, memory, an eval dataset and PHI runs (input, tool
+  args, tool errors, answer): none in any table, the audit chain or any process log, with non-PHI controls that DO keep the words; **d** a tenant re-homed to eu-west-1 is
+  refused (403 `residency_violation`) by the registry, the Eval Hub and billing, and the ModelGateway refuses an out-of-region provider before any network call; **e** an Annex IV
+  document for a real blueprint version, sealed, verified, gaps reported not invented, tamper detected; **f** `redteam-core@1.0.0` passes and the registry releases the version,
+  a widened email allow-list fails the suite (exfiltration) and the release is refused with `evals_gate_failed`; **g** chaos subset (kernel killed mid-approval, audit database lost,
+  kill switch survives a kernel restart; the 18-test `make chaos` is a separate target); **h** the committed DR drill is well-formed, both tamper negatives were detected,
+  RPO/RTO are within the targets parsed from `docs/nfr.md`.
+- **Gap closed (found by scenario c):** run input and tool results were redacted "by policy paths only" (NEEDS 363). `RunRecorder.record` now runs a free-text PHI net
+  (`axis_runtime.phi_net`: fullwidth digits, zero-width characters, MRN/SSN labels, SSN/phone/email shapes, introduced names) over every event of a PHI run before it is sealed,
+  structural values exempt; 14 failing-first tests, runtime suite 3004 passed at 97.5% coverage. Consequence recorded: the served output of a PHI run is the redacted form.
+- **Mutation check** (`e2e/mutation_phase9.py`): 14 wiring mutants (skipped residual verification, erase that leaves memory behind with a blind verification, purge of held data,
+  raw subject in the audit chain, residency default-allow in the Eval Hub, billing, registry, policy and ModelGateway, redaction-net bypass in the run log, channels, memory and
+  eval ingest, red-team gate default-allow): see the result line in `docs/runbooks/hardening-e2e.md`.
+- **Sweep at this commit** (one target at a time, logs kept): `pnpm build lint typecheck cov`, `make policy-test contracts-lint compliance-check threatmodel-check redteam-lint
+  e2e-core e2e-phase3 .. e2e-phase9 e2e-compliance e2e-governance console-e2e docs-build evals redteam redteam-selfcheck chaos dr-drill`, ruff, mypy, 3004 Python tests: all green.
+  One red on the way, fixed: `pnpm lint` (prettier on two new files). `make redteam`: 254 counted cases, containment 1.0000, 0 unsafe, all six release gates allow;
+  `make redteam-selfcheck`: control passes, all 10 mutants detected. `make dr-drill` re-run: RTO 1.31 s logical / 1.33 s physical, 0 audit events lost (window 0.0 s; earlier drills lost 0-2).
+- **Honest gaps** (NEEDS 413-421): the `runs`/`run_events`/`approvals` tables have no writer on the dev stack, so the e2e inserts those rows by SQL and a person's data inside the
+  live run service's memory is outside any DSAR; the run-log net is a heuristic; registry residency is enforced on version inserts only; model-region residency is proven on the gateway class
+  but not wired for real runs (nothing sets `ModelTarget.region`); billing residency is proven on the ledger, not the HTTP ingest; the red-team gate is exercised through the marketplace's
+  release step (no public release operation); the DR scenario asserts a committed result; the CI job has never run on GitHub. Still not measured: the 1k RPS control-plane target,
+  10k concurrent agent processes, eval throughput (docs/nfr.md). No live provider, cloud, regulator or auditor was involved; nothing here is a certification.
+
 ## Phase 9 / B2 - data-governance surface (gateway, SDKs, CLI, console; ADR 0111, 0112)
 
 - OpenAPI 1.6.0: 15 `/governance` operations (DSAR list/open/get/verify/export/erase/restrict, holds, retention, residency), the `privacy_officer` role
