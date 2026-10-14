@@ -193,7 +193,7 @@ MUTANTS = [
     (
         "gateway adapter: an unresolved region is an empty success",
         "../../apps/api-gateway/src/adapters/governance.ts",
-        'if (!t) throw new GovernanceError("unavailable", "the tenant\'s residency policy is unavailable");',
+        'if (!t)\n        throw new GovernanceError("unavailable", "the tenant\'s residency policy is unavailable");',
         "",
         ["test/governance.test.ts"],
         GATEWAY,
