@@ -27,6 +27,18 @@ describe("configFromEnv (standalone DEV gateway)", () => {
     expect(c).toMatchObject({ port: 0, host: "127.0.0.1", allowedOrigins: [], rate: undefined });
     expect(c.secrets.pepper).toHaveLength(32);
   });
+  it("data governance is off without GW_GOV_MASTER_KEY (routes answer 503) and needs a 64-hex key when set", () => {
+    expect(configFromEnv(good()).governance).toBeUndefined();
+    const c = configFromEnv({ ...good(), GW_GOV_MASTER_KEY: HEX });
+    expect(c.governance?.masterKey).toHaveLength(32);
+    expect(c.governance?.role).toBe("axis_governance");
+    expect(
+      configFromEnv({ ...good(), GW_GOV_MASTER_KEY: HEX, GW_GOV_ROLE: "r" }).governance?.role,
+    ).toBe("r");
+    expect(() => configFromEnv({ ...good(), GW_GOV_MASTER_KEY: "short" })).toThrow(
+      /GW_GOV_MASTER_KEY/,
+    );
+  });
   it("the per-tenant SSE stream cap defaults to 16 and is configurable within bounds (GW_MAX_SSE_STREAMS)", () => {
     expect(configFromEnv(good()).maxSseStreams).toBe(16);
     expect(configFromEnv({ ...good(), GW_MAX_SSE_STREAMS: "500" }).maxSseStreams).toBe(500);
