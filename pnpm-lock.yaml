@@ -86,6 +86,9 @@ importers:
       '@axis/control-plane':
         specifier: workspace:*
         version: link:../../services/control-plane
+      '@axis/data-governance':
+        specifier: workspace:*
+        version: link:../../services/data-governance
       '@axis/eval-hub':
         specifier: workspace:*
         version: link:../../services/eval-hub
