@@ -105,7 +105,9 @@ def script(body: dict[str, Any]) -> dict[str, Any]:
         return _turn(
             "restricted lookup finished: " + " | ".join(str(m["content"])[:60] for m in results)
         )
-    if ask.startswith("phi-canary:"):  # Phase 9: PHI-shaped free text in the input, in tool arguments, in a tool error and in the answer
+    if ask.startswith(
+        "phi-canary:"
+    ):  # Phase 9: PHI-shaped free text in the input, in tool arguments, in a tool error and in the answer
         canary = ask[len("phi-canary:") :].strip()
         if not results:
             return _turn(
@@ -178,6 +180,7 @@ def tools() -> ToolRegistry:
         },
         description="Read a claim",
     )
+
     def strict(a: dict[str, Any]) -> Any:
         raise ValueError(f"no such claim: {a.get('claim_id')}")  # an error that echoes its argument
 

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import sys
 from collections.abc import Iterator
@@ -52,7 +53,13 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[istack.Stack]:
     admin = os.environ.get("PG_ADMIN_URL")
     if not admin:
         raise RuntimeError("PG_ADMIN_URL is required: run via `make e2e-phase9`")
-    with istack.boot(tmp_path_factory.mktemp("e2e9"), admin) as st:
+    work = tmp_path_factory.mktemp("e2e9")
+    (work / "tool-catalog.json").write_text(
+        "{}"
+    )  # the red-team campaigns register tenant tool catalogs here (kernel reads it lazily)
+    with istack.boot(
+        work, admin, kernel_env={"AXIS_RK_TOOL_CATALOG_FILE": str(work / "tool-catalog.json")}
+    ) as st:
         yield st
 
 
@@ -60,9 +67,7 @@ def ax_of(stack: istack.Stack, key: str) -> Axis:
     return Axis(key, base_url=stack.gateway, allow_insecure=True, max_retries=0)
 
 
-def rest(
-    stack: istack.Stack, key: str, method: str, path: str, body: Any = None
-) -> httpx.Response:
+def rest(stack: istack.Stack, key: str, method: str, path: str, body: Any = None) -> httpx.Response:
     return httpx.request(
         method, f"{stack.gateway}{path}", headers={"x-axis-api-key": key}, json=body, timeout=60
     )
@@ -80,11 +85,19 @@ class Person:
     def __init__(
         self, stack: istack.Stack, tid: str, owner_key: str, email: str, slack_user: str, tag: str
     ) -> None:
-        self.stack, self.tid, self.email, self.slack_user, self.tag = stack, tid, email, slack_user, tag
+        self.stack, self.tid, self.email, self.slack_user, self.tag = (
+            stack,
+            tid,
+            email,
+            slack_user,
+            tag,
+        )
         m = stack.ops("member", tenant_id=tid, role="viewer", email=email)
         self.member_id: str = m["member_id"]
         self.user_ref = f"ops:{self.member_id}"
-        self.route = stack.ops("channels/route", tenant_id=tid, team_id=f"T{tag}", transcript_mode="full")
+        self.route = stack.ops(
+            "channels/route", tenant_id=tid, team_id=f"T{tag}", transcript_mode="full"
+        )
         self.msg = f"where is my refund for order ORD-{tag}-7731, please"
         self.note = f"Prefers a call in the morning; loyalty note {tag}-LN-5521"
         self.case_input = f"Customer question about invoice INV-{tag}-9902"
@@ -110,14 +123,20 @@ class Person:
             description="support questions",
         )
         # 4. billing: usage dimensioned by the person, and a goodwill adjustment made by them (actor)
-        assert stack.ops("billing/usage", tenant_id=tid, key=f"u-{tag}", dimensions={"end_user": self.user_ref})["ok"]
+        assert stack.ops(
+            "billing/usage", tenant_id=tid, key=f"u-{tag}", dimensions={"end_user": self.user_ref}
+        )["ok"]
         assert stack.ops("billing/usage", tenant_id=tid, key=f"a-{tag}", actor=self.user_ref)["ok"]
         # 5. run logs + approvals: no writer on this stack (NEEDS #413): inserted as the table owner
         self.run_id = secrets.token_hex(16)
         self.run_id = f"{self.run_id[:8]}-{self.run_id[8:12]}-4{self.run_id[13:16]}-8{self.run_id[17:20]}-{self.run_id[20:32]}"
         pid = "axp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
-        inp = json.dumps({"requested_by": self.user_ref, "note": self.run_input_note}).replace("'", "''")
-        data = json.dumps({"requested_by": self.user_ref, "text": self.run_input_note}).replace("'", "''")
+        inp = json.dumps({"requested_by": self.user_ref, "note": self.run_input_note}).replace(
+            "'", "''"
+        )
+        data = json.dumps({"requested_by": self.user_ref, "text": self.run_input_note}).replace(
+            "'", "''"
+        )
         istack.psql(
             stack.db_url,
             f"INSERT INTO runs (tenant_id, id, blueprint_name, blueprint_version, trace_id, input) VALUES "
@@ -156,13 +175,37 @@ class DsarWorld:
         self.a_tid, self.b_tid = self.g.tid, self.g.b["tenant_id"]
         self.email = f"jane9-{secrets.token_hex(3)}@subject.example"
         k_owner_b = stack.api_key(self.b_tid, self.g.b["owner_member_id"])
-        k_po_b = stack.api_key(self.b_tid, stack.ops("member", tenant_id=self.b_tid, role="privacy_officer")["member_id"])
+        k_po_b = stack.api_key(
+            self.b_tid,
+            stack.ops("member", tenant_id=self.b_tid, role="privacy_officer")["member_id"],
+        )
         self.k_po_b = k_po_b
         # the SAME human exists in tenant B (same email, same Slack user id): erasing in A must not touch B
-        self.jane = Person(stack, self.a_tid, self.g.k_owner, self.email, f"UJANE{secrets.token_hex(2)}", "a" + secrets.token_hex(2))
-        self.jane_b = Person(stack, self.b_tid, k_owner_b, self.email, self.jane.slack_user, "b" + secrets.token_hex(2))
+        self.jane = Person(
+            stack,
+            self.a_tid,
+            self.g.k_owner,
+            self.email,
+            f"UJANE{secrets.token_hex(2)}",
+            "a" + secrets.token_hex(2),
+        )
+        self.jane_b = Person(
+            stack,
+            self.b_tid,
+            k_owner_b,
+            self.email,
+            self.jane.slack_user,
+            "b" + secrets.token_hex(2),
+        )
         # a colleague in tenant A who must be left alone
-        self.bob = Person(stack, self.a_tid, self.g.k_owner, f"bob9-{secrets.token_hex(3)}@subject.example", f"UBOB{secrets.token_hex(2)}", "c" + secrets.token_hex(2))
+        self.bob = Person(
+            stack,
+            self.a_tid,
+            self.g.k_owner,
+            f"bob9-{secrets.token_hex(3)}@subject.example",
+            f"UBOB{secrets.token_hex(2)}",
+            "c" + secrets.token_hex(2),
+        )
 
     def request(self, kind: str, person: Person) -> dict[str, Any]:
         po, po2 = self.g.ax(self.g.k_po), self.g.ax(self.g.k_po2)
@@ -190,7 +233,15 @@ def test_a1_the_person_is_in_every_store_and_the_export_covers_them_all(dsar: Ds
     bundle = po.governance.requests.export(req["id"])
     assert bundle["signature"]["alg"] == "Ed25519"
     stores = {s["provider"]: s for s in bundle["manifest"]["stores"]}
-    for provider in ("control-plane-members", "channels", "memory", "eval-hub", "run-logs", "approvals", "billing"):
+    for provider in (
+        "control-plane-members",
+        "channels",
+        "memory",
+        "eval-hub",
+        "run-logs",
+        "approvals",
+        "billing",
+    ):
         assert provider in stores, (provider, sorted(stores))
         n = sum(c["count"] for c in stores[provider]["collections"])
         assert n > 0, f"the export found nothing in {provider}"
@@ -198,10 +249,16 @@ def test_a1_the_person_is_in_every_store_and_the_export_covers_them_all(dsar: Ds
     for marker in j.markers:
         assert marker in text, f"the export is missing {marker!r}"
     for other in (d.bob, d.jane_b):
-        assert other.msg not in text and other.note not in text and other.tag not in text.replace(j.tag, "")
+        assert (
+            other.msg not in text
+            and other.note not in text
+            and other.tag not in text.replace(j.tag, "")
+        )
 
 
-def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain_intact(dsar: DsarWorld) -> None:
+def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain_intact(
+    dsar: DsarWorld,
+) -> None:
     """Scenario a: the privacy officer erases the person. The engine's residual verification passes for every store, the raw words are
     gone from the tenant's whole database (not only from the stores the providers know), the audit chain verifies and holds no raw
     subject data, the colleague's data is untouched and the SAME human in the other tenant is byte-identical."""
@@ -211,13 +268,21 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     bob_before = p9.digest(
         "\n".join(
             [
-                p9.q(st, f"SELECT content FROM conversation_messages WHERE tenant_id='{d.a_tid}' AND content LIKE '%ORD-{d.bob.tag}-7731%'"),
-                p9.q(st, f"SELECT content FROM memory_chunks WHERE tenant_id='{d.a_tid}' AND subject = '{d.bob.user_ref}'"),
+                p9.q(
+                    st,
+                    f"SELECT content FROM conversation_messages WHERE tenant_id='{d.a_tid}' AND content LIKE '%ORD-{d.bob.tag}-7731%'",
+                ),
+                p9.q(
+                    st,
+                    f"SELECT content FROM memory_chunks WHERE tenant_id='{d.a_tid}' AND subject = '{d.bob.user_ref}'",
+                ),
             ]
         )
     )
     po = d.g.ax(d.g.k_po)
-    chain_len_before = int(p9.q(st, f"SELECT count(*) FROM audit_events WHERE tenant_id='{d.a_tid}'"))
+    chain_len_before = int(
+        p9.q(st, f"SELECT count(*) FROM audit_events WHERE tenant_id='{d.a_tid}'")
+    )
     req = d.request("erase", j)
     done = po.governance.requests.erase(req["id"])
     assert done["status"] == "completed", done
@@ -225,7 +290,15 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     assert verification["ok"] is True, verification
     proofs = {v["provider"]: v for v in verification["providers"]}
     assert all(v["residual"] == 0 for v in proofs.values()), proofs
-    for provider in ("control-plane-members", "channels", "memory", "eval-hub", "run-logs", "approvals", "billing"):
+    for provider in (
+        "control-plane-members",
+        "channels",
+        "memory",
+        "eval-hub",
+        "run-logs",
+        "approvals",
+        "billing",
+    ):
         assert provider in proofs, (provider, sorted(proofs))
     assert proofs["channels"]["erased"] >= 3 and proofs["memory"]["erased"] == 1
     assert proofs["eval-hub"]["erased"] == 1 and proofs["run-logs"]["erased"] >= 2
@@ -243,7 +316,9 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     assert owner.audit.verify()["ok"] is True
     events = list(owner.audit.iterate())
     assert len(events) > chain_len_before - 1
-    audit_text = json.dumps(events) + p9.q(st, f"SELECT t::text FROM audit_events t WHERE tenant_id='{d.a_tid}'")
+    audit_text = json.dumps(events) + p9.q(
+        st, f"SELECT t::text FROM audit_events t WHERE tenant_id='{d.a_tid}'"
+    )
     for marker in j.markers:
         assert marker not in audit_text, f"raw {marker!r} is in the audit chain"
     assert any("dsar.erase.completed" in json.dumps(e) for e in events)
@@ -251,8 +326,14 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     bob_after = p9.digest(
         "\n".join(
             [
-                p9.q(st, f"SELECT content FROM conversation_messages WHERE tenant_id='{d.a_tid}' AND content LIKE '%ORD-{d.bob.tag}-7731%'"),
-                p9.q(st, f"SELECT content FROM memory_chunks WHERE tenant_id='{d.a_tid}' AND subject = '{d.bob.user_ref}'"),
+                p9.q(
+                    st,
+                    f"SELECT content FROM conversation_messages WHERE tenant_id='{d.a_tid}' AND content LIKE '%ORD-{d.bob.tag}-7731%'",
+                ),
+                p9.q(
+                    st,
+                    f"SELECT content FROM memory_chunks WHERE tenant_id='{d.a_tid}' AND subject = '{d.bob.user_ref}'",
+                ),
             ]
         )
     )
@@ -264,7 +345,10 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     # tenant B's privacy officer cannot see or run tenant A's request
     other = ax_of(st, d.k_po_b)
     assert other.governance.requests.list()["items"] == []
-    assert rest(st, d.k_po_b, "POST", f"/governance/dsar-requests/{req['id']}/erase").status_code == 404
+    assert (
+        rest(st, d.k_po_b, "POST", f"/governance/dsar-requests/{req['id']}/erase").status_code
+        == 404
+    )
 
 
 # =================================================================================================================================
@@ -281,12 +365,17 @@ class RetentionWorld:
         self.k_po = stack.api_key(self.tid, self.po_member["member_id"])
         self.k_owner = stack.api_key(self.tid, t["owner_member_id"])
         self.tag = secrets.token_hex(3)
-        self.route = stack.ops("channels/route", tenant_id=self.tid, team_id=f"TR{self.tag}", transcript_mode="full")
+        self.route = stack.ops(
+            "channels/route", tenant_id=self.tid, team_id=f"TR{self.tag}", transcript_mode="full"
+        )
         for i in range(3):
             stack.ops("memory/write", tenant_id=self.tid, content=f"old note {i} {self.tag}")
         stack.ops("memory/write", tenant_id=self.tid, content=f"fresh note {self.tag}")
         for i in range(2):
-            assert p9.slack_post(self.route, f"UOLD{i}", f"old question {i} {self.tag}").status_code == 200
+            assert (
+                p9.slack_post(self.route, f"UOLD{i}", f"old question {i} {self.tag}").status_code
+                == 200
+            )
         assert p9.slack_post(self.route, "UFRESH", f"fresh question {self.tag}").status_code == 200
         # age the "old" rows past every retention period (the table owner; the application cannot rewrite history)
         tid = self.tid
@@ -302,10 +391,14 @@ class RetentionWorld:
         return p9.count(self.stack, "memory_chunks", self.tid, "content LIKE 'old note%'")
 
     def old_messages(self) -> int:
-        return p9.count(self.stack, "conversation_messages", self.tid, "content LIKE 'old question%'")
+        return p9.count(
+            self.stack, "conversation_messages", self.tid, "content LIKE 'old question%'"
+        )
 
     def fresh(self) -> int:
-        return p9.count(self.stack, "memory_chunks", self.tid, "content LIKE 'fresh note%'") + p9.count(
+        return p9.count(
+            self.stack, "memory_chunks", self.tid, "content LIKE 'fresh note%'"
+        ) + p9.count(
             self.stack, "conversation_messages", self.tid, "content LIKE 'fresh question%'"
         )
 
@@ -330,8 +423,16 @@ def test_b1_dry_run_reports_matches_and_changes_nothing(ret: RetentionWorld) -> 
     rep = po.governance.retention.run({"classes": ["memory", "conversation"]})
     assert rep["dry_run"] is True
     c = by_class(rep)
-    assert c["memory"]["status"] == "dry_run" and c["memory"]["matched"] == 3 and c["memory"]["purged"] == 0
-    assert c["conversation"]["status"] == "dry_run" and c["conversation"]["matched"] == 2 and c["conversation"]["purged"] == 0
+    assert (
+        c["memory"]["status"] == "dry_run"
+        and c["memory"]["matched"] == 3
+        and c["memory"]["purged"] == 0
+    )
+    assert (
+        c["conversation"]["status"] == "dry_run"
+        and c["conversation"]["matched"] == 2
+        and c["conversation"]["purged"] == 0
+    )
     assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == before
     assert any(r["run_id"] == rep["run_id"] for r in po.governance.retention.runs()["items"])
 
@@ -345,12 +446,16 @@ def test_b2_a_legal_hold_stops_the_purge_and_releasing_it_lets_it_run(ret: Reten
     for cls in ("memory", "conversation"):
         assert by_class(held)[cls]["status"] == "skipped_hold", by_class(held)[cls]
         assert by_class(held)[cls]["purged"] == 0
-    assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == (3, 2, 2), "a held tenant lost data"
+    assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == (3, 2, 2), (
+        "a held tenant lost data"
+    )
     po.governance.holds.release(hold["id"])
     done = po.governance.retention.run({"classes": ["memory", "conversation"], "dry_run": False})
     c = by_class(done)
     assert c["memory"]["status"] == "purged" and c["memory"]["purged"] == 3, c["memory"]
-    assert c["conversation"]["status"] == "purged" and c["conversation"]["purged"] == 2, c["conversation"]
+    assert c["conversation"]["status"] == "purged" and c["conversation"]["purged"] == 2, c[
+        "conversation"
+    ]
     assert (ret.old_notes(), ret.old_messages(), ret.fresh()) == (0, 0, 2)
 
 
@@ -367,7 +472,9 @@ def test_b3_audit_is_never_purged(ret: RetentionWorld) -> None:
     assert ret.audit_count() >= n
     assert ax_of(ret.stack, ret.k_owner).audit.verify()["ok"] is True
     audit_text = p9.q(ret.stack, f"SELECT t::text FROM audit_events t WHERE tenant_id='{ret.tid}'")
-    assert f"old note 0 {ret.tag}" not in audit_text and f"old question 0 {ret.tag}" not in audit_text
+    assert (
+        f"old note 0 {ret.tag}" not in audit_text and f"old question 0 {ret.tag}" not in audit_text
+    )
 
 
 # =================================================================================================================================
@@ -387,9 +494,15 @@ def _abl(name: str, *, phi: bool) -> dict[str, Any]:
                 "transparencyNotice": "You are interacting with an AI system.",
             },
             "model": {
-                "primary": {"provider": "openai", "model": "gpt-4o", "params": {"maxOutputTokens": 128}}
+                "primary": {
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "params": {"maxOutputTokens": 128},
+                }
             },
-            "instructions": {"system": "You look claims up for the tenant. Use the tools you are given."},
+            "instructions": {
+                "system": "You look claims up for the tenant. Use the tools you are given."
+            },
             "routing": {"stages": ["llm"]},
             "tools": [
                 {"name": "lookup-claim", "kind": "function", "sideEffects": "read"},
@@ -425,7 +538,9 @@ class PhiWorld:
         self.stack = stack
         pack = _phi_pack()
         slug = secrets.token_hex(3)
-        self.phi = stack.ops("provision-tenant", slug=f"phi{slug}", byo_key=istack.BYO_KEY, pack=pack, phi_mode=True)
+        self.phi = stack.ops(
+            "provision-tenant", slug=f"phi{slug}", byo_key=istack.BYO_KEY, pack=pack, phi_mode=True
+        )
         self.plain = stack.provision(f"pln{slug}", pack=pack)
         self.tid = self.phi["tenant_id"]
         self.k = stack.api_key(self.tid, self.phi["owner_member_id"])
@@ -456,7 +571,13 @@ def test_c2_channel_messages_are_redacted_before_they_are_stored(phiw: PhiWorld)
     """Scenario c, channel ingress: a Slack message on a PHI route carries each canary; the stored conversation holds none of them
     (the route is configured to keep FULL text, which PHI mode caps at a redacted preview)."""
     st = phiw.stack
-    route = st.ops("channels/route", tenant_id=phiw.tid, team_id="TPHI" + secrets.token_hex(2), phi=True, transcript_mode="full")
+    route = st.ops(
+        "channels/route",
+        tenant_id=phiw.tid,
+        team_id="TPHI" + secrets.token_hex(2),
+        phi=True,
+        transcript_mode="full",
+    )
     for i, (text, _core) in enumerate(p9.CANARIES):
         r = p9.slack_post(route, f"UPHI{i}", text)
         assert r.status_code == 200, (text, r.status_code, r.text)
@@ -464,9 +585,16 @@ def test_c2_channel_messages_are_redacted_before_they_are_stored(phiw: PhiWorld)
     assert stored.count("\n") + 1 >= len(p9.CANARIES)
     assert p9.leaked(stored) == [], f"raw PHI in the conversation log: {p9.leaked(stored)}"
     # the control: a non-PHI route with full transcripts DOES keep the words (so the redaction above is the PHI path, not the transport)
-    plain = st.ops("channels/route", tenant_id=phiw.plain["tenant_id"], team_id="TPLN" + secrets.token_hex(2), transcript_mode="full")
+    plain = st.ops(
+        "channels/route",
+        tenant_id=phiw.plain["tenant_id"],
+        team_id="TPLN" + secrets.token_hex(2),
+        transcript_mode="full",
+    )
     assert p9.slack_post(plain, "UPLAIN", p9.CANARIES[0][0]).status_code == 200
-    kept = p9.q(st, f"SELECT content FROM conversation_messages WHERE tenant_id='{phiw.plain['tenant_id']}'")
+    kept = p9.q(
+        st, f"SELECT content FROM conversation_messages WHERE tenant_id='{phiw.plain['tenant_id']}'"
+    )
     assert "123-45-6789" in kept
 
 
@@ -477,7 +605,9 @@ def test_c3_memory_writes_are_redacted_before_they_are_stored(phiw: PhiWorld) ->
     stored = p9.q(st, f"SELECT t::text FROM memory_chunks t WHERE tenant_id='{phiw.tid}'")
     assert p9.leaked(stored) == [], f"raw PHI in memory: {p9.leaked(stored)}"
     st.ops("memory/write", tenant_id=phiw.plain["tenant_id"], content=p9.CANARIES[0][0])
-    assert "123-45-6789" in p9.q(st, f"SELECT content FROM memory_chunks WHERE tenant_id='{phiw.plain['tenant_id']}'")
+    assert "123-45-6789" in p9.q(
+        st, f"SELECT content FROM memory_chunks WHERE tenant_id='{phiw.plain['tenant_id']}'"
+    )
 
 
 def test_c4_eval_datasets_are_redacted_at_ingest(phiw: PhiWorld) -> None:
@@ -493,7 +623,9 @@ def test_c4_eval_datasets_are_redacted_at_ingest(phiw: PhiWorld) -> None:
     assert p9.leaked(served) == [], "the API serves raw PHI"
 
 
-def test_c5_run_input_tool_args_tool_errors_and_answers_are_redacted_in_the_run_log(phiw: PhiWorld) -> None:
+def test_c5_run_input_tool_args_tool_errors_and_answers_are_redacted_in_the_run_log(
+    phiw: PhiWorld,
+) -> None:
     """Scenario c, run path (the gap closed in this phase): each canary is the run INPUT, becomes the argument of two tool calls, comes
     back in a tool result and in a tool ERROR, and is echoed in the final answer. None of it is in the events the API serves, and
     the control (a non-PHI blueprint) shows the same flow DOES carry the words."""
@@ -503,9 +635,13 @@ def test_c5_run_input_tool_args_tool_errors_and_answers_are_redacted_in_the_run_
         assert final["state"] == "terminated", final
         seen.append(json.dumps(events) + json.dumps(final))
     assert any("tool_call" in e["type"] or "tool" in e["type"] for e in events)
-    assert p9.leaked("\n".join(seen)) == [], f"raw PHI in the run log: {p9.leaked(chr(10).join(seen))}"
+    assert p9.leaked("\n".join(seen)) == [], (
+        f"raw PHI in the run log: {p9.leaked(chr(10).join(seen))}"
+    )
     _final, ctl = phiw.run(ax_of(phiw.stack, phiw.k_plain), "plain-intake", p9.CANARIES[0][0])
-    assert "123-45-6789" in json.dumps(ctl), "control: the non-PHI run log is expected to keep the words"
+    assert "123-45-6789" in json.dumps(ctl), (
+        "control: the non-PHI run log is expected to keep the words"
+    )
 
 
 def test_c6_nothing_raw_anywhere_a_database_log_or_the_audit_chain_can_hold(phiw: PhiWorld) -> None:
@@ -542,14 +678,19 @@ class ResidencyWorld:
         # a publisher for each (claim, key, signed bundle) is set up while the tenant is still homed in us-east-1
         from evals_world import Cli, setup_publisher  # noqa: PLC0415
 
-        for label, tenant, key in (("home", self.home, self.k_home), ("pinned", self.pinned, self.k_pinned)):
+        for label, _tenant, key in (
+            ("home", self.home, self.k_home),
+            ("pinned", self.pinned, self.k_pinned),
+        ):
             w = type("W", (), {})()
             w.stack, w.ns, w.state, w.owner_key = stack, f"res-{label}-{slug}", {}, key  # type: ignore[attr-defined]
             setup_publisher(w)  # type: ignore[arg-type]
             cli: Cli = w.state["publisher_cli"]  # type: ignore[attr-defined]
             abl = _abl(f"res-{label}-agent", phi=False)
             f = cli.file(f"res-{label}.json", abl)
-            signed = cli.run("registry", "sign", f, "--namespace", w.ns, "--key", str(cli.tmp / "publisher.pem")).stdout  # type: ignore[attr-defined]
+            signed = cli.run(
+                "registry", "sign", f, "--namespace", w.ns, "--key", str(cli.tmp / "publisher.pem")
+            ).stdout  # type: ignore[attr-defined]
             self.signed[label] = json.loads(signed)
             self.ns[label] = w.ns
         stack.ops("tenant/set-region", tenant_id=self.pinned["tenant_id"], region="eu-west-1")
@@ -569,23 +710,36 @@ def refused(call: Any) -> AxisError:
 def is_residency_violation(err: AxisError) -> bool:
     """403 with the gateway's `residency_violation` problem (title "Residency violation"; the SDK's slug is the generic `forbidden`)."""
     p = err.problem or {}
-    return err.status == 403 and "residency_violation" in json.dumps(p) + str(err.message).lower().replace(" ", "_")
+    return err.status == 403 and "residency_violation" in json.dumps(p) + str(
+        err.message
+    ).lower().replace(" ", "_")
 
 
-def test_d1_registry_refuses_a_cross_region_write_and_allows_the_home_tenant(resw: ResidencyWorld) -> None:
+def test_d1_registry_refuses_a_cross_region_write_and_allows_the_home_tenant(
+    resw: ResidencyWorld,
+) -> None:
     """Scenario d: publishing a registry version for the tenant homed in eu-west-1 is refused by the us-east-1 registry with 403
     residency_violation (no region names in the answer); the same call for the home-region tenant succeeds."""
     ok = ax_of(resw.stack, resw.k_home).registry.publish(resw.ns["home"], resw.signed["home"])
     assert ok["version"] == "1.0.0"
-    err = refused(lambda: ax_of(resw.stack, resw.k_pinned).registry.publish(resw.ns["pinned"], resw.signed["pinned"]))
+    err = refused(
+        lambda: ax_of(resw.stack, resw.k_pinned).registry.publish(
+            resw.ns["pinned"], resw.signed["pinned"]
+        )
+    )
     assert is_residency_violation(err), (err.status, err.code, err.problem, str(err))
     assert "eu-west-1" not in str(err) and "us-east-1" not in str(err)
 
 
 def test_d2_the_eval_hub_refuses_a_cross_region_write(resw: ResidencyWorld) -> None:
     cases = [{"id": "c1", "input": "hello", "expected": "hi"}]
-    assert ax_of(resw.stack, resw.k_home).evals.datasets.create("res-home", cases)["name"] == "res-home"
-    err = refused(lambda: ax_of(resw.stack, resw.k_pinned).evals.datasets.create("res-pinned", cases))
+    assert (
+        ax_of(resw.stack, resw.k_home).evals.datasets.create("res-home", cases)["name"]
+        == "res-home"
+    )
+    err = refused(
+        lambda: ax_of(resw.stack, resw.k_pinned).evals.datasets.create("res-pinned", cases)
+    )
     assert is_residency_violation(err), (err.status, err.code, err.problem)
     assert p9.count(resw.stack, "eval_hub_docs", resw.pinned["tenant_id"]) == 0
     # reads are not writes: the pinned tenant can still read its own data
@@ -634,7 +788,9 @@ def test_d4_a_model_call_to_a_provider_outside_the_allowed_regions_is_refused_be
             200,
             json={
                 "model": "gpt-4o",
-                "choices": [{"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+                "choices": [
+                    {"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}
+                ],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1},
             },
         )
@@ -664,7 +820,9 @@ def test_d4_a_model_call_to_a_provider_outside_the_allowed_regions_is_refused_be
             asyncio.run(gateway(allowed).complete(req(region)))
         assert e.value.kind is ErrorKind.CONFIGURATION
     with pytest.raises(ModelError):
-        asyncio.run(gateway(frozenset()).complete(req("eu-west-1")))  # an empty allow-list permits nothing
+        asyncio.run(
+            gateway(frozenset()).complete(req("eu-west-1"))
+        )  # an empty allow-list permits nothing
     assert calls == [], f"a refused model call reached the network: {calls}"
     assert asyncio.run(gateway(allowed).complete(req("EU-West-1"))).text == "ok"
     assert len(calls) == 1
@@ -675,13 +833,17 @@ def test_d4_a_model_call_to_a_provider_outside_the_allowed_regions_is_refused_be
 # =================================================================================================================================
 
 
-def test_e1_annex_iv_document_for_a_real_blueprint_version_is_sealed_and_verifies(phiw: PhiWorld) -> None:
+def test_e1_annex_iv_document_for_a_real_blueprint_version_is_sealed_and_verifies(
+    phiw: PhiWorld,
+) -> None:
     """Scenario e: the tenant of scenario c published ``phi-intake@1.0.0``, runs it through the kernel (c5) and holds a hash-chained
     audit log. The Annex IV document is generated from those REAL records (blueprint, policy packs, audit statistics, risk
     classification), is sealed, verifies on read, is idempotent for unchanged sources, and FAILS verification when a stored byte is
     altered behind the service's back. Sections without a source are reported as gaps, not invented."""
     st = phiw.stack
-    if p9.count(st, "audit_events", phiw.tid) < 5:  # when run alone, give the tenant a run to document
+    if (
+        p9.count(st, "audit_events", phiw.tid) < 5
+    ):  # when run alone, give the tenant a run to document
         phiw.run(phiw.ax, "phi-intake", "claim 7")
     comp = phiw.ax.compliance
     # the version is also signed and published to a registry namespace (provenance is one of the document's real sources)
@@ -700,7 +862,9 @@ def test_e1_annex_iv_document_for_a_real_blueprint_version_is_sealed_and_verifie
     assert secs["record_keeping"]["data"]["chain_verified"] is True
     assert secs["record_keeping"]["data"]["event_count"] > 0
     assert {s["status"] for s in secs.values()} <= {"complete", "partial", "gap"}
-    gaps = sorted(k for k, s in secs.items() if s["status"] == "gap")  # honest: whatever has no source says so
+    gaps = sorted(
+        k for k, s in secs.items() if s["status"] == "gap"
+    )  # honest: whatever has no source says so
     assert doc["content_hash"] and len(doc["content_hash"]) == 64
     got = comp.documents.get(doc["meta"]["document_id"])
     assert got["verification"] == {"ok": True, "failed": []}, got["verification"]
@@ -759,13 +923,116 @@ def test_g1_kernel_killed_mid_run_nothing_executes(ch: Any) -> None:
     chaos_suite.test_01_kernel_killed_before_a_run_nothing_executes_then_recovers(ch)
 
 
-def test_g2_losing_the_audit_database_refuses_mutations_with_503_and_decisions_deny(ch: Any) -> None:
+def test_g2_losing_the_audit_database_refuses_mutations_with_503_and_decisions_deny(
+    ch: Any,
+) -> None:
     """Scenario g: the kernel loses its audit database -> every decision is DENY and nothing runs unaudited; the gateway loses its
     database -> run starts answer 503 and create nothing; both recover without a restart."""
-    chaos_suite.test_05_kernel_loses_its_audit_database_decisions_deny_and_nothing_runs_unaudited(ch)
+    chaos_suite.test_05_kernel_loses_its_audit_database_decisions_deny_and_nothing_runs_unaudited(
+        ch
+    )
     chaos_suite.test_06_gateway_loses_its_database_mutations_refuse_with_503_and_create_nothing(ch)
 
 
 def test_g3_a_kill_switch_survives_a_kernel_restart(ch: Any) -> None:
     """Scenario g: engage the tenant kill switch, restart the kernel: it is still engaged (it used to be released: fail-open)."""
     chaos_suite.test_03_kernel_restart_keeps_the_kill_switch_engaged(ch)
+
+
+# =================================================================================================================================
+# h. disaster recovery: the committed drill result (`make dr-drill`) is well-formed, detected its negatives, within the NFR targets
+# =================================================================================================================================
+
+
+def _nfr_targets() -> dict[str, float]:
+    """The RPO / RTO targets as written in docs/nfr.md (rows N6, N7), converted to seconds: the test reads the document, not a copy."""
+    text = (ROOT / "docs" / "nfr.md").read_text()
+    units = {"s": 1.0, "min": 60.0, "h": 3600.0}
+    out: dict[str, float] = {}
+    for key, row in (("rpo", "N6"), ("rto", "N7")):
+        m = re.search(rf"\|\s*{row}\s*\|\s*(?:RPO|RTO)\s*<=\s*([\d.]+)\s*(s|min|h)\b", text)
+        assert m, f"docs/nfr.md has no {row} target row"
+        out[key] = float(m.group(1)) * units[m.group(2)]
+    return out
+
+
+def test_h1_the_committed_dr_drill_is_well_formed_and_within_the_nfr_targets() -> None:
+    """Scenario h: infra/dr/results/dr-drill.json (written by `make dr-drill`: a populated multi-tenant stack, a logical and a physical
+    backup, the postmaster killed and its data directory deleted, restores into fresh clusters, per-tenant verification) records no
+    failures, passing checks for BOTH restore paths, a measured RPO and RTO within docs/nfr.md, and both tamper negatives DETECTED."""
+    d = json.loads((ROOT / "infra" / "dr" / "results" / "dr-drill.json").read_text())
+    assert {"started", "steps", "machine", "measured", "failures"} <= d.keys()
+    assert d["failures"] == []
+    steps = d["steps"]
+    assert "SIGKILL" in steps["disaster"]
+    for path in ("restore_logical", "restore_physical"):
+        r = steps[path]
+        assert r["ok"] is True and r["checks"], path
+        assert all(c["ok"] is True for c in r["checks"]), [c for c in r["checks"] if not c["ok"]]
+        names = " ".join(c["name"] for c in r["checks"])
+        for needed in ("audit chain verifies", "signed checkpoint", "RLS"):
+            assert needed in names, (path, needed)
+    negatives = {n["tamper"]: n for n in steps["negatives"]}
+    assert {"flipped decision", "truncated tail"} <= negatives.keys()
+    for n in negatives.values():
+        assert n["detected"] is True and n["failed_checks"], n
+    t = _nfr_targets()
+    m = d["measured"]
+    assert 0 <= m["rpo_window_seconds"] <= t["rpo"], (m, t)
+    assert 0 < m["rto_logical_seconds"] <= t["rto"] and 0 < m["rto_physical_seconds"] <= t["rto"], (
+        m,
+        t,
+    )
+    assert steps["measured_rpo"]["window_seconds"] == m["rpo_window_seconds"]
+    lost = steps["restore_physical"]["audit_events_lost_per_tenant"]
+    assert sum(lost.values()) == steps["measured_rpo"]["lost_audit_events"], (
+        lost,
+        steps["measured_rpo"],
+    )
+
+
+# =================================================================================================================================
+# f. the red team as a RELEASE GATE
+# =================================================================================================================================
+
+
+def test_f1_redteam_core_passes_and_the_blueprint_is_released(stack: istack.Stack) -> None:
+    """Scenario f: ``redteam-agent`` declares ``redteam-core@1.0.0`` (threshold 1.0) in its ABL. The suite runs on the real stack (real
+    kernel, scripted worst-case GULLIBLE model, a real eval runner, results recorded in the Hub as a CI run). With every control in
+    place it passes and the registry RELEASES the version (the step the marketplace performs on approval)."""
+    import redteam_harness as rth  # noqa: PLC0415
+
+    rep = rth.campaign(
+        stack, pack=rth.PACK, datasets=["redteam-core"], release=True, label="f-control"
+    )
+    s = rep["summary"]
+    assert s["passed"] is True and not s["unsafe"], [f["id"] for f in s["failures"]]
+    assert rep["release_gate"]["redteam-core"]["allowed"] is True
+    assert rep["release"] == {"status": 200, "body": {"released": True}}, rep["release"]
+
+
+def test_f2_a_deliberately_weakened_control_fails_the_suite_and_blocks_the_release(
+    stack: istack.Stack,
+) -> None:
+    """Scenario f: the SAME blueprint and suite with one control weakened (the email allow-list widened to any recipient, the
+    reference mutant `relax-email-allowlist` of `make redteam-selfcheck`): the suite FAILS in the exfiltration category, the gate says
+    no and the release is BLOCKED with ``evals_gate_failed``, with the reasons."""
+    import redteam_harness as rth  # noqa: PLC0415
+
+    sys.path.insert(0, str(ROOT / "evals" / "redteam"))
+    import mutants  # noqa: PLC0415
+
+    m = next(x for x in mutants.MUTANTS if x.name == "relax-email-allowlist")
+    assert m.pack is not None
+    rep = rth.campaign(
+        stack, pack=m.pack(rth.PACK), datasets=["redteam-core"], release=True, label="f-weakened"
+    )
+    s = rep["summary"]
+    assert s["passed"] is False and s["unsafe"], (
+        "a weakened control must make the red-team suite fail"
+    )
+    assert {f["category"] for f in s["failures"]} >= {"exfiltration"}
+    assert rep["release_gate"]["redteam-core"]["allowed"] is False
+    rel = rep["release"]
+    assert rel["status"] == 500 and rel["body"]["code"] == "evals_gate_failed", rel
+    assert rel["body"]["reasons"], "the refusal must carry the gate's reasons"

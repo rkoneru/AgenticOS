@@ -1,4 +1,4 @@
-.PHONY: compliance-check e2e-compliance e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt loadtest chaos dr-drill redteam redteam-selfcheck redteam-lint threatmodel-check
+.PHONY: compliance-check e2e-compliance e2e-phase9 e2e-phase8 e2e-phase7 console-e2e docs-build sdk-generate sdk-mutation e2e-core e2e-phase3 e2e-phase4 e2e-phase5 e2e-phase6 contracts-lint freeze install dev dev-down dev-ps dev-health test e2e cov evals lint typecheck policy-test k3s-up tf-plan fmt loadtest chaos dr-drill redteam redteam-selfcheck redteam-lint threatmodel-check
 COMPOSE := docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env.example
 
 install:
@@ -182,6 +182,18 @@ e2e-compliance:
 e2e-governance:
 	pnpm build
 	bash infra/scripts/with-pg.sh uv run pytest e2e/test_governance.py -p no:cacheprovider --no-cov
+
+# Phase 9 exit (compliance, data governance, hardening) on the REAL stack, all scenarios TOGETHER (e2e/test_phase9_hardening.py): DSAR export +
+# erase for one person with data in 7 stores (member, a signed Slack message, memory, run logs, an eval case, approvals, billing refs), retention
+# with and without a legal hold, a PHI canary through the real ingress paths (channel, memory, eval dataset, run input/tool args/errors/answer),
+# residency refusals (registry, Eval Hub, billing, model egress), an Annex IV document from real records with its seal, the red team as a release
+# gate (a passing suite releases, a weakened control BLOCKS with evals_gate_failed), a chaos subset, and the committed DR drill result vs
+# docs/nfr.md. The compliance matrix checker and the threat-model checker run first (they fail on a citation that does not exist). Mutation check
+# of the wiring: `uv run python e2e/mutation_phase9.py`. Same prerequisites as e2e-phase8 (+ the chaos harness, in-repo).
+e2e-phase9: compliance-check threatmodel-check
+	pnpm build
+	bash infra/scripts/with-pg.sh uv run pytest e2e/test_phase9_hardening.py -p no:cacheprovider --no-cov
+	uv run pytest runtime/tests/test_bypass.py runtime/tests/test_audit_hook.py -q -p no:cacheprovider --no-cov
 
 # Phase 9 D: load test of the REAL stack (docs/runbooks/loadtest.md). Open-model Node harness (executed) + the committed k6 scripts (run when
 # perf/install-k6.sh has installed k6). ~2-3 minutes. Writes perf/results/loadtest-short.{json,md}. Same prerequisites as e2e-core.

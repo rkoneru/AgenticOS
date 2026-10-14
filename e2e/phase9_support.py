@@ -44,9 +44,7 @@ def dump_tenant(stack: istack.Stack, tenant_id: str, *, skip: tuple[str, ...] = 
     for table in tenant_tables(stack):
         if table in skip:
             continue
-        rows = q(
-            stack, f"SELECT t::text FROM {table} t WHERE tenant_id = '{tenant_id}' ORDER BY 1"
-        )
+        rows = q(stack, f"SELECT t::text FROM {table} t WHERE tenant_id = '{tenant_id}' ORDER BY 1")
         parts.extend(f"{table}: {r}" for r in rows.splitlines() if r)
     return "\n".join(parts)
 
@@ -56,7 +54,9 @@ def digest(text: str) -> str:
 
 
 def count(stack: istack.Stack, table: str, tenant_id: str, where: str = "true") -> int:
-    return int(q(stack, f"SELECT count(*) FROM {table} WHERE tenant_id = '{tenant_id}' AND {where}"))
+    return int(
+        q(stack, f"SELECT count(*) FROM {table} WHERE tenant_id = '{tenant_id}' AND {where}")
+    )
 
 
 # ---- PHI canaries ------------------------------------------------------------------------------------------------------------
