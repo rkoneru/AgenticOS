@@ -238,6 +238,68 @@ export interface EvalGateResult {
   checked_at: string;
 }
 
+// ---------------------------------------------------------------- data governance (OpenAPI 1.6.0)
+
+export interface GovernanceRequest {
+  id: string;
+  kind: "export" | "erase" | "restrict";
+  /** Opaque: identifiers are never returned. */
+  subject_ref: string;
+  status: "received" | "verified" | "processing" | "completed" | "rejected" | "cancelled";
+  received_at: string;
+  due_at: string;
+  extended: boolean;
+  verified_at: string | null;
+  verified_method: string | null;
+  destination_region: string | null;
+  result: Record<string, unknown>;
+}
+
+export interface GovernanceHold {
+  id: string;
+  kind: "legal_hold" | "restriction";
+  scope: "tenant" | "subject" | "case";
+  case_ref: string | null;
+  classes: unknown;
+  reason: string;
+  placed_by: string;
+  placed_at: string;
+  released_at: string | null;
+}
+
+export interface GovernanceRetentionClass {
+  data_class: string;
+  requested_days: number;
+  effective_days: number;
+  clamped: "min" | "max" | null;
+  source: "control_plane" | "governance" | "default";
+}
+
+export interface GovernanceRetentionReport {
+  run_id: string;
+  dry_run: boolean;
+  started_at: string;
+  finished_at?: string | null;
+  classes: Array<{
+    data_class: string;
+    status: string;
+    requested_days: number;
+    effective_days: number;
+    clamped?: "min" | "max" | null;
+    cutoff?: string | null;
+    matched: number;
+    purged: number;
+    protected_by_hold: number;
+    hold_id?: string;
+    error?: string;
+  }>;
+}
+
+export interface GovernanceResidency {
+  home_region: string;
+  allowed_regions: string[];
+}
+
 // ---------------------------------------------------------------- compliance (OpenAPI 1.5.0)
 
 export interface ComplianceSystem {
@@ -855,6 +917,13 @@ export interface Api {
   }): Promise<{ items: ComplianceAssessment[] }>;
   listComplianceDocuments(): Promise<{ items: ComplianceDocumentSummary[] }>;
   getComplianceDocument(id: string): Promise<ComplianceDocumentView>;
+  // data governance (OpenAPI 1.6.0): read-only here; requests, holds and purges are driven with the CLI or an SDK by the privacy officer
+  listGovernanceRequests(q?: { status?: string }): Promise<{ items: GovernanceRequest[] }>;
+  getGovernanceRequest(id: string): Promise<GovernanceRequest>;
+  listGovernanceHolds(q?: { all?: boolean }): Promise<{ items: GovernanceHold[] }>;
+  getGovernanceRetention(): Promise<{ items: GovernanceRetentionClass[] }>;
+  listGovernanceRetentionRuns(): Promise<{ items: GovernanceRetentionReport[] }>;
+  getGovernanceResidency(): Promise<GovernanceResidency>;
 }
 
 export function createApi(opts: ClientOptions = {}): Api {
@@ -1003,6 +1072,16 @@ export function createApi(opts: ClientOptions = {}): Api {
       }),
     listComplianceDocuments: () => json("GET", "/v1/compliance/documents"),
     getComplianceDocument: (id) => json("GET", `/v1/compliance/documents/${enc(id)}`),
+    listGovernanceRequests: (q) =>
+      json("GET", "/v1/governance/dsar-requests", {
+        query: { ...(q?.status ? { status: q.status } : {}) },
+      }),
+    getGovernanceRequest: (id) => json("GET", `/v1/governance/dsar-requests/${enc(id)}`),
+    listGovernanceHolds: (q) =>
+      json("GET", "/v1/governance/holds", { query: { ...(q?.all ? { all: true } : {}) } }),
+    getGovernanceRetention: () => json("GET", "/v1/governance/retention"),
+    listGovernanceRetentionRuns: () => json("GET", "/v1/governance/retention-runs"),
+    getGovernanceResidency: () => json("GET", "/v1/governance/residency"),
     listEvalDatasets: () => json("GET", "/v1/evals/datasets"),
     getEvalDataset: (name, version) =>
       json("GET", `/v1/evals/datasets/${enc(name)}/versions/${enc(String(version))}`),

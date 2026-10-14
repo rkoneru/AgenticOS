@@ -3,7 +3,16 @@ import { safeReturnTo } from "@/lib/security";
 
 export const metadata = { title: "Sign in" };
 
-const ROLES = ["owner", "admin", "builder", "operator", "auditor", "billing", "viewer"];
+const ROLES = [
+  "owner",
+  "admin",
+  "builder",
+  "operator",
+  "auditor",
+  "billing",
+  "viewer",
+  "privacy_officer",
+];
 
 export default async function Login({
   searchParams,

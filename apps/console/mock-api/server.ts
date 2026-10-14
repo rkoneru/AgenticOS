@@ -25,6 +25,7 @@ const ROLE_RANK: Record<string, number> = {
   auditor: 40,
   billing: 40,
   viewer: 10,
+  privacy_officer: 40,
 };
 
 interface RunRec {
@@ -357,6 +358,138 @@ function complianceRoute(
   if (p === `/compliance/documents/${CP_DOC_ID}`) return { status: 200, body: cpDocument() };
   if (p.startsWith("/compliance/documents/"))
     return { status: 404, body: { title: "not found", status: 404, code: "not_found" } };
+  return undefined;
+}
+
+// ---- Data-governance fixtures (OpenAPI 1.6.0): hostile text is in the data on purpose; identifiers are never present ---------------
+const GOV_REQ_ID = "0a1b2c3d-1111-4222-8333-444455556666";
+const GOV_REQUESTS: J[] = [
+  {
+    id: GOV_REQ_ID,
+    kind: "erase",
+    subject_ref: "sub_9f2c41d0a6b84e57a3c1e0d2b7f65a18",
+    status: "processing",
+    received_at: "2026-01-02T10:00:00.000Z",
+    due_at: "2026-02-01T10:00:00.000Z",
+    extended: false,
+    verified_at: "2026-01-02T11:00:00.000Z",
+    verified_method: `signed-token+admin-attestation ${XSS}`,
+    destination_region: null,
+    result: { blocked: [{ provider: "memory", hold: "h-1" }], note: XSS },
+  },
+  {
+    id: "1b2c3d4e-2222-4333-8444-555566667777",
+    kind: "export",
+    subject_ref: "sub_00000000000000000000000000000001",
+    status: "received",
+    received_at: "2099-01-02T10:00:00.000Z",
+    due_at: "2099-02-01T10:00:00.000Z",
+    extended: true,
+    verified_at: null,
+    verified_method: null,
+    destination_region: "eu-west-1",
+    result: {},
+  },
+];
+const GOV_HOLDS: J[] = [
+  {
+    id: "h1a2b3c4-3333-4444-8555-666677778888",
+    kind: "legal_hold",
+    scope: "case",
+    case_ref: "CASE-17",
+    classes: ["memory"],
+    reason: `Litigation ${XSS}`,
+    placed_by: "m-po",
+    placed_at: "2026-01-05T10:00:00.000Z",
+    released_at: null,
+  },
+  {
+    id: "h2a2b3c4-3333-4444-8555-666677779999",
+    kind: "restriction",
+    scope: "subject",
+    case_ref: null,
+    classes: null,
+    reason: "objection",
+    placed_by: "m-po",
+    placed_at: "2026-01-06T10:00:00.000Z",
+    released_at: "2026-01-07T10:00:00.000Z",
+  },
+];
+const GOV_RETENTION: J[] = [
+  {
+    data_class: "memory",
+    requested_days: 5,
+    effective_days: 30,
+    clamped: "min",
+    source: "governance",
+  },
+  {
+    data_class: "audit",
+    requested_days: 2555,
+    effective_days: 2555,
+    clamped: null,
+    source: "control_plane",
+  },
+];
+const GOV_RUNS: J[] = [
+  {
+    run_id: "aaaaaaaa-1111-4222-8333-444455556666",
+    dry_run: true,
+    started_at: "2026-01-08T10:00:00.000Z",
+    finished_at: "2026-01-08T10:00:01.000Z",
+    classes: [
+      {
+        data_class: "memory",
+        status: "dry_run",
+        requested_days: 30,
+        effective_days: 30,
+        matched: 4,
+        purged: 0,
+        protected_by_hold: 1,
+      },
+      {
+        data_class: "run_logs",
+        status: "error",
+        requested_days: 30,
+        effective_days: 30,
+        matched: 0,
+        purged: 0,
+        protected_by_hold: 0,
+        error: `store failed ${XSS}`,
+      },
+    ],
+  },
+];
+function governanceRoute(
+  p: string,
+  method: string,
+  url: URL,
+): { status: number; body: unknown } | undefined {
+  if (method !== "GET") return undefined;
+  if (p === "/governance/dsar-requests") {
+    const st = url.searchParams.get("status");
+    return { status: 200, body: { items: GOV_REQUESTS.filter((r) => !st || r["status"] === st) } };
+  }
+  const m = /^\/governance\/dsar-requests\/([^/]+)$/.exec(p);
+  if (m) {
+    const r = GOV_REQUESTS.find((x) => x["id"] === m[1]);
+    return r
+      ? { status: 200, body: r }
+      : { status: 404, body: { title: "not found", status: 404, code: "not_found" } };
+  }
+  if (p === "/governance/holds")
+    return {
+      status: 200,
+      body: {
+        items: GOV_HOLDS.filter(
+          (h) => url.searchParams.get("all") === "true" || h["released_at"] === null,
+        ),
+      },
+    };
+  if (p === "/governance/retention") return { status: 200, body: { items: GOV_RETENTION } };
+  if (p === "/governance/retention-runs") return { status: 200, body: { items: GOV_RUNS } };
+  if (p === "/governance/residency")
+    return { status: 200, body: { home_region: "eu-west-1", allowed_regions: ["eu-west-1"] } };
   return undefined;
 }
 
@@ -1386,6 +1519,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       if (role === "billing")
         return problem(res, 403, "forbidden", "Your role may not read compliance records");
       const r = complianceRoute(p, method, url);
+      if (r) return send(res, r.status, r.body);
+    }
+    // ---- Data governance (OpenAPI 1.6.0): read-only pages for owner, admin, auditor and privacy_officer
+    if (p.startsWith("/governance/")) {
+      if (!["owner", "admin", "auditor", "privacy_officer"].includes(role))
+        return problem(res, 403, "forbidden", "Your role may not read governance data");
+      const r = governanceRoute(p, method, url);
       if (r) return send(res, r.status, r.body);
     }
     // ---- Eval Hub (OpenAPI 1.3.0 / 1.4.0): enough state for the console pages; hostile text is in the data on purpose ----
