@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -222,9 +223,14 @@ def main() -> int:
             lines = (out.stdout + out.stderr).strip().splitlines()
             tail = lines[-1] if lines else ""
             killed = out.returncode != 0 and " failed" in tail and "error" not in tail
-            print(f"{'KILLED  ' if killed else 'SURVIVED'} {m.name}  [{tail}]", flush=True)
+            label = "KILLED  " if killed else ("ERRORED " if "error" in tail else "SURVIVED")
+            print(f"{label} {m.name}  [{tail}]", flush=True)
             if not killed:
                 survived.append(m.name)
+                # keep the evidence: a stack that failed to start is not a kill and needs a root cause, not a retry
+                log = Path(tempfile.gettempdir()) / f"axis-mutation9-{len(survived)}.log"
+                log.write_text(f"{m.name}\n\n{out.stdout}\n{out.stderr}")
+                print(f"         output kept in {log}", flush=True)
         finally:
             for rel, text in originals.items():
                 (ROOT / rel).write_text(text)
