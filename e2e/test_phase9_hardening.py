@@ -302,6 +302,9 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
         assert provider in proofs, (provider, sorted(proofs))
     assert proofs["channels"]["erased"] >= 3 and proofs["memory"]["erased"] == 1
     assert proofs["eval-hub"]["erased"] == 1 and proofs["run-logs"]["erased"] >= 2
+    # what the verification pass RE-QUERIED (not what the erase said): retained / pseudonymised rows are counted, not assumed
+    assert proofs["control-plane-members"]["retained"] == 1 and proofs["billing"]["retained"] == 2
+    assert proofs["approvals"]["pseudonymised"] == 1 and verification["verified_at"]
     # every raw marker is gone from the tenant's data, wherever it lived
     dump = p9.dump_tenant(st, d.a_tid)
     for marker in j.markers:
