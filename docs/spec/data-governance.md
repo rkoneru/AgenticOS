@@ -73,4 +73,11 @@ expiry (at most 7 days). The attester must differ from the member who opened the
 
 ## 10. Honest limits
 
-Exact-match discovery only; backups not covered; KMS not built; eval hashes break by design; see NEEDS 362-379 and 407-412.
+Exact-match discovery only; backups not covered; KMS not built; eval hashes break by design; see NEEDS 362-379 and 407-421.
+
+## 11. Proof on the real stack
+
+`make e2e-governance` (membership subject, dual control, holds) and `make e2e-phase9` (`e2e/test_phase9_hardening.py`, ADR 0113): one person across seven providers exported and
+erased through the public API with the verification pass, the audit chain intact and free of raw data, another tenant byte-identical; retention with and without a hold; PHI canaries
+through the channel, memory, Eval Hub and run paths (the run log of a PHI run passes `axis_runtime.phi_net` before every event is sealed); residency refusals in the registry,
+the Eval Hub and billing, and in the ModelGateway. `runs`, `run_events` and `approvals` have no writer on the dev stack and are seeded by SQL (NEEDS 413).

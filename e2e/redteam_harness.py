@@ -82,6 +82,7 @@ def campaign(
     label: str = "control",
     timeout_s: int = 900,
     probes: bool = False,
+    release: bool = False,
 ) -> dict[str, Any]:
     slug = "rt" + secrets.token_hex(3)
     tenant = stack.provision(slug, pack=pack)
@@ -114,6 +115,7 @@ def campaign(
     verdicts: list[dict[str, Any]] = []
     runs: dict[str, Any] = {}
     gates: dict[str, Any] = {}
+    release_result: dict[str, Any] | None = None
     try:
         time.sleep(2.0)
         for d in datasets:
@@ -150,6 +152,14 @@ def campaign(
                 blueprint=bp_dict(w, v),  # type: ignore[arg-type]
                 suites=[{"ref": suite["ref"], "threshold": 1.0}],
             )
+        if release and "redteam-core" in datasets:
+            # the step the marketplace performs on approval: the registry releases the version and asks the Hub's gate first. The
+            # blueprint declares `redteam-core@1.0.0` (threshold 1.0), so the red team is a RELEASE GATE, not a report.
+            v = published["redteam-agent"]
+            status, body = stack.ops_raw(
+                "registry/release", namespace=w.ns, name=v["name"], version=v["version"]
+            )
+            release_result = {"status": status, "body": body}
     finally:
         err = runner.stderr()
         runner.stop()
@@ -182,6 +192,7 @@ def campaign(
             k: {"allowed": g.get("allowed"), "reasons": g.get("reasons")} for k, g in gates.items()
         },
         "runner_stderr_tail": err[-1500:],
+        "release": release_result,
     }
 
 

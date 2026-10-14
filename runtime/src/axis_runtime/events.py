@@ -669,6 +669,8 @@ class RunRecorder:
         self.clock = clock
         self.run_id = run_id
         self._state = state
+        #: PHI run: free-text values are redacted before an event is sealed (axis_runtime.phi_net)
+        self._phi = False
         self._lock = asyncio.Lock()
         self._listeners: list[Callable[[RunEvent, RunState], None]] = []
 
@@ -683,12 +685,16 @@ class RunRecorder:
         meta: Mapping[str, JSON],
     ) -> RunRecorder:
         rec = cls(log, None, clock, run_id)
+        rec._phi = meta.get("phi") is True
         await rec.record(EventType.RUN_STARTED, None, {"tenant_id": tenant_id, **meta})
         return rec
 
     @classmethod
     async def resume(cls, log: RunEventLog, clock: Clock, run_id: str) -> RunRecorder:
-        return cls(log, replay(await log.read(run_id)), clock, run_id)
+        events = await log.read(run_id)
+        rec = cls(log, replay(events), clock, run_id)
+        rec._phi = bool(events) and events[0].data.get("phi") is True
+        return rec
 
     @property
     def state(self) -> RunState:
@@ -700,6 +706,10 @@ class RunRecorder:
         self._listeners.append(listener)
 
     async def record(self, type: str, pid: str | None, data: Mapping[str, JSON]) -> RunEvent:
+        if self._phi and type != EventType.RUN_STARTED:
+            from axis_runtime.phi_net import scrub_event_data
+
+            data = scrub_event_data(data)
         async with self._lock:
             for attempt in range(self.MAX_CONFLICT_RETRIES + 1):
                 seq = 1 if self._state is None else self._state.last_seq + 1

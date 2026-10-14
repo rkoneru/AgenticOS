@@ -5,7 +5,7 @@ export default defineConfig({
     testTimeout: 20_000,
     coverage: {
       provider: "v8",
-      include: ["src/proxy.ts"],
+      include: ["src/proxy.ts", "src/lane.ts"],
       thresholds: { lines: 90, branches: 80, functions: 90, statements: 90 },
     },
   },

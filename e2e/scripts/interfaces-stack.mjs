@@ -44,7 +44,27 @@ import {
 } from "@axis/marketplace";
 import { PgRegistryStore, RegistryService, ServiceAudit } from "@axis/registry";
 import { PgDocStore as PgEvalDocStore, createEvalHub } from "@axis/eval-hub";
-import { EvidenceVerifier, MasterKeyProvider } from "@axis/data-governance";
+import {
+  EvidenceVerifier,
+  MasterKeyProvider,
+  PgRegionResolver,
+  ResidencyPolicy,
+} from "@axis/data-governance";
+import {
+  ChannelGateway,
+  IdentityService,
+  InboxQueue,
+  MemoryIdempotencyStore,
+  MemoryRateLimiter,
+  PgConversationStore,
+  SlackAdapter,
+  StaticRoutingTable,
+  WebHub,
+  createDevServer as createChannelsServer,
+  listenLoopback as channelsListen,
+  staticTokenAuthenticator as channelsTokens,
+} from "@axis/channels";
+import { HashEmbedder, PgMemoryService } from "@axis/memory";
 
 const cfg = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const hex = (s) => Buffer.from(s, "hex");
@@ -124,10 +144,15 @@ const cpServer = createControlPlaneServer(cp.deps);
 const cpPort = await cpListen(cpServer, 0);
 
 // ---- billing ------------------------------------------------------------------------------------------------------
+// The billing service enforces residency like the gateway's stores do (ADR 0083): it serves cfg.region, so a tenant homed elsewhere is refused.
+const residency = new ResidencyPolicy(
+  new PgRegionResolver({ pool, role: "axis_governance" }),
+).forService(cfg.region);
 const ledger = new PgUsageLedger({
   pool,
   signer: new HmacSealSigner(Buffer.from(cfg.seal_key, "utf8")),
   role: cfg.role,
+  residency,
 });
 const billingTokens = new Map();
 const billingServer = createDevServer({
@@ -142,6 +167,56 @@ const billingServer = createDevServer({
   now: () => new Date(),
 });
 const billingPort = await billingListen(billingServer, 0);
+
+// ---- channels + memory (Phase 9 hardening e2e) ----------------------------------------------------------------------------
+// The REAL channels gateway (Slack signature verification, tenant routing, replay protection, identity, the PHI transcript net, the
+// hash-chained audit) on its own loopback port, with routes added at runtime by the `channels/route` op, and the real memory service.
+// Provider transports are not wired: nothing here can send a message out.
+const channelRoutes = [];
+let routingTable = new StaticRoutingTable([]);
+const dynamicRoutes = {
+  lookup: (c, k) => routingTable.lookup(c, k),
+  candidates: (c) => routingTable.candidates(c),
+  forTenant: (t, c) => routingTable.forTenant(t, c),
+  all: () => routingTable.all(),
+};
+const chStore = new PgConversationStore({ pool, role: cfg.role });
+const chLimiter = new MemoryRateLimiter();
+const chHub = new WebHub();
+const chInbox = new InboxQueue();
+const chIdentity = new IdentityService({ store: chStore, limiter: chLimiter });
+const chGateway = new ChannelGateway({
+  adapters: [new SlackAdapter()],
+  routes: dynamicRoutes,
+  store: chStore,
+  identity: chIdentity,
+  audit,
+  idempotency: new MemoryIdempotencyStore(),
+  limiter: chLimiter,
+  hub: chHub,
+  http: { request: async () => ({ status: 200, body: JSON.stringify({ ok: true }) }) },
+  email: { send: async () => {} },
+  onMessage: chInbox.handler,
+  hashKey: randomBytes(32).toString("hex"),
+  logger: {
+    debug: () => {},
+    info: () => {},
+    warn: (m, f) => console.error(JSON.stringify({ level: "warn", msg: m, ...f })),
+    error: (m, f) => console.error(JSON.stringify({ level: "error", msg: m, ...f })),
+  },
+  systemAudit: { sink: audit, tenant_id: randomUUID() },
+});
+const channelsServer = createChannelsServer({
+  gateway: chGateway,
+  routes: dynamicRoutes,
+  store: chStore,
+  identity: chIdentity,
+  hub: chHub,
+  inbox: chInbox,
+  authenticate: channelsTokens({}),
+});
+const channelsPort = await channelsListen(channelsServer, 0);
+const memory = new PgMemoryService({ pool, embedder: new HashEmbedder(), role: cfg.role });
 
 // ---- marketplace (publisher and staff side) -------------------------------------------------------------------------
 const mpDomain = new FakeDomainProver();
@@ -251,6 +326,7 @@ async function provision(b) {
     name: `Tenant ${slug}`,
     ownerEmail: `owner@${slug}.example`,
     region: cfg.region,
+    ...(b.phi_mode === true ? { phiMode: true } : {}),
   });
   const org = `org_${slug}`;
   await store.upsertConnection({
@@ -331,6 +407,84 @@ const ops = {
         memberId: b.attester_member_id,
       }),
     };
+  },
+  // ---- Phase 9 hardening e2e: the hands that seed and re-home a tenant ----
+  "tenant/set-region": async (b) => {
+    await pool.query("UPDATE tenants SET region = $2 WHERE id = $1", [b.tenant_id, b.region]);
+    return { ok: true };
+  },
+  "tenant/set-phi": async (b) => {
+    await pool.query("UPDATE tenants SET phi_mode = $2 WHERE id = $1", [
+      b.tenant_id,
+      b.phi === true,
+    ]);
+    return { ok: true };
+  },
+  "channels/route": async (b) => {
+    const secret = `slack-signing-${randomBytes(8).toString("hex")}`;
+    const route = {
+      channel: "slack",
+      provider_key: b.team_id,
+      tenant_id: b.tenant_id,
+      agent: b.agent ?? { name: "concierge", version: "1.0.0" },
+      secrets: { signing_secret: secret, bot_token: "xoxb-e2e" },
+      settings: { api_app_id: b.api_app_id ?? "A9E2E", bot_user_id: "UBOT" },
+      transcript: { mode: b.transcript_mode ?? "redacted_preview" },
+      phi: b.phi === true,
+      enabled: true,
+    };
+    channelRoutes.push(route);
+    routingTable = new StaticRoutingTable(channelRoutes);
+    return {
+      url: `http://127.0.0.1:${channelsPort}`,
+      team_id: b.team_id,
+      api_app_id: route.settings.api_app_id,
+      signing_secret: secret,
+    };
+  },
+  "memory/write": async (b) => {
+    const r = await memory.write(b.tenant_id, {
+      scope: b.scope ?? "tenant",
+      content: b.content,
+      ...(b.owner_ref ? { ownerRef: b.owner_ref } : {}),
+      ...(b.subject ? { subject: b.subject } : {}),
+      ...(b.metadata ? { metadata: b.metadata } : {}),
+      ...(b.phi === true ? { phi: true } : {}),
+      acl: { tenant: true },
+      principal: { id: b.principal ?? "e2e-writer", groups: [] },
+    });
+    return { id: r.id, phi: r.phi };
+  },
+  // Billing refs of a person: a usage event dimensioned by the person's reference, and a staff adjustment made BY them (actor)
+  "billing/usage": async (b) => {
+    const base = {
+      tenantId: b.tenant_id,
+      idempotencyKey: b.key,
+      eventTime: new Date(),
+      source: "e2e-hardening",
+    };
+    try {
+      if (b.actor) {
+        await ledger.append({
+          ...base,
+          entryType: "adjustment",
+          meter: "tokens_in",
+          quantity: 5n,
+          reason: "goodwill credit",
+          actor: b.actor,
+        });
+      } else {
+        await ledger.append({
+          ...base,
+          meter: "tokens_in",
+          quantity: BigInt(b.quantity ?? 7),
+          dimensions: { model_class: "small", ...(b.dimensions ?? {}) },
+        });
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, code: e?.code ?? null, message: String(e?.message ?? e) };
+    }
   },
   member: async (b) => {
     const id = randomUUID();

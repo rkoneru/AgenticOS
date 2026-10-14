@@ -6,7 +6,7 @@ scope: >-
   basis and consent hooks, data subject rights, data protection by design, processors, records of processing, security, breach
   notification, impact assessment, transfers) to AXIS mechanisms and to evidence in this repository. AXIS is designed for and
   evidence-ready toward these obligations. It is not legal advice, and whether a deployment meets the Regulation depends on the
-  operator's own role, contracts and procedures. The data subject rights tooling and retention enforcement are not present in this tree.
+  operator's own role, contracts and procedures. Data subject export, erasure and restriction and retention enforcement exist as a dev-stack prototype (services/data-governance) and are proven end to end in `make e2e-phase9`; correction (Art. 16) is not built.
 rows:
   - id: GDPR-Art5
     requirement: >-
@@ -26,7 +26,7 @@ rows:
       - { kind: test, ref: services/memory/test/redact.test.ts }
       - { kind: test, ref: services/audit/test/pg.test.ts }
     status: Prototype
-    notes: Accuracy and storage limitation are not enforced by tooling (no correction workflow, no purge job). Redaction is pattern based.
+    notes: Accuracy is not enforced by tooling (no correction workflow); storage limitation has a retention engine with legal holds that is proven in `make e2e-phase9` but is an operator-run job, not a scheduler. Redaction is pattern based.
   - id: GDPR-Art6-7
     requirement: >-
       Processing needs a lawful basis; where consent is the basis it must be freely given, specific, demonstrable and as easy to
@@ -55,12 +55,25 @@ rows:
     notes: A privacy notice for the operator's own processing is the operator's document; nothing here generates one.
   - id: GDPR-Art15
     requirement: A data subject can obtain confirmation of processing and a copy of their personal data.
-    mechanism: None yet. Export across memory, channels, eval datasets, control-plane members, billing and run logs is planned in Phase 9.
-    code: []
+    mechanism: >-
+      A privacy officer opens a request for a person; an independent owner or admin attests the requester's identity (dual control); the
+      export runs every registered subject-data provider (control-plane members, channels and voice transcripts, memory, Eval Hub cases and
+      results, run logs, approvals, billing references) and returns a bundle with an Ed25519 signature, per-store counts and hashes.
+    code:
+      [
+        services/data-governance/src/dsar.ts,
+        services/data-governance/src/bundle.ts,
+        services/data-governance/src/verifier.ts,
+        apps/api-gateway/src/adapters/governance.ts,
+      ]
     config: []
-    evidence: []
-    status: Gap
-    notes: No subject data provider interface or export exists in this tree.
+    evidence:
+      - { kind: test, ref: services/data-governance/test/dsar.test.ts }
+      - { kind: test, ref: e2e/test_governance.py }
+      - { kind: test, ref: e2e/test_phase9_hardening.py }
+      - { kind: make, ref: e2e-phase9 }
+    status: Prototype
+    notes: Discovery is exact-match on identifiers the requester supplies (NEEDS 364); requester identity proofing is out of band and its master key a dev stand-in (NEEDS 407); the run service's in-memory run log is outside the export (NEEDS 413).
   - id: GDPR-Art16
     requirement: A data subject can have inaccurate personal data corrected.
     mechanism: None yet.
@@ -72,22 +85,43 @@ rows:
   - id: GDPR-Art17
     requirement: A data subject can have personal data erased where the grounds apply.
     mechanism: >-
-      None yet. The audit chain is append-only, so erasure needs a design (pseudonymised subject references, hashes only in the chain,
-      crypto-shredding) that is planned in Phase 9.
-    code: []
+      Erasure is idempotent and resumable per provider, then a verification pass re-queries every provider and any residual stops the request;
+      the audit chain keeps hashes and pseudonymous references only (a guard refuses an event that would carry a raw identifier), the sealed
+      identifiers are crypto-shredded, and a legal hold suspends the erasure until released.
+    code:
+      [
+        services/data-governance/src/dsar.ts,
+        services/data-governance/src/audit.ts,
+        services/data-governance/src/holds.ts,
+        services/data-governance/src/providers/memory.ts,
+        services/data-governance/src/providers/channels.ts,
+      ]
     config: []
-    evidence: []
-    status: Gap
-    notes: Today the only deletion-like behaviour is that nothing is ever deleted; the audit log stores hashes of inputs rather than raw payloads, which limits but does not remove personal data in the chain.
+    evidence:
+      - { kind: test, ref: services/data-governance/test/dsar.test.ts }
+      - { kind: test, ref: services/data-governance/test/kit.pg.test.ts }
+      - { kind: test, ref: e2e/test_phase9_hardening.py }
+      - { kind: make, ref: e2e-phase9 }
+    status: Prototype
+    notes: Backups are not covered (NEEDS 371); rows that must be kept for accountability are pseudonymised, not deleted (member, billing and approval rows); erasure runs inside one HTTP request (NEEDS 410).
   - id: GDPR-Art18-21
     requirement: >-
       A data subject can restrict processing, is notified of rectification or erasure, can port their data and can object to processing.
-    mechanism: None yet; depends on the subject export and erasure tooling.
-    code: []
+    mechanism: >-
+      Restriction is recorded as a hold that processing paths consult (HoldRegistry.isRestricted); portability is the signed JSON export of
+      the subject's records; notification of recipients and objection handling are not built.
+    code:
+      [
+        services/data-governance/src/holds.ts,
+        services/data-governance/src/registry.ts,
+        services/data-governance/src/bundle.ts,
+      ]
     config: []
-    evidence: []
-    status: Gap
-    notes: Portability formats and objection handling are undefined.
+    evidence:
+      - { kind: test, ref: services/data-governance/test/dsar.test.ts }
+      - { kind: test, ref: e2e/test_governance.py }
+    status: Prototype
+    notes: No service calls the restriction check on its processing path yet (NEEDS 362); the export format is a JSON bundle, not a standard portability schema; objection handling is undefined.
   - id: GDPR-Art22
     requirement: A data subject is not subject to a decision based solely on automated processing with legal or similarly significant effect, without safeguards.
     mechanism: >-
