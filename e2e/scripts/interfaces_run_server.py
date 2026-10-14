@@ -105,6 +105,16 @@ def script(body: dict[str, Any]) -> dict[str, Any]:
         return _turn(
             "restricted lookup finished: " + " | ".join(str(m["content"])[:60] for m in results)
         )
+    if ask.startswith("phi-canary:"):  # Phase 9: PHI-shaped free text in the input, in tool arguments, in a tool error and in the answer
+        canary = ask[len("phi-canary:") :].strip()
+        if not results:
+            return _turn(
+                None,
+                [("lookup-claim", {"claim_id": canary}), ("strict-lookup", {"claim_id": canary})],
+                prompt=70,
+                completion=20,
+            )
+        return _turn("finished: " + " | ".join(str(m["content"]) for m in results))
     if ask.startswith("xss"):
         return _turn(f"output: {XSS}", prompt=30, completion=15)
     if ask.startswith("slow"):
@@ -168,6 +178,10 @@ def tools() -> ToolRegistry:
         },
         description="Read a claim",
     )
+    def strict(a: dict[str, Any]) -> Any:
+        raise ValueError(f"no such claim: {a.get('claim_id')}")  # an error that echoes its argument
+
+    reg.register("strict-lookup", strict, description="Read a claim by exact id (fails on unknown)")
     reg.register(
         "lookup-restricted",
         lambda a: {"secret": "restricted"},
