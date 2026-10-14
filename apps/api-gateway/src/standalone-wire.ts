@@ -27,6 +27,7 @@ import {
   generatePublisherKey,
   listenLoopback,
 } from "@axis/registry";
+import { createGovernanceKit } from "@axis/data-governance";
 import pg from "pg";
 import { HttpApprovalsClient } from "./adapters/approvals-http.js";
 import type { GatewayOptions } from "./context.js";
@@ -82,12 +83,24 @@ export async function startStandalone(
     ...(c.bundleDir ? { bundleSink: new FileBundleSink(c.bundleDir) } : {}),
     secureCookies: true,
   });
+  // Data governance (optional): the same kit serves the /governance routes and installs the residency write guard in the stores this
+  // process hosts. Without the master key the routes answer 503 and no guard is installed (nothing is half-enforced silently).
+  const governance = c.governance
+    ? createGovernanceKit({
+        pool,
+        role: c.governance.role,
+        masterKey: c.governance.masterKey,
+        region: c.region,
+        audit: audit as never,
+      })
+    : undefined;
+  const residency = governance ? { residency: governance.residency.forService(c.region) } : {};
   // The Eval Hub and the registry gate each other: the registry asks the hub before it releases a version (fail-closed), and the hub
   // hands the registry a signed summary of every finished run. The attestation key lives in this process only (docs/NEEDS.md: KMS).
   const hubKey = generatePublisherKey();
   const late: { registry?: RegistryService } = {};
   const evals = createEvalHub({
-    docs: new PgEvalDocStore({ pool, ...role }),
+    docs: new PgEvalDocStore({ pool, ...role, ...residency }),
     audit: new ServiceAudit(audit, "eval-hub"),
     signing: hubKey,
     sink: {
@@ -113,7 +126,7 @@ export async function startStandalone(
     },
   });
   const registry = new RegistryService({
-    store: new PgRegistryStore({ pool, ...role }),
+    store: new PgRegistryStore({ pool, ...role, ...residency }),
     audit: new ServiceAudit(audit, "registry"),
     evalGate: evals.gatePort,
     evalHubKeys: [{ keyId: hubKey.keyId, publicKey: hubKey.publicKey }],
@@ -133,6 +146,7 @@ export async function startStandalone(
     pool,
     signer: new HmacSealSigner(Buffer.from(c.sealKey, "utf8")),
     ...role,
+    ...residency,
   });
   const { gateway, deps } = wireGateway(
     {
@@ -142,6 +156,7 @@ export async function startStandalone(
       registry,
       marketplace,
       evals,
+      ...(governance ? { governance } : {}),
       compliance: {
         docs: new PgComplianceDocStore({ pool, ...role }),
         // Documents are sealed with a key derived from the gateway's seal key: it survives restarts, so old documents keep verifying.

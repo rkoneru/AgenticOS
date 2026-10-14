@@ -26,6 +26,7 @@
     "@axis/compliance": "workspace:*",
     "@axis/contracts": "workspace:*",
     "@axis/control-plane": "workspace:*",
+    "@axis/data-governance": "workspace:*",
     "@axis/eval-hub": "workspace:*",
     "@axis/marketplace": "workspace:*",
     "@axis/policy": "workspace:*",

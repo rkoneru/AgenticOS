@@ -38,6 +38,11 @@ export interface StandaloneConfig {
    * documents list the limitations source as a gap. The compliance documents are sealed with a key derived from `sealKey`.
    */
   complianceNeedsFile: string | undefined;
+  /**
+   * The data-governance kit (DSAR, holds, retention, residency). Without `GW_GOV_MASTER_KEY` every governance operation answers 503
+   * (fail-closed) and no residency write guard is installed. The key is a dev stand-in for a KMS (NEEDS 365).
+   */
+  governance: { masterKey: Buffer; role: string } | undefined;
 }
 
 const HEX64 = /^[0-9a-f]{64}$/i;
@@ -128,6 +133,9 @@ export function configFromEnv(env: Record<string, string | undefined>): Standalo
         }
       : undefined,
     complianceNeedsFile: env["GW_COMPLIANCE_NEEDS_FILE"] || undefined,
+    governance: env["GW_GOV_MASTER_KEY"]
+      ? { masterKey: hex("GW_GOV_MASTER_KEY"), role: env["GW_GOV_ROLE"] || "axis_governance" }
+      : undefined,
   };
 }
 

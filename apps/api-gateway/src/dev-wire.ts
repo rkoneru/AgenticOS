@@ -38,7 +38,8 @@ import {
   type KernelKillApplier,
 } from "./adapters/kernel.js";
 import { ComplianceAdapter, UnavailableCompliance } from "./adapters/compliance.js";
-import { UnavailableGovernance } from "./adapters/governance.js";
+import { GovernanceAdapter, UnavailableGovernance } from "./adapters/governance.js";
+import type { GovernanceKit } from "@axis/data-governance";
 import { gatewayComplianceSources } from "./adapters/compliance-sources.js";
 import { EvalsAdapter, UnavailableEvals } from "./adapters/evals.js";
 import { MarketplaceAdapter } from "./adapters/marketplace.js";
@@ -69,6 +70,7 @@ export interface DevWiring {
    * The compliance service: a ready `Compliance`, or `{ docs, sealer, limitations }` to build one whose document sources are this
    * gateway's own ports (same tenant scoping, same roles). Without it every compliance operation answers 503 (fail-closed).
    */
+  governance?: GovernanceKit | GovernancePort;
   compliance?:
     | Compliance
     | {
@@ -149,7 +151,11 @@ export function wireGateway(
     marketplace: new MarketplaceAdapter(w.marketplace),
     evals: evalsPort,
     compliance,
-    governance: new UnavailableGovernance(),
+    governance: !w.governance
+      ? new UnavailableGovernance()
+      : "dsar" in w.governance
+        ? new GovernanceAdapter(w.governance)
+        : w.governance,
     idempotency: new MemoryIdempotencyStore(),
   };
   return { gateway: createGateway(deps, { validateResponses: true, ...options }), deps };
