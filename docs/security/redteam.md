@@ -84,3 +84,7 @@ The control run must pass, then each mutant (`evals/redteam/mutants.py`) must ma
 - Function-tool fixtures stand in for MCP, browser, code, memory and channel backends (NEEDS #401).
 - Counters shared across cases (NEEDS #402); mutants are a sample (NEEDS #403); API probes are not a full authorization test (NEEDS #404).
 - No live provider, no live internet, no real cloud.
+
+## The red team as a release gate, proven end to end
+
+`redteam-agent` declares `redteam-core@1.0.0` (threshold 1.0). `make e2e-phase9` (`test_f1`, `test_f2`) runs the suite on the real stack and asks the registry to release the version: with every control in place the suite passes and the release succeeds; with the `relax-email-allowlist` mutant (the email allow-list widened to any recipient) the suite fails in the exfiltration category and the release is refused with `evals_gate_failed` and the gate's reasons. The weakened control is a policy-pack change; the release step is the marketplace's (NEEDS 419).

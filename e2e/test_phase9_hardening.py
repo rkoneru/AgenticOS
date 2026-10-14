@@ -32,6 +32,7 @@ import os
 import re
 import secrets
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -229,8 +230,10 @@ def test_a1_the_person_is_in_every_store_and_the_export_covers_them_all(dsar: Ds
     assert p9.count(st, "conversation_messages", d.a_tid, f"content LIKE '%ORD-{j.tag}-7731%'") == 1
     assert p9.count(st, "memory_chunks", d.a_tid, f"subject = '{j.user_ref}'") == 1
     po = d.g.ax(d.g.k_po)
+    t0 = time.monotonic()
     req = d.request("export", j)
     bundle = po.governance.requests.export(req["id"])
+    print(f"DSAR_TIMING export_seconds={time.monotonic() - t0:.3f}")
     assert bundle["signature"]["alg"] == "Ed25519"
     stores = {s["provider"]: s for s in bundle["manifest"]["stores"]}
     for provider in (
@@ -283,8 +286,10 @@ def test_a2_erase_through_the_public_api_verifies_residuals_and_leaves_the_chain
     chain_len_before = int(
         p9.q(st, f"SELECT count(*) FROM audit_events WHERE tenant_id='{d.a_tid}'")
     )
+    t0 = time.monotonic()
     req = d.request("erase", j)
     done = po.governance.requests.erase(req["id"])
+    print(f"DSAR_TIMING erase_seconds={time.monotonic() - t0:.3f}")
     assert done["status"] == "completed", done
     verification = done["request"]["result"]["verification"]
     assert verification["ok"] is True, verification
