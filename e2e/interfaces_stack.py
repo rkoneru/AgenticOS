@@ -393,6 +393,7 @@ def boot(
         ops_token = "e2e-ops-" + secrets.token_hex(8)
         platform_token = "e2e-platform-" + secrets.token_hex(8)
         seal_key = "e2e-seal-key-" + secrets.token_hex(16)
+        gov_master_key = secrets.token_hex(32)
         cfg = work / "stack.json"
         cfg.write_text(
             json.dumps(
@@ -404,6 +405,7 @@ def boot(
                     "platform_token": platform_token,
                     "ops_token": ops_token,
                     "seal_key": seal_key,
+                    "gov_master_key": gov_master_key,
                     "secrets": secrets_cfg,
                     "redirect_uri": f"{console_origin}/auth/sso/callback",
                     "return_origins": [console_origin],
@@ -455,7 +457,8 @@ def boot(
                 "GW_DATABASE_URL": gateway_db_url, "GW_DB_ROLE": "axis_app", "GW_PORT": str(gw_port),
                 "GW_ALLOWED_ORIGINS": console_origin, "GW_PEPPER": secrets_cfg["pepper"],
                 "GW_COOKIE_KEY": secrets_cfg["cookie_key"], "GW_SIGNING_KEY": secrets_cfg["signing_key"],
-                "GW_SEAL_KEY": seal_key, "GW_RUN_SERVICE_URL": f"http://127.0.0.1:{hop_('run', rinfo['port'])}",
+                "GW_SEAL_KEY": seal_key, "GW_GOV_MASTER_KEY": gov_master_key,
+                "GW_RUN_SERVICE_URL": f"http://127.0.0.1:{hop_('run', rinfo['port'])}",
                 "GW_RUN_TOKENS_FILE": str(files["gw_run"]), "GW_KERNEL_TARGET": kernel_target,
                 "GW_KERNEL_TOKENS_FILE": str(files["gw_kernel"]),
                 "GW_APPROVALS_URL": f"http://127.0.0.1:{approvals_port}",

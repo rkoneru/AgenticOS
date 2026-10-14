@@ -250,6 +250,9 @@ importers:
       '@axis/control-plane':
         specifier: workspace:*
         version: link:../services/control-plane
+      '@axis/data-governance':
+        specifier: workspace:*
+        version: link:../services/data-governance
       '@axis/db':
         specifier: workspace:*
         version: link:../packages/db
