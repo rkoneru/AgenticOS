@@ -19,3 +19,12 @@ Status: accepted. Additive (no schema or contract change); fixes two Phase 9 rev
    there and the class is marked `error` with nothing purged, instead of purging first and failing to record it after.
 
 Both are proven by `services/data-governance/test/review.test.ts` (reverting either fix makes its test fail; confirmed by hand).
+
+## Finding 3 (added): compliance matrix checker symlink escape
+
+`services/compliance/src/matrix/repo.ts` (`nodeFs`) validated an evidence path with `safePath` (no `..`, no leading `/`) but then
+read it with plain `existsSync`/`readFileSync`, which follow symlinks. A symlink committed inside the repo under an evidence path
+(`src/escape.ts -> /some/outside/file`) made `checkMatrix` treat outside-the-repo content as if it were the cited, reviewable
+source: `exists`/`isFile` now resolve the real path with `realpathSync` and refuse (treat as not-found) anything that resolves
+outside the repository root. Proven by `services/compliance/test/matrix.test.ts` ("a symlink inside the repo pointing outside it
+is not treated as valid evidence"); reverting the `insideRoot` gate makes that test fail (confirmed by hand).

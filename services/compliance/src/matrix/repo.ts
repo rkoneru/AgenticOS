@@ -1,5 +1,12 @@
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 import {
   checkMatrix,
   makeTargetsOf,
@@ -13,11 +20,37 @@ import { REQUIRED_ROWS } from "./required.js";
 export const MATRIX_DIR = "docs/compliance/matrix";
 export const RENDER_DIR = "docs/compliance";
 
+/**
+ * A symlink the repo (or a dependency the build pulled in) contains, whose target resolves outside `root`, must never count as
+ * evidence: its content is not something the checker (or a reviewer reading the repo on GitHub) can see or audit. `realpathSync`
+ * follows every symlink on the path; a path that still exists after that but no longer resolves under `rootReal` is treated as
+ * absent (found in review: `safePath`'s `..`/absolute-path checks only look at the written path, not where a symlink inside the
+ * repo actually points).
+ */
 export function nodeFs(root: string): RepoFs {
-  const abs = (rel: string): string => join(resolve(root), rel);
+  const rootAbs = resolve(root);
+  const abs = (rel: string): string => join(rootAbs, rel);
+  const insideRoot = (p: string): boolean => {
+    let real: string;
+    try {
+      real = realpathSync(p);
+    } catch {
+      return false;
+    }
+    const rootReal = (() => {
+      try {
+        return realpathSync(rootAbs);
+      } catch {
+        return rootAbs;
+      }
+    })();
+    if (real === rootReal) return true;
+    const rel = relative(rootReal, real);
+    return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`);
+  };
   return {
-    exists: (rel) => existsSync(abs(rel)),
-    isFile: (rel) => existsSync(abs(rel)) && statSync(abs(rel)).isFile(),
+    exists: (rel) => existsSync(abs(rel)) && insideRoot(abs(rel)),
+    isFile: (rel) => existsSync(abs(rel)) && insideRoot(abs(rel)) && statSync(abs(rel)).isFile(),
     read: (rel) => readFileSync(abs(rel), "utf8"),
   };
 }

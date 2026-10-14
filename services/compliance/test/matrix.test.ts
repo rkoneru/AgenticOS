@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -344,6 +344,17 @@ describe("repository runner", () => {
     expect(Object.keys(REQUIRED_ROWS).length).toBeGreaterThanOrEqual(5);
     expect(nodeFs(empty).exists("Makefile")).toBe(false);
     expect(nodeFs(empty).isFile("Makefile")).toBe(false);
+  });
+
+  it("a symlink inside the repo pointing outside it is not treated as valid evidence (review)", () => {
+    const d = repo({});
+    const secret = mkdtempSync(join(tmpdir(), "axis-matrix-outside-"));
+    dirs.push(secret);
+    writeFileSync(join(secret, "irrelevant.txt"), "audit.action.x not really here\n");
+    symlinkSync(join(secret, "irrelevant.txt"), join(d, "src/escape.ts"));
+    const fs = nodeFs(d);
+    expect(fs.exists("src/escape.ts")).toBe(false);
+    expect(fs.isFile("src/escape.ts")).toBe(false);
   });
 
   it("--write does not render over a matrix that has findings", () => {
