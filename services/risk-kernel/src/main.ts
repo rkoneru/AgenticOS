@@ -125,7 +125,8 @@ const authenticate: Authenticator = reloading
     }
   : staticTokenAuthenticator(tokenTable);
 const server = createGateServer({ kernel, audit, killSwitches, authenticate });
-const port = await listen(server, `127.0.0.1:${process.env["AXIS_RK_PORT"] ?? "0"}`);
+const bindHost = process.env["AXIS_BIND_HOST"] ?? "127.0.0.1";
+const port = await listen(server, `${bindHost}:${process.env["AXIS_RK_PORT"] ?? "0"}`);
 let approvalsPort: number | undefined;
 if (approvals && process.env["AXIS_APPROVALS_DEV_BRIDGE"] === "1") {
   const tenants: Record<string, string> = {};

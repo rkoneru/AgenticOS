@@ -176,7 +176,8 @@ async def main() -> None:
         approval_tokens=cfg.get("approval_tokens", {}),
     )
     server = RunServer(RunService(wired_factory(wiring)), RunServerConfig(tokens=cfg["tokens"]))
-    port = await server.start(port=int(cfg.get("port", 0)))
+    host = os.environ.get("AXIS_BIND_HOST", cfg.get("host", "127.0.0.1"))
+    port = await server.start(host=host, port=int(cfg.get("port", 0)))
     print(json.dumps({"port": port}), flush=True)
     await asyncio.Event().wait()
 
