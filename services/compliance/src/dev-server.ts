@@ -209,6 +209,10 @@ export function createComplianceDevServer(deps: ComplianceDevServerDeps): http.S
   };
 
   return http.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return void res.end(JSON.stringify({ status: "ok" }));
+    }
     void (async () => {
       try {
         const p = auth(req.headers.authorization);
