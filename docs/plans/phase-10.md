@@ -1,0 +1,26 @@
+# Phase 10 — Deployment and release
+
+## Scope (PHASE_PLAN.md)
+- Helm charts for every service; values for `local`, `k3s-homelab`, `aws`, `gcp`, `azure`, `dedicated`.
+- Terraform modules for AWS/GCP/Azure (networking, K8s, Postgres, Redis, ClickHouse, object storage, KMS). `terraform plan` only — apply is a hard stop.
+- Deploy to local k3s and run the full e2e suite against it.
+- Release process, versioning, runbooks.
+- `docs/FINAL_REPORT.md`.
+
+## Environment facts established before planning (read `read_documentation` + direct probes)
+- No `make dev`/compose run has ever completed in any prior session (status: "Designed, never started") because earlier sessions found no Docker daemon. Re-checked this session: `dockerd`/`containerd`/`runc` binaries ARE present; the daemon was simply never started. Started it (`dockerd --iptables=false --bridge=none`, cgroup v1 host); `docker pull alpine:3.20` from Docker Hub succeeds through the agent proxy.
+- Outbound network is allowlisted, not open: `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`, `index.crates.io`, `proxy.golang.org`, `*.anthropic.com`, private ranges, and (confirmed by probe) `docker.io`/Hub blob hosts and `raw.githubusercontent.com` (redirects, followed with `-L`) are reachable; `get.k3s.io` and the bare `github.com` host are refused by the proxy (403/400). So: the k3s *install script* can't be curled directly, but a k3s/k3d binary fetched via a GitHub raw file, a Docker Hub image, or `go install` against `proxy.golang.org` can.
+- Plan: use **k3d** (k3s-in-Docker) for the local cluster — it only needs the Docker daemon (now running) and the `rancher/k3s` image from Docker Hub (reachable), not `get.k3s.io`. Install the `k3d` CLI via `go install` (Go toolchain + `proxy.golang.org`, both available) rather than its shell installer (which curls GitHub release assets from a host the proxy may refuse).
+- No real AWS/GCP/Azure credentials exist or will be requested (hard stop). Terraform modules will be written to minimize live-API dependency in their variable/data-source design (no "latest AMI" style data sources — pin via variables), so `terraform validate` + `fmt -check` run for real, and `terraform plan` is attempted with dummy credentials and provider-level skip-validation flags where the provider supports them; wherever a provider still requires a live call even to plan (no universal skip flag exists for GCP/Azure), that is logged honestly in `docs/NEEDS.md` rather than faked.
+
+## Work breakdown (parallel subagents in worktrees, like prior phases)
+1. **phase10-helm** — Helm chart per deployable service/app (control-plane, risk-kernel, audit, registry, marketplace, billing, memory, channels, voice, approvals, agil, eval-hub, compliance, data-governance, api-gateway, console; docs-site as a static nginx chart) plus a top-level umbrella chart. Values overlays: `local`, `k3s-homelab` (reduced replica/resource footprint), `aws`, `gcp`, `azure`, `dedicated` (isolated-namespace/dedicated-DB profile matching the control-plane's existing dedicated-tenant routing). `helm lint` and `helm template` (rendered-manifest `kubeconform`/`kubectl --dry-run=client` validation) across every chart x every values file.
+2. **phase10-terraform** — modules per cloud (`infra/terraform/{aws,gcp,azure}`): networking (VPC/VNet), managed K8s (EKS/GKE/AKS), managed Postgres, managed Redis, ClickHouse (self-managed on K8s or managed where available), object storage, KMS. Root `envs/<cloud>/plan` composing the modules. `terraform fmt -check`, `terraform validate`, `terraform plan` (dummy creds); never `apply`.
+3. **phase10-cluster** (sequenced after (1) has working charts) — bring up a real local cluster with k3d, install the umbrella chart with `local` values, bring up real Postgres/Redis/ClickHouse (either in-cluster or via the existing compose stack reused as external services), wire env vars/secrets the services already expect, run as much of the real e2e suite as can reasonably target a k8s-deployed stack (service-by-service health/readiness first, then adapt or re-point the existing e2e harnesses at the cluster's exposed ports), and report exactly what ran green on this cluster vs. what still only runs against the ephemeral-process harness used by `make e2e-phaseN`.
+4. **Me**: write `docs/runbooks/release.md` (versioning, release process) and `docs/FINAL_REPORT.md` once 1-3 land; update `CLAUDE.md` component table and `CHANGELOG.md`; full-sweep verify before push.
+
+## Exit bar (honest version for this environment)
+- Every chart lints and templates clean across every values file.
+- Terraform validates/formats clean for all three clouds; plan output captured where achievable without live cloud credentials, gaps logged.
+- A real local k3d cluster runs the real container images built from this repo, with the control plane, risk kernel, audit, and at least the Phase-2-core-loop path exercised end-to-end against it (ABL → runtime → kernel → Postgres audit), and the gap between that and "full e2e suite on k8s" is stated exactly, not implied away.
+- `docs/FINAL_REPORT.md` is accurate: it says what's Deployed (the local k3d run, if achieved), what's Built-but-never-cloud-deployed (everything cloud), and what's Designed/Prototype, with evidence links for every row — never rounds up.
