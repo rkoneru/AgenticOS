@@ -154,6 +154,7 @@ IO_IMPORTS: dict[str, dict[str, str]] = {
         "pathlib": "FileSecretStore path handling.",
     },
     "tki/ipc.py": {
+        "os": "reads AXIS_IPC_SCHEMA_PATH (environment read only).",
         "pathlib": "locates the frozen ipc-envelope-v1 schema (read only); patterns are not copied.",
     },
     "sandbox/types.py": {

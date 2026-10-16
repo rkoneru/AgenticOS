@@ -601,8 +601,9 @@ class RunServer:
             method, target, headers, raw = await self._read_request(reader)
             path, _, qs = target.partition("?")
             if method == "GET" and path == "/health":
-                # Unauthenticated liveness/readiness probe target (Phase 10 Helm charts): proves only that
-                # this process accepts connections and speaks HTTP, never touches a tenant or the kernel.
+                # Unauthenticated liveness/readiness probe target (Phase 10 Helm charts): proves
+                # only that this process accepts connections and speaks HTTP, never touches a
+                # tenant or the kernel.
                 return await self._send(writer, 200, {"status": "ok"})
             reader_tenant = self._reader(headers.get("authorization"))
             if reader_tenant is not None:
