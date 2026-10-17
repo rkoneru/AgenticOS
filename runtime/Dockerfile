@@ -7,8 +7,20 @@
 # not needed by the run service or eval runner themselves, and would roughly double image size.
 # Build from the monorepo root as build context:
 #   docker build -f runtime/Dockerfile -t axis/runtime:dev .
+#
+# Building behind a TLS-intercepting egress proxy (e.g. this repo's sandboxed dev environments):
+# pass --build-context ciproxyca=<dir containing ca-bundle.crt> --build-arg CI_PROXY_CA_BASE=ciproxyca
+# --network=host. Omit all three and this is a no-op (no cert is appended, SSL_CERT_FILE still
+# points at the distro's own bundle). See docs/runbooks/local-cluster.md.
+ARG CI_PROXY_CA_BASE=ca-empty
+FROM scratch AS ca-empty
+FROM ${CI_PROXY_CA_BASE} AS ca-src
 
 FROM python:3.12-slim AS builder
+COPY --from=ca-src ca-bundle.cr[t] /tmp/
+RUN if [ -f /tmp/ca-bundle.crt ]; then cat /tmp/ca-bundle.crt >> /etc/ssl/certs/ca-certificates.crt; fi
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 RUN pip install --no-cache-dir uv==0.8.17
 WORKDIR /repo
 COPY pyproject.toml uv.lock ./
