@@ -13,7 +13,9 @@ spec:
   ingress:
     {{- if .Values.networkPolicy.allowIngressFromNamespace }}
     - from:
-        - namespaceSelector: {}
+        # same namespace only (k8s default when namespaceSelector is omitted);
+        # cross-namespace ingress (an Ingress controller, etc.) goes through extraIngress.
+        - podSelector: {}
       ports:
         - port: {{ .Values.service.port }}
           protocol: TCP

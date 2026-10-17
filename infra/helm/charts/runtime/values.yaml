@@ -1,3 +1,4 @@
+enabled: true
 image:
   repository: axis/runtime
   tag: dev

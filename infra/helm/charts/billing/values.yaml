@@ -1,3 +1,4 @@
+enabled: true
 replicaCount: 2
 image:
   repository: axis/billing

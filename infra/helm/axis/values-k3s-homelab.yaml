@@ -1,0 +1,40 @@
+# k3s home-lab overlay (docs/plans, PHASE_PLAN.md "k3s home-lab profile"): a small single-node or
+# few-node bare-metal/NUC cluster. Like values-local.yaml but assumes the cluster is a shared,
+# longer-lived box (so PDBs stay on) rather than a throwaway dev loop.
+# helm install axis infra/helm/axis -f infra/helm/axis/values.yaml -f infra/helm/axis/values-k3s-homelab.yaml
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      size: 5Gi
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+redis:
+  enabled: true
+  master:
+    persistence:
+      size: 1Gi
+  replica:
+    replicaCount: 0
+
+control-plane: &oneReplicaPdb
+  replicaCount: 1
+  podDisruptionBudget: { enabled: false } # a PDB on a single replica only blocks node drains
+risk-kernel: *oneReplicaPdb
+registry: *oneReplicaPdb
+marketplace: *oneReplicaPdb
+billing: *oneReplicaPdb
+memory: *oneReplicaPdb
+channels: *oneReplicaPdb
+eval-hub: *oneReplicaPdb
+compliance: *oneReplicaPdb
+data-governance: *oneReplicaPdb
+api-gateway: *oneReplicaPdb
+console: *oneReplicaPdb
+docs-site: *oneReplicaPdb
+runtime:
+  runServer:
+    replicaCount: 1
+    autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }

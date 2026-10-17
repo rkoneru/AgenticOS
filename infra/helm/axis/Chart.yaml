@@ -1,0 +1,80 @@
+apiVersion: v2
+name: axis
+description: >-
+  AXIS umbrella chart. Each deployable AXIS process is a subchart under ../charts/<name>,
+  referenced here as a local `file://` dependency (see infra/helm/README.md for the layout
+  rationale). Postgres/Redis/ClickHouse are bitnami charts pulled from their OCI distribution
+  (registry-1.docker.io/bitnamicharts), used for local/k3s-homelab; cloud values profiles disable
+  them in favor of a managed service (see values-aws.yaml et al. and the README's "swap" section).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: control-plane
+    version: "0.1.0"
+    repository: "file://../charts/control-plane"
+    condition: control-plane.enabled
+  - name: risk-kernel
+    version: "0.1.0"
+    repository: "file://../charts/risk-kernel"
+    condition: risk-kernel.enabled
+  - name: registry
+    version: "0.1.0"
+    repository: "file://../charts/registry"
+    condition: registry.enabled
+  - name: marketplace
+    version: "0.1.0"
+    repository: "file://../charts/marketplace"
+    condition: marketplace.enabled
+  - name: billing
+    version: "0.1.0"
+    repository: "file://../charts/billing"
+    condition: billing.enabled
+  - name: memory
+    version: "0.1.0"
+    repository: "file://../charts/memory"
+    condition: memory.enabled
+  - name: channels
+    version: "0.1.0"
+    repository: "file://../charts/channels"
+    condition: channels.enabled
+  - name: eval-hub
+    version: "0.1.0"
+    repository: "file://../charts/eval-hub"
+    condition: eval-hub.enabled
+  - name: compliance
+    version: "0.1.0"
+    repository: "file://../charts/compliance"
+    condition: compliance.enabled
+  - name: data-governance
+    version: "0.1.0"
+    repository: "file://../charts/data-governance"
+    condition: data-governance.enabled
+  - name: api-gateway
+    version: "0.1.0"
+    repository: "file://../charts/api-gateway"
+    condition: api-gateway.enabled
+  - name: console
+    version: "0.1.0"
+    repository: "file://../charts/console"
+    condition: console.enabled
+  - name: docs-site
+    version: "0.1.0"
+    repository: "file://../charts/docs-site"
+    condition: docs-site.enabled
+  - name: runtime
+    version: "0.1.0"
+    repository: "file://../charts/runtime"
+    condition: runtime.enabled
+  - name: postgresql
+    version: "16.2.3"
+    repository: "oci://registry-1.docker.io/bitnamicharts"
+    condition: postgresql.enabled
+  - name: redis
+    version: "20.6.1"
+    repository: "oci://registry-1.docker.io/bitnamicharts"
+    condition: redis.enabled
+  - name: clickhouse
+    version: "8.0.10"
+    repository: "oci://registry-1.docker.io/bitnamicharts"
+    condition: clickhouse.enabled

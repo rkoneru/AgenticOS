@@ -1,0 +1,62 @@
+# Umbrella defaults (schema validated by values.schema.json). Environment overlays
+# (values-local.yaml, values-k3s-homelab.yaml, values-aws.yaml, values-gcp.yaml,
+# values-azure.yaml, values-dedicated.yaml) are layered on top with -f, in that order with the
+# environment file last, e.g.:
+#   helm install axis infra/helm/axis -f infra/helm/axis/values.yaml -f infra/helm/axis/values-local.yaml
+# Each AXIS subchart defaults to enabled; disable one with `<name>.enabled: false`.
+global:
+  namespace: axis
+
+control-plane:
+  enabled: true
+risk-kernel:
+  enabled: true
+registry:
+  enabled: true
+marketplace:
+  enabled: true
+billing:
+  enabled: true
+memory:
+  enabled: true
+channels:
+  enabled: true
+eval-hub:
+  enabled: true
+compliance:
+  enabled: true
+data-governance:
+  enabled: true
+api-gateway:
+  enabled: true
+console:
+  enabled: true
+docs-site:
+  enabled: true
+runtime:
+  enabled: true
+
+# Bitnami charts (OCI: registry-1.docker.io/bitnamicharts). Enabled by default for local/k3s
+# clusters that run their own Postgres/Redis/ClickHouse; disable and point every service's
+# `secret.data.*_DATABASE_URL` / cache URL at a managed instance for cloud profiles (see README).
+postgresql:
+  enabled: true
+  auth:
+    username: axis
+    database: axis
+    existingSecret: ""
+  primary:
+    persistence:
+      size: 10Gi
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    existingSecret: ""
+  master:
+    persistence:
+      size: 2Gi
+clickhouse:
+  enabled: false # only the billing/compliance usage-metering path wants it, and it is NOT wired
+  # yet (docs/NEEDS.md): no AXIS service reads CLICKHOUSE_* from its env today. Off by default so
+  # a fresh install does not pay for an unused StatefulSet; flip true once that wiring lands.

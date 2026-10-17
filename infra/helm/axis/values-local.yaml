@@ -1,0 +1,42 @@
+# Local dev overlay: docker-compose-equivalent footprint on a single machine (Docker Desktop,
+# a local kind/k3d cluster). One replica per service, generous-enough-to-work resource requests,
+# HPA off, in-cluster Postgres/Redis with small persistent volumes.
+# helm install axis infra/helm/axis -f infra/helm/axis/values.yaml -f infra/helm/axis/values-local.yaml
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      size: 2Gi
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+redis:
+  enabled: true
+  master:
+    persistence:
+      size: 512Mi
+    resources:
+      requests: { cpu: 50m, memory: 128Mi}
+  replica:
+    replicaCount: 0
+
+control-plane: &oneReplica
+  replicaCount: 1
+  podDisruptionBudget: { enabled: false }
+risk-kernel: *oneReplica
+registry: *oneReplica
+marketplace: *oneReplica
+billing: *oneReplica
+memory: *oneReplica
+channels: *oneReplica
+eval-hub: *oneReplica
+compliance: *oneReplica
+data-governance: *oneReplica
+api-gateway: *oneReplica
+console: *oneReplica
+docs-site: *oneReplica
+runtime:
+  runServer:
+    replicaCount: 1
+    autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }
