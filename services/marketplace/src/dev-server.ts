@@ -253,6 +253,10 @@ export function createMarketplaceDevServer(deps: MarketplaceDevDeps): http.Serve
   };
 
   return http.createServer((rq, res) => {
+    if (rq.method === "GET" && rq.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return void res.end(JSON.stringify({ status: "ok" }));
+    }
     void (async () => {
       try {
         const url = new URL(rq.url ?? "/", "http://localhost");

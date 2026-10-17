@@ -1,0 +1,57 @@
+# GCP overlay. Swaps in-cluster Postgres/Redis for managed services (Cloud SQL Postgres + pgvector,
+# Memorystore Redis): disable the bitnami subcharts here and point each service's Secret at the
+# managed endpoint instead (see infra/helm/README.md "Swapping in a managed service"). This repo's
+# Terraform for the managed resources themselves is a separate module (infra/terraform/gcp,
+# Phase 10's other workstream) — this values file only wires Helm's side of the swap.
+postgresql:
+  enabled: false
+redis:
+  enabled: false
+clickhouse:
+  enabled: false
+
+# Point every *_DATABASE_URL / CP_PG_URL / AXIS_AUDIT_PG_URL secret at Cloud SQL instead (per
+# service, via `secret.existingSecret` referencing a Secret an External Secrets Operator / Secret
+# Manager CSI driver populates — never literal values in this file). Example for one service:
+# control-plane:
+#   secret:
+#     existingSecret: "control-plane-cloudsql-secret"
+
+control-plane: &cloudDefaults
+  replicaCount: 3
+  autoscaling: { enabled: true, minReplicas: 3, maxReplicas: 20 }
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  serviceAccount:
+    annotations:
+      iam.gke.io/gcp-service-account: "" # Workload Identity-bound GSA for this service's GCP permissions (KMS, Secret Manager)
+risk-kernel:
+  <<: *cloudDefaults
+  resources:
+    requests: { cpu: 500m, memory: 512Mi }
+    limits: { cpu: "2", memory: 2Gi }
+registry: *cloudDefaults
+marketplace: *cloudDefaults
+billing: *cloudDefaults
+memory: *cloudDefaults
+channels: *cloudDefaults
+eval-hub: *cloudDefaults
+compliance: *cloudDefaults
+data-governance: *cloudDefaults
+api-gateway: *cloudDefaults
+console:
+  <<: *cloudDefaults
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: "1", memory: 1536Mi }
+docs-site:
+  replicaCount: 2
+  autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6 }
+runtime:
+  runServer:
+    replicaCount: 3
+    autoscaling: { enabled: true, minReplicas: 3, maxReplicas: 20 }
+  serviceAccount:
+    annotations:
+      iam.gke.io/gcp-service-account: ""

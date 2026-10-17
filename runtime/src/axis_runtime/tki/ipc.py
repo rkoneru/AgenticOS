@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import secrets
 from collections.abc import Awaitable, Callable, Mapping
@@ -30,8 +31,15 @@ from axis_runtime.tki.events import EventSink, TkiEvent, TkiEventType
 
 
 def _schema() -> dict[str, Any]:
+    # AXIS_IPC_SCHEMA_PATH overrides the monorepo-relative default (mirrors
+    # AXIS_PROCESS_MODEL_PATH in process.py), needed once this package is installed from a
+    # wheel rather than a repo checkout, e.g. the Phase 10 container image (runtime/Dockerfile),
+    # which ships the schema at a fixed path.
+    override = os.environ.get("AXIS_IPC_SCHEMA_PATH")
     path = (
-        Path(__file__).resolve().parents[4]
+        Path(override)
+        if override
+        else Path(__file__).resolve().parents[4]
         / "packages"
         / "contracts"
         / "schemas"

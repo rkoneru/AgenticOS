@@ -1,0 +1,40 @@
+enabled: true
+replicaCount: 2
+image:
+  repository: axis/docs-site
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+readOnlyRootFilesystem: true
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "500m"
+    memory: 256Mi
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+probes:
+  enabled: true
+networkPolicy:
+  enabled: true
+  allowIngressFromNamespace: true
+  extraIngress: []
+  extraEgress: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

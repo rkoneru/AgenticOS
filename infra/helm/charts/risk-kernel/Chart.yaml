@@ -1,0 +1,6 @@
+apiVersion: v2
+name: risk-kernel
+description: AXIS Risk Kernel (fail-closed gRPC gate); optionally hosts the approvals dev bridge in-process.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

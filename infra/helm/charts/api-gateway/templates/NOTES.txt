@@ -1,0 +1,4 @@
+api-gateway deployed as {{ include "api-gateway.fullname" . }}.
+KNOWN LIMITATION: this process only binds loopback addresses (GW_HOST). The Service/Ingress
+in front of it will NOT receive real traffic until a production wiring removes that restriction
+(docs/NEEDS.md). Today it is reachable only from inside its own pod.

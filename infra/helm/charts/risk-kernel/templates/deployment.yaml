@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "risk-kernel.fullname" . }}
+  labels:
+    {{- include "risk-kernel.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "risk-kernel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "risk-kernel.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "risk-kernel.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: risk-kernel
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: {{ .Values.readOnlyRootFilesystem }}
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            {{- if .Values.approvalsBridge.enabled }}
+            - name: approvals
+              containerPort: {{ .Values.approvalsBridge.port }}
+              protocol: TCP
+            {{- end }}
+          {{- if .Values.probes.enabled }}
+          # No HTTP surface (gRPC): liveness/readiness fall back to a plain TCP accept check, which
+          # proves the listener is up but not that it answers correctly. docs/NEEDS.md tracks adding
+          # a gRPC health-checking-protocol service for a real readiness signal.
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "risk-kernel.fullname" . }}-config
+                optional: true
+            - secretRef:
+                name: {{ include "risk-kernel.secretName" . }}
+          env:
+            {{- if .Values.approvalsBridge.enabled }}
+            - name: AXIS_APPROVALS_DEV_BRIDGE
+              value: "1"
+            - name: AXIS_APPROVALS_PORT
+              value: {{ .Values.approvalsBridge.port | quote }}
+            {{- end }}
+            - name: AXIS_RK_KILL_STATE_FILE
+              value: /var/run/axis/kill-switch.json
+            {{- if .Values.policyBundle.secretName }}
+            - name: AXIS_POLICY_BUNDLE
+              value: /etc/axis/policy/bundle.tar.gz
+            {{- else if .Values.policyBundle.dirSecretName }}
+            - name: AXIS_POLICY_BUNDLE_DIR
+              value: /etc/axis/policy-dir
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: run
+              mountPath: /var/run/axis
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.policyBundle.secretName }}
+            - name: policy-bundle
+              mountPath: /etc/axis/policy
+              readOnly: true
+            {{- else if .Values.policyBundle.dirSecretName }}
+            - name: policy-bundle-dir
+              mountPath: /etc/axis/policy-dir
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.policyBundle.secretName }}
+        - name: policy-bundle
+          secret:
+            secretName: {{ .Values.policyBundle.secretName }}
+        {{- else if .Values.policyBundle.dirSecretName }}
+        - name: policy-bundle-dir
+          secret:
+            secretName: {{ .Values.policyBundle.dirSecretName }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

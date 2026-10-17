@@ -1,0 +1,2 @@
+billing deployed as {{ include "billing.fullname" . }}.
+Service: {{ include "billing.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

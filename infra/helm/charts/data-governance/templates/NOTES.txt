@@ -1,0 +1,2 @@
+data-governance deployed as {{ include "data-governance.fullname" . }}.
+Service: {{ include "data-governance.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

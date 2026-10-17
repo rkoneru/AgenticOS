@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "risk-kernel.fullname" . }}
+  labels:
+    {{- include "risk-kernel.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+    {{- if .Values.approvalsBridge.enabled }}
+    - port: {{ .Values.approvalsBridge.port }}
+      targetPort: approvals
+      protocol: TCP
+      name: approvals
+    {{- end }}
+  selector:
+    {{- include "risk-kernel.selectorLabels" . | nindent 4 }}

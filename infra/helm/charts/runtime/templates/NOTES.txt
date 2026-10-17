@@ -1,0 +1,7 @@
+runtime deployed as {{ include "runtime.fullname" . }}.
+{{- if .Values.runServer.enabled }}
+run-server: {{ include "runtime.fullname" . }}-run-server.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.runServer.service.port }}
+{{- end }}
+{{- if .Values.evalRunner.enabled }}
+eval-runner: no Service (outbound-only worker, one per tenant in production — see values.yaml).
+{{- end }}

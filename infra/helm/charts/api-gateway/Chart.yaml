@@ -1,0 +1,9 @@
+apiVersion: v2
+name: api-gateway
+description: >-
+  AXIS standalone API gateway (dev composition). Listens on a loopback address only by design
+  (GW_HOST restricted to 127.0.0.1/::1/localhost — apps/api-gateway/src/standalone.ts); see this
+  chart's README/NOTES for what that means for its Service.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

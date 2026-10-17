@@ -90,6 +90,10 @@ const STATUS: Record<GovernanceError["code"], number> = {
 
 export function createAdminServer(d: AdminDeps): http.Server {
   return http.createServer((rq, rs) => {
+    if (rq.method === "GET" && rq.url === "/health") {
+      rs.writeHead(200, { "content-type": "application/json" });
+      return void rs.end(JSON.stringify({ status: "ok" }));
+    }
     const send = (status: number, body: unknown): void => {
       rs.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
       rs.end(JSON.stringify(body));
@@ -225,7 +229,7 @@ export function createAdminServer(d: AdminDeps): http.Server {
 export function listenLoopback(server: http.Server, port = 0): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+    server.listen(port, process.env["AXIS_BIND_HOST"] ?? "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
   });
 }
 

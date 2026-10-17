@@ -294,6 +294,10 @@ export function createDevServer(deps: DevServerDeps): http.Server {
   };
 
   return http.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return void res.end(JSON.stringify({ status: "ok" }));
+    }
     handle(req, res).catch((err: unknown) => {
       if (res.headersSent) return void res.end();
       if (err instanceof ChannelError)
@@ -309,6 +313,6 @@ export function createDevServer(deps: DevServerDeps): http.Server {
 export function listenLoopback(server: http.Server, port = 0): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+    server.listen(port, process.env["AXIS_BIND_HOST"] ?? "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
   });
 }

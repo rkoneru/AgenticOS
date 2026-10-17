@@ -1,0 +1,6 @@
+apiVersion: v2
+name: control-plane
+description: AXIS control plane (identity, tenancy, billing/policy admin).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

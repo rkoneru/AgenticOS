@@ -1,0 +1,9 @@
+apiVersion: v2
+name: runtime
+description: >-
+  AXIS Python runtime: the run service (runtime/scripts/run_server.py, a long-running HTTP
+  worker) and the Eval Hub runner (runtime/scripts/eval_runner.py, a per-tenant polling worker
+  with no network-facing surface at all). Two Deployments, one chart.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

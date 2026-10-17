@@ -1,0 +1,5 @@
+risk-kernel deployed as {{ include "risk-kernel.fullname" . }}.
+gRPC: {{ include "risk-kernel.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+{{- if .Values.approvalsBridge.enabled }}
+Approvals dev bridge (in-process, not a separate chart): same Service, port {{ .Values.approvalsBridge.port }}.
+{{- end }}

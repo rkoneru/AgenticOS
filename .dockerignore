@@ -1,0 +1,14 @@
+.git
+.github
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/.next
+**/test-results
+**/playwright-report
+infra/terraform
+infra/dr
+perf/results
+evals/redteam/results
+*.log

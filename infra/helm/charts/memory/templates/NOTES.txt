@@ -1,0 +1,2 @@
+memory deployed as {{ include "memory.fullname" . }}.
+Service: {{ include "memory.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

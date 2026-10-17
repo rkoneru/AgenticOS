@@ -1,0 +1,20 @@
+{{- if .Values.runServer.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "runtime.fullname" . }}-run-server
+  labels:
+    {{- include "runtime.labels" . | nindent 4 }}
+    app.kubernetes.io/component: run-server
+spec:
+  type: {{ .Values.runServer.service.type }}
+  ports:
+    - port: {{ .Values.runServer.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: runtime
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: run-server
+{{- end -}}

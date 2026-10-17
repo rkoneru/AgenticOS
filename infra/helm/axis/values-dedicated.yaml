@@ -1,0 +1,56 @@
+# Dedicated single-tenant overlay: one full release of this chart per tenant, in its own
+# namespace, with its own Postgres — matching the `dedicated_db` / `single_tenant_vpc` isolation
+# tiers the control plane's tenancy router already recognizes (services/control-plane/src/types.ts
+# `IsolationTier`, src/tenancy.ts `TenantRouter`; "Deploying dedicated databases / VPCs is Phase 10"
+# per that file's own comment). Install with a per-tenant release name AND namespace, e.g.:
+#   helm install axis-acme infra/helm/axis --namespace tenant-acme --create-namespace \
+#     -f infra/helm/axis/values.yaml -f infra/helm/axis/values-dedicated.yaml \
+#     --set global.tenantId=acme
+#
+# This values file keeps the in-cluster Postgres subchart (a dedicated DB means a database this
+# tenant does not share, not necessarily a managed one) but sizes it for one tenant's load, and it
+# tightens every NetworkPolicy to same-namespace-only (no cross-namespace ingress at all — a
+# dedicated tenant's pods never need to and never should be reachable from another namespace).
+global:
+  tenantId: "" # REQUIRED: set via --set global.tenantId=<tenant>, used only for labeling here today
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      size: 20Gi
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits: { cpu: "2", memory: 4Gi }
+redis:
+  enabled: true
+  master:
+    persistence:
+      size: 4Gi
+  replica:
+    replicaCount: 0
+clickhouse:
+  enabled: false
+
+control-plane: &dedicatedDefaults
+  replicaCount: 2
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  networkPolicy:
+    allowIngressFromNamespace: false # same-namespace only: see this file's header comment
+risk-kernel: *dedicatedDefaults
+registry: *dedicatedDefaults
+marketplace: *dedicatedDefaults
+billing: *dedicatedDefaults
+memory: *dedicatedDefaults
+channels: *dedicatedDefaults
+eval-hub: *dedicatedDefaults
+compliance: *dedicatedDefaults
+data-governance: *dedicatedDefaults
+api-gateway: *dedicatedDefaults
+console: *dedicatedDefaults
+docs-site: *dedicatedDefaults
+runtime:
+  runServer:
+    replicaCount: 2
+  networkPolicy:
+    allowIngressFromNamespace: false
