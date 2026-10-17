@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api-gateway.fullname" . }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "api-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "api-gateway.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "api-gateway.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api-gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: {{ .Values.readOnlyRootFilesystem }}
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- if .Values.probes.enabled }}
+          livenessProbe:
+            exec:
+              command: ["node", "/app/healthcheck.js"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["node", "/app/healthcheck.js"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "api-gateway.fullname" . }}-config
+                optional: true
+            - secretRef:
+                name: {{ include "api-gateway.secretName" . }}
+          env:
+            - name: GW_PORT
+              value: {{ .Values.service.port | quote }}
+            {{- if .Values.secretFiles.secretName }}
+            {{- if .Values.secretFiles.runTokensFile }}
+            - name: GW_RUN_TOKENS_FILE
+              value: /etc/axis/gateway/{{ .Values.secretFiles.runTokensFile }}
+            {{- end }}
+            {{- if .Values.secretFiles.approvalsTokensFile }}
+            - name: GW_APPROVALS_TOKENS_FILE
+              value: /etc/axis/gateway/{{ .Values.secretFiles.approvalsTokensFile }}
+            {{- end }}
+            {{- if .Values.secretFiles.evalRunnerTokensFile }}
+            - name: GW_EVAL_RUNNER_TOKENS_FILE
+              value: /etc/axis/gateway/{{ .Values.secretFiles.evalRunnerTokensFile }}
+            {{- end }}
+            {{- if .Values.secretFiles.complianceNeedsFile }}
+            - name: GW_COMPLIANCE_NEEDS_FILE
+              value: /etc/axis/gateway/{{ .Values.secretFiles.complianceNeedsFile }}
+            {{- end }}
+            {{- if .Values.secretFiles.bundleDir }}
+            - name: GW_BUNDLE_DIR
+              value: /etc/axis/gateway-bundles
+            {{- end }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.secretFiles.secretName }}
+            - name: gateway-files
+              mountPath: /etc/axis/gateway
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.secretFiles.secretName }}
+        - name: gateway-files
+          secret:
+            secretName: {{ .Values.secretFiles.secretName }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

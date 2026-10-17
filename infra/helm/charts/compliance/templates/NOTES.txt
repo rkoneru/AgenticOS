@@ -1,0 +1,2 @@
+compliance deployed as {{ include "compliance.fullname" . }}.
+Service: {{ include "compliance.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

@@ -1,0 +1,2 @@
+marketplace deployed as {{ include "marketplace.fullname" . }}.
+Service: {{ include "marketplace.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

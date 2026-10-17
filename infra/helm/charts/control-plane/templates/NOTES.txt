@@ -1,0 +1,2 @@
+control-plane deployed as {{ include "control-plane.fullname" . }}.
+Service: {{ include "control-plane.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

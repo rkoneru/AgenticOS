@@ -1,0 +1,2 @@
+channels deployed as {{ include "channels.fullname" . }}.
+Service: {{ include "channels.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: compliance
+description: AXIS compliance matrix and Annex IV dev-server.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

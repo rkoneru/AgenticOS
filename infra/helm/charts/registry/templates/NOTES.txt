@@ -1,0 +1,2 @@
+registry deployed as {{ include "registry.fullname" . }}.
+Service: {{ include "registry.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

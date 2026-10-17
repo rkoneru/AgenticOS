@@ -1,0 +1,98 @@
+image:
+  repository: axis/runtime
+  tag: dev
+  pullPolicy: IfNotPresent
+readOnlyRootFilesystem: true
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+
+# The run service: runtime/scripts/run_server.py, driven entirely by one JSON file named in
+# RUNSERVER_CONFIG (see that script's own docstring for the schema: kernel/control-plane/billing/
+# memory/approvals URLs and tokens). The chart mounts it from a Secret; it is never inlined here.
+runServer:
+  enabled: true
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 8081
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits: { cpu: "2", memory: 1Gi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  probes:
+    enabled: true
+  config:
+    AXIS_BIND_HOST: "0.0.0.0"
+  # A Secret with key "runserver-config.json" holding the RUNSERVER_CONFIG document (kernel_target,
+  # kernel_tokens, control_plane_url, runtime_tokens, billing_url, ingest_tokens, approvals_url,
+  # approval_tokens — see runtime/scripts/run_server.py's docstring).
+  configSecretName: ""
+
+# The Eval Hub runner: runtime/scripts/eval_runner.py, one deployment PER TENANT in production (it
+# polls the hub for exactly one tenant_id — see that script's docstring), driven by one JSON file
+# named in EVAL_RUNNER_CONFIG. Off by default: a real rollout needs one release per tenant (or a
+# values override list), which is out of this chart's scope — see this chart's README.
+evalRunner:
+  enabled: false
+  replicaCount: 1
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  # No HTTP/gRPC surface at all: it only polls the hub and the run service outbound. There is no
+  # endpoint to probe, so no liveness/readiness probe is configured — only Kubernetes' own
+  # process-exit restart applies. docs/NEEDS.md tracks adding a minimal health surface.
+  configSecretName: ""
+
+networkPolicy:
+  enabled: true
+  allowIngressFromNamespace: true
+  extraEgress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: risk-kernel
+      ports:
+        - port: 50051
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: control-plane
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: billing
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: memory
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: eval-hub
+      ports:
+        - port: 8080
+          protocol: TCP
+  extraIngress: []

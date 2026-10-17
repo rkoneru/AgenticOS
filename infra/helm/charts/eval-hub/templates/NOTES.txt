@@ -1,0 +1,2 @@
+eval-hub deployed as {{ include "eval-hub.fullname" . }}.
+Service: {{ include "eval-hub.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}

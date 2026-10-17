@@ -1,0 +1,51 @@
+replicaCount: 2
+image:
+  repository: axis/eval-hub
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+readOnlyRootFilesystem: true
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: '1'
+    memory: 512Mi
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ''
+probes:
+  enabled: true
+config:
+  AXIS_EVALHUB_ROLE: axis_app
+secret:
+  create: true
+  existingSecret: ''
+  data:
+    AXIS_EVALHUB_DATABASE_URL: ''
+    AXIS_EVALHUB_TOKENS: ''
+networkPolicy:
+  enabled: true
+  allowIngressFromNamespace: true
+  allowEgressToPostgres: true
+  postgresSelector:
+    app.kubernetes.io/name: postgresql
+  postgresPort: 5432
+  extraEgress: []
+  extraIngress: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

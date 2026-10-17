@@ -1,0 +1,16 @@
+{{- if and .Values.runServer.enabled .Values.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "runtime.fullname" . }}-run-server
+  labels:
+    {{- include "runtime.labels" . | nindent 4 }}
+    app.kubernetes.io/component: run-server
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: runtime
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: run-server
+{{- end -}}

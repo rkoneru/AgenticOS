@@ -1,0 +1,56 @@
+replicaCount: 2
+image:
+  repository: axis/control-plane
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+readOnlyRootFilesystem: true
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: '1'
+    memory: 512Mi
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ''
+probes:
+  enabled: true
+config:
+  CP_REGION: us-east-1
+  CP_INSECURE_COOKIES: 'false'
+  CP_RETURN_ORIGINS: ''
+  CP_REDIRECT_URI: ''
+secret:
+  create: true
+  existingSecret: ''
+  data:
+    CP_PG_URL: ''
+    CP_DEV_TOKEN: ''
+    CP_PLATFORM_TOKEN: ''
+    CP_RUNTIME_TOKENS: ''
+networkPolicy:
+  enabled: true
+  allowIngressFromNamespace: true
+  allowEgressToPostgres: true
+  postgresSelector:
+    app.kubernetes.io/name: postgresql
+  postgresPort: 5432
+  extraEgress: []
+  extraIngress: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

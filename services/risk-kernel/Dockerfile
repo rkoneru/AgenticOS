@@ -14,13 +14,11 @@ RUN pnpm turbo run build --filter=@axis/risk-kernel
 RUN pnpm --filter @axis/risk-kernel deploy --prod --legacy /out
 
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache dumb-init && addgroup -S axis && adduser -S axis -G axis
+RUN addgroup -S axis && adduser -S axis -G axis
 WORKDIR /app
 COPY --from=builder --chown=axis:axis /out ./
 USER axis
-ENV NODE_ENV=production \
-    AXIS_RK_PORT=50051 \
+ENV AXIS_RK_PORT=50051 \
     AXIS_BIND_HOST=0.0.0.0
 EXPOSE 50051
-ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/main.js"]

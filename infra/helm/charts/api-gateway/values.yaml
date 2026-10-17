@@ -1,0 +1,67 @@
+replicaCount: 2
+image:
+  repository: axis/api-gateway
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+readOnlyRootFilesystem: true
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+probes:
+  # KNOWN LIMITATION (docs/NEEDS.md): GW_HOST must be a loopback address (the gateway's own
+  # configFromEnv() refuses anything else), so kubelet's httpGet — which dials the pod IP, not
+  # 127.0.0.1 inside the container — can never reach it. Probes exec a tiny bundled script instead.
+  enabled: true
+config:
+  GW_REGION: "us-east-1"
+  GW_ALLOWED_ORIGINS: ""
+  GW_TRUSTED_PROXIES: ""
+  GW_RUN_SERVICE_URL: ""
+  GW_APPROVALS_URL: ""
+secret:
+  create: true
+  existingSecret: ""
+  data:
+    GW_DATABASE_URL: ""
+    GW_GOV_MASTER_KEY: ""
+# GW_*_FILE variables are file paths, not inline env (apps/api-gateway/src/standalone.ts): mounted
+# from a Secret whose keys match the filenames below. Leave a value empty to omit that mount/env.
+secretFiles:
+  secretName: ""
+  runTokensFile: "run-tokens.json"
+  approvalsTokensFile: "approvals-tokens.json"
+  evalRunnerTokensFile: ""
+  complianceNeedsFile: ""
+  bundleDir: ""
+networkPolicy:
+  enabled: true
+  allowIngressFromNamespace: true
+  allowEgressToPostgres: true
+  postgresSelector:
+    app.kubernetes.io/name: postgresql
+  postgresPort: 5432
+  extraEgress: []
+  extraIngress: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

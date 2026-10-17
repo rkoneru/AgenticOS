@@ -5,6 +5,8 @@
 # documented per-service in its own main.ts/dev-server.ts (see docs/NEEDS.md for the production-hardening gaps:
 # static bearer tokens, no TLS, in-memory or loopback-only pieces where noted in CLAUDE.md's component table).
 
+# NODE_ENV MUST NOT be set to "production": this dev-server refuses to start if it is
+# (see its own source for the guard). The Helm chart leaves NODE_ENV unset.
 FROM node:22-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /repo
@@ -14,12 +16,13 @@ RUN pnpm turbo run build --filter=@axis/billing
 RUN pnpm --filter @axis/billing deploy --prod --legacy /out
 
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache dumb-init && addgroup -S axis && adduser -S axis -G axis
+# busybox adduser/addgroup only: no apk/network dependency in the final stage
+RUN addgroup -S axis && adduser -S axis -G axis
 WORKDIR /app
 COPY --from=builder --chown=axis:axis /out ./
 USER axis
-ENV NODE_ENV=production \
-    AXIS_BILLING_PORT=8080
+ENV AXIS_BILLING_PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["dumb-init", "--"]
+# No init system installed (keeps the final stage apk/network-free): Node reaps its own
+# children here (no subprocesses are spawned), and Kubernetes sends TERM directly to PID 1.
 CMD ["node", "dist/main.js"]

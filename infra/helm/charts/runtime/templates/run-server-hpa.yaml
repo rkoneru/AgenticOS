@@ -1,0 +1,23 @@
+{{- if and .Values.runServer.enabled .Values.runServer.autoscaling.enabled -}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "runtime.fullname" . }}-run-server
+  labels:
+    {{- include "runtime.labels" . | nindent 4 }}
+    app.kubernetes.io/component: run-server
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "runtime.fullname" . }}-run-server
+  minReplicas: {{ .Values.runServer.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.runServer.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.runServer.autoscaling.targetCPUUtilizationPercentage }}
+{{- end -}}

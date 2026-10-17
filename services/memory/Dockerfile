@@ -14,12 +14,13 @@ RUN pnpm turbo run build --filter=@axis/memory
 RUN pnpm --filter @axis/memory deploy --prod --legacy /out
 
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache dumb-init && addgroup -S axis && adduser -S axis -G axis
+# busybox adduser/addgroup only: no apk/network dependency in the final stage
+RUN addgroup -S axis && adduser -S axis -G axis
 WORKDIR /app
 COPY --from=builder --chown=axis:axis /out ./
 USER axis
-ENV NODE_ENV=production \
-    AXIS_MEMORY_PORT=8080
+ENV AXIS_MEMORY_PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["dumb-init", "--"]
+# No init system installed (keeps the final stage apk/network-free): Node reaps its own
+# children here (no subprocesses are spawned), and Kubernetes sends TERM directly to PID 1.
 CMD ["node", "dist/main.js"]

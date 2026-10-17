@@ -1,0 +1,65 @@
+replicaCount: 2
+image:
+  repository: axis/risk-kernel
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 50051
+readOnlyRootFilesystem: true
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+probes:
+  enabled: true
+config:
+  AXIS_RK_PORT: "50051"
+  AXIS_BIND_HOST: "0.0.0.0"
+secret:
+  create: true
+  existingSecret: ""
+  data:
+    AXIS_RK_TOKENS: ""
+    AXIS_AUDIT_PG_URL: ""
+    AXIS_APPROVALS_HMAC_KEY: ""
+# The Risk Kernel loads its compiled Wasm policy bundle(s) from a file, not an env var
+# (AXIS_POLICY_BUNDLE | AXIS_POLICY_BUNDLE_DIR — services/risk-kernel/src/main.ts): mounted here
+# from a Secret the control plane (or a release pipeline) produces, never baked into the image.
+policyBundle:
+  secretName: ""   # a Secret with key "bundle.tar.gz" (single-tenant) ...
+  dirSecretName: "" # ... or a Secret whose keys are "<tenant-uuid>.tar.gz" (AXIS_POLICY_BUNDLE_DIR mode)
+# The approvals service (services/approvals) has no standalone entrypoint: its only server is the
+# dev loopback bridge hosted inside this process (AXIS_APPROVALS_DEV_BRIDGE=1), so it is a second
+# port on this same Deployment, not a separate chart (docs/adr/0116-helm-chart-layout.md).
+approvalsBridge:
+  enabled: false
+  port: 8090
+networkPolicy:
+  enabled: true
+  allowIngressFromNamespace: true
+  allowEgressToPostgres: true
+  postgresSelector:
+    app.kubernetes.io/name: postgresql
+  postgresPort: 5432
+  extraEgress: []
+  extraIngress: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

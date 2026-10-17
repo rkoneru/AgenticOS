@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eval-hub
+description: AXIS Eval Hub (suites, baselines, release gate).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

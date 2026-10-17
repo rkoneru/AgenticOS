@@ -1,0 +1,13 @@
+{{- if .Values.runServer.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "runtime.fullname" . }}-run-server-config
+  labels:
+    {{- include "runtime.labels" . | nindent 4 }}
+    app.kubernetes.io/component: run-server
+data:
+  {{- range $k, $v := .Values.runServer.config }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- end -}}
