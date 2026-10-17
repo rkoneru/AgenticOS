@@ -8,6 +8,12 @@ service:
   type: ClusterIP
   port: 50051
 readOnlyRootFilesystem: true
+# Numeric, matching the image's USER (services/risk-kernel/Dockerfile): required for
+# runAsNonRoot to pass against a non-numeric named USER, otherwise kubelet refuses the
+# container with CreateContainerConfigError (found deploying to a real k3d cluster).
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
 resources:
   requests:
     cpu: 200m
@@ -45,6 +51,13 @@ secret:
 policyBundle:
   secretName: "" # a Secret with key "bundle.tar.gz" (single-tenant) ...
   dirSecretName: "" # ... or a Secret whose keys are "<tenant-uuid>.tar.gz" (AXIS_POLICY_BUNDLE_DIR mode)
+# AXIS_RK_TOKENS must be a FILE PATH (services/risk-kernel/src/main.ts does readFileSync(tokens)),
+# never the token JSON itself as an env var value — secret.data.AXIS_RK_TOKENS / envFrom only works
+# for a value the process reads directly, so a real token table needs this file mount instead
+# (found deploying to a real cluster: envFrom alone passes the literal secret value, which main.ts
+# then tries to open as a path and fails — docs/runbooks/local-cluster.md, docs/NEEDS.md).
+tokens:
+  secretName: "" # a Secret with key "tokens.json" (token -> principal map)
 # The approvals service (services/approvals) has no standalone entrypoint: its only server is the
 # dev loopback bridge hosted inside this process (AXIS_APPROVALS_DEV_BRIDGE=1), so it is a second
 # port on this same Deployment, not a separate chart (docs/adr/0116-helm-chart-layout.md).

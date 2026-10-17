@@ -24,6 +24,9 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        {{- with .Values.podSecurityContext }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -83,6 +86,10 @@ spec:
             - name: AXIS_POLICY_BUNDLE_DIR
               value: /etc/axis/policy-dir
             {{- end }}
+            {{- if .Values.tokens.secretName }}
+            - name: AXIS_RK_TOKENS
+              value: /etc/axis/tokens/tokens.json
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -97,6 +104,10 @@ spec:
             {{- else if .Values.policyBundle.dirSecretName }}
             - name: policy-bundle-dir
               mountPath: /etc/axis/policy-dir
+            {{- end }}
+            {{- if .Values.tokens.secretName }}
+            - name: tokens
+              mountPath: /etc/axis/tokens
               readOnly: true
             {{- end }}
       volumes:
@@ -112,6 +123,11 @@ spec:
         - name: policy-bundle-dir
           secret:
             secretName: {{ .Values.policyBundle.dirSecretName }}
+        {{- end }}
+        {{- if .Values.tokens.secretName }}
+        - name: tokens
+          secret:
+            secretName: {{ .Values.tokens.secretName }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

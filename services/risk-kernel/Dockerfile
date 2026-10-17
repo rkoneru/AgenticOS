@@ -25,9 +25,20 @@ RUN pnpm turbo run build --filter=@axis/risk-kernel
 RUN pnpm --filter @axis/risk-kernel deploy --prod --legacy /out
 
 FROM node:22-alpine AS runtime
-RUN addgroup -S axis && adduser -S axis -G axis
+# Numeric UID/GID (not just a named user): Kubernetes' runAsNonRoot pod securityContext can only
+# verify non-root when either the image's USER is numeric or the pod spec pins runAsUser itself
+# (see infra/helm/charts/*/templates/deployment.yaml's podSecurityContext.runAsUser, which this
+# repo's charts now set to the same 10001 — found as a real CreateContainerConfigError deploying
+# to a live k3d cluster, docs/runbooks/local-cluster.md).
+RUN addgroup -g 10001 -S axis && adduser -u 10001 -S axis -G axis
 WORKDIR /app
 COPY --from=builder --chown=axis:axis /out ./
+# services/risk-kernel/src/grpc.ts resolves PROTO_ROOT relative to the compiled dist/grpc.js
+# (../../../proto/ from the monorepo layout), which lands on /proto/ in this flattened image —
+# `pnpm deploy --prod` only packages this workspace, never the sibling proto/ directory, so the
+# gRPC server failed to boot with ENOENT on gate.proto until this COPY was added (found as a real
+# CrashLoopBackOff deploying to a live k3d cluster, docs/runbooks/local-cluster.md).
+COPY --chown=axis:axis proto/ /proto/
 USER axis
 ENV AXIS_RK_PORT=50051 \
     AXIS_BIND_HOST=0.0.0.0

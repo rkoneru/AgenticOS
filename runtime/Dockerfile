@@ -31,7 +31,12 @@ COPY sdk/python/src sdk/python/src
 RUN uv sync --frozen --no-dev --no-editable --package axis-runtime
 
 FROM python:3.12-slim AS runtime
-RUN groupadd -r axis && useradd -r -g axis axis
+# Numeric UID/GID (not just a named user): Kubernetes' runAsNonRoot pod securityContext can only
+# verify non-root when either the image's USER is numeric or the pod spec pins runAsUser itself
+# (see infra/helm/charts/runtime/templates/*.yaml's podSecurityContext.runAsUser, set to the same
+# 10001 — found as a real CreateContainerConfigError deploying to a live k3d cluster,
+# docs/runbooks/local-cluster.md).
+RUN groupadd -r -g 10001 axis && useradd -r -u 10001 -g axis axis
 WORKDIR /app
 COPY --from=builder --chown=axis:axis /repo/.venv /app/.venv
 COPY --chown=axis:axis runtime/scripts /app/scripts
