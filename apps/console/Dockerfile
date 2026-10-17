@@ -13,14 +13,14 @@ RUN pnpm turbo run build --filter=@axis/console
 FROM node:22-alpine AS runtime
 RUN addgroup -S axis && adduser -S axis -G axis
 WORKDIR /app
-# .next/standalone already contains a minimal node_modules and a server.js that serves on PORT.
-COPY --from=builder --chown=axis:axis /repo/apps/console/.next/standalone/apps/console ./
-COPY --from=builder --chown=axis:axis /repo/apps/console/.next/standalone/node_modules ./node_modules
-COPY --from=builder --chown=axis:axis /repo/apps/console/.next/static ./.next/static
-COPY --from=builder --chown=axis:axis /repo/apps/console/public ./public
+# .next/standalone's own tree is copied AS-IS (monorepo root at /app, server.js under
+# apps/console/): its node_modules entries are pnpm symlinks with relative targets like
+# "../../../node_modules/.pnpm/...", which only resolve correctly at this original nesting depth.
+COPY --from=builder --chown=axis:axis /repo/apps/console/.next/standalone ./
+COPY --from=builder --chown=axis:axis /repo/apps/console/.next/static ./apps/console/.next/static
 USER axis
 ENV NODE_ENV=production \
     PORT=3100 \
     HOSTNAME=0.0.0.0
 EXPOSE 3100
-CMD ["node", "server.js"]
+CMD ["node", "apps/console/server.js"]

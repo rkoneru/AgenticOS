@@ -7,7 +7,6 @@
 **/.next
 **/test-results
 **/playwright-report
-docs
 infra/terraform
 infra/dr
 perf/results
