@@ -23,7 +23,7 @@ fabricated `GOOGLE_APPLICATION_CREDENTIALS` service-account key (fake
 private key material, well-formed JSON shape). The provider never actually
 dials out, because nothing in the plan needs an existing resource read or a
 data-source lookup. This is a narrower result than "the provider has a
-skip-validation mode" (it does not), so a plan against an *existing* GCP
+skip-validation mode" (it does not), so a plan against an _existing_ GCP
 project (refreshing real resource state) would need real credentials; a
 from-scratch create plan, which is what this repo can exercise without a
 cloud account, does not.

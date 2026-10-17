@@ -43,7 +43,7 @@ secret:
 # (AXIS_POLICY_BUNDLE | AXIS_POLICY_BUNDLE_DIR — services/risk-kernel/src/main.ts): mounted here
 # from a Secret the control plane (or a release pipeline) produces, never baked into the image.
 policyBundle:
-  secretName: ""   # a Secret with key "bundle.tar.gz" (single-tenant) ...
+  secretName: "" # a Secret with key "bundle.tar.gz" (single-tenant) ...
   dirSecretName: "" # ... or a Secret whose keys are "<tenant-uuid>.tar.gz" (AXIS_POLICY_BUNDLE_DIR mode)
 # The approvals service (services/approvals) has no standalone entrypoint: its only server is the
 # dev loopback bridge hosted inside this process (AXIS_APPROVALS_DEV_BRIDGE=1), so it is a second

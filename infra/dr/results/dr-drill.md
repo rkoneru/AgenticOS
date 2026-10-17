@@ -1,405 +1,405 @@
 # DR drill result
 
-Started 2026-10-14T23:13:01.638795+00:00 on x86_64. One small machine; clusters are local throwaways.
+Started 2026-10-17T00:52:07.096282+00:00 on x86_64. One small machine; clusters are local throwaways.
 
-- logical_backup_seconds: 0.11
-- physical_backup_seconds: 0.34
-- logical_dump_bytes: 323884
+- logical_backup_seconds: 0.12
+- physical_backup_seconds: 0.36
+- logical_dump_bytes: 324658
 - basebackup_bytes: 51696004
-- seconds_between_last_committed_audit_row_and_crash: 0.61
+- seconds_between_last_committed_audit_row_and_crash: 0.62
 
 ## Measured
 
-{"rpo_window_seconds": 0.0, "rto_logical_seconds": 1.31, "rto_physical_seconds": 1.36}
+{"rpo_window_seconds": 0.0, "rto_logical_seconds": 1.24, "rto_physical_seconds": 1.34}
 
-## restore_logical (rto 1.31 s, ok=True)
+## restore_logical (rto 1.24 s, ok=True)
 
-- PASS audit chain verifies (d705da0a) 
-- PASS chain head == pre-backup head (d705da0a) 
-- PASS signed checkpoint (held outside the DB) matches (d705da0a) 
-- PASS audit chain verifies (4ea3cf24) 
-- PASS chain head == pre-backup head (4ea3cf24) 
-- PASS signed checkpoint (held outside the DB) matches (4ea3cf24) 
-- PASS audit chain verifies (0085fb31) 
-- PASS chain head == pre-backup head (0085fb31) 
-- PASS signed checkpoint (held outside the DB) matches (0085fb31) 
-- PASS RLS: tenant d705da0a sees 0 rows of 4ea3cf24 
-- PASS RLS: tenant 4ea3cf24 sees 0 rows of 0085fb31 
-- PASS RLS: tenant 0085fb31 sees 0 rows of d705da0a 
+- PASS audit chain verifies (b7012b44) 
+- PASS chain head == pre-backup head (b7012b44) 
+- PASS signed checkpoint (held outside the DB) matches (b7012b44) 
+- PASS audit chain verifies (9744615f) 
+- PASS chain head == pre-backup head (9744615f) 
+- PASS signed checkpoint (held outside the DB) matches (9744615f) 
+- PASS audit chain verifies (0b4a813f) 
+- PASS chain head == pre-backup head (0b4a813f) 
+- PASS signed checkpoint (held outside the DB) matches (0b4a813f) 
+- PASS RLS: tenant b7012b44 sees 0 rows of 9744615f 
+- PASS RLS: tenant 9744615f sees 0 rows of 0b4a813f 
+- PASS RLS: tenant 0b4a813f sees 0 rows of b7012b44 
 - PASS RLS: the application role with NO tenant set sees 0 audit rows 
-- PASS rows api_keys (d705da0a): 1 
-- PASS rows approvals (d705da0a): 0 
-- PASS rows audit_checkpoints (d705da0a): 1 
-- PASS rows audit_events (d705da0a): 28 
-- PASS rows billing_period_seals (d705da0a): 1 
-- PASS rows blueprint_versions (d705da0a): 0 
-- PASS rows blueprints (d705da0a): 0 
-- PASS rows budgets (d705da0a): 4 
-- PASS rows channel_identities (d705da0a): 0 
-- PASS rows compliance_docs (d705da0a): 0 
-- PASS rows conversation_messages (d705da0a): 0 
-- PASS rows conversation_threads (d705da0a): 0 
-- PASS rows conversations (d705da0a): 0 
-- PASS rows directories (d705da0a): 0 
-- PASS rows directory_role_mappings (d705da0a): 0 
-- PASS rows end_users (d705da0a): 0 
-- PASS rows eval_hub_docs (d705da0a): 1 
-- PASS rows governance_holds (d705da0a): 0 
-- PASS rows governance_requests (d705da0a): 0 
-- PASS rows governance_retention_policies (d705da0a): 0 
-- PASS rows governance_retention_runs (d705da0a): 0 
-- PASS rows governance_steps (d705da0a): 0 
-- PASS rows governance_subject_identifiers (d705da0a): 0 
-- PASS rows governance_subjects (d705da0a): 0 
-- PASS rows identity_connections (d705da0a): 1 
-- PASS rows invoice_provider_links (d705da0a): 0 
-- PASS rows invoices (d705da0a): 0 
-- PASS rows kill_switches (d705da0a): 0 
-- PASS rows knowledge_bases (d705da0a): 0 
-- PASS rows link_challenges (d705da0a): 0 
-- PASS rows marketplace_docs (d705da0a): 0 
-- PASS rows members (d705da0a): 1 
-- PASS rows memory_chunks (d705da0a): 3 
-- PASS rows memory_documents (d705da0a): 0 
-- PASS rows model_credentials (d705da0a): 1 
-- PASS rows policy_assignments (d705da0a): 2 
-- PASS rows policy_pack_versions (d705da0a): 2 
-- PASS rows policy_packs (d705da0a): 2 
-- PASS rows processes (d705da0a): 0 
-- PASS rows registry_eval_attestations (d705da0a): 0 
-- PASS rows registry_keys (d705da0a): 1 
-- PASS rows registry_names (d705da0a): 1 
-- PASS rows registry_namespaces (d705da0a): 1 
-- PASS rows registry_public_namespaces (d705da0a): 0 
-- PASS rows registry_public_versions (d705da0a): 0 
-- PASS rows registry_version_events (d705da0a): 0 
-- PASS rows registry_versions (d705da0a): 1 
-- PASS rows run_events (d705da0a): 0 
-- PASS rows runs (d705da0a): 0 
-- PASS rows scim_group_members (d705da0a): 0 
-- PASS rows scim_groups (d705da0a): 0 
-- PASS rows sessions (d705da0a): 2 
-- PASS rows tenant_keys (d705da0a): 1 
-- PASS rows tenant_placements (d705da0a): 1 
-- PASS rows tenant_settings (d705da0a): 1 
-- PASS rows usage_conflicts (d705da0a): 0 
-- PASS rows usage_events (d705da0a): 15 
-- PASS rows verified_domains (d705da0a): 0 
-- PASS rows api_keys (4ea3cf24): 1 
-- PASS rows approvals (4ea3cf24): 0 
-- PASS rows audit_checkpoints (4ea3cf24): 1 
-- PASS rows audit_events (4ea3cf24): 19 
-- PASS rows billing_period_seals (4ea3cf24): 1 
-- PASS rows blueprint_versions (4ea3cf24): 0 
-- PASS rows blueprints (4ea3cf24): 0 
-- PASS rows budgets (4ea3cf24): 4 
-- PASS rows channel_identities (4ea3cf24): 0 
-- PASS rows compliance_docs (4ea3cf24): 0 
-- PASS rows conversation_messages (4ea3cf24): 0 
-- PASS rows conversation_threads (4ea3cf24): 0 
-- PASS rows conversations (4ea3cf24): 0 
-- PASS rows directories (4ea3cf24): 0 
-- PASS rows directory_role_mappings (4ea3cf24): 0 
-- PASS rows end_users (4ea3cf24): 0 
-- PASS rows eval_hub_docs (4ea3cf24): 1 
-- PASS rows governance_holds (4ea3cf24): 0 
-- PASS rows governance_requests (4ea3cf24): 0 
-- PASS rows governance_retention_policies (4ea3cf24): 0 
-- PASS rows governance_retention_runs (4ea3cf24): 0 
-- PASS rows governance_steps (4ea3cf24): 0 
-- PASS rows governance_subject_identifiers (4ea3cf24): 0 
-- PASS rows governance_subjects (4ea3cf24): 0 
-- PASS rows identity_connections (4ea3cf24): 1 
-- PASS rows invoice_provider_links (4ea3cf24): 0 
-- PASS rows invoices (4ea3cf24): 0 
-- PASS rows kill_switches (4ea3cf24): 0 
-- PASS rows knowledge_bases (4ea3cf24): 0 
-- PASS rows link_challenges (4ea3cf24): 0 
-- PASS rows marketplace_docs (4ea3cf24): 0 
-- PASS rows members (4ea3cf24): 1 
-- PASS rows memory_chunks (4ea3cf24): 3 
-- PASS rows memory_documents (4ea3cf24): 0 
-- PASS rows model_credentials (4ea3cf24): 1 
-- PASS rows policy_assignments (4ea3cf24): 2 
-- PASS rows policy_pack_versions (4ea3cf24): 2 
-- PASS rows policy_packs (4ea3cf24): 2 
-- PASS rows processes (4ea3cf24): 0 
-- PASS rows registry_eval_attestations (4ea3cf24): 0 
-- PASS rows registry_keys (4ea3cf24): 0 
-- PASS rows registry_names (4ea3cf24): 0 
-- PASS rows registry_namespaces (4ea3cf24): 0 
-- PASS rows registry_public_namespaces (4ea3cf24): 0 
-- PASS rows registry_public_versions (4ea3cf24): 0 
-- PASS rows registry_version_events (4ea3cf24): 0 
-- PASS rows registry_versions (4ea3cf24): 0 
-- PASS rows run_events (4ea3cf24): 0 
-- PASS rows runs (4ea3cf24): 0 
-- PASS rows scim_group_members (4ea3cf24): 0 
-- PASS rows scim_groups (4ea3cf24): 0 
-- PASS rows sessions (4ea3cf24): 2 
-- PASS rows tenant_keys (4ea3cf24): 1 
-- PASS rows tenant_placements (4ea3cf24): 1 
-- PASS rows tenant_settings (4ea3cf24): 1 
-- PASS rows usage_conflicts (4ea3cf24): 0 
-- PASS rows usage_events (4ea3cf24): 17 
-- PASS rows verified_domains (4ea3cf24): 0 
-- PASS rows api_keys (0085fb31): 1 
-- PASS rows approvals (0085fb31): 0 
-- PASS rows audit_checkpoints (0085fb31): 1 
-- PASS rows audit_events (0085fb31): 19 
-- PASS rows billing_period_seals (0085fb31): 1 
-- PASS rows blueprint_versions (0085fb31): 0 
-- PASS rows blueprints (0085fb31): 0 
-- PASS rows budgets (0085fb31): 4 
-- PASS rows channel_identities (0085fb31): 0 
-- PASS rows compliance_docs (0085fb31): 0 
-- PASS rows conversation_messages (0085fb31): 0 
-- PASS rows conversation_threads (0085fb31): 0 
-- PASS rows conversations (0085fb31): 0 
-- PASS rows directories (0085fb31): 0 
-- PASS rows directory_role_mappings (0085fb31): 0 
-- PASS rows end_users (0085fb31): 0 
-- PASS rows eval_hub_docs (0085fb31): 1 
-- PASS rows governance_holds (0085fb31): 0 
-- PASS rows governance_requests (0085fb31): 0 
-- PASS rows governance_retention_policies (0085fb31): 0 
-- PASS rows governance_retention_runs (0085fb31): 0 
-- PASS rows governance_steps (0085fb31): 0 
-- PASS rows governance_subject_identifiers (0085fb31): 0 
-- PASS rows governance_subjects (0085fb31): 0 
-- PASS rows identity_connections (0085fb31): 1 
-- PASS rows invoice_provider_links (0085fb31): 0 
-- PASS rows invoices (0085fb31): 0 
-- PASS rows kill_switches (0085fb31): 0 
-- PASS rows knowledge_bases (0085fb31): 0 
-- PASS rows link_challenges (0085fb31): 0 
-- PASS rows marketplace_docs (0085fb31): 0 
-- PASS rows members (0085fb31): 1 
-- PASS rows memory_chunks (0085fb31): 3 
-- PASS rows memory_documents (0085fb31): 0 
-- PASS rows model_credentials (0085fb31): 1 
-- PASS rows policy_assignments (0085fb31): 2 
-- PASS rows policy_pack_versions (0085fb31): 2 
-- PASS rows policy_packs (0085fb31): 2 
-- PASS rows processes (0085fb31): 0 
-- PASS rows registry_eval_attestations (0085fb31): 0 
-- PASS rows registry_keys (0085fb31): 0 
-- PASS rows registry_names (0085fb31): 0 
-- PASS rows registry_namespaces (0085fb31): 0 
-- PASS rows registry_public_namespaces (0085fb31): 0 
-- PASS rows registry_public_versions (0085fb31): 0 
-- PASS rows registry_version_events (0085fb31): 0 
-- PASS rows registry_versions (0085fb31): 0 
-- PASS rows run_events (0085fb31): 0 
-- PASS rows runs (0085fb31): 0 
-- PASS rows scim_group_members (0085fb31): 0 
-- PASS rows scim_groups (0085fb31): 0 
-- PASS rows sessions (0085fb31): 2 
-- PASS rows tenant_keys (0085fb31): 1 
-- PASS rows tenant_placements (0085fb31): 1 
-- PASS rows tenant_settings (0085fb31): 1 
-- PASS rows usage_conflicts (0085fb31): 0 
-- PASS rows usage_events (0085fb31): 16 
-- PASS rows verified_domains (0085fb31): 0 
-- PASS billing seal 2026-08 verifies (d705da0a) 
-- PASS billing seal 2026-08 verifies (4ea3cf24) 
-- PASS billing seal 2026-08 verifies (0085fb31) 
-- PASS registry resolve verifies hash+signature+provenance (dr-53c756/helper-agent@^1) 
+- PASS rows api_keys (b7012b44): 1 
+- PASS rows approvals (b7012b44): 0 
+- PASS rows audit_checkpoints (b7012b44): 1 
+- PASS rows audit_events (b7012b44): 28 
+- PASS rows billing_period_seals (b7012b44): 1 
+- PASS rows blueprint_versions (b7012b44): 0 
+- PASS rows blueprints (b7012b44): 0 
+- PASS rows budgets (b7012b44): 4 
+- PASS rows channel_identities (b7012b44): 0 
+- PASS rows compliance_docs (b7012b44): 0 
+- PASS rows conversation_messages (b7012b44): 0 
+- PASS rows conversation_threads (b7012b44): 0 
+- PASS rows conversations (b7012b44): 0 
+- PASS rows directories (b7012b44): 0 
+- PASS rows directory_role_mappings (b7012b44): 0 
+- PASS rows end_users (b7012b44): 0 
+- PASS rows eval_hub_docs (b7012b44): 1 
+- PASS rows governance_holds (b7012b44): 0 
+- PASS rows governance_requests (b7012b44): 0 
+- PASS rows governance_retention_policies (b7012b44): 0 
+- PASS rows governance_retention_runs (b7012b44): 0 
+- PASS rows governance_steps (b7012b44): 0 
+- PASS rows governance_subject_identifiers (b7012b44): 0 
+- PASS rows governance_subjects (b7012b44): 0 
+- PASS rows identity_connections (b7012b44): 1 
+- PASS rows invoice_provider_links (b7012b44): 0 
+- PASS rows invoices (b7012b44): 0 
+- PASS rows kill_switches (b7012b44): 0 
+- PASS rows knowledge_bases (b7012b44): 0 
+- PASS rows link_challenges (b7012b44): 0 
+- PASS rows marketplace_docs (b7012b44): 0 
+- PASS rows members (b7012b44): 1 
+- PASS rows memory_chunks (b7012b44): 3 
+- PASS rows memory_documents (b7012b44): 0 
+- PASS rows model_credentials (b7012b44): 1 
+- PASS rows policy_assignments (b7012b44): 2 
+- PASS rows policy_pack_versions (b7012b44): 2 
+- PASS rows policy_packs (b7012b44): 2 
+- PASS rows processes (b7012b44): 0 
+- PASS rows registry_eval_attestations (b7012b44): 0 
+- PASS rows registry_keys (b7012b44): 1 
+- PASS rows registry_names (b7012b44): 1 
+- PASS rows registry_namespaces (b7012b44): 1 
+- PASS rows registry_public_namespaces (b7012b44): 0 
+- PASS rows registry_public_versions (b7012b44): 0 
+- PASS rows registry_version_events (b7012b44): 0 
+- PASS rows registry_versions (b7012b44): 1 
+- PASS rows run_events (b7012b44): 0 
+- PASS rows runs (b7012b44): 0 
+- PASS rows scim_group_members (b7012b44): 0 
+- PASS rows scim_groups (b7012b44): 0 
+- PASS rows sessions (b7012b44): 2 
+- PASS rows tenant_keys (b7012b44): 1 
+- PASS rows tenant_placements (b7012b44): 1 
+- PASS rows tenant_settings (b7012b44): 1 
+- PASS rows usage_conflicts (b7012b44): 0 
+- PASS rows usage_events (b7012b44): 18 
+- PASS rows verified_domains (b7012b44): 0 
+- PASS rows api_keys (9744615f): 1 
+- PASS rows approvals (9744615f): 0 
+- PASS rows audit_checkpoints (9744615f): 1 
+- PASS rows audit_events (9744615f): 19 
+- PASS rows billing_period_seals (9744615f): 1 
+- PASS rows blueprint_versions (9744615f): 0 
+- PASS rows blueprints (9744615f): 0 
+- PASS rows budgets (9744615f): 4 
+- PASS rows channel_identities (9744615f): 0 
+- PASS rows compliance_docs (9744615f): 0 
+- PASS rows conversation_messages (9744615f): 0 
+- PASS rows conversation_threads (9744615f): 0 
+- PASS rows conversations (9744615f): 0 
+- PASS rows directories (9744615f): 0 
+- PASS rows directory_role_mappings (9744615f): 0 
+- PASS rows end_users (9744615f): 0 
+- PASS rows eval_hub_docs (9744615f): 1 
+- PASS rows governance_holds (9744615f): 0 
+- PASS rows governance_requests (9744615f): 0 
+- PASS rows governance_retention_policies (9744615f): 0 
+- PASS rows governance_retention_runs (9744615f): 0 
+- PASS rows governance_steps (9744615f): 0 
+- PASS rows governance_subject_identifiers (9744615f): 0 
+- PASS rows governance_subjects (9744615f): 0 
+- PASS rows identity_connections (9744615f): 1 
+- PASS rows invoice_provider_links (9744615f): 0 
+- PASS rows invoices (9744615f): 0 
+- PASS rows kill_switches (9744615f): 0 
+- PASS rows knowledge_bases (9744615f): 0 
+- PASS rows link_challenges (9744615f): 0 
+- PASS rows marketplace_docs (9744615f): 0 
+- PASS rows members (9744615f): 1 
+- PASS rows memory_chunks (9744615f): 3 
+- PASS rows memory_documents (9744615f): 0 
+- PASS rows model_credentials (9744615f): 1 
+- PASS rows policy_assignments (9744615f): 2 
+- PASS rows policy_pack_versions (9744615f): 2 
+- PASS rows policy_packs (9744615f): 2 
+- PASS rows processes (9744615f): 0 
+- PASS rows registry_eval_attestations (9744615f): 0 
+- PASS rows registry_keys (9744615f): 0 
+- PASS rows registry_names (9744615f): 0 
+- PASS rows registry_namespaces (9744615f): 0 
+- PASS rows registry_public_namespaces (9744615f): 0 
+- PASS rows registry_public_versions (9744615f): 0 
+- PASS rows registry_version_events (9744615f): 0 
+- PASS rows registry_versions (9744615f): 0 
+- PASS rows run_events (9744615f): 0 
+- PASS rows runs (9744615f): 0 
+- PASS rows scim_group_members (9744615f): 0 
+- PASS rows scim_groups (9744615f): 0 
+- PASS rows sessions (9744615f): 2 
+- PASS rows tenant_keys (9744615f): 1 
+- PASS rows tenant_placements (9744615f): 1 
+- PASS rows tenant_settings (9744615f): 1 
+- PASS rows usage_conflicts (9744615f): 0 
+- PASS rows usage_events (9744615f): 16 
+- PASS rows verified_domains (9744615f): 0 
+- PASS rows api_keys (0b4a813f): 1 
+- PASS rows approvals (0b4a813f): 0 
+- PASS rows audit_checkpoints (0b4a813f): 1 
+- PASS rows audit_events (0b4a813f): 19 
+- PASS rows billing_period_seals (0b4a813f): 1 
+- PASS rows blueprint_versions (0b4a813f): 0 
+- PASS rows blueprints (0b4a813f): 0 
+- PASS rows budgets (0b4a813f): 4 
+- PASS rows channel_identities (0b4a813f): 0 
+- PASS rows compliance_docs (0b4a813f): 0 
+- PASS rows conversation_messages (0b4a813f): 0 
+- PASS rows conversation_threads (0b4a813f): 0 
+- PASS rows conversations (0b4a813f): 0 
+- PASS rows directories (0b4a813f): 0 
+- PASS rows directory_role_mappings (0b4a813f): 0 
+- PASS rows end_users (0b4a813f): 0 
+- PASS rows eval_hub_docs (0b4a813f): 1 
+- PASS rows governance_holds (0b4a813f): 0 
+- PASS rows governance_requests (0b4a813f): 0 
+- PASS rows governance_retention_policies (0b4a813f): 0 
+- PASS rows governance_retention_runs (0b4a813f): 0 
+- PASS rows governance_steps (0b4a813f): 0 
+- PASS rows governance_subject_identifiers (0b4a813f): 0 
+- PASS rows governance_subjects (0b4a813f): 0 
+- PASS rows identity_connections (0b4a813f): 1 
+- PASS rows invoice_provider_links (0b4a813f): 0 
+- PASS rows invoices (0b4a813f): 0 
+- PASS rows kill_switches (0b4a813f): 0 
+- PASS rows knowledge_bases (0b4a813f): 0 
+- PASS rows link_challenges (0b4a813f): 0 
+- PASS rows marketplace_docs (0b4a813f): 0 
+- PASS rows members (0b4a813f): 1 
+- PASS rows memory_chunks (0b4a813f): 3 
+- PASS rows memory_documents (0b4a813f): 0 
+- PASS rows model_credentials (0b4a813f): 1 
+- PASS rows policy_assignments (0b4a813f): 2 
+- PASS rows policy_pack_versions (0b4a813f): 2 
+- PASS rows policy_packs (0b4a813f): 2 
+- PASS rows processes (0b4a813f): 0 
+- PASS rows registry_eval_attestations (0b4a813f): 0 
+- PASS rows registry_keys (0b4a813f): 0 
+- PASS rows registry_names (0b4a813f): 0 
+- PASS rows registry_namespaces (0b4a813f): 0 
+- PASS rows registry_public_namespaces (0b4a813f): 0 
+- PASS rows registry_public_versions (0b4a813f): 0 
+- PASS rows registry_version_events (0b4a813f): 0 
+- PASS rows registry_versions (0b4a813f): 0 
+- PASS rows run_events (0b4a813f): 0 
+- PASS rows runs (0b4a813f): 0 
+- PASS rows scim_group_members (0b4a813f): 0 
+- PASS rows scim_groups (0b4a813f): 0 
+- PASS rows sessions (0b4a813f): 2 
+- PASS rows tenant_keys (0b4a813f): 1 
+- PASS rows tenant_placements (0b4a813f): 1 
+- PASS rows tenant_settings (0b4a813f): 1 
+- PASS rows usage_conflicts (0b4a813f): 0 
+- PASS rows usage_events (0b4a813f): 16 
+- PASS rows verified_domains (0b4a813f): 0 
+- PASS billing seal 2026-08 verifies (b7012b44) 
+- PASS billing seal 2026-08 verifies (9744615f) 
+- PASS billing seal 2026-08 verifies (0b4a813f) 
+- PASS registry resolve verifies hash+signature+provenance (dr-33a8ea/helper-agent@^1) 
 
-## restore_physical (rto 1.36 s, ok=True)
+## restore_physical (rto 1.34 s, ok=True)
 
-- PASS audit chain verifies (d705da0a) 
-- PASS pre-backup head is inside the restored chain (d705da0a) 
-- PASS signed checkpoint (held outside the DB) matches (d705da0a) 
-- PASS audit chain verifies (4ea3cf24) 
-- PASS pre-backup head is inside the restored chain (4ea3cf24) 
-- PASS signed checkpoint (held outside the DB) matches (4ea3cf24) 
-- PASS audit chain verifies (0085fb31) 
-- PASS pre-backup head is inside the restored chain (0085fb31) 
-- PASS signed checkpoint (held outside the DB) matches (0085fb31) 
-- PASS RLS: tenant d705da0a sees 0 rows of 4ea3cf24 
-- PASS RLS: tenant 4ea3cf24 sees 0 rows of 0085fb31 
-- PASS RLS: tenant 0085fb31 sees 0 rows of d705da0a 
+- PASS audit chain verifies (b7012b44) 
+- PASS pre-backup head is inside the restored chain (b7012b44) 
+- PASS signed checkpoint (held outside the DB) matches (b7012b44) 
+- PASS audit chain verifies (9744615f) 
+- PASS pre-backup head is inside the restored chain (9744615f) 
+- PASS signed checkpoint (held outside the DB) matches (9744615f) 
+- PASS audit chain verifies (0b4a813f) 
+- PASS pre-backup head is inside the restored chain (0b4a813f) 
+- PASS signed checkpoint (held outside the DB) matches (0b4a813f) 
+- PASS RLS: tenant b7012b44 sees 0 rows of 9744615f 
+- PASS RLS: tenant 9744615f sees 0 rows of 0b4a813f 
+- PASS RLS: tenant 0b4a813f sees 0 rows of b7012b44 
 - PASS RLS: the application role with NO tenant set sees 0 audit rows 
-- PASS rows api_keys (d705da0a) >= backup 
-- PASS rows approvals (d705da0a) >= backup 
-- PASS rows audit_checkpoints (d705da0a) >= backup 
-- PASS rows billing_period_seals (d705da0a) >= backup 
-- PASS rows blueprint_versions (d705da0a) >= backup 
-- PASS rows blueprints (d705da0a) >= backup 
-- PASS rows budgets (d705da0a) >= backup 
-- PASS rows channel_identities (d705da0a) >= backup 
-- PASS rows compliance_docs (d705da0a) >= backup 
-- PASS rows conversation_messages (d705da0a) >= backup 
-- PASS rows conversation_threads (d705da0a) >= backup 
-- PASS rows conversations (d705da0a) >= backup 
-- PASS rows directories (d705da0a) >= backup 
-- PASS rows directory_role_mappings (d705da0a) >= backup 
-- PASS rows end_users (d705da0a) >= backup 
-- PASS rows eval_hub_docs (d705da0a) >= backup 
-- PASS rows governance_holds (d705da0a) >= backup 
-- PASS rows governance_requests (d705da0a) >= backup 
-- PASS rows governance_retention_policies (d705da0a) >= backup 
-- PASS rows governance_retention_runs (d705da0a) >= backup 
-- PASS rows governance_steps (d705da0a) >= backup 
-- PASS rows governance_subject_identifiers (d705da0a) >= backup 
-- PASS rows governance_subjects (d705da0a) >= backup 
-- PASS rows identity_connections (d705da0a) >= backup 
-- PASS rows invoice_provider_links (d705da0a) >= backup 
-- PASS rows invoices (d705da0a) >= backup 
-- PASS rows kill_switches (d705da0a) >= backup 
-- PASS rows knowledge_bases (d705da0a) >= backup 
-- PASS rows link_challenges (d705da0a) >= backup 
-- PASS rows marketplace_docs (d705da0a) >= backup 
-- PASS rows members (d705da0a) >= backup 
-- PASS rows memory_chunks (d705da0a) >= backup 
-- PASS rows memory_documents (d705da0a) >= backup 
-- PASS rows model_credentials (d705da0a) >= backup 
-- PASS rows policy_assignments (d705da0a) >= backup 
-- PASS rows policy_pack_versions (d705da0a) >= backup 
-- PASS rows policy_packs (d705da0a) >= backup 
-- PASS rows processes (d705da0a) >= backup 
-- PASS rows registry_eval_attestations (d705da0a) >= backup 
-- PASS rows registry_keys (d705da0a) >= backup 
-- PASS rows registry_names (d705da0a) >= backup 
-- PASS rows registry_namespaces (d705da0a) >= backup 
-- PASS rows registry_public_namespaces (d705da0a) >= backup 
-- PASS rows registry_public_versions (d705da0a) >= backup 
-- PASS rows registry_version_events (d705da0a) >= backup 
-- PASS rows registry_versions (d705da0a) >= backup 
-- PASS rows run_events (d705da0a) >= backup 
-- PASS rows runs (d705da0a) >= backup 
-- PASS rows scim_group_members (d705da0a) >= backup 
-- PASS rows scim_groups (d705da0a) >= backup 
-- PASS rows sessions (d705da0a) >= backup 
-- PASS rows tenant_keys (d705da0a) >= backup 
-- PASS rows tenant_placements (d705da0a) >= backup 
-- PASS rows tenant_settings (d705da0a) >= backup 
-- PASS rows usage_conflicts (d705da0a) >= backup 
-- PASS rows usage_events (d705da0a) >= backup 
-- PASS rows verified_domains (d705da0a) >= backup 
-- PASS rows api_keys (4ea3cf24) >= backup 
-- PASS rows approvals (4ea3cf24) >= backup 
-- PASS rows audit_checkpoints (4ea3cf24) >= backup 
-- PASS rows billing_period_seals (4ea3cf24) >= backup 
-- PASS rows blueprint_versions (4ea3cf24) >= backup 
-- PASS rows blueprints (4ea3cf24) >= backup 
-- PASS rows budgets (4ea3cf24) >= backup 
-- PASS rows channel_identities (4ea3cf24) >= backup 
-- PASS rows compliance_docs (4ea3cf24) >= backup 
-- PASS rows conversation_messages (4ea3cf24) >= backup 
-- PASS rows conversation_threads (4ea3cf24) >= backup 
-- PASS rows conversations (4ea3cf24) >= backup 
-- PASS rows directories (4ea3cf24) >= backup 
-- PASS rows directory_role_mappings (4ea3cf24) >= backup 
-- PASS rows end_users (4ea3cf24) >= backup 
-- PASS rows eval_hub_docs (4ea3cf24) >= backup 
-- PASS rows governance_holds (4ea3cf24) >= backup 
-- PASS rows governance_requests (4ea3cf24) >= backup 
-- PASS rows governance_retention_policies (4ea3cf24) >= backup 
-- PASS rows governance_retention_runs (4ea3cf24) >= backup 
-- PASS rows governance_steps (4ea3cf24) >= backup 
-- PASS rows governance_subject_identifiers (4ea3cf24) >= backup 
-- PASS rows governance_subjects (4ea3cf24) >= backup 
-- PASS rows identity_connections (4ea3cf24) >= backup 
-- PASS rows invoice_provider_links (4ea3cf24) >= backup 
-- PASS rows invoices (4ea3cf24) >= backup 
-- PASS rows kill_switches (4ea3cf24) >= backup 
-- PASS rows knowledge_bases (4ea3cf24) >= backup 
-- PASS rows link_challenges (4ea3cf24) >= backup 
-- PASS rows marketplace_docs (4ea3cf24) >= backup 
-- PASS rows members (4ea3cf24) >= backup 
-- PASS rows memory_chunks (4ea3cf24) >= backup 
-- PASS rows memory_documents (4ea3cf24) >= backup 
-- PASS rows model_credentials (4ea3cf24) >= backup 
-- PASS rows policy_assignments (4ea3cf24) >= backup 
-- PASS rows policy_pack_versions (4ea3cf24) >= backup 
-- PASS rows policy_packs (4ea3cf24) >= backup 
-- PASS rows processes (4ea3cf24) >= backup 
-- PASS rows registry_eval_attestations (4ea3cf24) >= backup 
-- PASS rows registry_keys (4ea3cf24) >= backup 
-- PASS rows registry_names (4ea3cf24) >= backup 
-- PASS rows registry_namespaces (4ea3cf24) >= backup 
-- PASS rows registry_public_namespaces (4ea3cf24) >= backup 
-- PASS rows registry_public_versions (4ea3cf24) >= backup 
-- PASS rows registry_version_events (4ea3cf24) >= backup 
-- PASS rows registry_versions (4ea3cf24) >= backup 
-- PASS rows run_events (4ea3cf24) >= backup 
-- PASS rows runs (4ea3cf24) >= backup 
-- PASS rows scim_group_members (4ea3cf24) >= backup 
-- PASS rows scim_groups (4ea3cf24) >= backup 
-- PASS rows sessions (4ea3cf24) >= backup 
-- PASS rows tenant_keys (4ea3cf24) >= backup 
-- PASS rows tenant_placements (4ea3cf24) >= backup 
-- PASS rows tenant_settings (4ea3cf24) >= backup 
-- PASS rows usage_conflicts (4ea3cf24) >= backup 
-- PASS rows usage_events (4ea3cf24) >= backup 
-- PASS rows verified_domains (4ea3cf24) >= backup 
-- PASS rows api_keys (0085fb31) >= backup 
-- PASS rows approvals (0085fb31) >= backup 
-- PASS rows audit_checkpoints (0085fb31) >= backup 
-- PASS rows billing_period_seals (0085fb31) >= backup 
-- PASS rows blueprint_versions (0085fb31) >= backup 
-- PASS rows blueprints (0085fb31) >= backup 
-- PASS rows budgets (0085fb31) >= backup 
-- PASS rows channel_identities (0085fb31) >= backup 
-- PASS rows compliance_docs (0085fb31) >= backup 
-- PASS rows conversation_messages (0085fb31) >= backup 
-- PASS rows conversation_threads (0085fb31) >= backup 
-- PASS rows conversations (0085fb31) >= backup 
-- PASS rows directories (0085fb31) >= backup 
-- PASS rows directory_role_mappings (0085fb31) >= backup 
-- PASS rows end_users (0085fb31) >= backup 
-- PASS rows eval_hub_docs (0085fb31) >= backup 
-- PASS rows governance_holds (0085fb31) >= backup 
-- PASS rows governance_requests (0085fb31) >= backup 
-- PASS rows governance_retention_policies (0085fb31) >= backup 
-- PASS rows governance_retention_runs (0085fb31) >= backup 
-- PASS rows governance_steps (0085fb31) >= backup 
-- PASS rows governance_subject_identifiers (0085fb31) >= backup 
-- PASS rows governance_subjects (0085fb31) >= backup 
-- PASS rows identity_connections (0085fb31) >= backup 
-- PASS rows invoice_provider_links (0085fb31) >= backup 
-- PASS rows invoices (0085fb31) >= backup 
-- PASS rows kill_switches (0085fb31) >= backup 
-- PASS rows knowledge_bases (0085fb31) >= backup 
-- PASS rows link_challenges (0085fb31) >= backup 
-- PASS rows marketplace_docs (0085fb31) >= backup 
-- PASS rows members (0085fb31) >= backup 
-- PASS rows memory_chunks (0085fb31) >= backup 
-- PASS rows memory_documents (0085fb31) >= backup 
-- PASS rows model_credentials (0085fb31) >= backup 
-- PASS rows policy_assignments (0085fb31) >= backup 
-- PASS rows policy_pack_versions (0085fb31) >= backup 
-- PASS rows policy_packs (0085fb31) >= backup 
-- PASS rows processes (0085fb31) >= backup 
-- PASS rows registry_eval_attestations (0085fb31) >= backup 
-- PASS rows registry_keys (0085fb31) >= backup 
-- PASS rows registry_names (0085fb31) >= backup 
-- PASS rows registry_namespaces (0085fb31) >= backup 
-- PASS rows registry_public_namespaces (0085fb31) >= backup 
-- PASS rows registry_public_versions (0085fb31) >= backup 
-- PASS rows registry_version_events (0085fb31) >= backup 
-- PASS rows registry_versions (0085fb31) >= backup 
-- PASS rows run_events (0085fb31) >= backup 
-- PASS rows runs (0085fb31) >= backup 
-- PASS rows scim_group_members (0085fb31) >= backup 
-- PASS rows scim_groups (0085fb31) >= backup 
-- PASS rows sessions (0085fb31) >= backup 
-- PASS rows tenant_keys (0085fb31) >= backup 
-- PASS rows tenant_placements (0085fb31) >= backup 
-- PASS rows tenant_settings (0085fb31) >= backup 
-- PASS rows usage_conflicts (0085fb31) >= backup 
-- PASS rows usage_events (0085fb31) >= backup 
-- PASS rows verified_domains (0085fb31) >= backup 
-- PASS billing seal 2026-08 verifies (d705da0a) 
-- PASS billing seal 2026-08 verifies (4ea3cf24) 
-- PASS billing seal 2026-08 verifies (0085fb31) 
-- PASS registry resolve verifies hash+signature+provenance (dr-53c756/helper-agent@^1) 
+- PASS rows api_keys (b7012b44) >= backup 
+- PASS rows approvals (b7012b44) >= backup 
+- PASS rows audit_checkpoints (b7012b44) >= backup 
+- PASS rows billing_period_seals (b7012b44) >= backup 
+- PASS rows blueprint_versions (b7012b44) >= backup 
+- PASS rows blueprints (b7012b44) >= backup 
+- PASS rows budgets (b7012b44) >= backup 
+- PASS rows channel_identities (b7012b44) >= backup 
+- PASS rows compliance_docs (b7012b44) >= backup 
+- PASS rows conversation_messages (b7012b44) >= backup 
+- PASS rows conversation_threads (b7012b44) >= backup 
+- PASS rows conversations (b7012b44) >= backup 
+- PASS rows directories (b7012b44) >= backup 
+- PASS rows directory_role_mappings (b7012b44) >= backup 
+- PASS rows end_users (b7012b44) >= backup 
+- PASS rows eval_hub_docs (b7012b44) >= backup 
+- PASS rows governance_holds (b7012b44) >= backup 
+- PASS rows governance_requests (b7012b44) >= backup 
+- PASS rows governance_retention_policies (b7012b44) >= backup 
+- PASS rows governance_retention_runs (b7012b44) >= backup 
+- PASS rows governance_steps (b7012b44) >= backup 
+- PASS rows governance_subject_identifiers (b7012b44) >= backup 
+- PASS rows governance_subjects (b7012b44) >= backup 
+- PASS rows identity_connections (b7012b44) >= backup 
+- PASS rows invoice_provider_links (b7012b44) >= backup 
+- PASS rows invoices (b7012b44) >= backup 
+- PASS rows kill_switches (b7012b44) >= backup 
+- PASS rows knowledge_bases (b7012b44) >= backup 
+- PASS rows link_challenges (b7012b44) >= backup 
+- PASS rows marketplace_docs (b7012b44) >= backup 
+- PASS rows members (b7012b44) >= backup 
+- PASS rows memory_chunks (b7012b44) >= backup 
+- PASS rows memory_documents (b7012b44) >= backup 
+- PASS rows model_credentials (b7012b44) >= backup 
+- PASS rows policy_assignments (b7012b44) >= backup 
+- PASS rows policy_pack_versions (b7012b44) >= backup 
+- PASS rows policy_packs (b7012b44) >= backup 
+- PASS rows processes (b7012b44) >= backup 
+- PASS rows registry_eval_attestations (b7012b44) >= backup 
+- PASS rows registry_keys (b7012b44) >= backup 
+- PASS rows registry_names (b7012b44) >= backup 
+- PASS rows registry_namespaces (b7012b44) >= backup 
+- PASS rows registry_public_namespaces (b7012b44) >= backup 
+- PASS rows registry_public_versions (b7012b44) >= backup 
+- PASS rows registry_version_events (b7012b44) >= backup 
+- PASS rows registry_versions (b7012b44) >= backup 
+- PASS rows run_events (b7012b44) >= backup 
+- PASS rows runs (b7012b44) >= backup 
+- PASS rows scim_group_members (b7012b44) >= backup 
+- PASS rows scim_groups (b7012b44) >= backup 
+- PASS rows sessions (b7012b44) >= backup 
+- PASS rows tenant_keys (b7012b44) >= backup 
+- PASS rows tenant_placements (b7012b44) >= backup 
+- PASS rows tenant_settings (b7012b44) >= backup 
+- PASS rows usage_conflicts (b7012b44) >= backup 
+- PASS rows usage_events (b7012b44) >= backup 
+- PASS rows verified_domains (b7012b44) >= backup 
+- PASS rows api_keys (9744615f) >= backup 
+- PASS rows approvals (9744615f) >= backup 
+- PASS rows audit_checkpoints (9744615f) >= backup 
+- PASS rows billing_period_seals (9744615f) >= backup 
+- PASS rows blueprint_versions (9744615f) >= backup 
+- PASS rows blueprints (9744615f) >= backup 
+- PASS rows budgets (9744615f) >= backup 
+- PASS rows channel_identities (9744615f) >= backup 
+- PASS rows compliance_docs (9744615f) >= backup 
+- PASS rows conversation_messages (9744615f) >= backup 
+- PASS rows conversation_threads (9744615f) >= backup 
+- PASS rows conversations (9744615f) >= backup 
+- PASS rows directories (9744615f) >= backup 
+- PASS rows directory_role_mappings (9744615f) >= backup 
+- PASS rows end_users (9744615f) >= backup 
+- PASS rows eval_hub_docs (9744615f) >= backup 
+- PASS rows governance_holds (9744615f) >= backup 
+- PASS rows governance_requests (9744615f) >= backup 
+- PASS rows governance_retention_policies (9744615f) >= backup 
+- PASS rows governance_retention_runs (9744615f) >= backup 
+- PASS rows governance_steps (9744615f) >= backup 
+- PASS rows governance_subject_identifiers (9744615f) >= backup 
+- PASS rows governance_subjects (9744615f) >= backup 
+- PASS rows identity_connections (9744615f) >= backup 
+- PASS rows invoice_provider_links (9744615f) >= backup 
+- PASS rows invoices (9744615f) >= backup 
+- PASS rows kill_switches (9744615f) >= backup 
+- PASS rows knowledge_bases (9744615f) >= backup 
+- PASS rows link_challenges (9744615f) >= backup 
+- PASS rows marketplace_docs (9744615f) >= backup 
+- PASS rows members (9744615f) >= backup 
+- PASS rows memory_chunks (9744615f) >= backup 
+- PASS rows memory_documents (9744615f) >= backup 
+- PASS rows model_credentials (9744615f) >= backup 
+- PASS rows policy_assignments (9744615f) >= backup 
+- PASS rows policy_pack_versions (9744615f) >= backup 
+- PASS rows policy_packs (9744615f) >= backup 
+- PASS rows processes (9744615f) >= backup 
+- PASS rows registry_eval_attestations (9744615f) >= backup 
+- PASS rows registry_keys (9744615f) >= backup 
+- PASS rows registry_names (9744615f) >= backup 
+- PASS rows registry_namespaces (9744615f) >= backup 
+- PASS rows registry_public_namespaces (9744615f) >= backup 
+- PASS rows registry_public_versions (9744615f) >= backup 
+- PASS rows registry_version_events (9744615f) >= backup 
+- PASS rows registry_versions (9744615f) >= backup 
+- PASS rows run_events (9744615f) >= backup 
+- PASS rows runs (9744615f) >= backup 
+- PASS rows scim_group_members (9744615f) >= backup 
+- PASS rows scim_groups (9744615f) >= backup 
+- PASS rows sessions (9744615f) >= backup 
+- PASS rows tenant_keys (9744615f) >= backup 
+- PASS rows tenant_placements (9744615f) >= backup 
+- PASS rows tenant_settings (9744615f) >= backup 
+- PASS rows usage_conflicts (9744615f) >= backup 
+- PASS rows usage_events (9744615f) >= backup 
+- PASS rows verified_domains (9744615f) >= backup 
+- PASS rows api_keys (0b4a813f) >= backup 
+- PASS rows approvals (0b4a813f) >= backup 
+- PASS rows audit_checkpoints (0b4a813f) >= backup 
+- PASS rows billing_period_seals (0b4a813f) >= backup 
+- PASS rows blueprint_versions (0b4a813f) >= backup 
+- PASS rows blueprints (0b4a813f) >= backup 
+- PASS rows budgets (0b4a813f) >= backup 
+- PASS rows channel_identities (0b4a813f) >= backup 
+- PASS rows compliance_docs (0b4a813f) >= backup 
+- PASS rows conversation_messages (0b4a813f) >= backup 
+- PASS rows conversation_threads (0b4a813f) >= backup 
+- PASS rows conversations (0b4a813f) >= backup 
+- PASS rows directories (0b4a813f) >= backup 
+- PASS rows directory_role_mappings (0b4a813f) >= backup 
+- PASS rows end_users (0b4a813f) >= backup 
+- PASS rows eval_hub_docs (0b4a813f) >= backup 
+- PASS rows governance_holds (0b4a813f) >= backup 
+- PASS rows governance_requests (0b4a813f) >= backup 
+- PASS rows governance_retention_policies (0b4a813f) >= backup 
+- PASS rows governance_retention_runs (0b4a813f) >= backup 
+- PASS rows governance_steps (0b4a813f) >= backup 
+- PASS rows governance_subject_identifiers (0b4a813f) >= backup 
+- PASS rows governance_subjects (0b4a813f) >= backup 
+- PASS rows identity_connections (0b4a813f) >= backup 
+- PASS rows invoice_provider_links (0b4a813f) >= backup 
+- PASS rows invoices (0b4a813f) >= backup 
+- PASS rows kill_switches (0b4a813f) >= backup 
+- PASS rows knowledge_bases (0b4a813f) >= backup 
+- PASS rows link_challenges (0b4a813f) >= backup 
+- PASS rows marketplace_docs (0b4a813f) >= backup 
+- PASS rows members (0b4a813f) >= backup 
+- PASS rows memory_chunks (0b4a813f) >= backup 
+- PASS rows memory_documents (0b4a813f) >= backup 
+- PASS rows model_credentials (0b4a813f) >= backup 
+- PASS rows policy_assignments (0b4a813f) >= backup 
+- PASS rows policy_pack_versions (0b4a813f) >= backup 
+- PASS rows policy_packs (0b4a813f) >= backup 
+- PASS rows processes (0b4a813f) >= backup 
+- PASS rows registry_eval_attestations (0b4a813f) >= backup 
+- PASS rows registry_keys (0b4a813f) >= backup 
+- PASS rows registry_names (0b4a813f) >= backup 
+- PASS rows registry_namespaces (0b4a813f) >= backup 
+- PASS rows registry_public_namespaces (0b4a813f) >= backup 
+- PASS rows registry_public_versions (0b4a813f) >= backup 
+- PASS rows registry_version_events (0b4a813f) >= backup 
+- PASS rows registry_versions (0b4a813f) >= backup 
+- PASS rows run_events (0b4a813f) >= backup 
+- PASS rows runs (0b4a813f) >= backup 
+- PASS rows scim_group_members (0b4a813f) >= backup 
+- PASS rows scim_groups (0b4a813f) >= backup 
+- PASS rows sessions (0b4a813f) >= backup 
+- PASS rows tenant_keys (0b4a813f) >= backup 
+- PASS rows tenant_placements (0b4a813f) >= backup 
+- PASS rows tenant_settings (0b4a813f) >= backup 
+- PASS rows usage_conflicts (0b4a813f) >= backup 
+- PASS rows usage_events (0b4a813f) >= backup 
+- PASS rows verified_domains (0b4a813f) >= backup 
+- PASS billing seal 2026-08 verifies (b7012b44) 
+- PASS billing seal 2026-08 verifies (9744615f) 
+- PASS billing seal 2026-08 verifies (0b4a813f) 
+- PASS registry resolve verifies hash+signature+provenance (dr-33a8ea/helper-agent@^1) 
 
 ## Tampered backups
 
-- flipped decision: DETECTED (['audit chain verifies (d705da0a)', 'signed checkpoint (held outside the DB) matches (d705da0a)', 'rows audit_events (d705da0a): 28'])
-- truncated tail: DETECTED (['chain head == pre-backup head (4ea3cf24)', 'signed checkpoint (held outside the DB) matches (4ea3cf24)', 'rows audit_events (4ea3cf24): 19'])
+- flipped decision: DETECTED (['audit chain verifies (b7012b44)', 'signed checkpoint (held outside the DB) matches (b7012b44)', 'rows audit_events (b7012b44): 28'])
+- truncated tail: DETECTED (['chain head == pre-backup head (9744615f)', 'signed checkpoint (held outside the DB) matches (9744615f)', 'rows audit_events (9744615f): 19'])
 
 Failures: none

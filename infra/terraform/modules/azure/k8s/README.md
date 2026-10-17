@@ -10,7 +10,7 @@ pool.
 documented global flag that skips live credential validation during
 plan** the way `aws`'s `skip_credentials_validation` /
 `skip_requesting_account_id` / `skip_metadata_api_check` do, and unlike
-`google` it performs its OAuth2 token request *eagerly*, during provider
+`google` it performs its OAuth2 token request _eagerly_, during provider
 configuration, even for a from-scratch create plan with no data sources.
 Setting `ARM_CLIENT_ID` / `ARM_CLIENT_SECRET` / `ARM_SUBSCRIPTION_ID` /
 `ARM_TENANT_ID` to fabricated values is not enough: `terraform plan` fails

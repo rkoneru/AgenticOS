@@ -47,7 +47,7 @@ was not attempted because the direct-curl path (option 3 in the task's own
 ordering) worked first.
 
 `registry.terraform.io` — the Terraform Registry used by `terraform init`
-to resolve and download *provider* plugins — **is** blocked by the agent
+to resolve and download _provider_ plugins — **is** blocked by the agent
 proxy (`CONNECT tunnel failed, response 403`, `connect_rejected`). Working
 around this did not require any substitute tool: provider binaries for
 `hashicorp/aws`, `hashicorp/google` and `hashicorp/azurerm` are hosted on
@@ -81,15 +81,15 @@ composed from reusable per-concern modules.
 Resource choices per cloud, matching `docs/plans/phase-10.md`'s list
 (networking, K8s, Postgres, Redis, ClickHouse, object storage, KMS):
 
-| Concern | AWS | GCP | Azure |
-|---|---|---|---|
-| networking | VPC, public/private subnets, IGW, NAT GW | custom VPC, subnet + GKE secondary ranges, Cloud Router/NAT | VNet, AKS + delegated data subnet, NAT GW |
-| k8s | EKS + managed node group | GKE (`remove_default_node_pool`) + node pool | AKS, system-assigned identity |
-| postgres | RDS Postgres 16, Multi-AZ, KMS-encrypted | Cloud SQL Postgres 16, regional HA, PITR | Postgres Flexible Server 16, zone-redundant |
-| redis | ElastiCache replication group | Memorystore, STANDARD_HA | Azure Cache for Redis, Premium |
-| clickhouse | self-managed on EC2 ASG (no managed service) | self-managed on GCE MIG (no managed service) | self-managed on Linux VMSS (no managed service) |
-| object storage | S3 (versioned, SSE-KMS, public access blocked) | GCS (uniform access, CMEK, versioned) | Storage Account (GZRS, versioned, soft-delete) |
-| kms | KMS key + alias | KMS key ring + rotating crypto key | Key Vault + RSA-4096 key |
+| Concern        | AWS                                            | GCP                                                         | Azure                                           |
+| -------------- | ---------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------- |
+| networking     | VPC, public/private subnets, IGW, NAT GW       | custom VPC, subnet + GKE secondary ranges, Cloud Router/NAT | VNet, AKS + delegated data subnet, NAT GW       |
+| k8s            | EKS + managed node group                       | GKE (`remove_default_node_pool`) + node pool                | AKS, system-assigned identity                   |
+| postgres       | RDS Postgres 16, Multi-AZ, KMS-encrypted       | Cloud SQL Postgres 16, regional HA, PITR                    | Postgres Flexible Server 16, zone-redundant     |
+| redis          | ElastiCache replication group                  | Memorystore, STANDARD_HA                                    | Azure Cache for Redis, Premium                  |
+| clickhouse     | self-managed on EC2 ASG (no managed service)   | self-managed on GCE MIG (no managed service)                | self-managed on Linux VMSS (no managed service) |
+| object storage | S3 (versioned, SSE-KMS, public access blocked) | GCS (uniform access, CMEK, versioned)                       | Storage Account (GZRS, versioned, soft-delete)  |
+| kms            | KMS key + alias                                | KMS key ring + rotating crypto key                          | Key Vault + RSA-4096 key                        |
 
 No cloud offers managed ClickHouse, so all three `clickhouse` modules are
 "self-managed compute + block storage" — explicitly out of scope: cluster
@@ -114,7 +114,7 @@ source that was deliberately avoided named each time.
 Consequence, verified for real in this session (not merely designed for):
 `terraform validate` needs zero credentials, for every module and every
 env, on all three clouds. `terraform plan` against a from-scratch
-("nothing exists yet") environment needs zero *data*-lookup calls on any
+("nothing exists yet") environment needs zero _data_-lookup calls on any
 cloud — what each provider's own authentication step additionally requires
 turned out to differ sharply by cloud:
 
@@ -123,7 +123,7 @@ turned out to differ sharply by cloud:
   a `dev_plan_mode` variable, default `false`, so a real deployer does not
   silently inherit skip-mode). With those on and dummy
   `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, `terraform plan
-  -var-file=dummy.tfvars` in `envs/aws` **succeeds**: exit 0, "Plan: 35 to
+-var-file=dummy.tfvars` in `envs/aws` **succeeds**: exit 0, "Plan: 35 to
   add, 0 to change, 0 to destroy", one expected warning (no account ID,
   because that check was explicitly skipped).
 - **GCP**: the `google` provider has **no documented equivalent** global
@@ -132,19 +132,19 @@ turned out to differ sharply by cloud:
   expectation turned out to be wrong for this specific shape of plan: a
   from-scratch create-everything plan with no `data` sources never actually
   needs the provider to make a live call, so `terraform plan
-  -var-file=dummy.tfvars` in `envs/gcp`, with only a fabricated
+-var-file=dummy.tfvars` in `envs/gcp`, with only a fabricated
   `GOOGLE_APPLICATION_CREDENTIALS` service-account key (real JSON shape,
   fake key bytes), **also succeeds**: exit 0, "Plan: 14 to add, 0 to
   change, 0 to destroy". This does not generalize to a plan against an
-  *existing* GCP project (which would need to refresh real state).
+  _existing_ GCP project (which would need to refresh real state).
 - **Azure**: the `azurerm` provider also has no documented skip-validation
   flag, and unlike `google` it performs its OAuth2 client-credentials token
-  request *eagerly*, during provider configuration, before Terraform looks
+  request _eagerly_, during provider configuration, before Terraform looks
   at any resource. With fabricated `ARM_CLIENT_ID`/`ARM_CLIENT_SECRET`/
   `ARM_SUBSCRIPTION_ID`/`ARM_TENANT_ID`, `terraform plan
-  -var-file=dummy.tfvars` in `envs/azure` **fails**: exit 1,
+-var-file=dummy.tfvars` in `envs/azure` **fails**: exit 1,
   `Error: building account: could not acquire access token to parse
-  claims: ... AADSTS700038: ... is not a valid application identifier`.
+claims: ... AADSTS700038: ... is not a valid application identifier`.
   This is a genuine, unresolved gap: Azure `plan` cannot be verified in
   this environment without a real Azure AD app registration tied to a real
   tenant, which this session does not have and must not request.

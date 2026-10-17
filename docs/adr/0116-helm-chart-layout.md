@@ -38,8 +38,8 @@ next to that service, in its own `values.yaml`, lintable and readable on its own
 Checked against the actual code, not assumed from the service list in the phase brief:
 
 - **`services/approvals`** has no standalone process entrypoint (no `main.ts`, no `dev-server`
-  script). Its only server (`src/dev-bridge.ts`'s `createDevServer`) is started *inside the
-  risk-kernel process* when `AXIS_APPROVALS_DEV_BRIDGE=1`
+  script). Its only server (`src/dev-bridge.ts`'s `createDevServer`) is started _inside the
+  risk-kernel process_ when `AXIS_APPROVALS_DEV_BRIDGE=1`
   (`services/risk-kernel/src/main.ts`, `createDevBridge(...)`), matching CLAUDE.md's own
   component-table description ("wired to the kernel + runtime end to end via a dev-only loopback
   bridge"). It ships as a second container port on the `risk-kernel` chart

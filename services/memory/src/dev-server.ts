@@ -254,7 +254,9 @@ export function createDevServer(deps: DevServerDeps): http.Server {
 export function listenLoopback(server: http.Server, port = 0): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, process.env["AXIS_BIND_HOST"] ?? "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+    server.listen(port, process.env["AXIS_BIND_HOST"] ?? "127.0.0.1", () =>
+      resolve((server.address() as AddressInfo).port),
+    );
   });
 }
 

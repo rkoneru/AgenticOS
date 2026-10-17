@@ -13,7 +13,7 @@ instead of a `data "aws_ami"` "most recent" lookup, so `terraform plan` never
 issues an EC2/SSM image query.
 
 `terraform validate` passes with no credentials. `terraform plan` additionally
-needs `eks:DescribeCluster`-shaped read access during a *real* plan against an
+needs `eks:DescribeCluster`-shaped read access during a _real_ plan against an
 existing cluster (not applicable to a from-scratch create plan, which only
 needs the API to be reachable); with dummy AWS keys and the provider's
 `skip_*` flags (see `envs/aws/providers.tf`) a from-scratch create plan for

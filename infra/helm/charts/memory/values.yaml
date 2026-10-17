@@ -13,7 +13,7 @@ resources:
     cpu: 100m
     memory: 128Mi
   limits:
-    cpu: '1'
+    cpu: "1"
     memory: 512Mi
 podDisruptionBudget:
   enabled: true
@@ -26,17 +26,17 @@ autoscaling:
 serviceAccount:
   create: true
   annotations: {}
-  name: ''
+  name: ""
 probes:
   enabled: true
 config:
   AXIS_MEMORY_ROLE: axis_app
 secret:
   create: true
-  existingSecret: ''
+  existingSecret: ""
   data:
-    AXIS_MEMORY_DATABASE_URL: ''
-    AXIS_MEMORY_TOKENS: ''
+    AXIS_MEMORY_DATABASE_URL: ""
+    AXIS_MEMORY_TOKENS: ""
 networkPolicy:
   enabled: true
   allowIngressFromNamespace: true

@@ -13,7 +13,7 @@ resources:
     cpu: 100m
     memory: 128Mi
   limits:
-    cpu: '1'
+    cpu: "1"
     memory: 512Mi
 podDisruptionBudget:
   enabled: true
@@ -26,22 +26,22 @@ autoscaling:
 serviceAccount:
   create: true
   annotations: {}
-  name: ''
+  name: ""
 probes:
   enabled: true
 config:
   CP_REGION: us-east-1
-  CP_INSECURE_COOKIES: 'false'
-  CP_RETURN_ORIGINS: ''
-  CP_REDIRECT_URI: ''
+  CP_INSECURE_COOKIES: "false"
+  CP_RETURN_ORIGINS: ""
+  CP_REDIRECT_URI: ""
 secret:
   create: true
-  existingSecret: ''
+  existingSecret: ""
   data:
-    CP_PG_URL: ''
-    CP_DEV_TOKEN: ''
-    CP_PLATFORM_TOKEN: ''
-    CP_RUNTIME_TOKENS: ''
+    CP_PG_URL: ""
+    CP_DEV_TOKEN: ""
+    CP_PLATFORM_TOKEN: ""
+    CP_RUNTIME_TOKENS: ""
 networkPolicy:
   enabled: true
   allowIngressFromNamespace: true
