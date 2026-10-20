@@ -8,6 +8,14 @@ service:
   type: ClusterIP
   port: 8080
 readOnlyRootFilesystem: true
+# Numeric UID/GID: Kubernetes' runAsNonRoot pod securityContext can only verify non-root when
+# either the image's USER is numeric or the pod spec pins runAsUser itself. The base image here
+# is nginxinc/nginx-unprivileged, whose own USER is the named "nginx" (uid/gid 101, not a literal
+# numeric USER directive) — pin the pod securityContext to that same uid/gid explicitly so
+# Kubernetes can verify it statically (NEEDS #516).
+podSecurityContext:
+  runAsUser: 101
+  runAsGroup: 101
 resources:
   requests:
     cpu: 50m

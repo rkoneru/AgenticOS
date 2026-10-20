@@ -8,6 +8,14 @@ service:
   type: ClusterIP
   port: 8080
 readOnlyRootFilesystem: true
+# Numeric UID/GID (not just a named user): Kubernetes' runAsNonRoot pod securityContext can only
+# verify non-root when either the image's USER is numeric or the pod spec pins runAsUser itself
+# (same CreateContainerConfigError class found deploying risk-kernel/control-plane/runtime to a
+# real k3d cluster, docs/runbooks/local-cluster.md; this Dockerfile's final-stage USER is now
+# numeric too, NEEDS #516).
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
 resources:
   requests:
     cpu: 100m

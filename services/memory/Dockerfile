@@ -15,7 +15,11 @@ RUN pnpm --filter @axis/memory deploy --prod --legacy /out
 
 FROM node:22-alpine AS runtime
 # busybox adduser/addgroup only: no apk/network dependency in the final stage
-RUN addgroup -S axis && adduser -S axis -G axis
+# Numeric UID/GID (not just a named user): Kubernetes' runAsNonRoot pod securityContext can
+# only verify non-root when either the image's USER is numeric or the pod spec pins runAsUser
+# itself (same CreateContainerConfigError class found deploying risk-kernel/control-plane/
+# runtime to a real k3d cluster, docs/runbooks/local-cluster.md; NEEDS #516).
+RUN addgroup -g 10001 -S axis && adduser -u 10001 -S axis -G axis
 WORKDIR /app
 COPY --from=builder --chown=axis:axis /out ./
 USER axis
