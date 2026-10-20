@@ -136,10 +136,15 @@ policy-test:
 	pnpm --filter @axis/policy exec tsx src/cli.ts test ../../evals/redteam/policy
 
 k3s-up:
-	@echo "(planned) Phase 10"; exit 1
+	@echo "No single command yet: a real local k3d cluster bring-up (build images, build k3d-tools from source, create the cluster, helm install) was verified for real in Phase 10 but is still a multi-step manual walkthrough. Follow docs/runbooks/local-cluster.md."; exit 1
 
+# Phase 10: real `terraform validate`/`plan` against infra/terraform/envs/$(CLOUD).
+# NEVER runs `apply`. Needs real cloud credentials in the environment for a real
+# account's plan; see infra/terraform/envs/$(CLOUD)/README.md and ADR 0117 for the
+# dummy-credential path this repo's own CI/sandbox verification uses instead.
 tf-plan:
-	@echo "(planned) Phase 10: plan only, never apply"; exit 1
+	@test -n "$(CLOUD)" || (echo "usage: make tf-plan CLOUD=aws|gcp|azure"; exit 1)
+	cd infra/terraform/envs/$(CLOUD) && terraform init -backend=false && terraform validate && terraform plan
 
 # Regenerate the TS/Python SDK layers from the OpenAPI (ADR 0040); drift tests run --check.
 sdk-generate:
