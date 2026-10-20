@@ -4,6 +4,12 @@ image:
   tag: dev
   pullPolicy: IfNotPresent
 readOnlyRootFilesystem: true
+# Numeric, matching the image's USER (runtime/Dockerfile): required for runAsNonRoot to pass
+# against a non-numeric named USER, otherwise kubelet refuses the container with
+# CreateContainerConfigError (found deploying to a real k3d cluster).
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
 serviceAccount:
   create: true
   annotations: {}

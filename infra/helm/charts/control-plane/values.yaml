@@ -8,6 +8,12 @@ service:
   type: ClusterIP
   port: 8080
 readOnlyRootFilesystem: true
+# Numeric, matching the image's USER (services/control-plane/Dockerfile): required for
+# runAsNonRoot to pass against a non-numeric named USER, otherwise kubelet refuses the
+# container with CreateContainerConfigError (found deploying to a real k3d cluster).
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
 resources:
   requests:
     cpu: 100m

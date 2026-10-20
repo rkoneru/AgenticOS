@@ -1,0 +1,70 @@
+# phase10-cluster subset overlay: the live k3d exit-bar run only built and imported real images
+# for control-plane, risk-kernel and the Python runtime (see docs/runbooks/local-cluster.md).
+# Layer this ON TOP of values.yaml + values-local.yaml and disable every other AXIS subchart so
+# `helm install` doesn't try to schedule pods for images that were never built/imported in this
+# pass. Real images, not a placeholder: this is a scope reduction for time/disk, not a fake chart.
+registry: { enabled: false }
+marketplace: { enabled: false }
+billing: { enabled: false }
+memory: { enabled: false }
+channels: { enabled: false }
+eval-hub: { enabled: false }
+compliance: { enabled: false }
+data-governance: { enabled: false }
+api-gateway: { enabled: false }
+console: { enabled: false }
+docs-site: { enabled: false }
+
+# Redis isn't on the Phase-2 core-loop decision path (ABL -> runtime -> Risk Kernel gRPC ->
+# Postgres audit never touches it); skip it here to save RAM/disk in this sandbox.
+redis: { enabled: false }
+
+# DEVIATION (documented per the phase-10 instructions): the bitnami/postgresql chart's pinned
+# `17.2.0-debian-12-r1` tag has been pruned from Docker Hub's free tier (bitnami now publishes
+# only `latest` + sha256-pinned tags for most images under their post-2025 "Bitnami Secure
+# Images" retention policy) — confirmed by querying the registry's own tags/list, see
+# docs/runbooks/local-cluster.md. `latest` is pinned-by-digest-free and NOT what a real
+# deployment should run, but it is the only tag this sandbox could actually pull for this run.
+#
+# Auth is pinned here (not left to the chart's random generator) because this file also hardcodes
+# the matching postgresql:// URLs below for risk-kernel/control-plane — without a pin, a fresh
+# `helm install` generates a new random password every time and those URLs silently stop working
+# (found live in this session: the first install's generated passwords did not match this file's
+# placeholders at all, since nothing had pinned them yet). Dev-only credentials, never real ones.
+postgresql:
+  image:
+    tag: latest
+  auth:
+    postgresPassword: "cluster-e2e-pg-superuser-dev-only"
+    password: "cluster-e2e-pg-axis-dev-only"
+
+# Real wiring for the phase10-cluster live e2e smoke check (docs/runbooks/local-cluster.md):
+# a real policy bundle + token table (both pre-created as Secrets: axis-policy-bundle,
+# axis-tokens) and a real Postgres connection string for the Risk Kernel's hash-chained audit
+# log, pointed at this same release's in-cluster bitnami Postgres.
+risk-kernel:
+  config:
+    AXIS_AUDIT_PG_ROLE: axis_app
+  policyBundle:
+    secretName: axis-policy-bundle
+  tokens:
+    secretName: axis-tokens
+  secret:
+    data:
+      # Superuser (matches e2e/test_phase2_core_loop.py's own PG_ADMIN_URL pattern): SET ROLE
+      # axis_app needs either superuser or explicit membership, and the migrations don't grant
+      # axis_app to the schema owner (found running this smoke check against a real cluster).
+      AXIS_AUDIT_PG_URL: "postgresql://postgres:cluster-e2e-pg-superuser-dev-only@axis-postgresql.axis.svc.cluster.local:5432/axis"
+      AXIS_APPROVALS_HMAC_KEY: "06928aa0e46c0ce9ffa721316cf67cd6b50833bef5404cad46c10a5e91face58"
+
+control-plane:
+  secret:
+    data:
+      CP_PG_URL: "postgresql://axis:cluster-e2e-pg-axis-dev-only@axis-postgresql.axis.svc.cluster.local:5432/axis"
+      CP_DEV_TOKEN: "cluster-e2e-cp-dev-token"
+      CP_PLATFORM_TOKEN: "cluster-e2e-cp-platform-token"
+      CP_RUNTIME_TOKENS: "cluster-e2e-cp-runtime-token"
+
+runtime:
+  runServer:
+    configSecretName: axis-runserver-config
