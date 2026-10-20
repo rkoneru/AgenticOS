@@ -6,6 +6,15 @@ command here was executed for real; every gap below was found live, not guessed.
 `docs/plans/phase-10.md` for the phase's overall scope and `infra/helm/README.md` /
 `docs/adr/0116-helm-chart-layout.md` for the chart layout this builds on.
 
+This run was done across two sessions: a first pass (2026-10-17) that got as far as building the
+real images and hit real build/scheduling blockers, and a second pass (2026-10-20, after a
+container cycle wiped all Docker images and the first pass's cluster) that re-built everything
+from scratch using this file's own instructions, found two more real gaps the first pass's draft
+had missed (the Go-module CA trust for the `k3d-tools` build, and pinning the Postgres password so
+the hardcoded connection strings below actually match), and completed the full path through
+teardown. Every command and every piece of real output below — trace IDs, decisions, audit rows,
+hash values — is from the 2026-10-20 run unless stated otherwise.
+
 ## What was achieved
 
 - A real k3d (k3s-in-Docker) single-node cluster, created and torn down for real.
@@ -80,11 +89,14 @@ small Go module under `tools/` in the k3d source tree that builds without needin
 
 ```bash
 git clone --depth 1 --branch v5.8.3 https://github.com/k3d-io/k3d.git /tmp/k3dsrc
+```bash
 cat > /tmp/k3dsrc/tools/Dockerfile.local <<'EOF'
 FROM golang:1.22.4-alpine3.20 AS builder
 WORKDIR /app
+COPY ca-bundle.cr[t] /tmp/
+RUN if [ -f /tmp/ca-bundle.crt ]; then cp /tmp/ca-bundle.crt /usr/local/share/ca-certificates/ci-proxy.crt && update-ca-certificates; fi
 COPY . .
-ENV CGO_ENABLED=0 GOFLAGS=-mod=mod
+ENV CGO_ENABLED=0 GOFLAGS=-mod=mod GOPROXY=https://proxy.golang.org,direct
 RUN go build -o bin/k3d-tools .
 
 FROM alpine:3.20
@@ -92,13 +104,19 @@ WORKDIR /app
 COPY --from=builder /app/bin/k3d-tools .
 ENTRYPOINT [ "/app/k3d-tools"]
 EOF
-# proxy.golang.org is MITM'd by this sandbox's egress proxy same as everything else outside the
-# narrow no-proxy allowlist, so the Go module fetch needs the proxy's CA trusted — see the CA
-# pattern in step 3; the same --build-context + --network=host trick applies here too.
 cp /root/.ccr/ca-bundle.crt /tmp/k3dsrc/tools/ca-bundle.crt
 cd /tmp/k3dsrc/tools
 docker build --network=host -f Dockerfile.local -t k3d-tools-local:v5.8.3 .
 ```
+
+This CA step is **required**, not optional: an earlier draft of this runbook tried `ENV
+NODE_EXTRA_CA_CERTS`-style trust only inside the three AXIS Dockerfiles (step 3) and omitted it
+here, on the theory that `--network=host` alone would be enough for a bare `go build`. Re-running
+this for real in this session hit exactly the TLS failure that theory predicted:
+`proxy.golang.org`'s cert is signed by this sandbox's intercepting proxy CA, and a Go toolchain
+with no CA trust rejects it outright (`tls: failed to verify certificate: x509: certificate signed
+by unknown authority`) — confirmed by the actual build log, then fixed by installing the CA into
+the Alpine build stage's system trust store before `go build` runs.
 
 (`k3d-proxy`, the optional load-balancer, is also on `ghcr.io`; avoided entirely with `--no-lb`
 at cluster-create time, since this is a single-node local cluster with no need for one.)
@@ -275,6 +293,15 @@ Docker Hub's `429`s) before saving.
 retention policy change — see NEEDS #519); `docker pull bitnami/postgresql:latest` and override
 `postgresql.image.tag: latest` instead (done in `values-local-cluster-subset.yaml`).
 
+**Also pin the Postgres auth passwords in that same values file**
+(`postgresql.auth.postgresPassword` / `postgresql.auth.password`), not just the image tag. Found
+live in this session: without a pin, the bitnami chart generates a fresh random password on every
+`helm install`, but this values file *also* hardcodes matching `postgresql://...` connection
+strings into the risk-kernel and control-plane secrets further down — on the first install those
+strings' passwords and the chart's actual generated secret (`kubectl get secret axis-postgresql`)
+simply didn't match, and both services failed to connect until the values were pinned and the
+release reinstalled. Dev-only fixed passwords, never used outside this throwaway cluster.
+
 ### 6. `helm install`
 
 ```bash
@@ -297,32 +324,59 @@ input — see NEEDS #517), a real Postgres URL for control-plane, and a real `RU
 the runtime run-server. See that file for the exact values and NEEDS #514–#519 for the real bugs
 this surfaced and (mostly) got fixed.
 
-There is **no `kubectl` binary** available directly in this sandbox; every `kubectl` invocation
-in this runbook goes through the k3s node container, which ships its own:
+There is **no `kubectl` binary** available directly in this sandbox (and no outbound path to fetch
+one — `dl.k8s.io`/`storage.googleapis.com` are not on the allowlist). Two ways to get one, both
+used in this session:
+
+- Via the node container, for anything that doesn't need a local process to reach the API server
+  over a forwarded port:
+  ```bash
+  docker exec -i k3d-axis-local-server-0 kubectl "$@"
+  ```
+- A **real host-side `kubectl`**, by copying k3s's own embedded binary out of the node (k3s ships
+  `kubectl` as a symlink to the `k3s` binary itself, which implements the same CLI when invoked as
+  `kubectl`):
+  ```bash
+  docker cp k3d-axis-local-server-0:$(docker exec k3d-axis-local-server-0 readlink -f /bin/kubectl) /tmp/k3s
+  chmod +x /tmp/k3s
+  mkdir -p /tmp/kbin && ln -sf /tmp/k3s /tmp/kbin/kubectl
+  export PATH="/tmp/kbin:$PATH"
+  export KUBECONFIG=/tmp/kubeconfig-axis.yaml
+  kubectl get pods -n axis   # works like any normal kubectl, including port-forward
+  ```
+  This second form is needed for `kubectl port-forward`, which must run as a process on the same
+  host as the thing connecting to the forwarded port (step 7 below).
+
+### 7. Apply the DB migration and seed a tenant, from the host via `kubectl port-forward`
+
+The prior draft of this runbook planned a one-off migration Job image for this step (same pattern
+as steps 3/5). Re-running this for real, the much simpler path worked directly: port-forward
+Postgres to the host and run this repo's own migration CLI and `psql` against `127.0.0.1` — no
+extra image needed.
 
 ```bash
-docker exec -i k3d-axis-local-server-0 kubectl "$@"
+kubectl -n axis port-forward svc/axis-postgresql 15432:5432 &   # background; kill when done
+
+PG_ADMIN_URL="postgresql://postgres:<postgresPassword from values-local-cluster-subset.yaml>@127.0.0.1:15432/axis"
+
+DATABASE_URL="$PG_ADMIN_URL" pnpm --filter @axis/db exec tsx src/cli.ts
+# applied: 0001_tenancy_and_rls, 0002_core_tables, ... 0017_governance_settings_read
+
+psql "$PG_ADMIN_URL" -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO tenants (id, slug, name, region) VALUES ('c1057100-0000-4000-8000-000000000001', 'cluster-e2e', 'cluster-e2e', 'us') ON CONFLICT DO NOTHING"
 ```
 
-### 7. Apply the DB migration and seed a tenant (also via a one-off Job, same reason)
-
-```bash
-# Build a tiny node:22-alpine image that just runs `node dist/cli.js` (packages/db's compiled
-# migration CLI) with the same CA-trust pattern as step 3's Dockerfiles.
-docker build --network=host --build-context ciproxyca=/root/.ccr --build-arg CI_PROXY_CA_BASE=ciproxyca \
-  -f /tmp/migrate.Dockerfile -t axis/db-migrate:dev .
-# import it the same way as step 5, then:
-kubectl apply -f migrate-job.yaml   # DATABASE_URL = postgres superuser, NOT the 'axis' owner role
-                                     # (CREATE EXTENSION needs superuser)
-kubectl apply -f tenant-job.yaml    # INSERT INTO tenants (...)
-```
+`DATABASE_URL` must be the **superuser** (`postgres`) role, matching
+`e2e/test_phase2_core_loop.py`'s own `PG_ADMIN_URL` pattern — `CREATE EXTENSION` in the early
+migrations needs superuser, and the `axis_app`/`axis` roles the migrations create are not
+automatically grantable to each other.
 
 ### 8. Drive the real gRPC path and verify the real audit row
 
-A one-off Python script (reproduced here, not committed as a repo file — it is a one-time
-verification artifact, not a maintained test) run **inside the cluster**, using the real
-`axis_runtime.gate.GrpcGateClient` already present in the `axis/runtime:dev` image, against the
-real risk-kernel pod's ClusterIP:
+A one-off Python script, run **inside the cluster** via `kubectl cp` + `kubectl exec`, using the
+real `axis_runtime.gate.GrpcGateClient` already present in the `axis/runtime:dev` image, against
+the real risk-kernel pod's ClusterIP. It exercises both the ALLOW and the default-DENY path in one
+run, so the two decisions' hash-chain linkage can be checked directly:
 
 ```python
 import asyncio, secrets, sys
@@ -333,16 +387,16 @@ TENANT = "c1057100-0000-4000-8000-000000000001"
 TOKEN = "cluster-e2e-44a38b113b56862a"
 KERNEL_TARGET = "axis-risk-kernel.axis.svc.cluster.local:50051"
 
-async def main() -> int:
+async def run_one(action: str, side_effects: str) -> tuple[str, str]:
     trace_id = secrets.token_hex(16)          # kernel requires exactly /^[0-9a-f]{32}$/
     client = GrpcGateClient(KERNEL_TARGET, token=TOKEN, timeout=10.0)
     req = EvaluateRequest(
         tenant_id=TENANT, trace_id=trace_id, span_id=secrets.token_hex(16),
         actor_type=ActorType.AGENT, actor_id="smoke-agent", pid=new_pid(),
         blueprint_name="claims-triage", blueprint_version="1.0.0",
-        enforcement_point=EnforcementPoint.TOOL_CALL, action="lookup-claim",
+        enforcement_point=EnforcementPoint.TOOL_CALL, action=action,
         context={
-            "tool": {"name": "lookup-claim", "side_effects": "read"}, "args": {},
+            "tool": {"name": action, "side_effects": side_effects}, "args": {},
             "data": {"phi": False}, "tenant": {"id": TENANT},
             "agent": {"name": "claims-triage", "version": "1.0.0"},
             "run": {"id": "smoke-run-1"}, "actor": {"type": "agent", "id": "smoke-agent"},
@@ -350,44 +404,69 @@ async def main() -> int:
         },
     )
     decision = await client.evaluate(req)
-    print(f"TRACE_ID={trace_id} DECISION={decision.decision} REASON={decision.reason}")
-    return 0 if str(decision.decision) in ("Decision.ALLOW", "ALLOW") else 1
+    print(f"TRACE_ID={trace_id} ACTION={action} DECISION={decision.decision} REASON={decision.reason}")
+    return trace_id, str(decision.decision)
+
+async def main() -> int:
+    t1, d1 = await run_one("lookup-claim", "read")
+    t2, d2 = await run_one("update-crm", "write")
+    return 0 if ("ALLOW" in d1 and "DENY" in d2) else 1
 
 sys.exit(asyncio.run(main()))
 ```
 
-Run it inside an already-Ready pod in the `axis` namespace (see NEEDS #513 for why a *brand-new*
-pod's first attempt can spuriously `ECONNREFUSED`):
-
 ```bash
 kubectl cp smoke_gate.py axis/<runtime-pod>:/tmp/smoke_gate.py
-kubectl exec -n axis <runtime-pod> -- python /tmp/smoke_gate.py
-# TRACE_ID=a25ce83a0310e6530666e6e688cda4ef DECISION=Decision.ALLOW REASON=baseline-deny/allow-read-tools
+kubectl exec -n axis <runtime-pod> -- /app/.venv/bin/python /tmp/smoke_gate.py
 ```
 
-Then verify the real audit row, straight from Postgres (also via a one-off `psql` Job, same
-image/approach as steps 5/7):
+Real output from this session:
+
+```
+TRACE_ID=3a2a6347469a99459e9c4c5637ab4bbd ACTION=lookup-claim DECISION=ALLOW REASON=baseline-deny/allow-read-tools
+TRACE_ID=0da02d33f506099acf1e29d8b0bd9e2b ACTION=update-crm DECISION=DENY REASON=no matching rule (default deny)
+```
+
+Then verify the real audit rows, straight from Postgres (same `kubectl port-forward` + `psql` as
+step 7):
 
 ```sql
 SELECT id, tenant_id, decision, enforcement_point, action, trace_id, ts, policy_version, hash, prev_hash
-FROM audit_events WHERE trace_id = 'a25ce83a0310e6530666e6e688cda4ef';
---                   id                  |              tenant_id               | decision | enforcement_point |    action    |             trace_id             |            ts             |             policy_version              |                               hash                               |                            prev_hash
--- fc3483b9-c652-4c7f-8fac-cb7cf920694c | c1057100-0000-4000-8000-000000000001 | ALLOW    | tool_call         | lookup-claim | a25ce83a0310e6530666e6e688cda4ef | 2026-10-17 01:52:45.16+00 | baseline-deny@1.0.0,phi-redaction@1.1.0 | 2a27bda9...96a5d70e | 0000...0000
+FROM audit_events WHERE trace_id IN ('3a2a6347469a99459e9c4c5637ab4bbd','0da02d33f506099acf1e29d8b0bd9e2b');
 ```
 
-A second run with `action: "update-crm"` / `side_effects: "write"` (not in `baseline-deny`'s
-allowlist) produced `DECISION=Decision.DENY REASON=no matching rule (default deny)` — the
-fail-closed default, also for real, over the same real gRPC path.
+Real rows from this session (the hash chain is live here, not illustrative: the DENY row's
+`prev_hash` is exactly the ALLOW row's `hash`):
+
+```
+40465c29-cc78-4d8e-a7f7-5e5be17396da | c1057100-0000-4000-8000-000000000001 | ALLOW | tool_call | lookup-claim | 3a2a6347469a99459e9c4c5637ab4bbd | 2026-10-20 18:15:06.408+00 | baseline-deny@1.0.0,phi-redaction@1.1.0 | 4dd61dffd81e5991b60d46ac39b44834ae829871ab812ad9b36eb5821c039810 | 0000...0000
+9d147733-a1cd-4061-9fed-4d1073300189 | c1057100-0000-4000-8000-000000000001 | DENY  | tool_call | update-crm   | 0da02d33f506099acf1e29d8b0bd9e2b | 2026-10-20 18:15:06.46+00  | baseline-deny@1.0.0,phi-redaction@1.1.0 | a200265fe4d760214147c07c65db1c6737de6d4d80d57943f138d1ade0a5b89e | 4dd61dffd81e5991b60d46ac39b44834ae829871ab812ad9b36eb5821c039810
+```
+
+This is the full Phase-2 core-loop decision path (ABL/runtime process model → real gRPC →
+real fail-closed Risk Kernel pod → real hash-chained Postgres audit row), run for real against a
+real k3d cluster, not the ephemeral-process harness `make e2e-core` normally uses, and not
+reconstructed after the fact — the trace IDs, decisions and hash values above are copied verbatim
+from this session's actual command output.
 
 ### 9. Tear down
 
 ```bash
+pkill -f "port-forward svc/axis-postgresql"
 export PATH="$PATH:$HOME/go/bin"
 k3d cluster delete axis-local
-docker rmi axis/risk-kernel:dev axis/control-plane:dev axis/runtime:dev axis/db-migrate:dev \
-  k3d-tools-local:v5.8.3 bitnami/postgresql:latest  # whatever this pass built/pulled, as needed
-docker system prune -f
+docker rmi axis/risk-kernel:dev axis/control-plane:dev axis/runtime:dev \
+  k3d-tools-local:v5.8.3 bitnami/postgresql:latest rancher/k3s:v1.32.5-k3s1 \
+  rancher/local-path-provisioner:v0.0.31 rancher/mirrored-coredns-coredns:1.12.1 \
+  rancher/mirrored-library-busybox:1.36.1 rancher/mirrored-metrics-server:v0.7.2 \
+  rancher/mirrored-pause:3.6
+docker system prune -af
+docker builder prune -af
 ```
+
+Confirmed clean in this session: `k3d cluster delete` removed the node container (`docker ps -a`
+empty afterward), all images above were removed, and `df -h /` returned to the same 49-50% used
+baseline the session started at.
 
 ## Known gaps (see `docs/NEEDS.md` for the numbered entries)
 
