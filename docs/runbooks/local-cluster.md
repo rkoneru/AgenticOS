@@ -22,8 +22,8 @@ hash values — is from the 2026-10-20 run unless stated otherwise.
   `control-plane` and the Python `runtime` (run-server), imported into the cluster (no external
   registry).
 - `helm install`/`helm upgrade` of a **subset** of the `infra/helm/axis` umbrella chart (Postgres
-  + risk-kernel + control-plane + runtime; the other 11 AXIS service charts disabled — see
-  `infra/helm/axis/values-local-cluster-subset.yaml`) against the real cluster's API server.
+  - risk-kernel + control-plane + runtime; the other 11 AXIS service charts disabled — see
+    `infra/helm/axis/values-local-cluster-subset.yaml`) against the real cluster's API server.
 - **Running/Ready in the real cluster**: Postgres (`axis-postgresql-0`, bitnami chart), the real
   Risk Kernel pod (`axis-risk-kernel-*`), and the real Python runtime run-server pod
   (`axis-runtime-run-server-*`). `control-plane` does **not** reach Ready — see Known gaps.
@@ -37,7 +37,7 @@ hash values — is from the 2026-10-20 run unless stated otherwise.
   `make e2e-core` normally uses.
 - The cluster was torn down cleanly at the end (`k3d cluster delete`); nothing was left running.
 
-## What was *not* achieved (be precise about this)
+## What was _not_ achieved (be precise about this)
 
 - `control-plane` does not reach `Ready`: its image is missing a `policies/control-plane/`
   directory its `main.ts` expects at a fixed path (NEEDS #514). Not fixed in this pass.
@@ -65,7 +65,7 @@ hash values — is from the 2026-10-20 run unless stated otherwise.
 - `helm` and `kubeconform` were already built via `go install` by prior Phase 10 work
   (`~/go/bin`); `k3d` was not — see "Installing k3d" below.
 - Disk is a hard, shared budget (around 20 GB free when this session started). `docker system
-  prune -af`/`docker builder prune -af` between build batches, and build/import images one at a
+prune -af`/`docker builder prune -af` between build batches, and build/import images one at a
   time, not in parallel.
 - Docker Hub pulls can hit `429 Too Many Requests` from the shared proxy IP; retry with backoff.
 
@@ -87,7 +87,7 @@ k3d unconditionally needs a "tools" helper image (`ghcr.io/k3d-io/k3d-tools`) fo
 bootstrapping and image import, and `ghcr.io` is not reachable from this sandbox. It has its own
 small Go module under `tools/` in the k3d source tree that builds without needing `apk`/`make`:
 
-```bash
+````bash
 git clone --depth 1 --branch v5.8.3 https://github.com/k3d-io/k3d.git /tmp/k3dsrc
 ```bash
 cat > /tmp/k3dsrc/tools/Dockerfile.local <<'EOF'
@@ -107,7 +107,7 @@ EOF
 cp /root/.ccr/ca-bundle.crt /tmp/k3dsrc/tools/ca-bundle.crt
 cd /tmp/k3dsrc/tools
 docker build --network=host -f Dockerfile.local -t k3d-tools-local:v5.8.3 .
-```
+````
 
 This CA step is **required**, not optional: an earlier draft of this runbook tried `ENV
 NODE_EXTRA_CA_CERTS`-style trust only inside the three AXIS Dockerfiles (step 3) and omitted it
@@ -181,10 +181,10 @@ Two of these flags only exist because of this sandbox's nested virtualization:
 
 - `--snapshotter=native` — tried first because containerd's default `overlayfs` snapshotter
   inside a container whose own root is already `overlayfs` (`docker info | grep "Storage
-  Driver"`) is a classic "overlay-on-overlay" failure mode. It turned out **not** to be the actual
+Driver"`) is a classic "overlay-on-overlay" failure mode. It turned out **not** to be the actual
   cause of the real blocker below, but is harmless and was left in.
 - `--kubelet-arg=eviction-hard=...<1%` — **required**. `cAdvisor` reports `invalid capacity 0 on
-  image filesystem` in this nested environment, so kubelet's default disk-pressure eviction
+image filesystem` in this nested environment, so kubelet's default disk-pressure eviction
   thresholds immediately taint the node `disk-pressure:NoSchedule` regardless of real free space,
   wedging every pod. See NEEDS #512.
 
@@ -259,12 +259,12 @@ nsexec[...]: update /proc/self/oom_score_adj to '-998'
 nsexec[...]: failed to update /proc/self/oom_score_adj: Permission denied
 ```
 
-Writing a *more negative* `oom_score_adj` than a process's enclosing container already has is
+Writing a _more negative_ `oom_score_adj` than a process's enclosing container already has is
 blocked in this nested sandbox (the same restriction that produces k3s's own non-fatal
 `"Failed to ensure state" ... failed to apply oom score -999 ... permission denied` warning in its
 logs). containerd's CRI plugin has a config flag for exactly this situation —
 `restrict_oom_score_adj = true` — which clamps the OOM score adjustment it asks for to what the
-*containerd process's own* current value allows, instead of the CRI-computed value unconditionally.
+_containerd process's own_ current value allows, instead of the CRI-computed value unconditionally.
 Setting it (via the `config.toml.tmpl` override, since k3s regenerates `config.toml` from this
 template on every start) fixed every pod sandbox, no further workaround needed.
 
@@ -296,7 +296,7 @@ retention policy change — see NEEDS #519); `docker pull bitnami/postgresql:lat
 **Also pin the Postgres auth passwords in that same values file**
 (`postgresql.auth.postgresPassword` / `postgresql.auth.password`), not just the image tag. Found
 live in this session: without a pin, the bitnami chart generates a fresh random password on every
-`helm install`, but this values file *also* hardcodes matching `postgresql://...` connection
+`helm install`, but this values file _also_ hardcodes matching `postgresql://...` connection
 strings into the risk-kernel and control-plane secrets further down — on the first install those
 strings' passwords and the chart's actual generated secret (`kubectl get secret axis-postgresql`)
 simply didn't match, and both services failed to connect until the values were pinned and the
@@ -387,30 +387,44 @@ TENANT = "c1057100-0000-4000-8000-000000000001"
 TOKEN = "cluster-e2e-44a38b113b56862a"
 KERNEL_TARGET = "axis-risk-kernel.axis.svc.cluster.local:50051"
 
+
 async def run_one(action: str, side_effects: str) -> tuple[str, str]:
-    trace_id = secrets.token_hex(16)          # kernel requires exactly /^[0-9a-f]{32}$/
+    trace_id = secrets.token_hex(16)  # kernel requires exactly /^[0-9a-f]{32}$/
     client = GrpcGateClient(KERNEL_TARGET, token=TOKEN, timeout=10.0)
     req = EvaluateRequest(
-        tenant_id=TENANT, trace_id=trace_id, span_id=secrets.token_hex(16),
-        actor_type=ActorType.AGENT, actor_id="smoke-agent", pid=new_pid(),
-        blueprint_name="claims-triage", blueprint_version="1.0.0",
-        enforcement_point=EnforcementPoint.TOOL_CALL, action=action,
+        tenant_id=TENANT,
+        trace_id=trace_id,
+        span_id=secrets.token_hex(16),
+        actor_type=ActorType.AGENT,
+        actor_id="smoke-agent",
+        pid=new_pid(),
+        blueprint_name="claims-triage",
+        blueprint_version="1.0.0",
+        enforcement_point=EnforcementPoint.TOOL_CALL,
+        action=action,
         context={
-            "tool": {"name": action, "side_effects": side_effects}, "args": {},
-            "data": {"phi": False}, "tenant": {"id": TENANT},
+            "tool": {"name": action, "side_effects": side_effects},
+            "args": {},
+            "data": {"phi": False},
+            "tenant": {"id": TENANT},
             "agent": {"name": "claims-triage", "version": "1.0.0"},
-            "run": {"id": "smoke-run-1"}, "actor": {"type": "agent", "id": "smoke-agent"},
+            "run": {"id": "smoke-run-1"},
+            "actor": {"type": "agent", "id": "smoke-agent"},
             "enforcement_point": "tool_call",
         },
     )
     decision = await client.evaluate(req)
-    print(f"TRACE_ID={trace_id} ACTION={action} DECISION={decision.decision} REASON={decision.reason}")
+    print(
+        f"TRACE_ID={trace_id} ACTION={action} DECISION={decision.decision} REASON={decision.reason}"
+    )
     return trace_id, str(decision.decision)
+
 
 async def main() -> int:
     t1, d1 = await run_one("lookup-claim", "read")
     t2, d2 = await run_one("update-crm", "write")
     return 0 if ("ALLOW" in d1 and "DENY" in d2) else 1
+
 
 sys.exit(asyncio.run(main()))
 ```
