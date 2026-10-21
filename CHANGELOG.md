@@ -1,6 +1,18 @@
 # Changelog
 
-## Phase 10 - EXIT: deployment and release (ADR 0114-0117)
+## Phase 10 follow-up: closing the actionable NEEDS items (ADR 0118)
+
+No contract change beyond vendoring a standard, third-party gRPC health proto (not an AXIS contract; `packages/contracts/FREEZE.json` regenerated per ADR 0007 since `proto/buf.yaml` changed). A scoped pass through `docs/NEEDS.md`'s Phase 10 items, fixing the ones genuinely actionable without real cloud credentials:
+
+- **Risk Kernel gRPC health check** (ADR 0118, NEEDS #507): implemented the standard `grpc.health.v1.Health` protocol by hand (no new dependency); its chart now uses Kubernetes' native `grpc` readiness/liveness probe instead of a bare `tcpSocket` check. 4 new tests drive a real gRPC client against a real running server.
+- **Eval-runner heartbeat liveness** (NEEDS #508): the worker loop now touches a heartbeat file every iteration; the chart's `eval-runner` Deployment gets a real `exec` liveness probe checking its freshness. 7 new tests cover both sides, including running the actual probe command as a subprocess.
+- **All 14 images now pin a numeric container user** (NEEDS #516, previously only 3 of 14): every remaining Dockerfile and chart now sets a real `runAsUser`/`runAsGroup` Kubernetes can actually verify against `runAsNonRoot`; every image rebuilt and run for real to confirm it still serves traffic as that user.
+- **All 14 charts roll pods on config/secret changes** (NEEDS #518): checksum annotations added across the board (previously only the 3 charts exercised in the live cluster run had this); a new executable chart-fix verification script proves the checksum actually changes when the underlying data does.
+- **control-plane's image crash fixed** (NEEDS #514): it was missing both its `policies/` tree and the `opa` binary its authorizer shells out to at startup (the second bug only surfaced once the first was fixed) — both now shipped in the image; confirmed via a real `docker build`+`docker run`, not yet re-verified against a live cluster.
+- **Per-tenant eval-runner templating** (NEEDS #509): one Deployment per `evalRunner.tenants[]` entry, backward compatible with the original single-Deployment shape.
+- **Bitnami Postgres pinned by digest, not `latest`** (NEEDS #519) and its chart's **default egress tightened** (NEEDS #511, partial — ingress and existing-secret gaps documented rather than force-fixed across every consumer chart).
+- **api-gateway's loopback-only posture reviewed and deliberately left alone** (NEEDS #506): confirmed this is the gateway's own considered security design, not a bug.
+- Re-verified with the full 29-target sweep on the merged tree (one target at a time): all green. Two targets (`chaos`'s slow-gate-timeout case, `dr-drill`'s kill-9 fault injection) hit the same timing-sensitive flakes already documented from Phase 10 itself and passed clean on immediate retry — not a regression from this pass's changes.
 
 No contract change. Status: this phase is the first to touch real infrastructure outside the dev process harness used by every prior phase, and its honesty bar is correspondingly stricter — every "Built" row below is backed by a command this session actually ran in this environment, not by what would typically work elsewhere.
 
