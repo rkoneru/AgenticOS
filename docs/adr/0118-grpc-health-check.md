@@ -18,7 +18,7 @@ that anything past the kernel of the OS network stack is actually working.
 - Vendor the standard health proto verbatim at `proto/grpc/health/v1/health.proto`. This
   is not an AXIS contract — its shape is fixed upstream (`grpc.health.v1.Health`, the
   `Check`/`Watch` RPCs) — so it is not subject to CLAUDE.md's "proto is frozen v1, ADR to
-  change" rule for `proto/axis/**`; this ADR is about adding a vendored *copy* of a
+  change" rule for `proto/axis/**`; this ADR is about adding a vendored _copy_ of a
   third-party standard, not about changing an AXIS contract.
 - Implement it by hand in `services/risk-kernel/src/grpc.ts` (`addHealthService`)
   against `@grpc/grpc-js`/`@grpc/proto-loader`, both already dependencies, rather than

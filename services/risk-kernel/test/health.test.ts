@@ -35,7 +35,9 @@ function loadHealthClient(port: number): HealthClient {
     oneofs: true,
   });
   const pkg = grpc.loadPackageDefinition(def) as unknown as {
-    grpc: { health: { v1: { Health: new (a: string, c: grpc.ChannelCredentials) => HealthClient } } };
+    grpc: {
+      health: { v1: { Health: new (a: string, c: grpc.ChannelCredentials) => HealthClient } };
+    };
   };
   return new pkg.grpc.health.v1.Health(`127.0.0.1:${port}`, grpc.credentials.createInsecure());
 }
