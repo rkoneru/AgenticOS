@@ -14,6 +14,7 @@ import { PgAuditLog } from "@axis/audit";
 import type { AuditSink } from "@axis/contracts";
 import pg from "pg";
 import {
+  addHealthService,
   createGateServer,
   listen,
   staticTokenAuthenticator,
@@ -125,6 +126,7 @@ const authenticate: Authenticator = reloading
     }
   : staticTokenAuthenticator(tokenTable);
 const server = createGateServer({ kernel, audit, killSwitches, authenticate });
+addHealthService(server);
 const bindHost = process.env["AXIS_BIND_HOST"] ?? "127.0.0.1";
 const port = await listen(server, `${bindHost}:${process.env["AXIS_RK_PORT"] ?? "0"}`);
 let approvalsPort: number | undefined;

@@ -265,6 +265,55 @@ export function createGateServer(deps: GateServerDeps): grpc.Server {
   return server;
 }
 
+function loadHealthService(): grpc.ServiceDefinition {
+  const def = protoLoader.loadSync("grpc/health/v1/health.proto", {
+    includeDirs: [PROTO_ROOT],
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
+  const pkg = grpc.loadPackageDefinition(def) as unknown as {
+    grpc: { health: { v1: { Health: { service: grpc.ServiceDefinition } } } };
+  };
+  return pkg.grpc.health.v1.Health.service;
+}
+
+/**
+ * The standard gRPC health-checking protocol (grpc.health.v1.Health), so the chart's
+ * liveness/readiness probes (Kubernetes 1.24+'s native `readinessProbe.grpc`) can prove the
+ * server actually answers a real RPC — not just that its TCP listener accepted a connection
+ * (NEEDS #507). `isServing` reports current health for a given service name (empty string is
+ * the overall server, per the protocol); it defaults to always-SERVING because by the time
+ * `createGateServer` is reachable in services/risk-kernel/src/main.ts the policy bundle has
+ * already been loaded synchronously — a load failure exits the process before any server exists
+ * to probe at all, so there is no "listening but not ready" state for this process to report.
+ */
+export function addHealthService(
+  server: grpc.Server,
+  isServing: (service: string) => boolean = () => true,
+): void {
+  const SERVING = "SERVING";
+  const NOT_SERVING = "NOT_SERVING";
+  server.addService(loadHealthService(), {
+    Check: (call: Call<{ service?: string }>, cb: grpc.sendUnaryData<unknown>) => {
+      const service = (call.request["service"] as string | undefined) ?? "";
+      cb(null, { status: isServing(service) ? SERVING : NOT_SERVING });
+    },
+    // A conforming Watch: send the current status immediately on subscribe, then one more update
+    // only if/when it changes. This process's health never changes after startup (see above), so
+    // a single initial write is always correct; the stream is left open until the client cancels,
+    // matching clients (e.g. grpc_health_probe --service=... --rpc-timeout) that expect a stream,
+    // not just a unary reply.
+    Watch: (call: grpc.ServerWritableStream<{ service?: string }, unknown>) => {
+      const service = (call.request["service"] as string | undefined) ?? "";
+      call.write({ status: isServing(service) ? SERVING : NOT_SERVING });
+      call.on("cancelled", () => call.end());
+    },
+  });
+}
+
 export function listen(server: grpc.Server, address: string): Promise<number> {
   return new Promise((resolve, reject) => {
     server.bindAsync(address, grpc.ServerCredentials.createInsecure(), (err, port) =>

@@ -48,18 +48,20 @@ spec:
               protocol: TCP
             {{- end }}
           {{- if .Values.probes.enabled }}
-          # No HTTP surface (gRPC): liveness/readiness fall back to a plain TCP accept check, which
-          # proves the listener is up but not that it answers correctly. docs/NEEDS.md tracks adding
-          # a gRPC health-checking-protocol service for a real readiness signal.
+          # Native Kubernetes gRPC probe (1.24+, stable since 1.27): dials the standard
+          # grpc.health.v1.Health service's Check RPC (services/risk-kernel/src/grpc.ts's
+          # addHealthService, NEEDS #507) instead of a bare tcpSocket accept check, so a pod only
+          # becomes/stays Ready once it actually answers a real RPC over the real gate server, not
+          # merely once its listener accepts a connection.
           livenessProbe:
-            tcpSocket:
-              port: grpc
+            grpc:
+              port: {{ .Values.service.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
-              port: grpc
+            grpc:
+              port: {{ .Values.service.port }}
             initialDelaySeconds: 3
             periodSeconds: 5
             failureThreshold: 3
