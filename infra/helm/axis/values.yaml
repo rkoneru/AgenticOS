@@ -44,15 +44,40 @@ postgresql:
   auth:
     username: axis
     database: axis
+    # Reviewed against this repo's own security bar (NEEDS #511): left "" (bitnami generates a
+    # real random password on install, not a fixed/known default) for the local/homelab dev
+    # profiles — never production. values-dedicated.yaml (the one profile that keeps this
+    # in-cluster Postgres as an actual production target) documents the real gap this leaves:
+    # nothing auto-propagates that generated password into each AXIS service's own
+    # *_DATABASE_URL secret, so a real per-tenant deployment needs to set this explicitly. See
+    # that file's own comment rather than repeating it here.
     existingSecret: ""
   primary:
     persistence:
       size: 10Gi
+    networkPolicy:
+      # Reviewed against this repo's own security bar (NEEDS #511): bitnami's own default
+      # (allowExternal: true) accepts Postgres connections from ANY pod in the namespace, not
+      # just AXIS's own services — Postgres's own auth still gates access, but the network
+      # attack surface is wider than it needs to be. allowExternalEgress: false is tightened
+      # here (DB pods need no arbitrary outbound access; the chart's own NetworkPolicy already
+      # carves out DNS + same-component traffic, so this costs nothing functionally).
+      # allowExternal itself is NOT tightened to false here: doing so would require every one of
+      # the 12 AXIS service charts' pod templates to carry this subchart's generated
+      # `<release>-postgresql-client: "true"` label, which no AXIS chart sets today — a real,
+      # larger, cross-chart change left as an accurate NEEDS item rather than silently breaking
+      # every service's DB connectivity by flipping one flag.
+      allowExternalEgress: false
 redis:
   enabled: true
   auth:
     enabled: true
+    # See postgresql.auth.existingSecret's comment just above: same review, same conclusion.
     existingSecret: ""
+  networkPolicy:
+    # See postgresql.primary.networkPolicy's comment just above: same review, same reasoning,
+    # same conclusion (tighten egress, leave ingress's allowExternal as a documented NEEDS item).
+    allowExternalEgress: false
   master:
     persistence:
       size: 2Gi

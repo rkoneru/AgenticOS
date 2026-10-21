@@ -11,6 +11,28 @@
 # tenant does not share, not necessarily a managed one) but sizes it for one tenant's load, and it
 # tightens every NetworkPolicy to same-namespace-only (no cross-namespace ingress at all — a
 # dedicated tenant's pods never need to and never should be reachable from another namespace).
+#
+# SECURITY (NEEDS #511, reviewed — not yet fully closed): unlike values-aws/gcp/azure.yaml, this
+# profile is the one real production target that still runs Postgres/Redis in-cluster via the
+# bitnami subcharts, so their defaults matter here for real, not just for a throwaway dev run.
+# Before a real per-tenant install, set BOTH of the following explicitly (left blank here
+# deliberately rather than faked with a placeholder secret name that does not exist):
+#   postgresql:
+#     auth:
+#       existingSecret: "<tenant>-postgresql-auth"   # pre-created Secret: postgres-password, password keys
+#   redis:
+#     auth:
+#       existingSecret: "<tenant>-redis-auth"        # pre-created Secret: redis-password key
+# Without an existingSecret, bitnami generates its own random password on install — safe in
+# isolation, but nothing in this chart automatically propagates that password into each AXIS
+# service's own `secret.data.*_DATABASE_URL` (found live in docs/runbooks/local-cluster.md: a
+# fresh install's generated password did not match a hardcoded connection string anywhere, since
+# nothing had pinned it). Pre-creating the Secret and setting existingSecret on both the DB
+# subchart AND the consuming AXIS services' own `secret.data` to the SAME password is the real
+# fix; this file cannot do that automatically because it would mean either generating and storing
+# a real tenant credential in version control (never acceptable) or adding a cross-chart
+# password-sharing mechanism this chart does not have today — left as an accurate, open part of
+# NEEDS #511 rather than a half-fix that looks closed.
 global:
   tenantId: "" # REQUIRED: set via --set global.tenantId=<tenant>, used only for labeling here today
 
