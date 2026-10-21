@@ -1,72 +1,72 @@
 {
-  "started": "2026-10-20T18:44:35.816912+00:00",
+  "started": "2026-10-21T01:01:50.521653+00:00",
   "steps": {
-    "logical_backup_seconds": 0.14,
-    "physical_backup_seconds": 0.47,
-    "logical_dump_bytes": 325418,
+    "logical_backup_seconds": 0.16,
+    "physical_backup_seconds": 0.9,
+    "logical_dump_bytes": 326187,
     "basebackup_bytes": 51696004,
-    "seconds_between_last_committed_audit_row_and_crash": 0.69,
+    "seconds_between_last_committed_audit_row_and_crash": 1.06,
     "disaster": "postmaster killed with SIGKILL and the data directory deleted",
     "restore_logical": {
-      "rto_seconds": 1.43,
+      "rto_seconds": 1.95,
       "checks": [
         {
-          "name": "audit chain verifies (5360849c)",
+          "name": "audit chain verifies (f5902ce8)",
           "ok": true,
           "detail": "{\"ok\":true,\"length\":28}"
         },
         {
-          "name": "chain head == pre-backup head (5360849c)",
+          "name": "chain head == pre-backup head (f5902ce8)",
           "ok": true,
           "detail": "got seq 28, want 28"
         },
         {
-          "name": "signed checkpoint (held outside the DB) matches (5360849c)",
+          "name": "signed checkpoint (held outside the DB) matches (f5902ce8)",
           "ok": true,
           "detail": "{\"ok\":true,\"checkpointSeq\":28,\"headSeq\":28}"
         },
         {
-          "name": "audit chain verifies (f1ab7ff3)",
+          "name": "audit chain verifies (ea24fe31)",
           "ok": true,
           "detail": "{\"ok\":true,\"length\":19}"
         },
         {
-          "name": "chain head == pre-backup head (f1ab7ff3)",
+          "name": "chain head == pre-backup head (ea24fe31)",
           "ok": true,
           "detail": "got seq 19, want 19"
         },
         {
-          "name": "signed checkpoint (held outside the DB) matches (f1ab7ff3)",
+          "name": "signed checkpoint (held outside the DB) matches (ea24fe31)",
           "ok": true,
           "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":19}"
         },
         {
-          "name": "audit chain verifies (a12814d0)",
+          "name": "audit chain verifies (bcb9b61e)",
           "ok": true,
           "detail": "{\"ok\":true,\"length\":19}"
         },
         {
-          "name": "chain head == pre-backup head (a12814d0)",
+          "name": "chain head == pre-backup head (bcb9b61e)",
           "ok": true,
           "detail": "got seq 19, want 19"
         },
         {
-          "name": "signed checkpoint (held outside the DB) matches (a12814d0)",
+          "name": "signed checkpoint (held outside the DB) matches (bcb9b61e)",
           "ok": true,
           "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":19}"
         },
         {
-          "name": "RLS: tenant 5360849c sees 0 rows of f1ab7ff3",
+          "name": "RLS: tenant f5902ce8 sees 0 rows of ea24fe31",
           "ok": true,
           "detail": "saw 0"
         },
         {
-          "name": "RLS: tenant f1ab7ff3 sees 0 rows of a12814d0",
+          "name": "RLS: tenant ea24fe31 sees 0 rows of bcb9b61e",
           "ok": true,
           "detail": "saw 0"
         },
         {
-          "name": "RLS: tenant a12814d0 sees 0 rows of 5360849c",
+          "name": "RLS: tenant bcb9b61e sees 0 rows of f5902ce8",
           "ok": true,
           "detail": "saw 0"
         },
@@ -76,892 +76,892 @@
           "detail": "saw 0"
         },
         {
-          "name": "rows api_keys (5360849c): 1",
+          "name": "rows api_keys (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/c78cb4eb, want 1/c78cb4eb"
+          "detail": "got 1/405e9f1e, want 1/405e9f1e"
         },
         {
-          "name": "rows approvals (5360849c): 0",
+          "name": "rows approvals (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows audit_checkpoints (5360849c): 1",
+          "name": "rows audit_checkpoints (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/4cda8505, want 1/4cda8505"
+          "detail": "got 1/1c6bfa5b, want 1/1c6bfa5b"
         },
         {
-          "name": "rows audit_events (5360849c): 28",
+          "name": "rows audit_events (f5902ce8): 28",
           "ok": true,
-          "detail": "got 28/ac46731c, want 28/ac46731c"
+          "detail": "got 28/c7b7ede5, want 28/c7b7ede5"
         },
         {
-          "name": "rows billing_period_seals (5360849c): 1",
+          "name": "rows billing_period_seals (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/504e5e59, want 1/504e5e59"
+          "detail": "got 1/0abecb0f, want 1/0abecb0f"
         },
         {
-          "name": "rows blueprint_versions (5360849c): 0",
+          "name": "rows blueprint_versions (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows blueprints (5360849c): 0",
+          "name": "rows blueprints (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows budgets (5360849c): 4",
+          "name": "rows budgets (f5902ce8): 4",
           "ok": true,
-          "detail": "got 4/2f09dfb1, want 4/2f09dfb1"
+          "detail": "got 4/865746b4, want 4/865746b4"
         },
         {
-          "name": "rows channel_identities (5360849c): 0",
+          "name": "rows channel_identities (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows compliance_docs (5360849c): 0",
+          "name": "rows compliance_docs (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversation_messages (5360849c): 0",
+          "name": "rows conversation_messages (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversation_threads (5360849c): 0",
+          "name": "rows conversation_threads (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversations (5360849c): 0",
+          "name": "rows conversations (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows directories (5360849c): 0",
+          "name": "rows directories (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows directory_role_mappings (5360849c): 0",
+          "name": "rows directory_role_mappings (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows end_users (5360849c): 0",
+          "name": "rows end_users (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows eval_hub_docs (5360849c): 1",
+          "name": "rows eval_hub_docs (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/009ad150, want 1/009ad150"
+          "detail": "got 1/438e2e46, want 1/438e2e46"
         },
         {
-          "name": "rows governance_holds (5360849c): 0",
+          "name": "rows governance_holds (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_requests (5360849c): 0",
+          "name": "rows governance_requests (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_retention_policies (5360849c): 0",
+          "name": "rows governance_retention_policies (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_retention_runs (5360849c): 0",
+          "name": "rows governance_retention_runs (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_steps (5360849c): 0",
+          "name": "rows governance_steps (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_subject_identifiers (5360849c): 0",
+          "name": "rows governance_subject_identifiers (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_subjects (5360849c): 0",
+          "name": "rows governance_subjects (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows identity_connections (5360849c): 1",
+          "name": "rows identity_connections (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/8d74f0aa, want 1/8d74f0aa"
+          "detail": "got 1/f99c85ce, want 1/f99c85ce"
         },
         {
-          "name": "rows invoice_provider_links (5360849c): 0",
+          "name": "rows invoice_provider_links (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows invoices (5360849c): 0",
+          "name": "rows invoices (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows kill_switches (5360849c): 0",
+          "name": "rows kill_switches (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows knowledge_bases (5360849c): 0",
+          "name": "rows knowledge_bases (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows link_challenges (5360849c): 0",
+          "name": "rows link_challenges (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows marketplace_docs (5360849c): 0",
+          "name": "rows marketplace_docs (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows members (5360849c): 1",
+          "name": "rows members (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/5e5886db, want 1/5e5886db"
+          "detail": "got 1/f1437638, want 1/f1437638"
         },
         {
-          "name": "rows memory_chunks (5360849c): 3",
+          "name": "rows memory_chunks (f5902ce8): 3",
           "ok": true,
-          "detail": "got 3/2d01e865, want 3/2d01e865"
+          "detail": "got 3/788fd370, want 3/788fd370"
         },
         {
-          "name": "rows memory_documents (5360849c): 0",
+          "name": "rows memory_documents (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows model_credentials (5360849c): 1",
+          "name": "rows model_credentials (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/5034b2f3, want 1/5034b2f3"
+          "detail": "got 1/23d2a06f, want 1/23d2a06f"
         },
         {
-          "name": "rows policy_assignments (5360849c): 2",
+          "name": "rows policy_assignments (f5902ce8): 2",
           "ok": true,
-          "detail": "got 2/3eede764, want 2/3eede764"
+          "detail": "got 2/8aa6caf5, want 2/8aa6caf5"
         },
         {
-          "name": "rows policy_pack_versions (5360849c): 2",
+          "name": "rows policy_pack_versions (f5902ce8): 2",
           "ok": true,
-          "detail": "got 2/0d35f516, want 2/0d35f516"
+          "detail": "got 2/2adef5ef, want 2/2adef5ef"
         },
         {
-          "name": "rows policy_packs (5360849c): 2",
+          "name": "rows policy_packs (f5902ce8): 2",
           "ok": true,
-          "detail": "got 2/eb35703a, want 2/eb35703a"
+          "detail": "got 2/07e88baa, want 2/07e88baa"
         },
         {
-          "name": "rows processes (5360849c): 0",
+          "name": "rows processes (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_eval_attestations (5360849c): 0",
+          "name": "rows registry_eval_attestations (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_keys (5360849c): 1",
+          "name": "rows registry_keys (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/3874300e, want 1/3874300e"
+          "detail": "got 1/11e699b2, want 1/11e699b2"
         },
         {
-          "name": "rows registry_names (5360849c): 1",
+          "name": "rows registry_names (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/1fd68f75, want 1/1fd68f75"
+          "detail": "got 1/40fb5068, want 1/40fb5068"
         },
         {
-          "name": "rows registry_namespaces (5360849c): 1",
+          "name": "rows registry_namespaces (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/91666f67, want 1/91666f67"
+          "detail": "got 1/5a1e14ba, want 1/5a1e14ba"
         },
         {
-          "name": "rows registry_public_namespaces (5360849c): 0",
+          "name": "rows registry_public_namespaces (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_public_versions (5360849c): 0",
+          "name": "rows registry_public_versions (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_version_events (5360849c): 0",
+          "name": "rows registry_version_events (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_versions (5360849c): 1",
+          "name": "rows registry_versions (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/b8566e8d, want 1/b8566e8d"
+          "detail": "got 1/93dcf549, want 1/93dcf549"
         },
         {
-          "name": "rows run_events (5360849c): 0",
+          "name": "rows run_events (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows runs (5360849c): 0",
+          "name": "rows runs (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows scim_group_members (5360849c): 0",
+          "name": "rows scim_group_members (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows scim_groups (5360849c): 0",
+          "name": "rows scim_groups (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows sessions (5360849c): 2",
+          "name": "rows sessions (f5902ce8): 2",
           "ok": true,
-          "detail": "got 2/67415351, want 2/67415351"
+          "detail": "got 2/210cf0ae, want 2/210cf0ae"
         },
         {
-          "name": "rows tenant_keys (5360849c): 1",
+          "name": "rows tenant_keys (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/2b2933bf, want 1/2b2933bf"
+          "detail": "got 1/915fb46b, want 1/915fb46b"
         },
         {
-          "name": "rows tenant_placements (5360849c): 1",
+          "name": "rows tenant_placements (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/6cc0f3a2, want 1/6cc0f3a2"
+          "detail": "got 1/1211ed3f, want 1/1211ed3f"
         },
         {
-          "name": "rows tenant_settings (5360849c): 1",
+          "name": "rows tenant_settings (f5902ce8): 1",
           "ok": true,
-          "detail": "got 1/38e0e455, want 1/38e0e455"
+          "detail": "got 1/ed8492b1, want 1/ed8492b1"
         },
         {
-          "name": "rows usage_conflicts (5360849c): 0",
+          "name": "rows usage_conflicts (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows usage_events (5360849c): 18",
+          "name": "rows usage_events (f5902ce8): 18",
           "ok": true,
-          "detail": "got 18/6427d74f, want 18/6427d74f"
+          "detail": "got 18/4a364a7a, want 18/4a364a7a"
         },
         {
-          "name": "rows verified_domains (5360849c): 0",
+          "name": "rows verified_domains (f5902ce8): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows api_keys (f1ab7ff3): 1",
+          "name": "rows api_keys (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/a30d6f52, want 1/a30d6f52"
+          "detail": "got 1/40d44956, want 1/40d44956"
         },
         {
-          "name": "rows approvals (f1ab7ff3): 0",
+          "name": "rows approvals (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows audit_checkpoints (f1ab7ff3): 1",
+          "name": "rows audit_checkpoints (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/d9945c88, want 1/d9945c88"
+          "detail": "got 1/f585dcad, want 1/f585dcad"
         },
         {
-          "name": "rows audit_events (f1ab7ff3): 19",
+          "name": "rows audit_events (ea24fe31): 19",
           "ok": true,
-          "detail": "got 19/6250626e, want 19/6250626e"
+          "detail": "got 19/1567db8f, want 19/1567db8f"
         },
         {
-          "name": "rows billing_period_seals (f1ab7ff3): 1",
+          "name": "rows billing_period_seals (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/696d821b, want 1/696d821b"
+          "detail": "got 1/bf268c4c, want 1/bf268c4c"
         },
         {
-          "name": "rows blueprint_versions (f1ab7ff3): 0",
+          "name": "rows blueprint_versions (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows blueprints (f1ab7ff3): 0",
+          "name": "rows blueprints (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows budgets (f1ab7ff3): 4",
+          "name": "rows budgets (ea24fe31): 4",
           "ok": true,
-          "detail": "got 4/c2ab3654, want 4/c2ab3654"
+          "detail": "got 4/271535b9, want 4/271535b9"
         },
         {
-          "name": "rows channel_identities (f1ab7ff3): 0",
+          "name": "rows channel_identities (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows compliance_docs (f1ab7ff3): 0",
+          "name": "rows compliance_docs (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversation_messages (f1ab7ff3): 0",
+          "name": "rows conversation_messages (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversation_threads (f1ab7ff3): 0",
+          "name": "rows conversation_threads (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversations (f1ab7ff3): 0",
+          "name": "rows conversations (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows directories (f1ab7ff3): 0",
+          "name": "rows directories (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows directory_role_mappings (f1ab7ff3): 0",
+          "name": "rows directory_role_mappings (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows end_users (f1ab7ff3): 0",
+          "name": "rows end_users (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows eval_hub_docs (f1ab7ff3): 1",
+          "name": "rows eval_hub_docs (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/1b4d42a7, want 1/1b4d42a7"
+          "detail": "got 1/9cc9a4fd, want 1/9cc9a4fd"
         },
         {
-          "name": "rows governance_holds (f1ab7ff3): 0",
+          "name": "rows governance_holds (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_requests (f1ab7ff3): 0",
+          "name": "rows governance_requests (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_retention_policies (f1ab7ff3): 0",
+          "name": "rows governance_retention_policies (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_retention_runs (f1ab7ff3): 0",
+          "name": "rows governance_retention_runs (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_steps (f1ab7ff3): 0",
+          "name": "rows governance_steps (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_subject_identifiers (f1ab7ff3): 0",
+          "name": "rows governance_subject_identifiers (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_subjects (f1ab7ff3): 0",
+          "name": "rows governance_subjects (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows identity_connections (f1ab7ff3): 1",
+          "name": "rows identity_connections (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/344ea1f4, want 1/344ea1f4"
+          "detail": "got 1/769329da, want 1/769329da"
         },
         {
-          "name": "rows invoice_provider_links (f1ab7ff3): 0",
+          "name": "rows invoice_provider_links (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows invoices (f1ab7ff3): 0",
+          "name": "rows invoices (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows kill_switches (f1ab7ff3): 0",
+          "name": "rows kill_switches (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows knowledge_bases (f1ab7ff3): 0",
+          "name": "rows knowledge_bases (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows link_challenges (f1ab7ff3): 0",
+          "name": "rows link_challenges (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows marketplace_docs (f1ab7ff3): 0",
+          "name": "rows marketplace_docs (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows members (f1ab7ff3): 1",
+          "name": "rows members (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/64dd8a42, want 1/64dd8a42"
+          "detail": "got 1/683d60d5, want 1/683d60d5"
         },
         {
-          "name": "rows memory_chunks (f1ab7ff3): 3",
+          "name": "rows memory_chunks (ea24fe31): 3",
           "ok": true,
-          "detail": "got 3/f29eb3fe, want 3/f29eb3fe"
+          "detail": "got 3/97ef8692, want 3/97ef8692"
         },
         {
-          "name": "rows memory_documents (f1ab7ff3): 0",
+          "name": "rows memory_documents (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows model_credentials (f1ab7ff3): 1",
+          "name": "rows model_credentials (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/6eeb80bd, want 1/6eeb80bd"
+          "detail": "got 1/df1078fa, want 1/df1078fa"
         },
         {
-          "name": "rows policy_assignments (f1ab7ff3): 2",
+          "name": "rows policy_assignments (ea24fe31): 2",
           "ok": true,
-          "detail": "got 2/107e5cf6, want 2/107e5cf6"
+          "detail": "got 2/9b2c7336, want 2/9b2c7336"
         },
         {
-          "name": "rows policy_pack_versions (f1ab7ff3): 2",
+          "name": "rows policy_pack_versions (ea24fe31): 2",
           "ok": true,
-          "detail": "got 2/44e70aee, want 2/44e70aee"
+          "detail": "got 2/e42b6faf, want 2/e42b6faf"
         },
         {
-          "name": "rows policy_packs (f1ab7ff3): 2",
+          "name": "rows policy_packs (ea24fe31): 2",
           "ok": true,
-          "detail": "got 2/cd090668, want 2/cd090668"
+          "detail": "got 2/694daa86, want 2/694daa86"
         },
         {
-          "name": "rows processes (f1ab7ff3): 0",
+          "name": "rows processes (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_eval_attestations (f1ab7ff3): 0",
+          "name": "rows registry_eval_attestations (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_keys (f1ab7ff3): 0",
+          "name": "rows registry_keys (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_names (f1ab7ff3): 0",
+          "name": "rows registry_names (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_namespaces (f1ab7ff3): 0",
+          "name": "rows registry_namespaces (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_public_namespaces (f1ab7ff3): 0",
+          "name": "rows registry_public_namespaces (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_public_versions (f1ab7ff3): 0",
+          "name": "rows registry_public_versions (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_version_events (f1ab7ff3): 0",
+          "name": "rows registry_version_events (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_versions (f1ab7ff3): 0",
+          "name": "rows registry_versions (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows run_events (f1ab7ff3): 0",
+          "name": "rows run_events (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows runs (f1ab7ff3): 0",
+          "name": "rows runs (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows scim_group_members (f1ab7ff3): 0",
+          "name": "rows scim_group_members (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows scim_groups (f1ab7ff3): 0",
+          "name": "rows scim_groups (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows sessions (f1ab7ff3): 2",
+          "name": "rows sessions (ea24fe31): 2",
           "ok": true,
-          "detail": "got 2/85ef8a1c, want 2/85ef8a1c"
+          "detail": "got 2/2ff76a57, want 2/2ff76a57"
         },
         {
-          "name": "rows tenant_keys (f1ab7ff3): 1",
+          "name": "rows tenant_keys (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/d6567042, want 1/d6567042"
+          "detail": "got 1/960bd238, want 1/960bd238"
         },
         {
-          "name": "rows tenant_placements (f1ab7ff3): 1",
+          "name": "rows tenant_placements (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/350994c1, want 1/350994c1"
+          "detail": "got 1/541575b1, want 1/541575b1"
         },
         {
-          "name": "rows tenant_settings (f1ab7ff3): 1",
+          "name": "rows tenant_settings (ea24fe31): 1",
           "ok": true,
-          "detail": "got 1/100af3e8, want 1/100af3e8"
+          "detail": "got 1/f1d3a89b, want 1/f1d3a89b"
         },
         {
-          "name": "rows usage_conflicts (f1ab7ff3): 0",
+          "name": "rows usage_conflicts (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows usage_events (f1ab7ff3): 18",
+          "name": "rows usage_events (ea24fe31): 20",
           "ok": true,
-          "detail": "got 18/767462bc, want 18/767462bc"
+          "detail": "got 20/e8d0d6c0, want 20/e8d0d6c0"
         },
         {
-          "name": "rows verified_domains (f1ab7ff3): 0",
+          "name": "rows verified_domains (ea24fe31): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows api_keys (a12814d0): 1",
+          "name": "rows api_keys (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/ac4627c1, want 1/ac4627c1"
+          "detail": "got 1/f8951765, want 1/f8951765"
         },
         {
-          "name": "rows approvals (a12814d0): 0",
+          "name": "rows approvals (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows audit_checkpoints (a12814d0): 1",
+          "name": "rows audit_checkpoints (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/9878e07a, want 1/9878e07a"
+          "detail": "got 1/c01bb553, want 1/c01bb553"
         },
         {
-          "name": "rows audit_events (a12814d0): 19",
+          "name": "rows audit_events (bcb9b61e): 19",
           "ok": true,
-          "detail": "got 19/889ce635, want 19/889ce635"
+          "detail": "got 19/71253e80, want 19/71253e80"
         },
         {
-          "name": "rows billing_period_seals (a12814d0): 1",
+          "name": "rows billing_period_seals (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/4cb1e31d, want 1/4cb1e31d"
+          "detail": "got 1/cf5ffce4, want 1/cf5ffce4"
         },
         {
-          "name": "rows blueprint_versions (a12814d0): 0",
+          "name": "rows blueprint_versions (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows blueprints (a12814d0): 0",
+          "name": "rows blueprints (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows budgets (a12814d0): 4",
+          "name": "rows budgets (bcb9b61e): 4",
           "ok": true,
-          "detail": "got 4/e3d94026, want 4/e3d94026"
+          "detail": "got 4/f74c6e1c, want 4/f74c6e1c"
         },
         {
-          "name": "rows channel_identities (a12814d0): 0",
+          "name": "rows channel_identities (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows compliance_docs (a12814d0): 0",
+          "name": "rows compliance_docs (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversation_messages (a12814d0): 0",
+          "name": "rows conversation_messages (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversation_threads (a12814d0): 0",
+          "name": "rows conversation_threads (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows conversations (a12814d0): 0",
+          "name": "rows conversations (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows directories (a12814d0): 0",
+          "name": "rows directories (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows directory_role_mappings (a12814d0): 0",
+          "name": "rows directory_role_mappings (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows end_users (a12814d0): 0",
+          "name": "rows end_users (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows eval_hub_docs (a12814d0): 1",
+          "name": "rows eval_hub_docs (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/8d0440dd, want 1/8d0440dd"
+          "detail": "got 1/e011db32, want 1/e011db32"
         },
         {
-          "name": "rows governance_holds (a12814d0): 0",
+          "name": "rows governance_holds (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_requests (a12814d0): 0",
+          "name": "rows governance_requests (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_retention_policies (a12814d0): 0",
+          "name": "rows governance_retention_policies (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_retention_runs (a12814d0): 0",
+          "name": "rows governance_retention_runs (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_steps (a12814d0): 0",
+          "name": "rows governance_steps (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_subject_identifiers (a12814d0): 0",
+          "name": "rows governance_subject_identifiers (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows governance_subjects (a12814d0): 0",
+          "name": "rows governance_subjects (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows identity_connections (a12814d0): 1",
+          "name": "rows identity_connections (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/91cbf81d, want 1/91cbf81d"
+          "detail": "got 1/7690ce36, want 1/7690ce36"
         },
         {
-          "name": "rows invoice_provider_links (a12814d0): 0",
+          "name": "rows invoice_provider_links (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows invoices (a12814d0): 0",
+          "name": "rows invoices (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows kill_switches (a12814d0): 0",
+          "name": "rows kill_switches (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows knowledge_bases (a12814d0): 0",
+          "name": "rows knowledge_bases (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows link_challenges (a12814d0): 0",
+          "name": "rows link_challenges (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows marketplace_docs (a12814d0): 0",
+          "name": "rows marketplace_docs (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows members (a12814d0): 1",
+          "name": "rows members (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/c4023deb, want 1/c4023deb"
+          "detail": "got 1/ddb7bea5, want 1/ddb7bea5"
         },
         {
-          "name": "rows memory_chunks (a12814d0): 3",
+          "name": "rows memory_chunks (bcb9b61e): 3",
           "ok": true,
-          "detail": "got 3/c137616f, want 3/c137616f"
+          "detail": "got 3/d3a114a5, want 3/d3a114a5"
         },
         {
-          "name": "rows memory_documents (a12814d0): 0",
+          "name": "rows memory_documents (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows model_credentials (a12814d0): 1",
+          "name": "rows model_credentials (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/f32f726e, want 1/f32f726e"
+          "detail": "got 1/bcce82ca, want 1/bcce82ca"
         },
         {
-          "name": "rows policy_assignments (a12814d0): 2",
+          "name": "rows policy_assignments (bcb9b61e): 2",
           "ok": true,
-          "detail": "got 2/fc84ea95, want 2/fc84ea95"
+          "detail": "got 2/4684de1d, want 2/4684de1d"
         },
         {
-          "name": "rows policy_pack_versions (a12814d0): 2",
+          "name": "rows policy_pack_versions (bcb9b61e): 2",
           "ok": true,
-          "detail": "got 2/09389769, want 2/09389769"
+          "detail": "got 2/1a2952d9, want 2/1a2952d9"
         },
         {
-          "name": "rows policy_packs (a12814d0): 2",
+          "name": "rows policy_packs (bcb9b61e): 2",
           "ok": true,
-          "detail": "got 2/ca311d05, want 2/ca311d05"
+          "detail": "got 2/76bd4e9e, want 2/76bd4e9e"
         },
         {
-          "name": "rows processes (a12814d0): 0",
+          "name": "rows processes (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_eval_attestations (a12814d0): 0",
+          "name": "rows registry_eval_attestations (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_keys (a12814d0): 0",
+          "name": "rows registry_keys (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_names (a12814d0): 0",
+          "name": "rows registry_names (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_namespaces (a12814d0): 0",
+          "name": "rows registry_namespaces (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_public_namespaces (a12814d0): 0",
+          "name": "rows registry_public_namespaces (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_public_versions (a12814d0): 0",
+          "name": "rows registry_public_versions (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_version_events (a12814d0): 0",
+          "name": "rows registry_version_events (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows registry_versions (a12814d0): 0",
+          "name": "rows registry_versions (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows run_events (a12814d0): 0",
+          "name": "rows run_events (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows runs (a12814d0): 0",
+          "name": "rows runs (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows scim_group_members (a12814d0): 0",
+          "name": "rows scim_group_members (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows scim_groups (a12814d0): 0",
+          "name": "rows scim_groups (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows sessions (a12814d0): 2",
+          "name": "rows sessions (bcb9b61e): 2",
           "ok": true,
-          "detail": "got 2/47891cad, want 2/47891cad"
+          "detail": "got 2/3396bb97, want 2/3396bb97"
         },
         {
-          "name": "rows tenant_keys (a12814d0): 1",
+          "name": "rows tenant_keys (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/5fc519e5, want 1/5fc519e5"
+          "detail": "got 1/2dcd115a, want 1/2dcd115a"
         },
         {
-          "name": "rows tenant_placements (a12814d0): 1",
+          "name": "rows tenant_placements (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/3f09c46e, want 1/3f09c46e"
+          "detail": "got 1/98d5c3e8, want 1/98d5c3e8"
         },
         {
-          "name": "rows tenant_settings (a12814d0): 1",
+          "name": "rows tenant_settings (bcb9b61e): 1",
           "ok": true,
-          "detail": "got 1/9508cba9, want 1/9508cba9"
+          "detail": "got 1/a321697f, want 1/a321697f"
         },
         {
-          "name": "rows usage_conflicts (a12814d0): 0",
+          "name": "rows usage_conflicts (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "rows usage_events (a12814d0): 16",
+          "name": "rows usage_events (bcb9b61e): 16",
           "ok": true,
-          "detail": "got 16/e560758e, want 16/e560758e"
+          "detail": "got 16/d973364a, want 16/d973364a"
         },
         {
-          "name": "rows verified_domains (a12814d0): 0",
+          "name": "rows verified_domains (bcb9b61e): 0",
           "ok": true,
           "detail": "got 0/, want 0/"
         },
         {
-          "name": "billing seal 2026-08 verifies (5360849c)",
+          "name": "billing seal 2026-08 verifies (f5902ce8)",
           "ok": true,
           "detail": "{\"ok\":true}"
         },
         {
-          "name": "billing seal 2026-08 verifies (f1ab7ff3)",
+          "name": "billing seal 2026-08 verifies (ea24fe31)",
           "ok": true,
           "detail": "{\"ok\":true}"
         },
         {
-          "name": "billing seal 2026-08 verifies (a12814d0)",
+          "name": "billing seal 2026-08 verifies (bcb9b61e)",
           "ok": true,
           "detail": "{\"ok\":true}"
         },
         {
-          "name": "registry resolve verifies hash+signature+provenance (dr-2c90a6/helper-agent@^1)",
+          "name": "registry resolve verifies hash+signature+provenance (dr-dc0768/helper-agent@^1)",
           "ok": true,
           "detail": ""
         }
@@ -969,65 +969,65 @@
       "ok": true
     },
     "restore_physical": {
-      "rto_seconds": 1.4,
+      "rto_seconds": 1.96,
       "checks": [
         {
-          "name": "audit chain verifies (5360849c)",
+          "name": "audit chain verifies (f5902ce8)",
           "ok": true,
           "detail": "{\"ok\":true,\"length\":36}"
         },
         {
-          "name": "pre-backup head is inside the restored chain (5360849c)",
+          "name": "pre-backup head is inside the restored chain (f5902ce8)",
           "ok": true,
           "detail": "restored head seq 36, backup head seq 28"
         },
         {
-          "name": "signed checkpoint (held outside the DB) matches (5360849c)",
+          "name": "signed checkpoint (held outside the DB) matches (f5902ce8)",
           "ok": true,
           "detail": "{\"ok\":true,\"checkpointSeq\":28,\"headSeq\":36}"
         },
         {
-          "name": "audit chain verifies (f1ab7ff3)",
+          "name": "audit chain verifies (ea24fe31)",
           "ok": true,
           "detail": "{\"ok\":true,\"length\":27}"
         },
         {
-          "name": "pre-backup head is inside the restored chain (f1ab7ff3)",
+          "name": "pre-backup head is inside the restored chain (ea24fe31)",
           "ok": true,
           "detail": "restored head seq 27, backup head seq 19"
         },
         {
-          "name": "signed checkpoint (held outside the DB) matches (f1ab7ff3)",
+          "name": "signed checkpoint (held outside the DB) matches (ea24fe31)",
           "ok": true,
           "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":27}"
         },
         {
-          "name": "audit chain verifies (a12814d0)",
+          "name": "audit chain verifies (bcb9b61e)",
           "ok": true,
-          "detail": "{\"ok\":true,\"length\":25}"
+          "detail": "{\"ok\":true,\"length\":27}"
         },
         {
-          "name": "pre-backup head is inside the restored chain (a12814d0)",
+          "name": "pre-backup head is inside the restored chain (bcb9b61e)",
           "ok": true,
-          "detail": "restored head seq 25, backup head seq 19"
+          "detail": "restored head seq 27, backup head seq 19"
         },
         {
-          "name": "signed checkpoint (held outside the DB) matches (a12814d0)",
+          "name": "signed checkpoint (held outside the DB) matches (bcb9b61e)",
           "ok": true,
-          "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":25}"
+          "detail": "{\"ok\":true,\"checkpointSeq\":19,\"headSeq\":27}"
         },
         {
-          "name": "RLS: tenant 5360849c sees 0 rows of f1ab7ff3",
-          "ok": true,
-          "detail": "saw 0"
-        },
-        {
-          "name": "RLS: tenant f1ab7ff3 sees 0 rows of a12814d0",
+          "name": "RLS: tenant f5902ce8 sees 0 rows of ea24fe31",
           "ok": true,
           "detail": "saw 0"
         },
         {
-          "name": "RLS: tenant a12814d0 sees 0 rows of 5360849c",
+          "name": "RLS: tenant ea24fe31 sees 0 rows of bcb9b61e",
+          "ok": true,
+          "detail": "saw 0"
+        },
+        {
+          "name": "RLS: tenant bcb9b61e sees 0 rows of f5902ce8",
           "ok": true,
           "detail": "saw 0"
         },
@@ -1037,920 +1037,920 @@
           "detail": "saw 0"
         },
         {
-          "name": "rows api_keys (5360849c) >= backup",
+          "name": "rows api_keys (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows approvals (5360849c) >= backup",
+          "name": "rows approvals (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows audit_checkpoints (5360849c) >= backup",
+          "name": "rows audit_checkpoints (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows billing_period_seals (5360849c) >= backup",
+          "name": "rows billing_period_seals (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows blueprint_versions (5360849c) >= backup",
+          "name": "rows blueprint_versions (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows blueprints (5360849c) >= backup",
+          "name": "rows blueprints (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows budgets (5360849c) >= backup",
+          "name": "rows budgets (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 4, backup 4"
         },
         {
-          "name": "rows channel_identities (5360849c) >= backup",
+          "name": "rows channel_identities (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows compliance_docs (5360849c) >= backup",
+          "name": "rows compliance_docs (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows conversation_messages (5360849c) >= backup",
+          "name": "rows conversation_messages (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows conversation_threads (5360849c) >= backup",
+          "name": "rows conversation_threads (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows conversations (5360849c) >= backup",
+          "name": "rows conversations (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows directories (5360849c) >= backup",
+          "name": "rows directories (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows directory_role_mappings (5360849c) >= backup",
+          "name": "rows directory_role_mappings (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows end_users (5360849c) >= backup",
+          "name": "rows end_users (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows eval_hub_docs (5360849c) >= backup",
+          "name": "rows eval_hub_docs (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows governance_holds (5360849c) >= backup",
+          "name": "rows governance_holds (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_requests (5360849c) >= backup",
+          "name": "rows governance_requests (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_retention_policies (5360849c) >= backup",
+          "name": "rows governance_retention_policies (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_retention_runs (5360849c) >= backup",
+          "name": "rows governance_retention_runs (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_steps (5360849c) >= backup",
+          "name": "rows governance_steps (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_subject_identifiers (5360849c) >= backup",
+          "name": "rows governance_subject_identifiers (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_subjects (5360849c) >= backup",
+          "name": "rows governance_subjects (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows identity_connections (5360849c) >= backup",
+          "name": "rows identity_connections (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows invoice_provider_links (5360849c) >= backup",
+          "name": "rows invoice_provider_links (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows invoices (5360849c) >= backup",
+          "name": "rows invoices (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows kill_switches (5360849c) >= backup",
+          "name": "rows kill_switches (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows knowledge_bases (5360849c) >= backup",
+          "name": "rows knowledge_bases (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows link_challenges (5360849c) >= backup",
+          "name": "rows link_challenges (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows marketplace_docs (5360849c) >= backup",
+          "name": "rows marketplace_docs (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows members (5360849c) >= backup",
+          "name": "rows members (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows memory_chunks (5360849c) >= backup",
+          "name": "rows memory_chunks (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 3, backup 3"
         },
         {
-          "name": "rows memory_documents (5360849c) >= backup",
+          "name": "rows memory_documents (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows model_credentials (5360849c) >= backup",
+          "name": "rows model_credentials (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows policy_assignments (5360849c) >= backup",
+          "name": "rows policy_assignments (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows policy_pack_versions (5360849c) >= backup",
+          "name": "rows policy_pack_versions (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows policy_packs (5360849c) >= backup",
+          "name": "rows policy_packs (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows processes (5360849c) >= backup",
+          "name": "rows processes (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_eval_attestations (5360849c) >= backup",
+          "name": "rows registry_eval_attestations (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_keys (5360849c) >= backup",
+          "name": "rows registry_keys (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows registry_names (5360849c) >= backup",
+          "name": "rows registry_names (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows registry_namespaces (5360849c) >= backup",
+          "name": "rows registry_namespaces (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows registry_public_namespaces (5360849c) >= backup",
+          "name": "rows registry_public_namespaces (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_public_versions (5360849c) >= backup",
+          "name": "rows registry_public_versions (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_version_events (5360849c) >= backup",
+          "name": "rows registry_version_events (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_versions (5360849c) >= backup",
+          "name": "rows registry_versions (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows run_events (5360849c) >= backup",
+          "name": "rows run_events (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows runs (5360849c) >= backup",
+          "name": "rows runs (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows scim_group_members (5360849c) >= backup",
+          "name": "rows scim_group_members (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows scim_groups (5360849c) >= backup",
+          "name": "rows scim_groups (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows sessions (5360849c) >= backup",
+          "name": "rows sessions (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows tenant_keys (5360849c) >= backup",
+          "name": "rows tenant_keys (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows tenant_placements (5360849c) >= backup",
+          "name": "rows tenant_placements (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows tenant_settings (5360849c) >= backup",
+          "name": "rows tenant_settings (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows usage_conflicts (5360849c) >= backup",
+          "name": "rows usage_conflicts (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows usage_events (5360849c) >= backup",
-          "ok": true,
-          "detail": "got 29, backup 18"
-        },
-        {
-          "name": "rows verified_domains (5360849c) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows api_keys (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows approvals (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows audit_checkpoints (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows billing_period_seals (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows blueprint_versions (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows blueprints (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows budgets (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 4, backup 4"
-        },
-        {
-          "name": "rows channel_identities (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows compliance_docs (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows conversation_messages (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows conversation_threads (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows conversations (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows directories (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows directory_role_mappings (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows end_users (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows eval_hub_docs (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows governance_holds (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows governance_requests (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows governance_retention_policies (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows governance_retention_runs (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows governance_steps (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows governance_subject_identifiers (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows governance_subjects (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows identity_connections (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows invoice_provider_links (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows invoices (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows kill_switches (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows knowledge_bases (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows link_challenges (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows marketplace_docs (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows members (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows memory_chunks (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 3, backup 3"
-        },
-        {
-          "name": "rows memory_documents (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows model_credentials (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows policy_assignments (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 2, backup 2"
-        },
-        {
-          "name": "rows policy_pack_versions (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 2, backup 2"
-        },
-        {
-          "name": "rows policy_packs (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 2, backup 2"
-        },
-        {
-          "name": "rows processes (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_eval_attestations (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_keys (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_names (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_namespaces (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_public_namespaces (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_public_versions (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_version_events (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows registry_versions (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows run_events (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows runs (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows scim_group_members (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows scim_groups (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows sessions (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 2, backup 2"
-        },
-        {
-          "name": "rows tenant_keys (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows tenant_placements (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows tenant_settings (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 1, backup 1"
-        },
-        {
-          "name": "rows usage_conflicts (f1ab7ff3) >= backup",
-          "ok": true,
-          "detail": "got 0, backup 0"
-        },
-        {
-          "name": "rows usage_events (f1ab7ff3) >= backup",
+          "name": "rows usage_events (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 28, backup 18"
         },
         {
-          "name": "rows verified_domains (f1ab7ff3) >= backup",
+          "name": "rows verified_domains (f5902ce8) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows api_keys (a12814d0) >= backup",
+          "name": "rows api_keys (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows approvals (a12814d0) >= backup",
+          "name": "rows approvals (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows audit_checkpoints (a12814d0) >= backup",
+          "name": "rows audit_checkpoints (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows billing_period_seals (a12814d0) >= backup",
+          "name": "rows billing_period_seals (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows blueprint_versions (a12814d0) >= backup",
+          "name": "rows blueprint_versions (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows blueprints (a12814d0) >= backup",
+          "name": "rows blueprints (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows budgets (a12814d0) >= backup",
+          "name": "rows budgets (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 4, backup 4"
         },
         {
-          "name": "rows channel_identities (a12814d0) >= backup",
+          "name": "rows channel_identities (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows compliance_docs (a12814d0) >= backup",
+          "name": "rows compliance_docs (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows conversation_messages (a12814d0) >= backup",
+          "name": "rows conversation_messages (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows conversation_threads (a12814d0) >= backup",
+          "name": "rows conversation_threads (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows conversations (a12814d0) >= backup",
+          "name": "rows conversations (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows directories (a12814d0) >= backup",
+          "name": "rows directories (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows directory_role_mappings (a12814d0) >= backup",
+          "name": "rows directory_role_mappings (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows end_users (a12814d0) >= backup",
+          "name": "rows end_users (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows eval_hub_docs (a12814d0) >= backup",
+          "name": "rows eval_hub_docs (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows governance_holds (a12814d0) >= backup",
+          "name": "rows governance_holds (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_requests (a12814d0) >= backup",
+          "name": "rows governance_requests (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_retention_policies (a12814d0) >= backup",
+          "name": "rows governance_retention_policies (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_retention_runs (a12814d0) >= backup",
+          "name": "rows governance_retention_runs (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_steps (a12814d0) >= backup",
+          "name": "rows governance_steps (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_subject_identifiers (a12814d0) >= backup",
+          "name": "rows governance_subject_identifiers (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows governance_subjects (a12814d0) >= backup",
+          "name": "rows governance_subjects (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows identity_connections (a12814d0) >= backup",
+          "name": "rows identity_connections (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows invoice_provider_links (a12814d0) >= backup",
+          "name": "rows invoice_provider_links (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows invoices (a12814d0) >= backup",
+          "name": "rows invoices (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows kill_switches (a12814d0) >= backup",
+          "name": "rows kill_switches (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows knowledge_bases (a12814d0) >= backup",
+          "name": "rows knowledge_bases (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows link_challenges (a12814d0) >= backup",
+          "name": "rows link_challenges (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows marketplace_docs (a12814d0) >= backup",
+          "name": "rows marketplace_docs (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows members (a12814d0) >= backup",
+          "name": "rows members (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows memory_chunks (a12814d0) >= backup",
+          "name": "rows memory_chunks (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 3, backup 3"
         },
         {
-          "name": "rows memory_documents (a12814d0) >= backup",
+          "name": "rows memory_documents (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows model_credentials (a12814d0) >= backup",
+          "name": "rows model_credentials (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows policy_assignments (a12814d0) >= backup",
+          "name": "rows policy_assignments (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows policy_pack_versions (a12814d0) >= backup",
+          "name": "rows policy_pack_versions (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows policy_packs (a12814d0) >= backup",
+          "name": "rows policy_packs (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows processes (a12814d0) >= backup",
+          "name": "rows processes (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_eval_attestations (a12814d0) >= backup",
+          "name": "rows registry_eval_attestations (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_keys (a12814d0) >= backup",
+          "name": "rows registry_keys (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_names (a12814d0) >= backup",
+          "name": "rows registry_names (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_namespaces (a12814d0) >= backup",
+          "name": "rows registry_namespaces (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_public_namespaces (a12814d0) >= backup",
+          "name": "rows registry_public_namespaces (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_public_versions (a12814d0) >= backup",
+          "name": "rows registry_public_versions (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_version_events (a12814d0) >= backup",
+          "name": "rows registry_version_events (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows registry_versions (a12814d0) >= backup",
+          "name": "rows registry_versions (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows run_events (a12814d0) >= backup",
+          "name": "rows run_events (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows runs (a12814d0) >= backup",
+          "name": "rows runs (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows scim_group_members (a12814d0) >= backup",
+          "name": "rows scim_group_members (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows scim_groups (a12814d0) >= backup",
+          "name": "rows scim_groups (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows sessions (a12814d0) >= backup",
+          "name": "rows sessions (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 2, backup 2"
         },
         {
-          "name": "rows tenant_keys (a12814d0) >= backup",
+          "name": "rows tenant_keys (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows tenant_placements (a12814d0) >= backup",
+          "name": "rows tenant_placements (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows tenant_settings (a12814d0) >= backup",
+          "name": "rows tenant_settings (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 1, backup 1"
         },
         {
-          "name": "rows usage_conflicts (a12814d0) >= backup",
+          "name": "rows usage_conflicts (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "rows usage_events (a12814d0) >= backup",
+          "name": "rows usage_events (ea24fe31) >= backup",
           "ok": true,
-          "detail": "got 21, backup 16"
+          "detail": "got 30, backup 20"
         },
         {
-          "name": "rows verified_domains (a12814d0) >= backup",
+          "name": "rows verified_domains (ea24fe31) >= backup",
           "ok": true,
           "detail": "got 0, backup 0"
         },
         {
-          "name": "billing seal 2026-08 verifies (5360849c)",
+          "name": "rows api_keys (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows approvals (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows audit_checkpoints (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows billing_period_seals (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows blueprint_versions (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows blueprints (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows budgets (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 4, backup 4"
+        },
+        {
+          "name": "rows channel_identities (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows compliance_docs (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_messages (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversation_threads (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows conversations (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directories (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows directory_role_mappings (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows end_users (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows eval_hub_docs (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows governance_holds (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows governance_requests (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows governance_retention_policies (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows governance_retention_runs (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows governance_steps (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows governance_subject_identifiers (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows governance_subjects (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows identity_connections (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows invoice_provider_links (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows invoices (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows kill_switches (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows knowledge_bases (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows link_challenges (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows marketplace_docs (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows members (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows memory_chunks (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 3, backup 3"
+        },
+        {
+          "name": "rows memory_documents (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows model_credentials (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows policy_assignments (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_pack_versions (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows policy_packs (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows processes (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_eval_attestations (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_keys (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_names (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_namespaces (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_namespaces (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_public_versions (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_version_events (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows registry_versions (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows run_events (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows runs (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_group_members (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows scim_groups (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows sessions (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 2, backup 2"
+        },
+        {
+          "name": "rows tenant_keys (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_placements (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows tenant_settings (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 1, backup 1"
+        },
+        {
+          "name": "rows usage_conflicts (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "rows usage_events (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 26, backup 16"
+        },
+        {
+          "name": "rows verified_domains (bcb9b61e) >= backup",
+          "ok": true,
+          "detail": "got 0, backup 0"
+        },
+        {
+          "name": "billing seal 2026-08 verifies (f5902ce8)",
           "ok": true,
           "detail": "{\"ok\":true}"
         },
         {
-          "name": "billing seal 2026-08 verifies (f1ab7ff3)",
+          "name": "billing seal 2026-08 verifies (ea24fe31)",
           "ok": true,
           "detail": "{\"ok\":true}"
         },
         {
-          "name": "billing seal 2026-08 verifies (a12814d0)",
+          "name": "billing seal 2026-08 verifies (bcb9b61e)",
           "ok": true,
           "detail": "{\"ok\":true}"
         },
         {
-          "name": "registry resolve verifies hash+signature+provenance (dr-2c90a6/helper-agent@^1)",
+          "name": "registry resolve verifies hash+signature+provenance (dr-dc0768/helper-agent@^1)",
           "ok": true,
           "detail": ""
         }
       ],
       "ok": true,
       "audit_events_lost_per_tenant": {
-        "5360849c-47ec-4d2f-920f-bcb7cb2699c5": 0,
-        "f1ab7ff3-4288-4403-b961-cef222ea45f4": 0,
-        "a12814d0-a4ee-4c41-b0c9-a50971578954": 2
+        "f5902ce8-bc98-48e6-98a1-b89005c5ee60": 0,
+        "ea24fe31-33f1-43ea-bb43-29af7fe37fa8": 0,
+        "bcb9b61e-c5c5-41d4-88f9-f7d847e6d1f6": 0
       },
-      "last_restored_audit_ts": "2026-10-20 18:44:56.029+00",
-      "last_committed_audit_ts_before_crash": "2026-10-20 18:44:56.178+00"
+      "last_restored_audit_ts": "2026-10-21 01:02:13.628+00",
+      "last_committed_audit_ts_before_crash": "2026-10-21 01:02:13.628+00"
     },
     "measured_rpo": {
-      "lost_audit_events": 2,
-      "window_seconds": 0.15
+      "lost_audit_events": 0,
+      "window_seconds": 0.0
     },
     "negatives": [
       {
         "tamper": "flipped decision",
         "detected": true,
         "failed_checks": [
-          "audit chain verifies (5360849c)",
-          "signed checkpoint (held outside the DB) matches (5360849c)",
-          "rows audit_events (5360849c): 28"
+          "audit chain verifies (f5902ce8)",
+          "signed checkpoint (held outside the DB) matches (f5902ce8)",
+          "rows audit_events (f5902ce8): 28"
         ]
       },
       {
         "tamper": "truncated tail",
         "detected": true,
         "failed_checks": [
-          "chain head == pre-backup head (f1ab7ff3)",
-          "signed checkpoint (held outside the DB) matches (f1ab7ff3)",
-          "rows audit_events (f1ab7ff3): 19"
+          "chain head == pre-backup head (ea24fe31)",
+          "signed checkpoint (held outside the DB) matches (ea24fe31)",
+          "rows audit_events (ea24fe31): 19"
         ]
       }
     ]
   },
   "machine": "x86_64",
   "measured": {
-    "rpo_window_seconds": 0.15,
-    "rto_logical_seconds": 1.43,
-    "rto_physical_seconds": 1.4
+    "rpo_window_seconds": 0.0,
+    "rto_logical_seconds": 1.95,
+    "rto_physical_seconds": 1.96
   },
   "failures": []
 }
