@@ -21,10 +21,17 @@ spec:
         app.kubernetes.io/name: runtime
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: run-server
-      {{- with .Values.podAnnotations }}
       annotations:
+        # Rolls run-server pods automatically when only run-server-configmap.yaml's rendered
+        # data changes (a values-file-only change otherwise leaves existing pods on stale config
+        # until something else recreates them — found live redeploying to a real k3d cluster,
+        # NEEDS #518). eval-runner-deployment.yaml's config comes from an externally-provided
+        # Secret this chart never renders (`evalRunner.configSecretName`), so there is nothing
+        # for it to checksum from the chart's own templates; see that file's own comment.
+        checksum/config: {{ include (print $.Template.BasePath "/run-server-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "runtime.serviceAccountName" . }}
       automountServiceAccountToken: false

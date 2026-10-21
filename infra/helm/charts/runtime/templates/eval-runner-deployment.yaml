@@ -19,6 +19,13 @@ spec:
         app.kubernetes.io/name: runtime
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: eval-runner
+      # No checksum/config annotation here (contrast run-server-deployment.yaml, NEEDS #518):
+      # this Deployment's config comes entirely from an externally-provided Secret named by
+      # `.Values.evalRunner.configSecretName`, which this chart only references, never renders —
+      # there is no ConfigMap/Secret *template* in this chart whose content a checksum could hash.
+      # A values-file-only rotation of that external secret's data still needs a manual pod
+      # recreate (or whatever manages the external secret to also bump a pod-template label/
+      # annotation of its own); tracked as an accurate, not-yet-closed part of NEEDS #518.
       {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}

@@ -15,6 +15,10 @@ spec:
     metadata:
       labels:
         {{- include "docs-site.selectorLabels" . | nindent 8 }}
+      # No checksum/config annotation (NEEDS #518): this chart renders no ConfigMap/Secret at
+      # all — the static site is baked into the image at build time (apps/docs-site/Dockerfile),
+      # so an image tag bump is the only "config" change a rollout ever needs to pick up, and
+      # Kubernetes already rolls pods on an image change with no extra annotation required.
       {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
