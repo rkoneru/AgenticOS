@@ -1,60 +1,84 @@
-{{- if .Values.evalRunner.enabled -}}
+{{/*
+NEEDS #509: the eval-runner polls for exactly one tenant_id (runtime/scripts/eval_runner.py's
+EVAL_RUNNER_CONFIG), so a real multi-tenant rollout needs one Deployment per tenant. Render one
+per entry in .Values.evalRunner.tenants (each: {name, configSecretName, replicaCount?,
+resources?, heartbeatPath?, heartbeatStaleAfterMinutes?} — anything a tenant entry omits falls
+back to the top-level evalRunner.* default), instead of a single hardcoded Deployment.
+
+Backward compatible: an empty/unset .Values.evalRunner.tenants renders exactly one Deployment
+under the ORIGINAL name ({{ runtime.fullname }}-eval-runner, no tenant suffix), using the
+top-level evalRunner.configSecretName etc. exactly as before — an existing single-tenant release
+upgrades in place with no renamed/recreated resource.
+*/}}
+{{- define "runtime.evalRunnerDeployment" -}}
+{{- $root := .root -}}
+{{- $t := .tenant -}}
+{{- $name := .name -}}
+{{- $cfg := .evalRunner -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "runtime.fullname" . }}-eval-runner
+  name: {{ $name }}
   labels:
-    {{- include "runtime.labels" . | nindent 4 }}
+    {{- include "runtime.labels" $root | nindent 4 }}
     app.kubernetes.io/component: eval-runner
+    {{- if $t.name }}
+    axis.dev/eval-runner-tenant: {{ $t.name | quote }}
+    {{- end }}
 spec:
-  replicas: {{ .Values.evalRunner.replicaCount }}
+  replicas: {{ $t.replicaCount | default $cfg.replicaCount }}
   selector:
     matchLabels:
       app.kubernetes.io/name: runtime
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
       app.kubernetes.io/component: eval-runner
+      {{- if $t.name }}
+      axis.dev/eval-runner-tenant: {{ $t.name | quote }}
+      {{- end }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: runtime
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
         app.kubernetes.io/component: eval-runner
+        {{- if $t.name }}
+        axis.dev/eval-runner-tenant: {{ $t.name | quote }}
+        {{- end }}
       # No checksum/config annotation here (contrast run-server-deployment.yaml, NEEDS #518):
       # this Deployment's config comes entirely from an externally-provided Secret named by
-      # `.Values.evalRunner.configSecretName`, which this chart only references, never renders —
-      # there is no ConfigMap/Secret *template* in this chart whose content a checksum could hash.
-      # A values-file-only rotation of that external secret's data still needs a manual pod
-      # recreate (or whatever manages the external secret to also bump a pod-template label/
-      # annotation of its own); tracked as an accurate, not-yet-closed part of NEEDS #518.
-      {{- with .Values.podAnnotations }}
+      # configSecretName below, which this chart only references, never renders — there is no
+      # ConfigMap/Secret *template* in this chart whose content a checksum could hash. A
+      # values-file-only rotation of that external secret's data still needs a manual pod
+      # recreate; tracked as an accurate, not-yet-closed part of NEEDS #518.
+      {{- with $root.Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "runtime.serviceAccountName" . }}
+      serviceAccountName: {{ include "runtime.serviceAccountName" $root }}
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        {{- with .Values.podSecurityContext }}
+        {{- with $root.Values.podSecurityContext }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: eval-runner
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag | default $root.Chart.AppVersion }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
           args: ["scripts/eval_runner.py"]
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: {{ .Values.readOnlyRootFilesystem }}
+            readOnlyRootFilesystem: {{ $root.Values.readOnlyRootFilesystem }}
             capabilities:
               drop: ["ALL"]
           env:
             - name: EVAL_RUNNER_CONFIG
               value: /etc/axis/runtime/eval-runner-config.json
             - name: EVAL_RUNNER_HEARTBEAT_FILE
-              value: {{ .Values.evalRunner.heartbeatPath | quote }}
+              value: {{ ($t.heartbeatPath | default $cfg.heartbeatPath) | quote }}
           # NEEDS #508: no HTTP/gRPC surface to probe, so liveness instead checks that the
           # heartbeat file runtime/scripts/eval_runner.py writes once per poll-loop iteration
           # (EVAL_RUNNER_HEARTBEAT_FILE above) has an mtime newer than heartbeatStaleAfterMinutes.
@@ -66,16 +90,16 @@ spec:
               command:
                 - sh
                 - -c
-                - test -n "$(find {{ .Values.evalRunner.heartbeatPath }} -mmin -{{ .Values.evalRunner.heartbeatStaleAfterMinutes }} 2>/dev/null)"
+                - test -n "$(find {{ $t.heartbeatPath | default $cfg.heartbeatPath }} -mmin -{{ $t.heartbeatStaleAfterMinutes | default $cfg.heartbeatStaleAfterMinutes }} 2>/dev/null)"
             initialDelaySeconds: 15
             periodSeconds: 30
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.evalRunner.resources | nindent 12 }}
+            {{- toYaml ($t.resources | default $cfg.resources) | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- if .Values.evalRunner.configSecretName }}
+            {{- if ($t.configSecretName | default $cfg.configSecretName) }}
             - name: eval-runner-config
               mountPath: /etc/axis/runtime
               readOnly: true
@@ -83,24 +107,35 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
-        {{- if .Values.evalRunner.configSecretName }}
+        {{- if ($t.configSecretName | default $cfg.configSecretName) }}
         - name: eval-runner-config
           secret:
-            secretName: {{ .Values.evalRunner.configSecretName }}
+            secretName: {{ $t.configSecretName | default $cfg.configSecretName }}
             items:
               - key: eval-runner-config.json
                 path: eval-runner-config.json
         {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with $root.Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with $root.Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with $root.Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end -}}
+
+{{- if .Values.evalRunner.enabled -}}
+{{- if .Values.evalRunner.tenants -}}
+{{- range $t := .Values.evalRunner.tenants }}
+{{- include "runtime.evalRunnerDeployment" (dict "root" $ "tenant" $t "evalRunner" $.Values.evalRunner "name" (printf "%s-eval-runner-%s" (include "runtime.fullname" $) $t.name)) }}
+---
+{{- end -}}
+{{- else -}}
+{{- include "runtime.evalRunnerDeployment" (dict "root" . "tenant" (dict) "evalRunner" .Values.evalRunner "name" (printf "%s-eval-runner" (include "runtime.fullname" .))) }}
+{{- end -}}
 {{- end -}}

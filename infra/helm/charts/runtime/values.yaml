@@ -67,6 +67,19 @@ evalRunner:
   heartbeatPath: /tmp/eval-runner-heartbeat
   heartbeatStaleAfterMinutes: 2
   configSecretName: ""
+  # NEEDS #509: the eval-runner polls for exactly one tenant_id, so a real multi-tenant rollout
+  # needs one Deployment per tenant. Leave this empty for a single-tenant/dev install (renders
+  # exactly one Deployment under the original name, using replicaCount/resources/
+  # heartbeatPath/heartbeatStaleAfterMinutes/configSecretName above — fully backward compatible,
+  # no renamed/recreated resource on upgrade). For real multi-tenant production, list one entry
+  # per tenant instead; any field a tenant entry omits falls back to the defaults above:
+  #   tenants:
+  #     - name: acme                              # required: used in the Deployment's name/labels
+  #       configSecretName: acme-eval-runner-config
+  #       # replicaCount, resources, heartbeatPath, heartbeatStaleAfterMinutes: optional per-tenant overrides
+  #     - name: globex
+  #       configSecretName: globex-eval-runner-config
+  tenants: []
 
 networkPolicy:
   enabled: true
