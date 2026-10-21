@@ -20,11 +20,25 @@ docs-site: { enabled: false }
 redis: { enabled: false }
 
 # DEVIATION (documented per the phase-10 instructions): the bitnami/postgresql chart's pinned
-# `17.2.0-debian-12-r1` tag has been pruned from Docker Hub's free tier (bitnami now publishes
+# `17.2.0-debian-12-r1` TAG has been pruned from Docker Hub's free tier (bitnami now publishes
 # only `latest` + sha256-pinned tags for most images under their post-2025 "Bitnami Secure
 # Images" retention policy) — confirmed by querying the registry's own tags/list, see
-# docs/runbooks/local-cluster.md. `latest` is pinned-by-digest-free and NOT what a real
-# deployment should run, but it is the only tag this sandbox could actually pull for this run.
+# docs/runbooks/local-cluster.md.
+#
+# NEEDS #519 (resolved as far as this sandbox can go): a bare `tag: latest` is not reproducible —
+# the same tag can point at a different image tomorrow. Pin BOTH `tag` (kept as `latest`, since no
+# other tag is pullable at all right now) AND `digest`, which the bitnami chart's own
+# `image.digest` input supports (confirmed against the exact pinned chart version this repo uses,
+# postgresql-16.2.3's own values.yaml) — when both are set the chart pulls
+# `repository@digest`, ignoring the tag for the actual pull, so the image this deploys is fully
+# content-addressed and reproducible even though its tag will keep moving. The digest below was
+# resolved for real, right now, by `docker pull bitnami/postgresql:latest` +
+# `docker inspect --format='{{index .RepoDigests 0}}'` (not invented or copied from a changelog).
+# This still is not what a real deployment should run long-term: a real deployment needs its own
+# pinned, mirrored Postgres image in a private registry, since even a pinned upstream digest can
+# be deleted/replaced by bitnami's own retention policy out from under a future redeploy with no
+# warning (the actual, structural gap NEEDS #519 describes; a digest pin only makes *this* sandbox
+# run reproducible, it does not remove the need for that real mirror).
 #
 # Auth is pinned here (not left to the chart's random generator) because this file also hardcodes
 # the matching postgresql:// URLs below for risk-kernel/control-plane — without a pin, a fresh
@@ -34,6 +48,7 @@ redis: { enabled: false }
 postgresql:
   image:
     tag: latest
+    digest: "sha256:889db6427034525f50071945ddf808fbb77f8a52c2c8d3a7a75d39a167373566"
   auth:
     postgresPassword: "cluster-e2e-pg-superuser-dev-only"
     password: "cluster-e2e-pg-axis-dev-only"
