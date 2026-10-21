@@ -58,9 +58,14 @@ evalRunner:
   resources:
     requests: { cpu: 100m, memory: 192Mi }
     limits: { cpu: "1", memory: 512Mi }
-  # No HTTP/gRPC surface at all: it only polls the hub and the run service outbound. There is no
-  # endpoint to probe, so no liveness/readiness probe is configured — only Kubernetes' own
-  # process-exit restart applies. docs/NEEDS.md tracks adding a minimal health surface.
+  # No HTTP/gRPC surface at all: it only polls the hub and the run service outbound. A minimal
+  # file-touch liveness surface (NEEDS #508): the process writes heartbeatPath's mtime once per
+  # poll-loop iteration (runtime/scripts/eval_runner.py's EVAL_RUNNER_CONFIG `heartbeat_file`,
+  # wired below to the same path), and the chart's exec liveness probe fails if that file is
+  # missing or older than heartbeatStaleAfterSeconds — catching a process that is alive but stuck
+  # (e.g. blocked forever against a dead Hub), which plain process-exit restart never would.
+  heartbeatPath: /tmp/eval-runner-heartbeat
+  heartbeatStaleAfterMinutes: 2
   configSecretName: ""
 
 networkPolicy:

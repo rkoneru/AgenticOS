@@ -18,7 +18,10 @@ Configuration: ``EVAL_RUNNER_CONFIG`` names a JSON file:
    "poll_interval": 5.0, "once": false, "judge_deps": true,
    "mode": "ci",                             # "online": sample finished production runs
    "run_service_url": "http://127.0.0.1:8081", "run_read_token": "...",   # online only
-   "online_poll_interval": 30.0}
+   "online_poll_interval": 30.0,
+   "heartbeat_file": "/tmp/eval-runner-heartbeat"}   # optional: NEEDS #508, written once per
+                                                      # poll-loop iteration; the chart's exec
+                                                      # liveness probe checks its mtime is recent.
 Without ``manifest_dir`` the compiled manifest of each queued blueprint version is fetched from the
 hub (``GET /v1/evals/runner/manifest``, served only while this runner holds a running run of that
 version). Either way the runner refuses a manifest whose content hash is not the queued one. The
@@ -33,6 +36,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +70,28 @@ class DirManifestSource:
         path = self._dir / f"{name.replace('/', '__')}.json"
         raw: Any = json.loads(await asyncio.to_thread(path.read_text))
         return RuntimeManifest.from_dict(raw)
+
+
+def _heartbeat(path: str | None) -> Any:
+    """NEEDS #508: a minimal liveness surface for a process with no listening port of its own.
+    Returns a zero-argument callable (for ``EvalWorker``/``OnlineWorker``'s ``on_iteration``) that
+    writes the current time to ``path`` once per poll-loop iteration, or ``None`` when no path is
+    configured (``--once``/test runs; a chart always sets ``EVAL_RUNNER_HEARTBEAT_FILE``). A
+    process that is alive but stuck (hung forever inside a single iteration, e.g. a dead Hub with
+    no timeout) stops updating the file's mtime; a liveness probe that checks the mtime is recent
+    (``find "$path" -mmin -2``, wired into the chart's exec liveness probe) then fails and
+    Kubernetes restarts the pod — catching a failure mode plain restart-on-exit never would.
+    Writing is best-effort: a transient filesystem error must never crash the poll loop itself."""
+    if not path:
+        return None
+
+    def touch() -> None:
+        try:
+            Path(path).write_text(str(time.time()))
+        except OSError as exc:  # noqa: BLE001 - heartbeat failures must never crash the worker
+            print(f"heartbeat write failed (non-fatal): {exc}", file=sys.stderr)
+
+    return touch
 
 
 async def run(
@@ -127,7 +153,7 @@ async def run(
             if cfg.get("once"):
                 await worker.run_once()
             else:
-                await worker.run_forever(stop)
+                await worker.run_forever(stop, on_iteration=_heartbeat(cfg.get("heartbeat_file")))
     finally:
         for close in closers:
             await close()
@@ -166,11 +192,17 @@ async def _run_online(
         for s in worker.samplers():
             await s.drain()
     else:
-        await worker.run_forever(stop)
+        await worker.run_forever(stop, on_iteration=_heartbeat(cfg.get("heartbeat_file")))
 
 
 async def main() -> int:
     cfg = json.loads(await asyncio.to_thread(Path(os.environ["EVAL_RUNNER_CONFIG"]).read_text))
+    # EVAL_RUNNER_HEARTBEAT_FILE (env, NEEDS #508) is a chart-friendly alternative to the JSON
+    # config's own "heartbeat_file" key: EVAL_RUNNER_CONFIG often names an externally-provided
+    # Secret this chart does not render (infra/helm/charts/runtime's eval-runner Deployment, whose
+    # own exec liveness probe needs a path it can be sure is actually wired, not merely documented
+    # as a convention for whatever produces that Secret's content). The JSON key wins if present.
+    cfg.setdefault("heartbeat_file", os.environ.get("EVAL_RUNNER_HEARTBEAT_FILE"))
     return await run(cfg, online="--online" in sys.argv[1:])
 
 

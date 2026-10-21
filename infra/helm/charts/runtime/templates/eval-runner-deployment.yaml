@@ -53,6 +53,23 @@ spec:
           env:
             - name: EVAL_RUNNER_CONFIG
               value: /etc/axis/runtime/eval-runner-config.json
+            - name: EVAL_RUNNER_HEARTBEAT_FILE
+              value: {{ .Values.evalRunner.heartbeatPath | quote }}
+          # NEEDS #508: no HTTP/gRPC surface to probe, so liveness instead checks that the
+          # heartbeat file runtime/scripts/eval_runner.py writes once per poll-loop iteration
+          # (EVAL_RUNNER_HEARTBEAT_FILE above) has an mtime newer than heartbeatStaleAfterMinutes.
+          # A process that is alive but stuck (blocked forever inside one iteration, e.g. a dead
+          # Hub) stops updating the file and gets restarted; plain process-exit restart alone
+          # would never catch that.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - test -n "$(find {{ .Values.evalRunner.heartbeatPath }} -mmin -{{ .Values.evalRunner.heartbeatStaleAfterMinutes }} 2>/dev/null)"
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.evalRunner.resources | nindent 12 }}
           volumeMounts:

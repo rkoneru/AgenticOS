@@ -121,9 +121,20 @@ class EvalWorker:
                 log.warning("review task hand-off failed (%s)", exc.kind)
                 await self._sleep(min(2.0**attempt, 10.0))
 
-    async def run_forever(self, stop: asyncio.Event) -> None:
+    async def run_forever(
+        self, stop: asyncio.Event, *, on_iteration: Callable[[], None] | None = None
+    ) -> None:
+        """``on_iteration`` (NEEDS #508) is called once per loop iteration, whether or not a run
+        was handled — a deployment's liveness probe can watch it (e.g. a heartbeat file write) to
+        detect a process that is alive but stuck (blocked forever inside a single ``run_once``,
+        never reaching the loop's own top) without this library knowing anything about files,
+        probes or Kubernetes. A callback that raises propagates (never swallowed): a broken
+        heartbeat mechanism should not silently keep a stuck-but-still-exits-cleanly worker
+        running forever."""
         while not stop.is_set():
             handled = await self.run_once()
+            if on_iteration is not None:
+                on_iteration()
             if not handled:
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=self._config.poll_interval)
@@ -174,9 +185,14 @@ class OnlineWorker:
         await self.refresh()
         return sum([await s.poll_once() for s in self._samplers.values()])
 
-    async def run_forever(self, stop: asyncio.Event) -> None:
+    async def run_forever(
+        self, stop: asyncio.Event, *, on_iteration: Callable[[], None] | None = None
+    ) -> None:
+        """See ``EvalWorker.run_forever``'s ``on_iteration`` docstring (NEEDS #508)."""
         while not stop.is_set():
             await self.poll_once()
+            if on_iteration is not None:
+                on_iteration()
             try:
                 await asyncio.wait_for(stop.wait(), timeout=self._interval)
             except TimeoutError:

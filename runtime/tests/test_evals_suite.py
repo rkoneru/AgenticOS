@@ -440,6 +440,54 @@ async def test_worker_survives_a_dead_hub_and_stops_on_request() -> None:
     await asyncio.wait_for(task, 2)
 
 
+async def test_worker_run_forever_calls_on_iteration_every_loop(tmp_path: Any) -> None:
+    """NEEDS #508: EvalWorker.run_forever's on_iteration fires once per iteration, even when the
+    hub is dead and nothing was handled — a heartbeat file wired to it (runtime/scripts/
+    eval_runner.py's _heartbeat) keeps updating as long as the loop is actually iterating, and
+    would stop (detectable by a liveness probe checking its mtime) only if the loop truly hangs."""
+
+    class Dead(FakeHub):
+        async def claim_run(self) -> QueuedRun | None:
+            raise HubError("transport:ConnectError")
+
+    heartbeat_file = tmp_path / "heartbeat"
+    calls = 0
+
+    def on_iteration() -> None:
+        nonlocal calls
+        calls += 1
+        heartbeat_file.write_text(str(calls))
+
+    w = worker(Dead())
+    stop = asyncio.Event()
+    task = asyncio.create_task(w.run_forever(stop, on_iteration=on_iteration))
+    await asyncio.sleep(0.1)
+    stop.set()
+    await asyncio.wait_for(task, 2)
+    assert calls >= 2  # multiple iterations really happened, not just one
+    assert heartbeat_file.read_text() == str(calls)
+
+
+async def test_online_worker_run_forever_calls_on_iteration_every_loop() -> None:
+    hub = FakeHub()  # no online configs: poll_once() is a fast no-op each iteration
+    calls = 0
+
+    def on_iteration() -> None:
+        nonlocal calls
+        calls += 1
+
+    def build(cfg: OnlineConfig) -> Any:
+        raise AssertionError("never called: hub.online_configs() is empty")
+
+    ow = OnlineWorker(hub, build, poll_interval=0.01)
+    stop = asyncio.Event()
+    task = asyncio.create_task(ow.run_forever(stop, on_iteration=on_iteration))
+    await asyncio.sleep(0.1)
+    stop.set()
+    await asyncio.wait_for(task, 2)
+    assert calls >= 2
+
+
 async def test_review_task_handoff_failure_is_logged_not_fatal() -> None:
     class NoTasks(FakeHub):
         async def create_review_tasks(self, run_id: str, tasks: Any) -> Any:
