@@ -3,5 +3,17 @@ modules:
   - path: .
 lint:
   use: [STANDARD]
+  # grpc/health/v1/health.proto is a verbatim vendored copy of the standard gRPC
+  # health-checking protocol (grpc.health.v1.Health) — its message/enum/RPC names are fixed
+  # upstream and must match exactly for interop with standard tooling (grpc_health_probe,
+  # Kubernetes' native grpc probe type, etc.), so it is exempt from this repo's own naming
+  # conventions (NEEDS #507, docs/adr/0118-grpc-health-check.md).
+  except:
+    - ENUM_VALUE_PREFIX
+    - ENUM_ZERO_VALUE_SUFFIX
+    - SERVICE_SUFFIX
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
 breaking:
   use: [FILE]
