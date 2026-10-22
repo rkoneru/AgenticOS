@@ -78,7 +78,12 @@ control-plane:
       CP_PG_URL: "postgresql://axis:cluster-e2e-pg-axis-dev-only@axis-postgresql.axis.svc.cluster.local:5432/axis"
       CP_DEV_TOKEN: "cluster-e2e-cp-dev-token"
       CP_PLATFORM_TOKEN: "cluster-e2e-cp-platform-token"
-      CP_RUNTIME_TOKENS: "cluster-e2e-cp-runtime-token"
+      # Must be a JSON object (CP_RUNTIME_TOKENS (JSON {"<tenant uuid>": "<token>"}), per
+      # services/control-plane/src/main.ts's own docstring) — a bare token string here makes
+      # JSON.parse throw and crashes control-plane on every start (found live deploying to a
+      # real k3d cluster this pass, NEEDS #524: a prior pass's draft of this values file had
+      # never gotten far enough for control-plane to actually parse this value).
+      CP_RUNTIME_TOKENS: '{"c1057100-0000-4000-8000-000000000001":"cluster-e2e-cp-runtime-token"}'
 
 runtime:
   runServer:
