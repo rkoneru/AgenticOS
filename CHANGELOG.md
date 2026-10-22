@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 10 follow-up, session 3: live-cluster re-verification, coverage extended 4→8 charts
+
+A third live-cluster pass closed out the one gap the previous follow-up left open — control-plane's fix had only been confirmed by `docker build`+`docker run`, never against a real cluster — and pushed the deployed/verified set from 4 charts to 8:
+
+- **control-plane now reaches `1/1 Running`/`Ready` on a real k3d cluster** (NEEDS #514 fully resolved). Getting there surfaced two more real bugs beyond the already-fixed missing `policies/`/`opa`: `CP_RUNTIME_TOKENS` needed to be a JSON object, not a bare string (NEEDS #524), and a fresh bitnami Postgres login role isn't automatically a member of the `axis_app` role the migrations grant to — this stays a documented manual step for now (NEEDS #526, open).
+- **The Risk Kernel's new gRPC health check (ADR 0118) confirmed working for real** against Kubernetes' native `grpc` probe type on a live `v1.32.5+k3s1` cluster — not just unit-tested.
+- **4 more services deployed and verified Ready for the first time ever**: registry, billing, data-governance, docs-site. This surfaced two real, previously-unknown deployment bugs found only by actually running on a live cluster:
+  - 9 services default to a loopback-only HTTP bind, which a Kubernetes `httpGet` probe (dialing the pod IP from outside its network namespace) can never reach — the pod sits `Running` but never `Ready`, with nothing in the logs to explain why (NEEDS #523, fixed across all 9).
+  - Kubernetes' Docker-links-style `<SVC>_PORT=tcp://ip:port` env var injection silently collides with several services' own identically-named port env var, corrupting the real port value (NEEDS #525) — fixed by disabling `enableServiceLinks` on all 15 deployments, not just the 2 that happened to collide this session.
+- A second real end-to-end check: a real `POST /platform/v1/tenants` from inside a real pod to the real control-plane Service, verified by querying the resulting tenant row directly in the real Postgres pod.
+- Cluster torn down cleanly afterward; disk and Docker state back to baseline.
+- Independently re-verified: `helm lint` + `helm template` + `kubeconform -strict` across all 14 charts × all 7 values files (98/98 valid), plus the full 29-target sweep — all green. Two known timing-sensitive flakes (chaos's slow-gate test, one red-team case with an empty decision trace) reproduced clean on immediate retry, consistent with their established pattern in this sandbox; neither traces to anything this pass changed (chart/values/docs only).
+
 ## Phase 10 follow-up: closing the actionable NEEDS items (ADR 0118)
 
 No contract change beyond vendoring a standard, third-party gRPC health proto (not an AXIS contract; `packages/contracts/FREEZE.json` regenerated per ADR 0007 since `proto/buf.yaml` changed). A scoped pass through `docs/NEEDS.md`'s Phase 10 items, fixing the ones genuinely actionable without real cloud credentials:
