@@ -520,10 +520,12 @@ kubelet? Both: yes.
      write 500'd with `permission denied for schema axis` until a one-off
      `GRANT axis_app TO axis;` was run by hand (#526, still open — `control-plane`'s dev entry
      point has no `CP_PG_ROLE`/`SET ROLE` option the way `risk-kernel`'s does).
+
    ```bash
    PGPASSWORD=<postgresPassword> psql -h 127.0.0.1 -p 15432 -U postgres -d axis -c \
      "GRANT axis_app TO axis;"
    ```
+
    After both fixes, a real `POST /platform/v1/tenants` call through the real control-plane
    (Bearer platform token) returned a real `201` with a tenant row confirmed in Postgres by id.
 
@@ -537,8 +539,8 @@ kubelet? Both: yes.
 3. **Four more AXIS service charts deployed for the first time ever on a live cluster**:
    `registry`, `billing`, `data-governance` and `docs-site`. Images built the same way as the
    core three (`docker build --network=host --build-context ciproxyca=... --build-arg
-   CI_PROXY_CA_BASE=ciproxyca`), imported the same way (`docker save` + `ctr -n k8s.io images
-   import` inside the node — `k3d image import` is still broken here, #520), and enabled in
+CI_PROXY_CA_BASE=ciproxyca`), imported the same way (`docker save` + `ctr -n k8s.io images
+import` inside the node — `k3d image import` is still broken here, #520), and enabled in
    `values-local-cluster-subset.yaml` with real Postgres URLs, bearer tokens and seal/master keys
    (dev-only fixed values, same pattern as the existing risk-kernel/control-plane wiring). All
    four reached `1/1 Running`. `docs-site` and `data-governance` needed no further fix beyond
