@@ -82,6 +82,16 @@ postgresql:
   auth:
     postgresPassword: "cluster-e2e-pg-superuser-dev-only"
     password: "cluster-e2e-pg-axis-dev-only"
+# REQUIRED MANUAL STEP (NEEDS #526, not yet automated): migration 0001_tenancy_and_rls.sql grants
+# table/schema privileges to a NOLOGIN group role, axis_app, and expects "ops" to grant LOGIN role
+# membership per environment -- nothing here does that for the bitnami-chart-provisioned `axis`
+# login role. Without it, control-plane (which has no SET-ROLE option the way risk-kernel's
+# AXIS_AUDIT_PG_ROLE does) fails every real write with "permission denied for schema axis". Run
+# this once against the live Postgres after the postgresql pod is Ready and before controlplane
+# needs to write (a restart is NOT required -- the grant takes effect on controlplane's next
+# query, since Postgres resolves role membership per-query, not per-connection):
+#   PGPASSWORD=cluster-e2e-pg-superuser-dev-only psql -h 127.0.0.1 -p 15432 -U postgres -d axis \
+#     -c "GRANT axis_app TO axis;"
 
 # Real wiring for the phase10-cluster live e2e smoke check (docs/runbooks/local-cluster.md):
 # a real policy bundle + token table (both pre-created as Secrets: axis-policy-bundle,

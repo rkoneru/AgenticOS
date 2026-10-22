@@ -484,13 +484,127 @@ baseline the session started at.
 
 ## Known gaps (see `docs/NEEDS.md` for the numbered entries)
 
-- #510 (umbrella: only a 3-service subset was installed and proven; `control-plane` still crashes)
+- #510 (RESOLVED further: 8 of 14 AXIS service charts now proven Ready on a real cluster)
 - #512 (kubelet disk-pressure false positive in nested sandboxes)
 - #513 (kube-router NetworkPolicy ipset lag for brand-new pods)
-- #514 (`control-plane` image missing `policies/control-plane/`)
+- #514 (RESOLVED, confirmed on a live cluster this pass: `control-plane` reaches `1/1 Running`)
 - #515 (RESOLVED: risk-kernel image missing `proto/` — fixed this session)
 - #516 (RESOLVED for 3 of 14 images: non-numeric `USER` breaks `runAsNonRoot`)
 - #517 (RESOLVED: risk-kernel chart's `AXIS_RK_TOKENS` wiring needed a file mount, not an env var)
 - #518 (Secret/ConfigMap changes don't trigger a pod rollout in any of the 3 charts checked)
 - #519 (bitnami postgresql's pinned tag is no longer pullable; `latest` used instead)
 - #520 (k3d's own helper images are on the blocked `ghcr.io`; built `k3d-tools` locally instead)
+- #521 (RESOLVED: `k3d-tools` build also needs the sandbox's proxy CA trusted)
+- #522 (RESOLVED: hardcoded Postgres connection strings needed a matching pinned password)
+- #523 (RESOLVED: 9 services default to a loopback-only listener; a k8s `httpGet` probe can't reach it)
+- #524 (RESOLVED: `CP_RUNTIME_TOKENS` needed to be a JSON object, not a bare string)
+- #525 (RESOLVED: Kubernetes' injected `<SVC>_PORT` env var collided with services' own same-named port var)
+- #526 (open: nothing provisions `axis_app` role membership for `control-plane`'s own login role)
+
+## Session 3 (this pass): control-plane confirmed Ready + 4 more services deployed
+
+This pass re-ran the whole runbook above from scratch (fresh container, no prior images or
+cluster) specifically to answer two questions the prior pass's `docker run`-only verification
+could not: does `control-plane`'s #514 fix actually reach `Ready` on a **live** cluster, and does
+risk-kernel's `grpc` native readiness probe (ADR 0118) actually work against this cluster's real
+kubelet? Both: yes.
+
+### What's new in this pass
+
+1. **`control-plane` confirmed `1/1 Running` on a live k3d cluster** (not just `docker run`).
+   Getting there surfaced two more real bugs beyond #514's own fix, both found live and fixed:
+   - `CP_RUNTIME_TOKENS` in `values-local-cluster-subset.yaml` was a bare string, but
+     `control-plane`'s `main.ts` does `JSON.parse()` on it and crashes otherwise (#524).
+   - The `axis` Postgres login role the bitnami chart provisions was never a member of the
+     `axis_app` group role the migrations grant table/schema privileges to, so every real DB
+     write 500'd with `permission denied for schema axis` until a one-off
+     `GRANT axis_app TO axis;` was run by hand (#526, still open — `control-plane`'s dev entry
+     point has no `CP_PG_ROLE`/`SET ROLE` option the way `risk-kernel`'s does).
+   ```bash
+   PGPASSWORD=<postgresPassword> psql -h 127.0.0.1 -p 15432 -U postgres -d axis -c \
+     "GRANT axis_app TO axis;"
+   ```
+   After both fixes, a real `POST /platform/v1/tenants` call through the real control-plane
+   (Bearer platform token) returned a real `201` with a tenant row confirmed in Postgres by id.
+
+2. **Risk Kernel's `grpc` readiness/liveness probe (ADR 0118) confirmed working for real**:
+   `kubectl -n axis describe pod axis-risk-kernel-...` shows
+   `Readiness: grpc <pod>:50051 delay=3s timeout=1s period=5s #success=1 #failure=3` (the native
+   gRPC probe type, not `tcpSocket`), and the pod reaches `1/1 Running` using it. This cluster's
+   Kubernetes version is `v1.32.5+k3s1` — well past 1.24, where the `grpc` probe type went GA, so
+   it works without any feature-gate flag.
+
+3. **Four more AXIS service charts deployed for the first time ever on a live cluster**:
+   `registry`, `billing`, `data-governance` and `docs-site`. Images built the same way as the
+   core three (`docker build --network=host --build-context ciproxyca=... --build-arg
+   CI_PROXY_CA_BASE=ciproxyca`), imported the same way (`docker save` + `ctr -n k8s.io images
+   import` inside the node — `k3d image import` is still broken here, #520), and enabled in
+   `values-local-cluster-subset.yaml` with real Postgres URLs, bearer tokens and seal/master keys
+   (dev-only fixed values, same pattern as the existing risk-kernel/control-plane wiring). All
+   four reached `1/1 Running`. `docs-site` and `data-governance` needed no further fix beyond
+   what was already in the chart; `registry` and `billing` additionally needed the
+   `enableServiceLinks: false` fix below.
+
+4. **A new, previously-undiscovered bug found deploying `registry` and `billing`**: Kubernetes
+   injects Docker-links-style `<SVC>_PORT=tcp://<ip>:<port>` env vars into every pod for every
+   Service already in the namespace (uppercased, `-` → `_`), unless the pod spec sets
+   `enableServiceLinks: false`. `registry` (Service `axis-registry`) and `billing` (Service
+   `axis-billing`) each read their own HTTP port from `AXIS_REGISTRY_PORT`/`AXIS_BILLING_PORT`
+   env vars — which collide exactly with the injected name — so the injected `"tcp://..."` string
+   silently clobbered the real port value and crashed `http.Server.listen()` with
+   `ERR_SOCKET_BAD_PORT` (`Number("tcp://...")` is `NaN`). `data-governance`
+   (`AXIS_GOV_PORT`, no collision) and `docs-site` (nginx, no such env var) happened not to hit
+   this in the same batch — not evidence the bug doesn't apply elsewhere. Fixed by adding
+   `enableServiceLinks: false` to all 15 AXIS deployment templates (every chart, not just the two
+   that collided today; NEEDS #525).
+
+5. **Node-level image garbage collection evicted already-imported bootstrap images mid-session**:
+   partway through this pass, `rancher/mirrored-pause:3.6` (and `mirrored-library-busybox`)
+   disappeared from `crictl images` even though they had been successfully imported and used by
+   earlier pods, causing new pod sandboxes to fail with `FailedCreatePodSandBox` /
+   `ErrImagePull` trying to re-pull them from the (unreachable in this sandbox at the time)
+   registry. The `pinned_images.sandbox` setting in `config.toml.tmpl` did not prevent this. Fixed
+   by just re-`docker save`+`ctr images import`-ing the missing images again (seconds, since
+   they're tiny) — not deeply root-caused, logged here for the next person who hits the same
+   `FailedCreatePodSandBox` after a run that has been up a while.
+
+6. **A real second end-to-end check, through control-plane, alongside the original gRPC smoke
+   test**: a real HTTP `POST /platform/v1/tenants` call from inside the `runtime` pod to the real
+   `control-plane` Service, authenticated with the real platform bearer token, provisioning a real
+   tenant through `Provisioner.signup()` (policy pack compile via the real `opa` binary + a real
+   transactional Postgres write), confirmed by querying the resulting `tenant_id` directly in
+   Postgres:
+   ```
+   HTTP 201 {"tenant_id":"5b065d16-1566-4255-b5df-61ad306354f2", ...}
+   # psql: id | slug | name | region
+   #      5b065d16-... | cluster-e2e-2 | Cluster E2E Co | us-east-1
+   ```
+
+### Not attempted in this pass
+
+`marketplace`, `memory`, `channels`, `eval-hub`, `compliance`, `api-gateway` and `console` were
+not built or deployed in this pass. This was a time/disk budget decision (each additional
+Node/Next.js image costs tens to hundreds of MB, and this sandbox's disk is a hard, shared,
+~20-23 GB-free allowance that a full 14-service deploy plus Postgres plus the node's own
+containerd overlay would not comfortably fit without very careful pruning between every single
+image) — not a technical blocker found and abandoned. `api-gateway`'s chart deliberately has no
+working Service path yet (NEEDS #506: its own loopback-only posture needs an exec-probe pattern,
+already wired, but it still can't carry real Service traffic) and would not have been a
+meaningful target even with more budget.
+
+Final pod state at the end of this pass (before teardown):
+
+```
+NAME                                       READY   STATUS    RESTARTS   AGE
+axis-billing-...                           1/1     Running   0          ...
+axis-control-plane-...                     1/1     Running   0          ...
+axis-data-governance-...                   1/1     Running   0          ...
+axis-docs-site-...                         1/1     Running   0          ...
+axis-postgresql-0                          1/1     Running   0          ...
+axis-registry-...                          1/1     Running   0          ...
+axis-risk-kernel-...                       1/1     Running   0          ...
+axis-runtime-run-server-...                1/1     Running   0          ...
+```
+
+Cluster torn down cleanly afterward the same way as prior sessions (`k3d cluster delete` +
+`docker rmi` + `docker system/builder prune -af`) — see the teardown section above.
