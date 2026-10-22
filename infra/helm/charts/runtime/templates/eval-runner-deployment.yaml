@@ -56,6 +56,18 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "runtime.serviceAccountName" $root }}
+      # Kubernetes injects <SVC>_PORT=tcp://<ip>:<port> Docker-links-style env vars for
+      # every Service already in this namespace, uppercased with '-' -> '_'. Several AXIS
+      # services read their OWN port from an env var of exactly that shape (e.g.
+      # AXIS_BILLING_PORT for a Service named axis-billing), so the injected value silently
+      # clobbers the app's real port with "tcp://10.x.x.x:8080" -- Number() of that string is
+      # NaN, and the app's own listen() call crashes with ERR_SOCKET_BAD_PORT. Found live
+      # deploying to a real k3d cluster this pass (NEEDS #525): billing and registry both hit
+      # this exact crash (data-governance and docs-site did not, only because their own port
+      # env var names happen not to collide with their Service names). Disabled on every
+      # chart, not just the two that happened to collide today, since the same class of
+      # collision depends only on naming and would otherwise resurface silently elsewhere.
+      enableServiceLinks: false
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

@@ -3,17 +3,47 @@
 # Layer this ON TOP of values.yaml + values-local.yaml and disable every other AXIS subchart so
 # `helm install` doesn't try to schedule pods for images that were never built/imported in this
 # pass. Real images, not a placeholder: this is a scope reduction for time/disk, not a fake chart.
-registry: { enabled: false }
+#
+# A later pass (this one) extended coverage to registry, billing, data-governance and docs-site
+# (real images built + imported + deployed this session, see docs/runbooks/local-cluster.md) —
+# enabled below with real wiring. marketplace, memory, channels, eval-hub, compliance,
+# api-gateway and console were NOT attempted in that pass (time/disk budget) and stay disabled.
 marketplace: { enabled: false }
-billing: { enabled: false }
 memory: { enabled: false }
 channels: { enabled: false }
 eval-hub: { enabled: false }
 compliance: { enabled: false }
-data-governance: { enabled: false }
 api-gateway: { enabled: false }
 console: { enabled: false }
-docs-site: { enabled: false }
+
+registry:
+  config:
+    AXIS_REGISTRY_ROLE: axis_app
+  secret:
+    data:
+      AXIS_REGISTRY_DATABASE_URL: "postgresql://axis:cluster-e2e-pg-axis-dev-only@axis-postgresql.axis.svc.cluster.local:5432/axis"
+      AXIS_REGISTRY_TOKENS: '{"cluster-e2e-registry-token":{"kind":"tenant","tenantId":"c1057100-0000-4000-8000-000000000001","subject":"smoke-agent","role":"admin"}}'
+
+billing:
+  config:
+    AXIS_BILLING_ROLE: axis_app
+  secret:
+    data:
+      AXIS_BILLING_DATABASE_URL: "postgresql://axis:cluster-e2e-pg-axis-dev-only@axis-postgresql.axis.svc.cluster.local:5432/axis"
+      AXIS_BILLING_TOKENS: '{"cluster-e2e-billing-token":{"tenantId":"c1057100-0000-4000-8000-000000000001","scopes":["read"],"subject":"svc"}}'
+      AXIS_BILLING_SEAL_KEY: "cluster-e2e-billing-seal-key-dev-only-32chars-min"
+
+data-governance:
+  config:
+    AXIS_GOV_ROLE: axis_app
+    AXIS_GOV_REGION: us-east-1
+  secret:
+    data:
+      AXIS_GOV_DATABASE_URL: "postgresql://axis:cluster-e2e-pg-axis-dev-only@axis-postgresql.axis.svc.cluster.local:5432/axis"
+      AXIS_GOV_TOKENS: '{"cluster-e2e-gov-token":{"tenantId":"c1057100-0000-4000-8000-000000000001","id":"officer","roles":["privacy_officer"]}}'
+      AXIS_GOV_MASTER_KEY: "bcfbfa5d8d38a198959ba9ec236d44e66b27ea8dd2378911cbe96108cc4a1753"
+
+docs-site: { enabled: true }
 
 # Redis isn't on the Phase-2 core-loop decision path (ABL -> runtime -> Risk Kernel gRPC ->
 # Postgres audit never touches it); skip it here to save RAM/disk in this sandbox.
