@@ -35,8 +35,14 @@ serviceAccount:
   name: ""
 probes:
   enabled: true
+# AXIS_BIND_HOST must be 0.0.0.0, not the app's own loopback-only default: kubelet's httpGet
+# probes dial the pod IP from outside the pod's network namespace, which a listener bound to
+# 127.0.0.1 can never answer (found live deploying to a real k3d cluster, NEEDS #523 — note
+# main.ts's own startup log always prints "listening on 127.0.0.1:<port>" regardless of the
+# actual bind address used, which is misleading when this var is set).
 config:
   CP_REGION: us-east-1
+  AXIS_BIND_HOST: "0.0.0.0"
   CP_INSECURE_COOKIES: "false"
   CP_RETURN_ORIGINS: ""
   CP_REDIRECT_URI: ""

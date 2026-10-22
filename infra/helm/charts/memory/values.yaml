@@ -37,8 +37,12 @@ serviceAccount:
   name: ""
 probes:
   enabled: true
+# AXIS_BIND_HOST must be 0.0.0.0, not the app's own loopback-only default: kubelet's httpGet
+# probes dial the pod IP from outside the pod's network namespace, which a listener bound to
+# 127.0.0.1 can never answer (found live deploying to a real k3d cluster, NEEDS #523).
 config:
   AXIS_MEMORY_ROLE: axis_app
+  AXIS_BIND_HOST: "0.0.0.0"
 secret:
   create: true
   existingSecret: ""
