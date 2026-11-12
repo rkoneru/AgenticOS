@@ -1,12 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { Badge, Button, CodeEditor, useToast } from "@axis/ui";
-import { ApiError, api, type AblCheckResult } from "@/lib/api";
+import { useState } from "react";
+import { Button, CodeEditor, useToast } from "@axis/ui";
+import { ApiError, api } from "@/lib/api";
 import { useAction } from "@/lib/hooks";
+import { useAblCheck } from "@/lib/use-abl-check";
 import { useCan } from "./session";
-import { ErrorNote } from "./common";
-
-const DEBOUNCE_MS = 300;
+import { AblStatusBar } from "./abl-status";
 
 export function BlueprintEditor({
   initial,
@@ -16,37 +15,9 @@ export function BlueprintEditor({
   onPublished?: (name: string, version: string) => void;
 }) {
   const [text, setText] = useState(initial);
-  const [check, setCheck] = useState<AblCheckResult | undefined>();
-  const [checking, setChecking] = useState(false);
-  const [checkError, setCheckError] = useState<string | undefined>();
+  const { check, checking, checkError } = useAblCheck(text);
   const canWrite = useCan("blueprints.write");
   const toast = useToast();
-  const seq = useRef(0);
-
-  useEffect(() => {
-    const mine = ++seq.current;
-    const ac = new AbortController();
-    setChecking(true);
-    const t = setTimeout(() => {
-      api.validateAbl(text, ac.signal).then(
-        (r) => {
-          if (mine !== seq.current) return;
-          setCheck(r);
-          setCheckError(undefined);
-          setChecking(false);
-        },
-        (e: unknown) => {
-          if (mine !== seq.current || ac.signal.aborted) return;
-          setCheckError(e instanceof Error ? e.message : "Validation unavailable");
-          setChecking(false);
-        },
-      );
-    }, DEBOUNCE_MS);
-    return () => {
-      clearTimeout(t);
-      ac.abort();
-    };
-  }, [text]);
 
   const publish = useAction(async () => {
     if (!check?.ok || !check.doc) throw new Error("Fix the errors first");
@@ -61,41 +32,11 @@ export function BlueprintEditor({
     }
   }
 
-  const errors = check?.diagnostics.filter((d) => d.severity === "error").length ?? 0;
-  const warnings = check?.diagnostics.filter((d) => d.severity === "warning").length ?? 0;
   const serverErrors = publish.error instanceof ApiError ? publish.error.errors : [];
 
   return (
     <div className="flex flex-col gap-3">
-      <div
-        className="flex flex-wrap items-center gap-2"
-        aria-live="polite"
-        data-testid="abl-status"
-      >
-        {checking ? (
-          <Badge>Checking...</Badge>
-        ) : check ? (
-          check.ok ? (
-            <Badge tone="good">Valid</Badge>
-          ) : (
-            <Badge tone="bad">
-              {errors} error{errors === 1 ? "" : "s"}
-            </Badge>
-          )
-        ) : null}
-        {warnings > 0 ? (
-          <Badge tone="warn">
-            {warnings} warning{warnings === 1 ? "" : "s"}
-          </Badge>
-        ) : null}
-        {check?.riskLevel ? <Badge tone="info">risk: {check.riskLevel}</Badge> : null}
-        {check?.name ? (
-          <span className="text-sm text-[var(--axis-muted)]">
-            {check.name}@{check.version}
-          </span>
-        ) : null}
-      </div>
-      {checkError ? <ErrorNote error={new Error(checkError)} /> : null}
+      <AblStatusBar checking={checking} check={check} checkError={checkError} />
       <CodeEditor
         label="ABL (YAML)"
         value={text}
