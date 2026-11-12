@@ -21,9 +21,7 @@ import {
 } from "@/lib/studio-graph";
 import { starterGraph } from "@/lib/studio-starter";
 
-const examplesDir = fileURLToPath(
-  new URL("../../../packages/abl/examples/valid", import.meta.url),
-);
+const examplesDir = fileURLToPath(new URL("../../../packages/abl/examples/valid", import.meta.url));
 
 function manifestOf(doc: unknown): RuntimeManifest {
   const r = compileAbl(doc);
@@ -186,9 +184,7 @@ describe("ablToGraph <-> graphToAbl structural invariants", () => {
     // compileAbl should accept it (high risk without evals is only a lint *finding*, not a schema
     // failure captured in this assertion - we only assert the schema-level oversight requirement here).
     const r = compileAbl(doc);
-    expect(r.ok || (!r.ok && r.issues.every((i) => !i.path.includes("humanOversight")))).toBe(
-      true,
-    );
+    expect(r.ok || (!r.ok && r.issues.every((i) => !i.path.includes("humanOversight")))).toBe(true);
   });
 });
 

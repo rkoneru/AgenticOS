@@ -40,7 +40,7 @@ keyboard-operable with one Enter per click, at the cost of not letting the user 
 value to add next out of canonical order (documented as NEEDS #527).
 
 **Routing stages as a chain, not an array field.** `spec.routing.stages` is the one place ABL's own
-order is semantically load-bearing *and* visually interesting (NEXUS runs stages in listed order;
+order is semantically load-bearing _and_ visually interesting (NEXUS runs stages in listed order;
 the first to resolve short-circuits the rest) - exactly what "interactive data flow" means in the
 brief. Modeling it as a left-to-right chain of nodes (`stage[i] -> stage[i+1]`, tail `-> agent`)
 makes that order a first-class, visible, reconnectable part of the graph, instead of a hidden array
@@ -71,12 +71,12 @@ that is identical except for `blueprint.content_hash`, which is excluded from th
 purpose (see below).
 
 **Why the round-trip test excludes `content_hash`.** `docs/spec/abl-v1.md` defines
-`blueprint.content_hash` as the sha256 of the canonical JSON of the *source document itself*, not of
+`blueprint.content_hash` as the sha256 of the canonical JSON of the _source document itself_, not of
 its compiled semantics - so a rebuilt document that is semantically identical but omits/adds a
 field at its compiler-default value (e.g. `memory.longTerm: false` written explicitly vs. omitted,
 both compiling to the same `long_term: false`) hashes differently even though nothing about the
 agent's behavior changed. The task's own allowance ("don't require byte-identical YAML... require
-the compiled RuntimeManifest to match") is read here as applying to the manifest's *semantic*
+the compiled RuntimeManifest to match") is read here as applying to the manifest's _semantic_
 fields; the test asserts both hashes are well-formed sha256 hex strings and compares every other
 manifest field, rather than asserting a guarantee the spec itself does not make for this kind of
 round-trip.
@@ -109,7 +109,7 @@ knowledge bases and policy packs, none of which have a drag affordance at all in
   editor shows the exact same generated document, because both go through `graphToAblYaml` ->
   `api.validateAbl` -> `api.publishBlueprint`, the identical pipeline `BlueprintEditor` always used.
 - A blueprint using `process`, `evals`, `data` (PHI/residency) or `metadata.labels` can be loaded and
-  re-published unchanged from the canvas, but those fields cannot be *created or edited* there yet -
+  re-published unchanged from the canvas, but those fields cannot be _created or edited_ there yet -
   a real, documented gap (NEEDS #527), not a silent one.
 - `routing.stages`, `budgets`, `channels` reaching their enum's full cardinality disable the
   corresponding "Add" toolbar button (with an explanatory `title`) rather than failing silently or

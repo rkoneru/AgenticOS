@@ -84,10 +84,7 @@ function StudioCanvasInner() {
     if (liveRef.current) liveRef.current.textContent = msg;
   }, []);
 
-  const onConnect = useCallback(
-    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
-    [setEdges],
-  );
+  const onConnect = useCallback((c: Connection) => setEdges((eds) => addEdge(c, eds)), [setEdges]);
 
   const onSelectionChange = useCallback(({ nodes: sel }: OnSelectionChangeParams) => {
     setSelectedId(sel[0]?.id);
@@ -99,7 +96,10 @@ function StudioCanvasInner() {
       if (edgeToAgent) {
         setEdges(
           (cur) =>
-            [...cur, { id: `${node.id}->agent`, source: node.id, target: "agent" }] as unknown as Edge[],
+            [
+              ...cur,
+              { id: `${node.id}->agent`, source: node.id, target: "agent" },
+            ] as unknown as Edge[],
         );
       }
       setSelectedId(node.id);
@@ -119,17 +119,27 @@ function StudioCanvasInner() {
 
   const onAddRoutingStage = useCallback(() => {
     const present = new Set(
-      studioNodes.filter((n) => n.type === "routingStage").map((n) => (n.data as { stage: string }).stage),
+      studioNodes
+        .filter((n) => n.type === "routingStage")
+        .map((n) => (n.data as { stage: string }).stage),
     );
     const stage = ROUTING_STAGES.find((s) => !present.has(s));
     if (!stage) return;
     const id = `routing:${stage}`;
     const stageNodes = studioNodes.filter((n) => n.type === "routingStage");
     const prev = stageNodes[stageNodes.length - 1];
-    setNodes((cur) => [
-      ...cur,
-      { id, type: "routingStage", position: { x: 40 + stageNodes.length * 170, y: 420 }, data: { stage } },
-    ] as unknown as Node[]);
+    setNodes(
+      (cur) =>
+        [
+          ...cur,
+          {
+            id,
+            type: "routingStage",
+            position: { x: 40 + stageNodes.length * 170, y: 420 },
+            data: { stage },
+          },
+        ] as unknown as Node[],
+    );
     setEdges((cur) => {
       const next = [...cur].filter((e) => e.id !== `${prev?.id}->agent`);
       if (prev) next.push({ id: `${prev.id}->${id}`, source: prev.id, target: id } as Edge);
@@ -150,7 +160,11 @@ function StudioCanvasInner() {
   }, [addNode, studioNodes]);
 
   const onAddBudget = useCallback(() => {
-    const present = new Set(studioNodes.filter((n) => n.type === "budget").map((n) => (n.data as { metric: BudgetMetric }).metric));
+    const present = new Set(
+      studioNodes
+        .filter((n) => n.type === "budget")
+        .map((n) => (n.data as { metric: BudgetMetric }).metric),
+    );
     const metric = BUDGET_METRICS.find((m) => !present.has(m));
     if (!metric) return;
     addNode({
@@ -172,7 +186,11 @@ function StudioCanvasInner() {
   }, [addNode, studioNodes]);
 
   const onAddChannel = useCallback(() => {
-    const present = new Set(studioNodes.filter((n) => n.type === "channel").map((n) => (n.data as { kind: ChannelKind }).kind));
+    const present = new Set(
+      studioNodes
+        .filter((n) => n.type === "channel")
+        .map((n) => (n.data as { kind: ChannelKind }).kind),
+    );
     const kind = CHANNEL_KINDS.find((k) => !present.has(k));
     if (!kind) return;
     addNode({
@@ -185,8 +203,11 @@ function StudioCanvasInner() {
 
   const onNodeDataChange = useCallback(
     (id: string, data: StudioNodeData) => {
-      setNodes((cur) =>
-        (cur as unknown as StudioNode[]).map((n) => (n.id === id ? { ...n, data } : n)) as unknown as Node[],
+      setNodes(
+        (cur) =>
+          (cur as unknown as StudioNode[]).map((n) =>
+            n.id === id ? { ...n, data } : n,
+          ) as unknown as Node[],
       );
     },
     [setNodes],
@@ -218,7 +239,12 @@ function StudioCanvasInner() {
           });
         }
         const last = order[order.length - 1];
-        if (last) rebuilt.push({ id: `routing:${last}->agent`, source: `routing:${last}`, target: "agent" });
+        if (last)
+          rebuilt.push({
+            id: `routing:${last}->agent`,
+            source: `routing:${last}`,
+            target: "agent",
+          });
         return [...kept, ...rebuilt] as unknown as Edge[];
       });
       announce("Routing order updated");
@@ -262,9 +288,11 @@ function StudioCanvasInner() {
 
   const canAddRoutingStage = stageNodes.length < ROUTING_STAGES.length;
   const canAddMemory = !studioNodes.some((n) => n.type === "memory");
-  const canAddBudget = studioNodes.filter((n) => n.type === "budget").length < BUDGET_METRICS.length;
+  const canAddBudget =
+    studioNodes.filter((n) => n.type === "budget").length < BUDGET_METRICS.length;
   const canAddPolicy = !studioNodes.some((n) => n.type === "policy");
-  const canAddChannel = studioNodes.filter((n) => n.type === "channel").length < CHANNEL_KINDS.length;
+  const canAddChannel =
+    studioNodes.filter((n) => n.type === "channel").length < CHANNEL_KINDS.length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -348,8 +376,8 @@ function StudioCanvasInner() {
         <section className="flex flex-col gap-2 border-t border-[var(--axis-border)] pt-4">
           <h2 className="text-sm font-semibold">Review &amp; publish</h2>
           <p className="text-sm text-[var(--axis-muted)]">
-            This is the same blueprint editor and publish flow as{" "}
-            <code>/blueprints/new</code>, seeded from the canvas above.
+            This is the same blueprint editor and publish flow as <code>/blueprints/new</code>,
+            seeded from the canvas above.
           </p>
           <BlueprintEditor
             key={reviewText}

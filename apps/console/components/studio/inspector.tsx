@@ -161,10 +161,20 @@ function ModelForm({
   );
 }
 
-function ToolForm({ data, onChange }: { data: ToolNodeData; onChange: (next: ToolNodeData) => void }) {
+function ToolForm({
+  data,
+  onChange,
+}: {
+  data: ToolNodeData;
+  onChange: (next: ToolNodeData) => void;
+}) {
   return (
     <div className="flex flex-col gap-3">
-      <Input label="Name" value={data.name} onChange={(e) => onChange({ ...data, name: e.target.value })} />
+      <Input
+        label="Name"
+        value={data.name}
+        onChange={(e) => onChange({ ...data, name: e.target.value })}
+      />
       <Select
         label="Kind"
         options={opts(TOOL_KINDS)}

@@ -132,14 +132,7 @@ export interface ChannelNodeData {
 }
 
 export type StudioNodeType =
-  | "agent"
-  | "model"
-  | "tool"
-  | "routingStage"
-  | "memory"
-  | "budget"
-  | "policy"
-  | "channel";
+  "agent" | "model" | "tool" | "routingStage" | "memory" | "budget" | "policy" | "channel";
 
 export type StudioNodeData =
   | AgentNodeData
@@ -433,9 +426,7 @@ export function graphToAbl(nodes: StudioNode[], edges: StudioEdge[]): AblDocLike
       ...(Object.keys(budgets).length ? { budgets } : {}),
       ...(a.passthrough?.process ? { process: a.passthrough.process } : {}),
       ...(a.passthrough?.data ? { data: a.passthrough.data } : {}),
-      ...(policyNode
-        ? { policy: { packs: [...policyNode.data.packs] } }
-        : {}),
+      ...(policyNode ? { policy: { packs: [...policyNode.data.packs] } } : {}),
       ...(channelNodes.length ? { channels: channelNodes.map((n) => n.data.kind) } : {}),
       ...(a.passthrough?.evals ? { evals: a.passthrough.evals } : {}),
     },
