@@ -1,5 +1,18 @@
 # Changelog
 
+## Agent Studio: a visual node-graph blueprint editor (ADR 0119)
+
+A new `/studio` page in the console, alongside (not replacing) the existing plain-YAML `BlueprintEditor`: an interactive, node-based canvas (`@xyflow/react`) for composing an ABL agent blueprint visually.
+
+- Nodes for the agent core, model, tools, memory, budgets, policy, channels, and a reorderable left-to-right **routing-stage chain** (cache → rules → mpm → rag → llm), all edged into the agent — reordering the chain's edges reorders `routing.stages`.
+- A pure, bidirectional `ablToGraph`/`graphToAbl` serializer, round-trip tested against every real fixture in `packages/abl/examples/valid/*.yaml` through the actual `@axis/abl` compiler (not a parallel/duplicate validator).
+- The live preview panel and "Continue to review & publish" action reuse `BlueprintEditor`'s real `api.validateAbl`/`api.publishBlueprint` calls end to end — nothing was reimplemented.
+- The inspector form enforces real schema constraints in the UI itself (e.g. a `riskClassification.level: high` blueprint is forced to declare `humanOversight.required` + at least one approver role, not just caught later by the validator).
+- Keyboard-operable and passes `axe` in both themes — React Flow's canvas dragging is inherently mouse-first, so the one real gap (reordering the routing chain) gets an explicit up/down control instead.
+- **Found and fixed a real, unrelated regression along the way**: the console's mock-API Playwright suite (`pnpm e2e`/`make console-e2e`) was already broken on this branch's base commit, independent of Agent Studio — an earlier Phase 10 change set `next.config.ts`'s `output: "standalone"` for the Docker image, which `next start` cannot actually serve (every test timed out waiting on full hydration). Fixed by pointing the test config at the real standalone server entrypoint, the same one the Dockerfile already uses (NEEDS #531).
+- Independently re-verified: `pnpm --filter @axis/console typecheck/lint/test` clean (106/106 unit tests, `studio-graph.ts` 98.93% stmt coverage), the real mock-API Playwright suite 104/104 passing (including the new Agent Studio flow test and its a11y sweep in both themes), bundle scan clean.
+- Honest gaps logged (NEEDS #527-530): no canvas node yet for `spec.process`/`spec.evals`/`spec.data`/`metadata.labels` (round-trips losslessly, not editable from the canvas); fallback models aren't editable from the canvas; toolbar "add" actions fill the next canonical enum value rather than offering a picker; no auto-layout for a large graph.
+
 ## Phase 10 follow-up, session 3: live-cluster re-verification, coverage extended 4→8 charts
 
 A third live-cluster pass closed out the one gap the previous follow-up left open — control-plane's fix had only been confirmed by `docker build`+`docker run`, never against a real cluster — and pushed the deployed/verified set from 4 charts to 8:
