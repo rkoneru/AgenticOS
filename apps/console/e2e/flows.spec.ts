@@ -59,6 +59,47 @@ test("blueprint editor: live diagnostics with line/column, then publish", async 
   await expect(page.getByRole("heading", { name: "second-agent @ 1.0.0" })).toBeVisible();
 });
 
+test("agent studio: add a tool node, edit it, preview updates, then publish through the real flow", async ({
+  page,
+}) => {
+  await login(page, "admin", "/studio");
+  await expect(page.getByRole("heading", { name: "Agent Studio", level: 1 })).toBeVisible();
+
+  // The starter graph (agent + model) is already valid.
+  await expect(page.getByTestId("abl-status")).toContainText("Valid");
+
+  await page.getByRole("button", { name: "Add tool" }).click();
+  const toolNode = page.getByTestId("rf__node-tool:0");
+  await expect(toolNode).toBeVisible();
+  await toolNode.click();
+
+  const inspector = page.getByRole("complementary", { name: "tool inspector" });
+  await expect(inspector).toBeVisible();
+  await inspector.getByLabel("Name").fill("web-search");
+  await inspector.getByLabel("Kind").selectOption("function");
+  await inspector.getByLabel("Side effects").selectOption("read");
+
+  const preview = page.getByLabel("Generated YAML");
+  await expect(preview).toHaveValue(/name: web-search/);
+  await expect(preview).toHaveValue(/kind: function/);
+  await expect(page.getByTestId("abl-status")).toContainText("Valid");
+
+  // Rename + bump the version so publish is a fresh version, not a re-publish of the seeded one.
+  await page.getByTestId("rf__node-agent").click();
+  const agentInspector = page.getByRole("complementary", { name: "agent inspector" });
+  await agentInspector.getByLabel("Name").fill("studio-built-agent");
+  await agentInspector.getByLabel("Version").fill("1.0.0");
+
+  await page.getByRole("button", { name: "Continue to review & publish" }).click();
+  const reviewEditor = page.getByLabel("ABL (YAML)");
+  await expect(reviewEditor).toHaveValue(/name: studio-built-agent/);
+  await expect(reviewEditor).toHaveValue(/name: web-search/);
+  await expect(page.getByRole("button", { name: "Publish version" })).toBeEnabled();
+  await page.getByRole("button", { name: "Publish version" }).click();
+  await expect(page).toHaveURL(/\/blueprints\/studio-built-agent\/1\.0\.0$/);
+  await expect(page.getByRole("heading", { name: "studio-built-agent @ 1.0.0" })).toBeVisible();
+});
+
 test("publishing an existing immutable version surfaces the server's conflict", async ({
   page,
 }) => {
@@ -598,6 +639,7 @@ const PAGES: Array<[string, string, string]> = [
   ["login", "/login", "admin"],
   ["blueprints", "/blueprints", "admin"],
   ["blueprint editor", "/blueprints/new", "admin"],
+  ["agent studio", "/studio", "admin"],
   ["blueprint version", "/blueprints/hello-agent/1.0.0", "admin"],
   ["runs", "/runs", "admin"],
   ["run", `/runs/${SEED_RUN}`, "admin"],

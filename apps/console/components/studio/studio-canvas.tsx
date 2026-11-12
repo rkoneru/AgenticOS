@@ -1,6 +1,7 @@
 "use client";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Background,
   Controls,
@@ -71,6 +72,7 @@ function StudioCanvasInner() {
   const [previewOpen, setPreviewOpen] = useState(true);
   const [reviewText, setReviewText] = useState<string | undefined>();
   const toast = useToast();
+  const router = useRouter();
   const liveRef = useRef<HTMLDivElement>(null);
 
   const studioNodes = toStudioNodes(nodes);
@@ -349,7 +351,13 @@ function StudioCanvasInner() {
             This is the same blueprint editor and publish flow as{" "}
             <code>/blueprints/new</code>, seeded from the canvas above.
           </p>
-          <BlueprintEditor key={reviewText} initial={reviewText} />
+          <BlueprintEditor
+            key={reviewText}
+            initial={reviewText}
+            onPublished={(n, v) =>
+              router.push(`/blueprints/${encodeURIComponent(n)}/${encodeURIComponent(v)}`)
+            }
+          />
         </section>
       ) : null}
     </div>
