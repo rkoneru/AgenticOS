@@ -77,6 +77,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { href: "/blueprints", label: "Blueprints", show: () => true },
+  { href: "/studio", label: "Studio", show: () => true },
   { href: "/runs", label: "Runs", show: () => true },
   { href: "/approvals", label: "Approvals", show: () => true },
   { href: "/policies", label: "Policies", show: () => true },

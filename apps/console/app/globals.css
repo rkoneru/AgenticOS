@@ -52,3 +52,41 @@
     transition: none !important;
   }
 }
+
+/* Agent Studio canvas: re-theme @xyflow/react's own CSS variables onto the axis token set instead
+   of its default light-only palette, so the canvas matches the rest of the console in dark mode. */
+.axis-studio-flow .react-flow {
+  background: var(--axis-bg);
+}
+.axis-studio-flow .react-flow__renderer,
+.axis-studio-flow .react-flow {
+  --xy-edge-stroke-default: var(--axis-border);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-edge-stroke-selected-default: var(--axis-accent);
+  --xy-connectionline-stroke-default: var(--axis-accent);
+  --xy-background-color-default: var(--axis-bg);
+  --xy-background-pattern-dots-color-default: var(--axis-border);
+  --xy-minimap-background-color-default: var(--axis-surface);
+  --xy-controls-button-background-color-default: var(--axis-surface);
+  --xy-controls-button-background-color-hover-default: var(--axis-surface-2);
+  --xy-controls-button-color-default: var(--axis-fg);
+  --xy-controls-button-color-hover-default: var(--axis-fg);
+  --xy-controls-button-border-color-default: var(--axis-border);
+  --xy-controls-box-shadow-default: none;
+  --xy-handle-background-color-default: var(--axis-accent);
+  --xy-handle-border-color-default: var(--axis-surface);
+  --xy-selection-background-color-default: color-mix(in srgb, var(--axis-accent) 12%, transparent);
+  --xy-selection-border-default: 1px dotted var(--axis-accent);
+  --xy-node-border-radius-default: 6px;
+}
+.axis-studio-flow .react-flow__node {
+  /* Custom node cards supply their own chrome; drop the library's default card background/border. */
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  width: auto;
+}
+.axis-studio-flow .react-flow__controls-button svg {
+  fill: currentColor;
+}

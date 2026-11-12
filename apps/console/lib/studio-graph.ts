@@ -445,7 +445,7 @@ export function graphToAbl(nodes: StudioNode[], edges: StudioEdge[]): AblDocLike
 
 /** Topological order of routing-stage nodes from their chain edges (falls back to canvas order for an
  * unconnected/partial chain, so a mid-edit graph never throws). */
-function orderRoutingStages(nodes: StudioNode[], edges: StudioEdge[]): RoutingStage[] {
+export function orderRoutingStages(nodes: StudioNode[], edges: StudioEdge[]): RoutingStage[] {
   const stageNodes = nodes.filter(
     (n): n is StudioNode<RoutingStageNodeData> => n.type === "routingStage",
   );
